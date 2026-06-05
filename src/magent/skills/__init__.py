@@ -12,6 +12,7 @@ import yaml
 from rich.console import Console
 
 from magent.config import SKILLS_DIR, SKILLS_LOCK
+from magent.tokens import estimate_tokens, truncate_to_tokens
 
 console = Console()
 
@@ -163,11 +164,24 @@ class SkillRegistry:
         scored.sort(key=lambda x: x[0], reverse=True)
         return [s for score, s in scored[:max_skills] if score > 0.05]
 
-    def build_skill_context(self, user_message: str) -> str:
+    def build_skill_context(self, user_message: str, budget_tokens: int = 2000) -> str:
         active = self.match(user_message)
         if not active:
             return ""
-        blocks = [s.to_context_block() for s in active]
+        blocks = []
+        used = estimate_tokens("# Active Skills\n\n")
+        for skill in active:
+            block = skill.to_context_block()
+            block_tokens = estimate_tokens(block)
+            remaining = budget_tokens - used
+            if remaining <= 0:
+                break
+            if block_tokens > remaining:
+                block = truncate_to_tokens(block, remaining, "[...skill truncated for budget...]")
+            blocks.append(block)
+            used += estimate_tokens(block)
+        if not blocks:
+            return ""
         return "# Active Skills\n\n" + "\n---\n\n".join(blocks)
 
     def list_all(self) -> list[dict[str, Any]]:

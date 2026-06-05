@@ -17,6 +17,8 @@ from typing import Any
 
 from rich.console import Console
 
+from magent.tokens import estimate_tokens, truncate_to_tokens
+
 console = Console()
 
 # Node type constants
@@ -46,9 +48,11 @@ ALL_NODE_TYPES = [
 class MemoryManager:
     """Manages a user's MagGraph knowledge graph."""
 
-    def __init__(self, memory_dir: Path, budget_tokens: int = 4000):
+    def __init__(self, memory_dir: Path, budget_tokens: int = 4000, max_node_tokens: int = 220):
         self.memory_dir = memory_dir
         self.budget_tokens = budget_tokens
+        self.max_node_tokens = max_node_tokens
+        self.last_recall_stats: dict[str, int] = {"nodes": 0, "tokens": 0, "budget": budget_tokens}
         self._index = None
         self._init_graph()
 
@@ -88,7 +92,7 @@ class MemoryManager:
         if not anchor_ids:
             return ""
 
-        sections: list[str] = []
+        ordered_ids: list[str] = []
         seen_ids: set[str] = set()
 
         for anchor_id in anchor_ids:
@@ -97,52 +101,77 @@ class MemoryManager:
                 for node in result.nodes:
                     if node.id not in seen_ids:
                         seen_ids.add(node.id)
-                sections.append(self._format_traversal_with_bodies(result))
+                        ordered_ids.append(node.id)
             except Exception:
                 pass
 
-        combined = "\n\n---\n\n".join(sections)
+        rendered = self._format_recall_nodes(ordered_ids, anchor_ids)
+        self.last_recall_stats = {
+            "nodes": len(ordered_ids),
+            "tokens": estimate_tokens(rendered),
+            "budget": self.budget_tokens,
+        }
+        return rendered
 
-        # Rough token budget enforcement (4 chars ≈ 1 token)
-        max_chars = self.budget_tokens * 4
-        if len(combined) > max_chars:
-            combined = combined[:max_chars] + "\n\n[...memory truncated for context budget...]"
+    def _format_recall_nodes(self, node_ids: list[str], anchor_ids: list[str]) -> str:
+        """Render compact memory snippets plus a few relevant excerpts."""
+        if not node_ids:
+            return ""
 
-        return combined
-
-    def _format_traversal_with_bodies(self, traversal: Any) -> str:
-        """Render a traversal with enough node body content to be useful to the LLM."""
+        budget = self.budget_tokens
+        excerpt_budget = max(40, self.max_node_tokens)
         lines = [
             "# MagAgent Memory Recall",
             "",
-            f"- Start: `{traversal.start}`",
-            f"- Max depth: {traversal.max_depth}",
-            f"- Nodes reached: {len(traversal.nodes)}",
+            f"- Anchors: {', '.join(f'`{node_id}`' for node_id in anchor_ids)}",
+            f"- Nodes considered: {len(node_ids)}",
+            f"- Budget: ~{budget} tokens",
+            "",
+            "## Compact Matches",
             "",
         ]
-        for visited in traversal.nodes:
+
+        loaded: list[Any] = []
+        for node_id in node_ids:
             try:
-                node = self._index.read_node(visited.id)
+                loaded.append(self._index.read_node(node_id))
             except Exception:
                 continue
-            body = (node.body or "").strip()
-            if len(body) > 2400:
-                body = body[:2400].rstrip() + "\n\n[...node body truncated...]"
-            path = " -> ".join(visited.path)
+
+        for node in loaded:
+            snippet = _first_sentence_or_line(node.body)
             links = ", ".join(node.links or []) or "none"
+            lines.append(
+                f"- `{node.id}` ({node.node_type}; links: {links}): "
+                f"{truncate_to_tokens(snippet, 45, '[...]')}"
+            )
+
+        lines.extend(["", "## Excerpts", ""])
+        excerpt_count = 0
+        for node in loaded:
+            if excerpt_count >= 4:
+                break
+            body = truncate_to_tokens((node.body or "").strip(), excerpt_budget)
+            if not body:
+                continue
             lines.extend(
                 [
-                    f"## {node.id} (depth {visited.depth})",
+                    f"### {node.id}",
                     "",
                     f"- Type: `{node.node_type}`",
-                    f"- Path: `{path}`",
-                    f"- Links: {links}",
                     "",
-                    body or "_No body content._",
+                    body,
                     "",
                 ]
             )
-        return "\n".join(lines).strip()
+            excerpt_count += 1
+
+            current = "\n".join(lines)
+            if estimate_tokens(current) >= budget:
+                break
+
+        rendered = "\n".join(lines).strip()
+        return truncate_to_tokens(rendered, budget, "[...memory truncated for context budget...]")
 
     def _find_anchor_nodes(self, query: str, max_anchors: int = 3) -> list[str]:
         """Find node IDs most relevant to query via keyword matching."""
@@ -449,3 +478,11 @@ class MemoryManager:
             if n:
                 nodes.append(n)
         return nodes
+
+
+def _first_sentence_or_line(text: str) -> str:
+    compact = re.sub(r"\s+", " ", (text or "").strip())
+    if not compact:
+        return ""
+    sentence = re.split(r"(?<=[.!?])\s+", compact, maxsplit=1)[0]
+    return sentence or compact.splitlines()[0]

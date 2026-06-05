@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-74%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-78%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -36,8 +36,9 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Runs entirely in your terminal — no IDE plugin, no web UI required
 - Maintains a **persistent memory graph** per user that grows smarter over time
 - Connects to **11+ AI providers** (local and cloud) via a single config
-- Has **29 built-in tools** out of the box — no plugins or configuration required
-- Includes **8 pre-built skill libraries** for docs, spreadsheets, PDFs, images, video, data analysis, REST APIs, and databases
+- Has **31 built-in tools** out of the box — no plugins or configuration required
+- Includes **10 pre-built skill libraries** for docs, spreadsheets, PDFs, images, video, data analysis, REST APIs, databases, desktop automation, and Git
+- Uses token-efficient context management: conversation compaction, repo-map slices, memory/skill budgets, and compressed tool results
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
 
 Every session, MagAgent extracts facts, preferences, and patterns from your conversation and writes them into a MagGraph knowledge graph. Next session, it reads that graph to understand your tech stack, coding style, project context, and recurring patterns — without you having to repeat yourself.
@@ -108,18 +109,20 @@ Configure multiple providers and switch mid-session: `/model anthropic/claude-3-
 
 ## Tools
 
-MagAgent ships with **29 built-in tools** the agent can call without any setup.
+MagAgent ships with **31 built-in tools** the agent can call without any setup.
 
 ### File & Code Tools
 
 | Tool | Description | Permission |
 |---|---|---|
-| `read_file` | Read file contents | Silent (always allowed) |
+| `read_file` | Read file preview, with truncation for large files | Silent in project, confirm outside |
+| `read_file_range` | Read exact line ranges from a file | Silent in project, confirm outside |
+| `outline_file` | Compact source outline with symbols and line numbers | Silent in project, confirm outside |
 | `write_file` | Write/create a file | Auto in project dir |
 | `edit_file` | Replace exact string in file | Auto in project dir |
 | `delete_file` | Delete file or directory | Confirm |
-| `list_dir` | List directory contents | Silent |
-| `diff_files` | Unified diff between two files | Silent |
+| `list_dir` | List directory contents | Silent in project, confirm outside |
+| `diff_files` | Unified diff between two files | Silent in project, confirm outside |
 | `compress` | Zip or tar.gz a file/directory | Auto |
 | `extract` | Unzip/untar an archive | Auto |
 | `run_shell` | Execute a shell command | Tiered by command risk |
@@ -156,7 +159,7 @@ MagAgent ships with **29 built-in tools** the agent can call without any setup.
 | `clipboard_read` | Read system clipboard | Silent |
 | `clipboard_write` | Write to clipboard | Auto |
 | `open_file` | Open file in default application (xdg-open) | Auto |
-| `read_image` | Image metadata + base64 for vision models | Silent |
+| `read_image` | Image metadata + base64 for vision models | Silent in project, confirm outside |
 
 ---
 
@@ -166,7 +169,7 @@ MagAgent uses a **4-tier risk system** to auto-approve safe operations and only 
 
 | Mode | Behaviour |
 |---|---|
-| `balanced` *(default)* | Reads always run; low-risk writes auto-run; medium needs Enter; high needs typed "yes" |
+| `balanced` *(default)* | Project reads run; outside-project reads confirm; low-risk writes auto-run; medium needs Enter; high needs typed "yes" |
 | `silent` | Only destructive or high-risk ops prompt |
 | `paranoid` | Everything except file reads requires confirmation |
 | `yolo` | Fully autonomous — no prompts |
@@ -214,12 +217,25 @@ Memory is extracted and written every **N turns** (configurable, default 5) and 
 
 ```bash
 magent memory stats                     # Node/edge counts, disk usage
-magent memory search "JWT"              # Semantic search
+magent memory search "JWT"              # Keyword/full-text search
 magent memory show project_myapp        # View a node
 magent memory traverse project_myapp    # BFS from a node
+magent memory ui                        # Open MagGraph dashboard
+magent memory sync status               # Run MagGraph sync status
 magent memory export --out backup.json  # Export all nodes as JSON
 magent memory reset                     # Wipe all memory (with confirmation)
 ```
+
+### Token-Efficient Context
+
+MagAgent keeps context lean while preserving useful state:
+
+- **Conversation compaction** summarizes older turns and keeps recent turns verbatim.
+- **Repository map slices** inject relevant file/symbol maps instead of whole files.
+- **Memory recall budgets** inject compact matches first, then a few excerpts.
+- **Skill budgets** truncate long skill guidance before it crowds out the task.
+- **Tool result compression** trims large outputs and points the agent to targeted follow-ups.
+- **Large file reads** return previews; use `outline_file` and `read_file_range` for exact context.
 
 ---
 
@@ -253,7 +269,7 @@ Skills are Markdown files that teach the agent how to perform specific tasks —
 
 ### Built-in Skills Library
 
-MagAgent ships with 8 pre-built skills in `docs/skills/`:
+MagAgent ships with 10 pre-built skills in `docs/skills/`:
 
 | Skill | Triggers On | Guide |
 |---|---|---|
@@ -308,7 +324,7 @@ Send tasks to MagAgent from **Slack**, **Discord**, or **Telegram** while you're
 
 ```bash
 # Install gateway dependencies
-pip install "magent[gateway]"
+pip install "mag-agent[gateway]"
 
 # Generate config template
 magent gateway init
@@ -374,6 +390,10 @@ magent memory delete <node-id>           # Delete a node
 magent memory export --out backup.json   # Export all nodes as JSON
 magent memory reset                      # Wipe all memory (prompts "yes")
 magent memory log                        # View recent session logs
+magent memory ui                         # Open embedded MagGraph UI
+magent memory sync status                # Git sync status via MagGraph
+magent memory sync pull                  # Pull memory graph updates
+magent memory sync push -m "message"     # Commit/push memory graph updates
 ```
 
 ### Gateway
@@ -422,12 +442,22 @@ Full config at `~/.config/magent/config.toml`:
 provider = "ollama"
 model = "qwen2.5-coder:32b"
 permission_mode = "balanced"
+context_window_tokens = 32000
+memory_budget_tokens = 4000
+repo_map_budget_tokens = 1200
+skill_budget_tokens = 2000
 
 [memory]
 write_every_n_turns = 5
 extraction_provider = "ollama"
 extraction_model = "qwen2.5:7b"
 encrypt = false
+recall_body_tokens = 220
+
+[context]
+compact_every_n_turns = 10
+keep_recent_turns = 6
+max_history_tokens = 6000
 
 [permissions]
 mode = "balanced"
@@ -518,9 +548,11 @@ src/magent/
 ├── memory/           # MagGraph integration — read, write, search
 ├── permissions/      # Risk tiers, auto-approve logic
 ├── providers/        # LiteLLM provider registry
+├── repo_map.py       # Token-efficient repository map cache
 ├── skills/           # SKILL.md discovery, matching, lockfile
 ├── subagents/        # Sub-agent runner
-├── tools/            # 29 built-in tools (file, web, db, system)
+├── tokens.py         # Lightweight token budgeting helpers
+├── tools/            # 31 built-in tools (file, web, db, system)
 │   └── db.py         # SQLite named database tools
 ├── logging.py        # JSONL session event logging
 ├── setup.py          # First-run wizard
@@ -529,7 +561,7 @@ docs/
 ├── gateway/          # Gateway setup guides
 └── skills/           # Built-in skill SKILL.md files
 tests/
-└── unit/             # 42 unit tests (all mocked, no credentials needed)
+└── unit/             # 78 unit tests (all mocked, no credentials needed)
 ```
 
 ---

@@ -17,7 +17,9 @@ from magent.logging import SessionLogger
 from magent.memory import MemoryManager
 from magent.memory.extraction import extract_memories
 from magent.providers import Provider
+from magent.repo_map import RepoMapCache
 from magent.skills import SkillRegistry
+from magent.tokens import estimate_tokens, truncate_to_tokens
 from magent.tools import ToolExecutor
 
 console = Console()
@@ -35,8 +37,12 @@ Key behaviors:
 5. Think step-by-step for complex tasks. Break large tasks into smaller tool calls.
 6. After completing a task, briefly summarize what you did.
 7. For file reads over 100 lines, prefer outline_file first, then read only the relevant range.
+8. Prefer narrow edit_file changes over whole-file rewrites whenever possible.
+9. Tool outputs may be compressed; use targeted follow-up tools for exact ranges or full details.
 
 {memory_context}
+{repo_context}
+{session_context}
 {skill_context}
 """
 
@@ -63,10 +69,22 @@ class AgentSession:
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
         self.turn_count = 0
         self.conversation: list[dict[str, str]] = []
+        self.compacted_summary = ""
+        self.scratchpad: dict[str, Any] = {
+            "project": self.project_slug,
+            "files_touched": [],
+            "commands_run": [],
+            "decisions": [],
+        }
 
         # Initialize subsystems
         memory_dir = user_memory_dir(username)
-        self.memory = MemoryManager(memory_dir, config.memory_budget_tokens)
+        self.memory = MemoryManager(
+            memory_dir,
+            config.memory_budget_tokens,
+            max_node_tokens=config.recall_body_tokens,
+        )
+        self.repo_map = RepoMapCache(cwd)
         self.tools = ToolExecutor(
             cwd=cwd,
             permission_mode=config.permission_mode,
@@ -114,11 +132,41 @@ class AgentSession:
             recalled = self.memory.recall(user_message)
             if recalled:
                 memory_context = f"## Your Memory (what you know about this user)\n\n{recalled}\n"
-        skill_context = self.skill_registry.build_skill_context(user_message)
+        repo_context = ""
+        repo_slice = self.repo_map.relevant_slice(user_message, self.config.repo_map_budget_tokens)
+        if repo_slice:
+            repo_context = f"{repo_slice}\n"
+        session_context = self._build_session_context()
+        skill_context = self.skill_registry.build_skill_context(
+            user_message,
+            budget_tokens=self.config.skill_budget_tokens,
+        )
         return AGENT_SYSTEM_PROMPT.format(
             memory_context=memory_context,
+            repo_context=repo_context,
+            session_context=session_context,
             skill_context=skill_context,
         )
+
+    def _build_session_context(self) -> str:
+        parts = ["## Session State", ""]
+        if self.compacted_summary:
+            parts.extend(["### Compacted Conversation", self.compacted_summary, ""])
+        files = self.scratchpad.get("files_touched") or []
+        commands = self.scratchpad.get("commands_run") or []
+        if files:
+            parts.append("Files touched: " + ", ".join(f"`{f}`" for f in files[-12:]))
+        if commands:
+            parts.append("Recent commands: " + "; ".join(f"`{c}`" for c in commands[-8:]))
+        if len(parts) <= 2:
+            return ""
+        return "\n".join(parts) + "\n"
+
+    def _conversation_messages_for_prompt(self) -> list[dict[str, str]]:
+        if not self.compacted_summary:
+            return self.conversation[:-1]
+        keep = self.config.keep_recent_turns
+        return self.conversation[-(keep + 1) : -1] if keep > 0 else []
 
     async def _run_tool_loop(
         self, messages: list[dict[str, Any]]
@@ -174,7 +222,8 @@ class AgentSession:
                     result = await self.mcp.dispatch(tool_name, tool_args)
                 else:
                     result = await self.tools.dispatch(tool_name, tool_args)
-                result_str = json.dumps(result, indent=2, default=str)
+                self._observe_tool_result(tool_name, tool_args, result)
+                result_str = self._compress_tool_result(tool_name, result)
 
                 # Log the tool call
                 from magent.permissions import RiskTier, classify_shell_command
@@ -206,9 +255,9 @@ class AgentSession:
         system_prompt = self._build_system_prompt(user_message)
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
-            *self.conversation[:-1],
-            {"role": "user", "content": user_message},
+            *self._conversation_messages_for_prompt(),
         ]
+        messages.append({"role": "user", "content": user_message})
 
         # Run tool loop first (tools don't stream)
         # Wait for MCP servers to finish connecting (if still starting)
@@ -256,11 +305,12 @@ class AgentSession:
                         result = await self.mcp.dispatch(tool_name, tool_args)
                     else:
                         result = await self.tools.dispatch(tool_name, tool_args)
+                    self._observe_tool_result(tool_name, tool_args, result)
                     messages.append(
                         {
                             "role": "tool",
                             "tool_call_id": tc.id,
-                            "content": json.dumps(result, default=str),
+                            "content": self._compress_tool_result(tool_name, result),
                         }
                     )
 
@@ -285,6 +335,7 @@ class AgentSession:
 
             if self.turn_count % self.config.write_every_n_turns == 0:
                 await self._maybe_write_memories()
+            self._maybe_compact_conversation()
 
         except Exception as e:
             err = f"\n[Error: {e}]"
@@ -299,9 +350,9 @@ class AgentSession:
         system_prompt = self._build_system_prompt(user_message)
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": system_prompt},
-            *self.conversation[:-1],
-            {"role": "user", "content": user_message},
+            *self._conversation_messages_for_prompt(),
         ]
+        messages.append({"role": "user", "content": user_message})
 
         response, _, tool_call_count = await self._run_tool_loop(messages)
         self.conversation.append({"role": "assistant", "content": response})
@@ -309,8 +360,76 @@ class AgentSession:
 
         if self.turn_count % self.config.write_every_n_turns == 0:
             await self._maybe_write_memories()
+        self._maybe_compact_conversation()
 
         return response
+
+    def _maybe_compact_conversation(self) -> None:
+        keep = self.config.keep_recent_turns
+        if len(self.conversation) <= keep + 2:
+            return
+        history_tokens = estimate_tokens("\n".join(t["content"] for t in self.conversation))
+        interval_hit = (
+            self.config.compact_every_n_turns > 0
+            and self.turn_count % self.config.compact_every_n_turns == 0
+        )
+        budget_hit = history_tokens > self.config.max_history_tokens
+        if not interval_hit and not budget_hit:
+            return
+
+        old_turns = self.conversation[:-keep]
+        self.conversation = self.conversation[-keep:]
+        summary_lines = []
+        if self.compacted_summary:
+            summary_lines.append(self.compacted_summary)
+        summary_lines.append(f"Compacted {len(old_turns)} older turns at turn {self.turn_count}.")
+        for turn in old_turns[-12:]:
+            role = turn.get("role", "unknown")
+            content = reflow(turn.get("content", ""))
+            summary_lines.append(f"- {role}: {truncate_to_tokens(content, 60, '[...]')}")
+        self.compacted_summary = truncate_to_tokens("\n".join(summary_lines), 1200)
+        console.print(
+            f"[dim]Compacted conversation history (~{history_tokens} tokens before compaction).[/dim]"
+        )
+
+    def _observe_tool_result(
+        self, tool_name: str, tool_args: dict[str, Any], result: dict[str, Any]
+    ) -> None:
+        if tool_name in {"write_file", "edit_file", "delete_file"} and result.get("path"):
+            self._remember_scratchpad("files_touched", str(result["path"]))
+        if tool_name == "run_shell":
+            command = str(tool_args.get("command", ""))
+            if command:
+                self._remember_scratchpad("commands_run", command)
+
+    def _remember_scratchpad(self, key: str, value: str, limit: int = 40) -> None:
+        values = list(self.scratchpad.get(key) or [])
+        if value not in values:
+            values.append(value)
+        self.scratchpad[key] = values[-limit:]
+
+    def _compress_tool_result(self, tool_name: str, result: dict[str, Any]) -> str:
+        compressed = dict(result)
+        max_tokens = 1200
+        if tool_name in {"read_file", "web_fetch"}:
+            max_tokens = 1800
+        elif tool_name in {"search_codebase", "list_dir", "system_info"}:
+            max_tokens = 900
+
+        for key in ("content", "stdout", "stderr", "body_text", "diff", "base64"):
+            if isinstance(compressed.get(key), str):
+                marker = f"[...{key} truncated; use targeted follow-up tools for more...]"
+                compressed[key] = truncate_to_tokens(compressed[key], max_tokens, marker)
+
+        if isinstance(compressed.get("matches"), list) and len(compressed["matches"]) > 60:
+            compressed["matches"] = compressed["matches"][:60]
+            compressed["truncated"] = True
+        if isinstance(compressed.get("entries"), list) and len(compressed["entries"]) > 80:
+            compressed["entries"] = compressed["entries"][:80]
+            compressed["truncated"] = True
+
+        text = json.dumps(compressed, indent=2, default=str)
+        return truncate_to_tokens(text, max_tokens + 300, "[...tool result truncated...]")
 
     async def spawn_subagent(self, task_id: str, description: str) -> str:
         """Spawn a focused sub-agent for a parallel task. Returns its result."""
@@ -359,3 +478,8 @@ class AgentSession:
         self.logger.close()
         # Stop all MCP server connections
         await self.mcp.stop_all()
+
+
+def reflow(text: str) -> str:
+    """Collapse whitespace for compact session summaries."""
+    return " ".join((text or "").split())

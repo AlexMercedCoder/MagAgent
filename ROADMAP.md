@@ -13,6 +13,8 @@ These improvements reduce token spend on every single interaction, regardless of
 
 ### 0.1 · Tool Output Budgets (Token Caps Per Tool)
 
+**Status:** Partially shipped in v0.3.0. Large file reads are previewed, exact range reads are available, and agent-side tool results are compressed before they are appended to model context. Per-tool config remains future work.
+
 **Why:** The biggest single source of token waste is uncapped tool output. A `read_file` on a 2,000-line file burns thousands of tokens even when the agent only needed 10 lines. A `web_fetch` on a documentation page can return 15,000 tokens of boilerplate. These cost money and crowd out useful context.
 
 **What to build:**
@@ -40,7 +42,7 @@ db_query = 4000          # cap rows returned
 
 ### 0.2 · Selective Tool Injection
 
-**Why:** The standard OpenAI function-calling schema for 29 tools costs ~2,000–3,000 tokens of prompt *on every LLM call* — even simple conversational questions that don't need most tools. That's wasted on every turn.
+**Why:** The standard OpenAI function-calling schema for 31 tools costs thousands of prompt tokens *on every LLM call* — even simple conversational questions that don't need most tools. That's wasted on every turn.
 
 **What to build:**
 - Tool classifier: given the user's message, use a small fast model (or keyword heuristics) to predict which tool categories are relevant
@@ -76,6 +78,8 @@ db_query = 4000          # cap rows returned
 ---
 
 ### 0.4 · Smart File Reading (Partial Reads + Outline Mode)
+
+**Status:** Shipped in v0.3.0. `read_file_range` and `outline_file` are available, `read_file` previews large files, and the system prompt nudges targeted file reads.
 
 **Why:** The agent often reads entire files to find one function. A smarter read strategy can give the agent what it needs with 90% fewer tokens.
 
@@ -118,6 +122,8 @@ db_query = 4000          # cap rows returned
 
 ### 0.6 · Tool Response Compression
 
+**Status:** Partially shipped in v0.3.0. Agent-side tool results are compressed/truncated before entering conversation context. Fine-grained raw/debug controls remain future work.
+
 **Why:** Many tool results include verbose JSON, full error tracebacks, or redundant metadata that the model doesn't need but still pays for. Compressing results to the signal reduces token consumption.
 
 **What to build:**
@@ -135,6 +141,8 @@ db_query = 4000          # cap rows returned
 ---
 
 ### 0.7 · Memory Token Budget Enforcement
+
+**Status:** Shipped in v0.3.0 for local recall. Memory recall now reports an approximate budget, injects compact matches before excerpts, and truncates individual node bodies.
 
 **Why:** The memory recall injected into every system prompt can balloon unchecked. If the user has 500 memory nodes, a naive recall might inject 10,000 tokens of context — more than the response itself.
 
@@ -241,6 +249,8 @@ CREATE TABLE checkpoints (
 ---
 
 ### 1.4 · Context Window Management & Conversation Summarization
+
+**Status:** Partially shipped in v0.3.0. MagAgent now performs deterministic conversation compaction using recent-turn retention and compacted session state. LLM-authored summaries and token/cost telemetry remain future work.
 
 **Why:** Long sessions hit model context limits and quality degrades. The agent needs to gracefully manage conversation history — summarizing old turns rather than truncating them blindly.
 
@@ -586,8 +596,8 @@ If implementing today, start with these — highest impact, lowest effort:
 
 1. **Tool Output Budgets** — Wrap `_budget_output()` around every tool return. One afternoon of work, immediate savings on every session.
 2. **Stale Result Pruning** — One `ConversationPruner` class, applied after each tool append. Prevents long sessions from becoming expensive.
-3. **Memory Token Budget** — Already partially implemented; enforce the budget cap fully in `MemoryManager.recall()`.
-4. **Smart File Reading** — Add `read_file_range` + `outline_file` tools. Teaches the agent surgical file reading.
+3. **Memory Token Budget** — Shipped in v0.3.0 for local recall; semantic reranking remains future work.
+4. **Smart File Reading** — Shipped in v0.3.0 with `read_file_range`, `outline_file`, and large-file previews.
 5. **Prompt Caching** — Restructure system prompt (static first, dynamic last). Zero-code-change for most providers.
 6. **MCP Support** — After efficiency is solid, open the ecosystem. One `MCPClient` class + config section.
 

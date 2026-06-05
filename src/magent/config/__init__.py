@@ -29,7 +29,7 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.2.0",
+        "version": "0.3.0",
     },
     "defaults": {
         "provider": "ollama",
@@ -37,6 +37,8 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "permission_mode": "balanced",
         "context_window_tokens": 32000,
         "memory_budget_tokens": 4000,
+        "repo_map_budget_tokens": 1200,
+        "skill_budget_tokens": 2000,
     },
     "memory": {
         "auto_write": True,
@@ -45,6 +47,12 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "extraction_provider": "ollama",
         "extraction_model": "qwen2.5:7b",
         "encrypt": False,
+        "recall_body_tokens": 220,
+    },
+    "context": {
+        "compact_every_n_turns": 10,
+        "keep_recent_turns": 6,
+        "max_history_tokens": 6000,
     },
     "skills": {
         "lockfile": str(SKILLS_LOCK),
@@ -146,6 +154,34 @@ class Config:
             self._user.get("preferences", {}).get("memory_budget_tokens")
             or self._global.get("defaults", {}).get("memory_budget_tokens", 4000)
         )
+
+    @property
+    def repo_map_budget_tokens(self) -> int:
+        return int(self._global.get("defaults", {}).get("repo_map_budget_tokens", 1200))
+
+    @property
+    def skill_budget_tokens(self) -> int:
+        return int(self._global.get("defaults", {}).get("skill_budget_tokens", 2000))
+
+    @property
+    def context_window_tokens(self) -> int:
+        return int(self._global.get("defaults", {}).get("context_window_tokens", 32000))
+
+    @property
+    def compact_every_n_turns(self) -> int:
+        return int(self._global.get("context", {}).get("compact_every_n_turns", 10))
+
+    @property
+    def keep_recent_turns(self) -> int:
+        return int(self._global.get("context", {}).get("keep_recent_turns", 6))
+
+    @property
+    def max_history_tokens(self) -> int:
+        return int(self._global.get("context", {}).get("max_history_tokens", 6000))
+
+    @property
+    def recall_body_tokens(self) -> int:
+        return int(self._global.get("memory", {}).get("recall_body_tokens", 220))
 
     @property
     def write_every_n_turns(self) -> int:

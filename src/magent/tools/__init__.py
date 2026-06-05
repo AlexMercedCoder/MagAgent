@@ -36,6 +36,7 @@ from magent.permissions import (
 console = Console()
 
 ToolResult = dict[str, Any]
+READ_FILE_PREVIEW_CHARS = 16000
 
 
 class ToolExecutor:
@@ -84,11 +85,19 @@ class ToolExecutor:
             return {"ok": False, "error": "Permission denied by user"}
         try:
             content = abs_path.read_text(encoding="utf-8", errors="replace")
+            total_lines = len(content.splitlines())
+            truncated = len(content) > READ_FILE_PREVIEW_CHARS
+            if truncated:
+                content = (
+                    content[:READ_FILE_PREVIEW_CHARS].rstrip()
+                    + "\n\n[...file preview truncated; use outline_file or read_file_range...]"
+                )
             return {
                 "ok": True,
                 "content": content,
                 "path": str(abs_path),
-                "lines": len(content.splitlines()),
+                "lines": total_lines,
+                "truncated": truncated,
             }
         except Exception as e:
             return {"ok": False, "error": str(e)}

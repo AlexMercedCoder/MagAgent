@@ -91,6 +91,10 @@ def _build_extraction_provider(config):
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
+    task: Annotated[
+        str | None,
+        typer.Argument(help="Optional one-shot task to run non-interactively"),
+    ] = None,
     provider: str | None = typer.Option(None, "--provider", "-p", help="Provider ID"),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
     project: str | None = typer.Option(None, "--project", help="Project directory"),
@@ -114,7 +118,33 @@ def main(
     main_provider = _build_provider(config, provider, model)
     extract_provider = _build_extraction_provider(config)
 
-    _run_repl(username, config, main_provider, extract_provider, cwd)
+    if task:
+        _run_one_shot(username, config, main_provider, extract_provider, cwd, task)
+    else:
+        _run_repl(username, config, main_provider, extract_provider, cwd)
+
+
+def _run_one_shot(username, config, main_provider, extract_provider, cwd, task):
+    """Run a single non-interactive agent task."""
+    from magent.agent import AgentSession
+    from magent.tui import print_response
+
+    session = AgentSession(
+        username=username,
+        config=config,
+        provider=main_provider,
+        extraction_provider=extract_provider,
+        cwd=cwd,
+    )
+
+    async def _run() -> str:
+        try:
+            return await session.chat(task)
+        finally:
+            await session.end_session()
+
+    response = asyncio.run(_run())
+    print_response(response)
 
 
 def _run_repl(username, config, main_provider, extract_provider, cwd):
