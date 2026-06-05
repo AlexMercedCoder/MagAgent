@@ -1,8 +1,12 @@
-"""TUI helpers: banner, response rendering."""
+"""TUI helpers: banner, response rendering, streaming."""
 
 from __future__ import annotations
 
+import asyncio
+from typing import AsyncIterator
+
 from rich.console import Console
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.text import Text
@@ -39,4 +43,36 @@ def print_response(text: str) -> None:
         console.print(Markdown(text))
     except Exception:
         console.print(text)
+    console.print()
+
+
+def print_streaming_response(
+    async_gen: AsyncIterator[str],
+    loop: asyncio.AbstractEventLoop,
+) -> None:
+    """
+    Consume a streaming async generator and render output live.
+    Accumulates tokens, then re-renders as Markdown when done.
+    """
+    accumulated = ""
+
+    # Stream tokens to terminal directly (no Live panel — simpler, no flicker)
+    async def _consume():
+        nonlocal accumulated
+        async for chunk in async_gen:
+            accumulated += chunk
+            # Print raw chunk immediately for responsiveness
+            console.print(chunk, end="", markup=False)
+
+    loop.run_until_complete(_consume())
+
+    # After streaming is done, print a newline then re-render as Markdown
+    console.print()  # newline after raw stream
+    console.print()
+    try:
+        # Re-render final output as formatted Markdown
+        console.rule(style="dim")
+        console.print(Markdown(accumulated))
+    except Exception:
+        pass  # already printed raw above
     console.print()

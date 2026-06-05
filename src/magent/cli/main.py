@@ -114,9 +114,9 @@ def main(
 
 
 def _run_repl(username, config, main_provider, extract_provider, cwd):
-    """Run the interactive REPL."""
+    """Run the interactive REPL with streaming output."""
     from magent.agent import AgentSession
-    from magent.tui import print_banner, print_response
+    from magent.tui import print_banner, print_streaming_response
 
     print_banner(username, main_provider.display_name, cwd, config.permission_mode)
 
@@ -128,11 +128,19 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
         cwd=cwd,
     )
 
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    def _shutdown():
+        console.print("\n[dim]Ending session...[/dim]")
+        loop.run_until_complete(session.end_session())
+        loop.close()
+
     def _signal_handler(sig, frame):
-        console.print("\n[dim]Interrupted. Ending session...[/dim]")
-        asyncio.get_event_loop().run_until_complete(session.end_session())
+        _shutdown()
         raise SystemExit(0)
 
+    import signal
     signal.signal(signal.SIGINT, _signal_handler)
 
     console.print(
@@ -152,30 +160,32 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
         if user_input.strip().lower() in ("exit", "quit", "/exit", "/quit"):
             break
 
-        # Handle slash commands
         if user_input.startswith("/"):
-            if _handle_slash_command(user_input, session, config, main_provider):
+            if _handle_slash_command(user_input, session, config, main_provider, loop):
                 continue
 
-        # Regular agent chat
+        # Stream the agent response
         try:
-            response = asyncio.get_event_loop().run_until_complete(
-                session.chat(user_input)
+            print_streaming_response(
+                session.stream_chat(user_input),
+                loop,
             )
-            print_response(response)
         except KeyboardInterrupt:
             console.print("\n[dim]Interrupted.[/dim]")
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
 
-    # End session
     console.print("\n[dim]Writing session memories...[/dim]")
-    asyncio.get_event_loop().run_until_complete(session.end_session())
+    loop.run_until_complete(session.end_session())
     console.print("[dim green]Session ended. Goodbye![/dim green]")
+    loop.close()
 
 
-def _handle_slash_command(cmd: str, session, config, provider) -> bool:
+def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> bool:
     """Handle slash commands. Returns True if handled."""
+    import asyncio as _asyncio
+    _loop = loop or _asyncio.get_event_loop()
+
     parts = cmd.strip().split(maxsplit=1)
     command = parts[0].lower()
     arg = parts[1] if len(parts) > 1 else ""
@@ -183,14 +193,15 @@ def _handle_slash_command(cmd: str, session, config, provider) -> bool:
     if command == "/help":
         console.print(Panel(
             "[bold]Available commands:[/bold]\n\n"
-            "  [cyan]/help[/cyan]          — Show this help\n"
-            "  [cyan]/memory[/cyan]        — Show memory stats\n"
-            "  [cyan]/skills[/cyan]        — List active skills\n"
-            "  [cyan]/model[/cyan]         — Show current model\n"
-            "  [cyan]/user[/cyan]          — Show current user\n"
-            "  [cyan]/mode <mode>[/cyan]   — Set permission mode (silent/balanced/paranoid/yolo)\n"
-            "  [cyan]/clear[/cyan]         — Clear conversation history\n"
-            "  [cyan]/exit[/cyan]          — End session",
+            "  [cyan]/help[/cyan]            — Show this help\n"
+            "  [cyan]/memory[/cyan]          — Show memory stats\n"
+            "  [cyan]/skills[/cyan]          — List active skills\n"
+            "  [cyan]/model[/cyan]           — Show current model\n"
+            "  [cyan]/user[/cyan]            — Show current user\n"
+            "  [cyan]/mode <mode>[/cyan]     — Set permission mode (silent/balanced/paranoid/yolo)\n"
+            "  [cyan]/spawn <task>[/cyan]    — Spawn a sub-agent for a focused task\n"
+            "  [cyan]/clear[/cyan]           — Clear conversation history\n"
+            "  [cyan]/exit[/cyan]            — End session",
             title="[bold cyan]MagAgent Help[/bold cyan]",
         ))
         return True
@@ -227,6 +238,19 @@ def _handle_slash_command(cmd: str, session, config, provider) -> bool:
         else:
             console.print(f"[yellow]Current mode: {config.permission_mode}[/yellow]")
             console.print(f"[dim]Available: {', '.join(modes)}[/dim]")
+        return True
+
+    if command == "/spawn":
+        if not arg:
+            console.print("[yellow]Usage: /spawn <task description>[/yellow]")
+            return True
+        import uuid as _uuid
+        task_id = f"sub_{_uuid.uuid4().hex[:6]}"
+        console.print(f"[dim]Spawning sub-agent [{task_id}]...[/dim]")
+        result = _loop.run_until_complete(session.spawn_subagent(task_id, arg))
+        from magent.tui import print_response
+        console.print(f"[dim cyan]Sub-agent [{task_id}] result:[/dim cyan]")
+        print_response(result)
         return True
 
     if command == "/clear":
@@ -459,6 +483,40 @@ def memory_reset(yes: bool = typer.Option(False, "--yes", "-y")):
         for f in memory_dir.rglob("*.md"):
             f.unlink()
     console.print(f"[green]✓ Memory cleared for '{username}'[/green]")
+
+
+@memory_app.command("log")
+def memory_log(
+    limit: int = typer.Option(20, "--limit", "-n", help="Max sessions to show"),
+    user: Optional[str] = typer.Option(None, "--user", "-u"),
+):
+    """Show recent session logs."""
+    from magent.logging import list_session_logs
+    from magent.utils import human_bytes
+
+    logs = list_session_logs(limit=limit)
+    if not logs:
+        console.print("[dim]No session logs found.[/dim]")
+        return
+
+    t = Table("Session", "User", "Started", "Status", "Events", "Size")
+    for entry in logs:
+        if user and entry.get("user") != user:
+            continue
+        status = (
+            "[green]complete[/green]"
+            if entry.get("ended") != "active"
+            else "[yellow]active[/yellow]"
+        )
+        t.add_row(
+            entry["session"][:22],
+            entry.get("user", "?"),
+            entry.get("started", "?")[:19],
+            status,
+            str(entry.get("events", 0)),
+            human_bytes(entry.get("bytes", 0)),
+        )
+    console.print(t)
 
 
 # ─────────────────────────────────────────────
