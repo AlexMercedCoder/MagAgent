@@ -45,7 +45,7 @@ class TelegramAdapter(GatewayAdapter):
 
     async def start(self) -> None:
         try:
-            from telegram import Bot, Update
+            from telegram import Update
             from telegram.ext import (
                 Application,
                 filters,
@@ -53,10 +53,10 @@ class TelegramAdapter(GatewayAdapter):
             from telegram.ext import (
                 MessageHandler as TGHandler,
             )
-        except ImportError:
+        except ImportError as e:
             raise RuntimeError(
                 "python-telegram-bot is not installed. Run: pip install 'python-telegram-bot>=21.0'"
-            )
+            ) from e
 
         bot_token = self.config.get("bot_token", "")
         if not bot_token:

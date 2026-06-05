@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sys
 import tomllib  # type: ignore[no-redef]
 from pathlib import Path
 from typing import Any
@@ -30,7 +29,7 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.1.1",
+        "version": "0.2.0",
     },
     "defaults": {
         "provider": "ollama",
@@ -105,6 +104,7 @@ class Config:
     def __init__(self, global_cfg: dict[str, Any], user_cfg: dict[str, Any] | None = None):
         self._global = global_cfg
         self._user = user_cfg or {}
+        self._raw = _deep_merge(global_cfg, self._user)
 
     def get(self, *keys: str, default: Any = None) -> Any:
         """Dot-path lookup, user profile overrides global."""
@@ -198,6 +198,10 @@ class Config:
         if env_var:
             return os.environ.get(env_var)
         return cfg.get("api_key")
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return the merged config as a plain dictionary."""
+        return self._raw.copy()
 
 
 # ─────────────────────────────────────────────

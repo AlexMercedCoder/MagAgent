@@ -23,7 +23,7 @@ def main() -> None:
     from magent.gateway import GatewayRunner
 
     username = get_current_user() or "default"
-    config_data = load_config(username)._raw
+    config_data = load_config(username).as_dict()
 
     runner = GatewayRunner(config_data)
 

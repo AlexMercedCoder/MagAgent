@@ -72,6 +72,7 @@ class AgentSession:
             permission_mode=config.permission_mode,
             allowed_shell_patterns=config.allowed_shell_patterns,
             show_tool_calls=config.get("ui", "show_tool_calls", default=True),
+            username=username,
         )
 
         # MCP servers (optional — connect only if configured)

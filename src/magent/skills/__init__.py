@@ -5,14 +5,13 @@ from __future__ import annotations
 import contextlib
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Any
 
 import yaml
 from rich.console import Console
 
-from magent.config import CONFIG_DIR, SKILLS_DIR, SKILLS_LOCK
+from magent.config import SKILLS_DIR, SKILLS_LOCK
 
 console = Console()
 

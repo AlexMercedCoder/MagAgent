@@ -45,8 +45,10 @@ class SlackAdapter(GatewayAdapter):
         try:
             from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
             from slack_bolt.async_app import AsyncApp
-        except ImportError:
-            raise RuntimeError("slack-bolt is not installed. Run: pip install 'slack-bolt>=1.18'")
+        except ImportError as e:
+            raise RuntimeError(
+                "slack-bolt is not installed. Run: pip install 'slack-bolt>=1.18'"
+            ) from e
 
         bot_token = self.config.get("bot_token", "")
         app_token = self.config.get("app_token", "")

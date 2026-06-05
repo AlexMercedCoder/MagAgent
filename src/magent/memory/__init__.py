@@ -10,10 +10,7 @@ Manages per-user knowledge graph operations:
 from __future__ import annotations
 
 import contextlib
-import json
-import os
 import re
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -100,8 +97,7 @@ class MemoryManager:
                 for node in result.nodes:
                     if node.id not in seen_ids:
                         seen_ids.add(node.id)
-                report = result.to_markdown(self._index)
-                sections.append(report)
+                sections.append(self._format_traversal_with_bodies(result))
             except Exception:
                 pass
 
@@ -113,6 +109,40 @@ class MemoryManager:
             combined = combined[:max_chars] + "\n\n[...memory truncated for context budget...]"
 
         return combined
+
+    def _format_traversal_with_bodies(self, traversal: Any) -> str:
+        """Render a traversal with enough node body content to be useful to the LLM."""
+        lines = [
+            "# MagAgent Memory Recall",
+            "",
+            f"- Start: `{traversal.start}`",
+            f"- Max depth: {traversal.max_depth}",
+            f"- Nodes reached: {len(traversal.nodes)}",
+            "",
+        ]
+        for visited in traversal.nodes:
+            try:
+                node = self._index.read_node(visited.id)
+            except Exception:
+                continue
+            body = (node.body or "").strip()
+            if len(body) > 2400:
+                body = body[:2400].rstrip() + "\n\n[...node body truncated...]"
+            path = " -> ".join(visited.path)
+            links = ", ".join(node.links or []) or "none"
+            lines.extend(
+                [
+                    f"## {node.id} (depth {visited.depth})",
+                    "",
+                    f"- Type: `{node.node_type}`",
+                    f"- Path: `{path}`",
+                    f"- Links: {links}",
+                    "",
+                    body or "_No body content._",
+                    "",
+                ]
+            )
+        return "\n".join(lines).strip()
 
     def _find_anchor_nodes(self, query: str, max_anchors: int = 3) -> list[str]:
         """Find node IDs most relevant to query via keyword matching."""
@@ -135,9 +165,9 @@ class MemoryManager:
             if score > 0:
                 scored.append((score, node_id))
 
-        # Also scan node bodies for top matches (sample first 50 nodes)
-        sample_ids = all_ids[:50]
-        for node_id in sample_ids:
+        # Also scan node bodies. Memory graphs are local Markdown and usually small
+        # enough that a full lightweight scan is more useful than sampling.
+        for node_id in all_ids:
             if any(nid == node_id for _, nid in scored):
                 continue
             try:
@@ -188,19 +218,28 @@ class MemoryManager:
             body = item.get("body", "")
             links = item.get("links", [])
 
+            if links:
+                missing_wikilinks = [
+                    link for link in links if f"[[{link}]]" not in body and f"[[{link}|" not in body
+                ]
+                if missing_wikilinks:
+                    body = body.rstrip() + "\n\nRelated: " + ", ".join(
+                        f"[[{link}]]" for link in missing_wikilinks
+                    ) + "\n"
+
             # Inject project link if applicable
             if project_slug and project_slug not in links:
                 project_node_id = f"project_{project_slug}"
                 body = body.rstrip() + f"\n\nProject: [[{project_node_id}]]\n"
                 links = list(links) + [project_node_id]
 
-            # Extra frontmatter for bookmark nodes
-            extra: dict[str, Any] = {}
+            # The current MagGraph Python binding does not expose arbitrary extra
+            # frontmatter fields, so preserve bookmark metadata in Markdown.
             if node_type == NODE_BOOKMARK:
                 if url := item.get("url"):
-                    extra["url"] = url
+                    body = body.rstrip() + f"\n\nURL: {url}\n"
                 if tags := item.get("tags"):
-                    extra["tags"] = tags
+                    body = body.rstrip() + f"\nTags: {', '.join(map(str, tags))}\n"
 
             try:
                 existing_ids = self._index.list_nodes()
@@ -212,7 +251,6 @@ class MemoryManager:
                         node_type=node_type,
                         body=body,
                         links=links,
-                        **extra,
                     )
                 written += 1
             except Exception as e:

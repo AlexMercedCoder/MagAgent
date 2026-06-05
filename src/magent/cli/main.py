@@ -8,6 +8,7 @@ import os
 import signal
 import sys
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -163,9 +164,10 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
         if user_input.strip().lower() in ("exit", "quit", "/exit", "/quit"):
             break
 
-        if user_input.startswith("/"):
-            if _handle_slash_command(user_input, session, config, main_provider, loop):
-                continue
+        if user_input.startswith("/") and _handle_slash_command(
+            user_input, session, config, main_provider, loop
+        ):
+            continue
 
         # Stream the agent response
         try:
@@ -551,6 +553,67 @@ def memory_log(
     console.print(t)
 
 
+@memory_app.command("ui")
+def memory_ui(
+    host: str = typer.Option("127.0.0.1", "--host", help="Loopback host to bind"),
+    port: int = typer.Option(8787, "--port", "-p", help="Port for the MagGraph UI"),
+):
+    """Open the embedded MagGraph web dashboard for the current user's memory graph."""
+    import shutil
+    import subprocess
+
+    username = _require_user()
+    memory_dir = user_memory_dir(username)
+    maggraph_bin = shutil.which("maggraph")
+    if not maggraph_bin:
+        console.print("[red]MagGraph CLI not found. Install it to use 'magent memory ui'.[/red]")
+        raise typer.Exit(1)
+
+    console.print(
+        f"[green]Starting MagGraph UI for '{username}' at http://{host}:{port}[/green]"
+    )
+    code = subprocess.run(
+        [
+            maggraph_bin,
+            "--config",
+            str(memory_dir / "maggraph.toml"),
+            "ui",
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ]
+    ).returncode
+    raise typer.Exit(code)
+
+
+@memory_app.command("sync")
+def memory_sync(
+    action: str = typer.Argument(..., help="push|pull|status"),
+    message: str = typer.Option("MagAgent memory sync", "--message", "-m"),
+):
+    """Run MagGraph Git sync for the current user's memory graph."""
+    import shutil
+    import subprocess
+
+    valid = {"push", "pull", "status"}
+    if action not in valid:
+        console.print(f"[red]Invalid sync action '{action}'. Choose: {', '.join(sorted(valid))}[/red]")
+        raise typer.Exit(1)
+
+    username = _require_user()
+    memory_dir = user_memory_dir(username)
+    maggraph_bin = shutil.which("maggraph")
+    if not maggraph_bin:
+        console.print("[red]MagGraph CLI not found. Install it to use 'magent memory sync'.[/red]")
+        raise typer.Exit(1)
+
+    cmd = [maggraph_bin, "--config", str(memory_dir / "maggraph.toml"), "sync", action]
+    if action == "push":
+        cmd += ["--message", message]
+    raise typer.Exit(subprocess.run(cmd).returncode)
+
+
 # ─────────────────────────────────────────────
 # Top-level commands
 # ─────────────────────────────────────────────
@@ -597,10 +660,10 @@ def doctor():
 
 @gateway_app.command("start")
 def gateway_start(
-    platforms: list[str] = typer.Argument(
-        None,
-        help="Platforms to start: slack discord telegram (default: all configured)",
-    ),
+    platforms: Annotated[
+        list[str] | None,
+        typer.Argument(help="Platforms to start: slack discord telegram (default: all configured)"),
+    ] = None,
     foreground: bool = typer.Option(
         False,
         "--foreground",
@@ -624,7 +687,7 @@ def gateway_start(
         raise typer.Exit(1)
 
     username = _require_user()
-    config_data = load_config(username)._raw
+    config_data = load_config(username).as_dict()
 
     gw_cfg = config_data.get("gateway", {})
     if not gw_cfg:
@@ -691,7 +754,7 @@ def gateway_stop():
         console.print(f"[green]✓ Gateway (PID {pid}) stopped.[/green]")
     except Exception as e:
         console.print(f"[red]Failed to stop gateway: {e}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @gateway_app.command("status")

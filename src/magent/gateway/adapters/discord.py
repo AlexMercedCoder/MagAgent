@@ -46,8 +46,10 @@ class DiscordAdapter(GatewayAdapter):
     async def start(self) -> None:
         try:
             import discord
-        except ImportError:
-            raise RuntimeError("discord.py is not installed. Run: pip install 'discord.py>=2.3'")
+        except ImportError as e:
+            raise RuntimeError(
+                "discord.py is not installed. Run: pip install 'discord.py>=2.3'"
+            ) from e
 
         bot_token = self.config.get("bot_token", "")
         if not bot_token:

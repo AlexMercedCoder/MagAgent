@@ -4,17 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import os
 import signal
-import sys
-from pathlib import Path
 from typing import Any
 
 from rich.console import Console
 
 from magent.config import CONFIG_DIR
-from magent.gateway.base import IncomingMessage
 from magent.gateway.router import MessageRouter
 
 console = Console()
@@ -84,10 +80,8 @@ class GatewayRunner:
                 t.cancel()
 
         for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
+            with contextlib.suppress(NotImplementedError):
                 loop.add_signal_handler(sig, _shutdown)
-            except NotImplementedError:
-                pass  # Windows
 
         try:
             await asyncio.gather(

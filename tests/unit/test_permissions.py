@@ -31,9 +31,13 @@ class TestClassifyShellCommand:
         assert classify_shell_command("rm -rf node_modules") == RiskTier.BLOCK
 
     def test_allowlist_overrides(self):
-        # git push is normally CONFIRM, but allowlisted to AUTO
-        tier = classify_shell_command("git push origin main", allowlist=["git *"])
+        # Ordinary git commands can be allowlisted to AUTO.
+        tier = classify_shell_command("git status --short", allowlist=["git *"])
         assert tier == RiskTier.AUTO
+
+    def test_allowlist_does_not_override_confirm_or_shell_control(self):
+        assert classify_shell_command("git push origin main", allowlist=["git *"]) == RiskTier.CONFIRM
+        assert classify_shell_command("git status; rm -rf /tmp/x", allowlist=["git *"]) == RiskTier.BLOCK
 
     def test_unknown_command_defaults_to_confirm(self):
         tier = classify_shell_command("my-custom-deploy-script --prod")

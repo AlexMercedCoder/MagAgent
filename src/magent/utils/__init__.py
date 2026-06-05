@@ -30,8 +30,8 @@ def run_doctor() -> None:
     # Python version
     import sys
 
-    ok = sys.version_info >= (3, 12)
-    checks.append(("Python >= 3.12", ok, f"Python {sys.version.split()[0]}"))
+    ok = sys.version_info >= (3, 11)
+    checks.append(("Python >= 3.11", ok, f"Python {sys.version.split()[0]}"))
 
     # Dependencies
     for pkg, friendly in [
@@ -49,7 +49,7 @@ def run_doctor() -> None:
             checks.append((friendly, False, "NOT INSTALLED — run: pip install magent"))
 
     # Config dir
-    from magent.config import CONFIG_DIR, get_current_user
+    from magent.config import CONFIG_DIR, get_current_user, load_config, user_memory_dir
 
     checks.append(
         (
@@ -69,6 +69,50 @@ def run_doctor() -> None:
         )
     )
 
+    if user:
+        memory_dir = user_memory_dir(user)
+        checks.append(("Memory directory", memory_dir.exists(), str(memory_dir)))
+        try:
+            import maggraph
+
+            index = maggraph.open_index(str(memory_dir))
+            checks.append(("MagGraph open", True, f"{len(index)} node(s)"))
+        except Exception as e:
+            checks.append(("MagGraph open", False, str(e)))
+
+        cfg = load_config(user)
+        provider_id = cfg.default_provider
+        provider_cfg = cfg.provider_config(provider_id)
+        checks.append(("Default provider", bool(provider_id), provider_id or "not configured"))
+        if provider_cfg.get("api_key_env"):
+            import os
+
+            env = provider_cfg["api_key_env"]
+            checks.append((f"{provider_id} API key env", bool(os.environ.get(env)), env))
+
+        raw_cfg = cfg.as_dict()
+        gateway_cfg = raw_cfg.get("gateway", {})
+        checks.append(
+            (
+                "Gateway config",
+                bool(gateway_cfg),
+                "configured" if gateway_cfg else "not configured",
+            )
+        )
+        mcp_cfg = raw_cfg.get("mcp", {}).get("servers", {})
+        checks.append(
+            (
+                "MCP servers",
+                isinstance(mcp_cfg, dict),
+                f"{len(mcp_cfg)} configured" if isinstance(mcp_cfg, dict) else "invalid config",
+            )
+        )
+        try:
+            importlib.import_module("mcp")
+            checks.append(("MCP SDK", True, "installed"))
+        except ImportError:
+            checks.append(("MCP SDK", not mcp_cfg, "install with: pip install 'mag-agent[mcp]'"))
+
     # ripgrep (optional)
     rg = shutil.which("rg")
     checks.append(("ripgrep (optional)", bool(rg), rg or "not found — search fallback to grep"))
@@ -76,6 +120,9 @@ def run_doctor() -> None:
     # git
     git = shutil.which("git")
     checks.append(("git", bool(git), git or "NOT FOUND"))
+
+    maggraph_cli = shutil.which("maggraph")
+    checks.append(("MagGraph CLI", bool(maggraph_cli), maggraph_cli or "not found"))
 
     # Print results
     t = Table("Check", "Status", "Details")

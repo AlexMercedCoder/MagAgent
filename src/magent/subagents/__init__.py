@@ -8,8 +8,7 @@ the parent's memory graph (read-only by default).
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 from rich.console import Console
 from rich.panel import Panel

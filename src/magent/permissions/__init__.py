@@ -16,8 +16,11 @@ Modes:
 from __future__ import annotations
 
 import fnmatch
+import os
 import re
+import shlex
 from enum import IntEnum
+from pathlib import Path
 from typing import NamedTuple
 
 from rich.console import Console
@@ -156,6 +159,8 @@ _BLOCK_PATTERNS: list[str] = [
     "ncat*",
 ]
 
+_SHELL_CONTROL_PATTERN = re.compile(r"(\|\||&&|[;\n`|<>]|\$\(|\${)")
+
 
 def _matches_any(cmd: str, patterns: list[str]) -> bool:
     cmd_lower = cmd.strip().lower()
@@ -167,18 +172,32 @@ def classify_shell_command(
     allowlist: list[str] | None = None,
 ) -> RiskTier:
     """Return the risk tier for a shell command string."""
-    # User allowlist trumps everything (tier 1 at most for auditing)
-    if allowlist and _matches_any(cmd, allowlist):
-        return RiskTier.AUTO
+    cmd_stripped = cmd.strip()
+
+    # Shell control syntax can turn an otherwise-safe allowlisted command into
+    # multiple actions. Treat it as high risk before applying user allowlists.
+    if _SHELL_CONTROL_PATTERN.search(cmd_stripped):
+        return RiskTier.BLOCK
 
     if _matches_any(cmd, _BLOCK_PATTERNS):
         return RiskTier.BLOCK
     if _matches_any(cmd, _CONFIRM_PATTERNS):
         return RiskTier.CONFIRM
+
+    # User allowlist can lower ordinary commands to AUTO, but not explicit
+    # blocked/confirmation commands and not shell-control syntax above.
+    if allowlist and _matches_any(cmd_stripped, allowlist):
+        return RiskTier.AUTO
+
     if _matches_any(cmd, _AUTO_PATTERNS):
         return RiskTier.AUTO
     if _matches_any(cmd, _SILENT_PATTERNS):
         return RiskTier.SILENT
+    try:
+        if not shlex.split(cmd_stripped):
+            return RiskTier.CONFIRM
+    except ValueError:
+        return RiskTier.BLOCK
     # Unknown commands default to CONFIRM
     return RiskTier.CONFIRM
 
@@ -190,13 +209,17 @@ def classify_shell_command(
 
 def classify_file_op(op: str, path: str, cwd: str) -> RiskTier:
     """Classify a file operation by type and path."""
-    import os
-
-    abs_path = os.path.abspath(os.path.join(cwd, path))
-    in_cwd = abs_path.startswith(os.path.abspath(cwd))
+    root = Path(cwd).resolve()
+    raw_path = Path(path).expanduser()
+    abs_path = (raw_path if raw_path.is_absolute() else root / raw_path).resolve(strict=False)
+    try:
+        os.path.commonpath([str(root), str(abs_path)])
+        in_cwd = abs_path == root or root in abs_path.parents
+    except ValueError:
+        in_cwd = False
 
     if op == "read":
-        return RiskTier.SILENT
+        return RiskTier.SILENT if in_cwd else RiskTier.CONFIRM
     if op in ("write", "edit", "create"):
         return RiskTier.AUTO if in_cwd else RiskTier.CONFIRM
     if op == "delete":

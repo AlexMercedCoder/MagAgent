@@ -15,9 +15,8 @@ import difflib
 import importlib.util
 import io
 import json
-import os
+import shlex
 import shutil
-import subprocess
 import sys
 import tempfile
 import zipfile
@@ -26,7 +25,6 @@ from typing import Any
 
 import httpx
 from rich.console import Console
-from rich.prompt import Confirm
 
 from magent.permissions import (
     RiskTier,
@@ -57,6 +55,14 @@ class ToolExecutor:
         self.show_tool_calls = show_tool_calls
         self.username = username
 
+    def _resolve_path(self, path: str) -> Path:
+        root = Path(self.cwd).resolve()
+        raw = Path(path).expanduser()
+        return (raw if raw.is_absolute() else root / raw).resolve(strict=False)
+
+    def _path_tier(self, op: str, path: str) -> tuple[Path, RiskTier]:
+        return self._resolve_path(path), classify_file_op(op, path, self.cwd)
+
     def _log_tool(self, name: str, desc: str, tier: RiskTier) -> None:
         if self.show_tool_calls and tier > RiskTier.SILENT:
             from magent.permissions import TIER_LABELS
@@ -71,9 +77,11 @@ class ToolExecutor:
     # ─────────────────────────────────────────────
 
     async def read_file(self, path: str) -> ToolResult:
-        tier = RiskTier.SILENT
-        self._log_tool("read_file", path, tier)
-        abs_path = Path(self.cwd) / path
+        abs_path, tier = self._path_tier("read", path)
+        self._log_tool("read_file", str(abs_path), tier)
+        perm = check_permission(f"Read {abs_path}", tier, self.permission_mode)
+        if not perm.approved:
+            return {"ok": False, "error": "Permission denied by user"}
         try:
             content = abs_path.read_text(encoding="utf-8", errors="replace")
             return {
@@ -85,9 +93,86 @@ class ToolExecutor:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    async def read_file_range(
+        self,
+        path: str,
+        start_line: int = 1,
+        end_line: int | None = None,
+    ) -> ToolResult:
+        """Read a 1-based inclusive line range from a file."""
+        abs_path, tier = self._path_tier("read", path)
+        self._log_tool("read_file_range", f"{abs_path}:{start_line}-{end_line or ''}", tier)
+        perm = check_permission(f"Read {abs_path}", tier, self.permission_mode)
+        if not perm.approved:
+            return {"ok": False, "error": "Permission denied by user"}
+        try:
+            lines = abs_path.read_text(encoding="utf-8", errors="replace").splitlines()
+            start = max(start_line, 1)
+            end = end_line if end_line is not None else min(start + 199, len(lines))
+            end = max(start, min(end, len(lines)))
+            selected = lines[start - 1 : end]
+            numbered = "\n".join(f"{i}: {line}" for i, line in enumerate(selected, start=start))
+            return {
+                "ok": True,
+                "path": str(abs_path),
+                "start_line": start,
+                "end_line": end,
+                "total_lines": len(lines),
+                "content": numbered,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    async def outline_file(self, path: str, max_symbols: int = 200) -> ToolResult:
+        """Return a compact structural outline for a source file."""
+        abs_path, tier = self._path_tier("read", path)
+        self._log_tool("outline_file", str(abs_path), tier)
+        perm = check_permission(f"Outline {abs_path}", tier, self.permission_mode)
+        if not perm.approved:
+            return {"ok": False, "error": "Permission denied by user"}
+        try:
+            content = abs_path.read_text(encoding="utf-8", errors="replace")
+            lines = content.splitlines()
+            suffix = abs_path.suffix.lower()
+            symbols: list[dict[str, Any]] = []
+            if suffix == ".py":
+                import ast
+
+                tree = ast.parse(content)
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                        symbols.append(
+                            {
+                                "kind": "class" if isinstance(node, ast.ClassDef) else "function",
+                                "name": node.name,
+                                "line": node.lineno,
+                            }
+                        )
+            else:
+                import re
+
+                pattern = re.compile(
+                    r"^\s*(class|function|def|async def|export function|const|let|var)\s+([A-Za-z_][\w$]*)"
+                )
+                for lineno, line in enumerate(lines, start=1):
+                    match = pattern.match(line)
+                    if match:
+                        symbols.append(
+                            {"kind": match.group(1).strip(), "name": match.group(2), "line": lineno}
+                        )
+            symbols.sort(key=lambda item: item["line"])
+            return {
+                "ok": True,
+                "path": str(abs_path),
+                "lines": len(lines),
+                "symbols": symbols[:max_symbols],
+                "truncated": len(symbols) > max_symbols,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     async def write_file(self, path: str, content: str) -> ToolResult:
-        tier = classify_file_op("write", path, self.cwd)
-        abs_path = Path(self.cwd) / path
+        abs_path, tier = self._path_tier("write", path)
         self._log_tool("write_file", str(abs_path), tier)
         perm = check_permission(
             f"Write {len(content)} chars to {abs_path}", tier, self.permission_mode
@@ -102,8 +187,7 @@ class ToolExecutor:
             return {"ok": False, "error": str(e)}
 
     async def edit_file(self, path: str, old_str: str, new_str: str) -> ToolResult:
-        tier = classify_file_op("edit", path, self.cwd)
-        abs_path = Path(self.cwd) / path
+        abs_path, tier = self._path_tier("edit", path)
         self._log_tool("edit_file", str(abs_path), tier)
         perm = check_permission(f"Edit {abs_path}", tier, self.permission_mode)
         if not perm.approved:
@@ -118,8 +202,7 @@ class ToolExecutor:
             return {"ok": False, "error": str(e)}
 
     async def delete_file(self, path: str) -> ToolResult:
-        tier = classify_file_op("delete", path, self.cwd)
-        abs_path = Path(self.cwd) / path
+        abs_path, tier = self._path_tier("delete", path)
         self._log_tool("delete_file", str(abs_path), tier)
         perm = check_permission(f"Delete {abs_path}", tier, self.permission_mode)
         if not perm.approved:
@@ -134,7 +217,11 @@ class ToolExecutor:
             return {"ok": False, "error": str(e)}
 
     async def list_dir(self, path: str = ".") -> ToolResult:
-        abs_path = Path(self.cwd) / path
+        abs_path, tier = self._path_tier("read", path)
+        self._log_tool("list_dir", str(abs_path), tier)
+        perm = check_permission(f"List {abs_path}", tier, self.permission_mode)
+        if not perm.approved:
+            return {"ok": False, "error": "Permission denied by user"}
         try:
             entries = []
             for item in sorted(abs_path.iterdir()):
@@ -151,18 +238,16 @@ class ToolExecutor:
 
     async def diff_files(self, path_a: str, path_b: str) -> ToolResult:
         """Unified diff between two files."""
-        self._log_tool("diff_files", f"{path_a} vs {path_b}", RiskTier.SILENT)
+        abs_a, tier_a = self._path_tier("read", path_a)
+        abs_b, tier_b = self._path_tier("read", path_b)
+        tier = max(tier_a, tier_b)
+        self._log_tool("diff_files", f"{abs_a} vs {abs_b}", tier)
+        perm = check_permission(f"Diff {abs_a} and {abs_b}", tier, self.permission_mode)
+        if not perm.approved:
+            return {"ok": False, "error": "Permission denied by user"}
         try:
-            a = (
-                (Path(self.cwd) / path_a)
-                .read_text(encoding="utf-8", errors="replace")
-                .splitlines(keepends=True)
-            )
-            b = (
-                (Path(self.cwd) / path_b)
-                .read_text(encoding="utf-8", errors="replace")
-                .splitlines(keepends=True)
-            )
+            a = abs_a.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+            b = abs_b.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
             diff = list(difflib.unified_diff(a, b, fromfile=path_a, tofile=path_b))
             return {"ok": True, "diff": "".join(diff), "changed": bool(diff)}
         except Exception as e:
@@ -170,16 +255,16 @@ class ToolExecutor:
 
     async def compress(self, source_path: str, output_path: str, format: str = "zip") -> ToolResult:
         """Compress a file or directory into zip or tar.gz."""
-        tier = RiskTier.AUTO
+        src, src_tier = self._path_tier("read", source_path)
+        out, out_tier = self._path_tier("write", output_path)
+        tier = max(RiskTier.AUTO, src_tier, out_tier)
         self._log_tool("compress", f"{source_path} → {output_path}", tier)
         perm = check_permission(
-            f"Compress {source_path} → {output_path}", tier, self.permission_mode
+            f"Compress {src} → {out}", tier, self.permission_mode
         )
         if not perm.approved:
             return {"ok": False, "error": "Permission denied"}
         try:
-            src = Path(self.cwd) / source_path
-            out = Path(self.cwd) / output_path
             if format == "zip":
                 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
                     if src.is_dir():
@@ -200,25 +285,25 @@ class ToolExecutor:
 
     async def extract(self, archive_path: str, output_dir: str = ".") -> ToolResult:
         """Extract a zip or tar archive."""
-        tier = RiskTier.AUTO
+        src, src_tier = self._path_tier("read", archive_path)
+        out, out_tier = self._path_tier("write", output_dir)
+        tier = max(RiskTier.AUTO, src_tier, out_tier)
         self._log_tool("extract", archive_path, tier)
-        perm = check_permission(f"Extract {archive_path}", tier, self.permission_mode)
+        perm = check_permission(f"Extract {src} to {out}", tier, self.permission_mode)
         if not perm.approved:
             return {"ok": False, "error": "Permission denied"}
         try:
-            src = Path(self.cwd) / archive_path
-            out = Path(self.cwd) / output_dir
             out.mkdir(parents=True, exist_ok=True)
             if archive_path.endswith(".zip"):
                 with zipfile.ZipFile(src) as zf:
-                    zf.extractall(out)
                     names = zf.namelist()
+                    _safe_extract_zip(zf, out)
             else:
                 import tarfile
 
                 with tarfile.open(src) as tf:
-                    tf.extractall(out)
                     names = tf.getnames()
+                    _safe_extract_tar(tf, out)
             return {
                 "ok": True,
                 "output_dir": str(out),
@@ -239,8 +324,14 @@ class ToolExecutor:
         if not perm.approved:
             return {"ok": False, "error": "Permission denied by user"}
         try:
-            proc = await asyncio.create_subprocess_shell(
-                command,
+            try:
+                argv = shlex.split(command)
+            except ValueError as e:
+                return {"ok": False, "error": f"Invalid shell syntax: {e}"}
+            if not argv:
+                return {"ok": False, "error": "Empty command"}
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
                 cwd=self.cwd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -327,8 +418,11 @@ class ToolExecutor:
     # ─────────────────────────────────────────────
 
     async def search_codebase(self, pattern: str, path: str = ".") -> ToolResult:
-        self._log_tool("search_codebase", f"{pattern!r} in {path}", RiskTier.SILENT)
-        abs_path = Path(self.cwd) / path
+        abs_path, tier = self._path_tier("read", path)
+        self._log_tool("search_codebase", f"{pattern!r} in {abs_path}", tier)
+        perm = check_permission(f"Search {abs_path}", tier, self.permission_mode)
+        if not perm.approved:
+            return {"ok": False, "error": "Permission denied by user"}
         rg = shutil.which("rg") or shutil.which("grep")
         if not rg:
             return {"ok": False, "error": "No search tool found (rg or grep)"}
@@ -525,7 +619,11 @@ class ToolExecutor:
             # Decide if it's a file path or raw JSON
             candidate = Path(self.cwd) / path_or_json
             if candidate.exists():
-                data = json.loads(candidate.read_text())
+                abs_path, tier = self._path_tier("read", path_or_json)
+                perm = check_permission(f"Read JSON {abs_path}", tier, self.permission_mode)
+                if not perm.approved:
+                    return {"ok": False, "error": "Permission denied by user"}
+                data = json.loads(abs_path.read_text())
             else:
                 data = json.loads(path_or_json)
             result = jmespath.search(query, data)
@@ -610,25 +708,28 @@ class ToolExecutor:
 
     async def open_file(self, path: str) -> ToolResult:
         """Open a file in its default application (xdg-open on Linux)."""
-        tier = RiskTier.AUTO
-        self._log_tool("open_file", path, tier)
-        perm = check_permission(f"Open file: {path}", tier, self.permission_mode)
+        abs_path, file_tier = self._path_tier("read", path)
+        tier = max(RiskTier.AUTO, file_tier)
+        self._log_tool("open_file", str(abs_path), tier)
+        perm = check_permission(f"Open file: {abs_path}", tier, self.permission_mode)
         if not perm.approved:
             return {"ok": False, "error": "Permission denied"}
-        abs_path = str(Path(self.cwd) / path)
         opener = shutil.which("xdg-open") or shutil.which("open")
         if not opener:
             return {"ok": False, "error": "No file opener found (xdg-open / open)"}
-        result = await self.run_shell(f"{opener} {json.dumps(abs_path)}")
+        result = await self.run_shell(f"{opener} {shlex.quote(str(abs_path))}")
         return result
 
     async def read_image(self, path: str) -> ToolResult:
         """Read image metadata and return base64-encoded content for vision models."""
-        self._log_tool("read_image", path, RiskTier.SILENT)
+        abs_path, tier = self._path_tier("read", path)
+        self._log_tool("read_image", str(abs_path), tier)
+        perm = check_permission(f"Read image {abs_path}", tier, self.permission_mode)
+        if not perm.approved:
+            return {"ok": False, "error": "Permission denied by user"}
         try:
             from PIL import Image
 
-            abs_path = Path(self.cwd) / path
             with Image.open(abs_path) as img:
                 meta = {
                     "format": img.format,
@@ -714,6 +815,23 @@ class ToolExecutor:
                 "read_file",
                 "Read the contents of a file.",
                 {"path": ("string", "Relative file path")},
+            ),
+            _def(
+                "read_file_range",
+                "Read a 1-based inclusive range of lines from a file.",
+                {
+                    "path": ("string", "Relative file path"),
+                    "start_line": ("integer", "First line to read"),
+                    "end_line": ("integer", "Optional final line to read"),
+                },
+            ),
+            _def(
+                "outline_file",
+                "Return a compact structural outline of a source file.",
+                {
+                    "path": ("string", "Relative file path"),
+                    "max_symbols": ("integer", "Maximum symbols to return"),
+                },
             ),
             _def(
                 "write_file",
@@ -886,6 +1004,10 @@ class ToolExecutor:
         a = tool_args
         dispatch_map: dict[str, Any] = {
             "read_file": lambda: self.read_file(a["path"]),
+            "read_file_range": lambda: self.read_file_range(
+                a["path"], a.get("start_line", 1), a.get("end_line")
+            ),
+            "outline_file": lambda: self.outline_file(a["path"], a.get("max_symbols", 200)),
             "write_file": lambda: self.write_file(a["path"], a["content"]),
             "edit_file": lambda: self.edit_file(a["path"], a["old_str"], a["new_str"]),
             "delete_file": lambda: self.delete_file(a["path"]),
@@ -936,10 +1058,16 @@ class ToolExecutor:
 def _def(name: str, description: str, params: dict[str, tuple[str, str | None]]) -> dict[str, Any]:
     """Build an OpenAI-compatible tool definition."""
     properties: dict[str, Any] = {}
+    required: list[str] = []
     for param_name, (param_type, param_desc) in params.items():
         prop: dict[str, Any] = {"type": param_type}
+        if param_type == "array":
+            prop["items"] = {}
         if param_desc:
             prop["description"] = param_desc
+        desc = (param_desc or "").lower()
+        if "optional" not in desc and "default" not in desc:
+            required.append(param_name)
         properties[param_name] = prop
 
     return {
@@ -950,7 +1078,36 @@ def _def(name: str, description: str, params: dict[str, tuple[str, str | None]])
             "parameters": {
                 "type": "object",
                 "properties": properties,
-                "required": [],
+                "required": required,
             },
         },
     }
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    root = root.resolve(strict=False)
+    path = path.resolve(strict=False)
+    return path == root or root in path.parents
+
+
+def _safe_extract_zip(zf: zipfile.ZipFile, output_dir: Path) -> None:
+    root = output_dir.resolve(strict=False)
+    for member in zf.infolist():
+        target = root / member.filename
+        if not _is_within(target, root):
+            raise ValueError(f"Refusing to extract unsafe archive member: {member.filename}")
+    zf.extractall(root)
+
+
+def _safe_extract_tar(tf: Any, output_dir: Path) -> None:
+    root = output_dir.resolve(strict=False)
+    for member in tf.getmembers():
+        target = root / member.name
+        if not _is_within(target, root):
+            raise ValueError(f"Refusing to extract unsafe archive member: {member.name}")
+        linkname = getattr(member, "linkname", "")
+        if linkname:
+            link_target = (target.parent / linkname).resolve(strict=False)
+            if not _is_within(link_target, root):
+                raise ValueError(f"Refusing to extract unsafe archive link: {member.name}")
+    tf.extractall(root)
