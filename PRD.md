@@ -604,6 +604,26 @@ env = { POSTGRES_URL = "postgresql://..." }
 | **Multi-file editing** | Edits multiple files atomically with rollback on error |
 | **Code search** | Ripgrep-powered codebase search with AST-aware results |
 
+### 14.1 Local Productivity Workbench
+
+MagAgent includes a local-first workbench stored as plain JSON under
+`~/.config/magent/users/<username>/workbench/`. This turns MagAgent into a
+durable coding and productivity agent rather than a single-session assistant.
+
+Shipped workbench surfaces include:
+
+- Task ledger: `magent task add/list/done/report`
+- Artifact tracking: `magent artifact add/list`
+- Project profiles: `magent project profile/list`
+- Local inbox: `magent inbox add/list/triage`
+- Routines and follow-ups: `magent routine add/list/run`, `magent followup add/list`
+- Personal knowledge: `magent knowledge remember/recall/forget`
+- Planning and review: `magent plan`, `magent run`, `magent review`
+- Repo intelligence: `magent graph`, `magent test-intel`, `magent env-doctor`, `magent ci`
+- Patch queue: `magent patch save/list`
+- Data/API/notes helpers: `magent data inspect`, `magent api save/list`, `magent notes`
+- Session and usage views: `magent session timeline`, `magent stats`, `magent dashboard`
+
 ---
 
 ## 15. Configuration Reference
@@ -613,7 +633,7 @@ env = { POSTGRES_URL = "postgresql://..." }
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.3.0"
+version = "0.4.0"
 
 [defaults]
 provider = "ollama"

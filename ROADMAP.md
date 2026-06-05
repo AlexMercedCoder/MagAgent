@@ -310,6 +310,8 @@ Capabilities that significantly expand what MagAgent can do autonomously.
 
 ### 2.2 · Plan Mode (Draft Before Execute)
 
+**Status:** MVP shipped in v0.4.0. `magent plan` generates local implementation plans and `magent run` records autonomous work-session plans. Full intercepted tool execution and apply/discard workflows remain future work.
+
 **Why:** For complex multi-file tasks, show the user a complete plan with diff previews before applying any changes. This reduces mistakes on large refactors.
 
 **What to build:**
@@ -426,7 +428,15 @@ Larger investments that position MagAgent as a platform rather than just a tool.
 
 ---
 
+### 3.0 · Local Productivity Workbench
+
+**Status:** Shipped in v0.4.0. MagAgent now includes durable local JSON-backed ledgers for tasks, artifacts, project profiles, inboxes, routines, follow-ups, knowledge notes, API bookmarks, patch queues, session timelines, policy profiles, and static dashboard export.
+
+---
+
 ### 3.1 · Local Web Dashboard
+
+**Status:** MVP shipped in v0.4.0. `magent dashboard` exports a static local HTML dashboard with tasks, artifacts, and usage stats. The interactive FastAPI dashboard remains future work.
 
 **Why:** A local web UI makes memory visualization, session history browsing, and task management accessible without memorizing CLI commands — especially useful for non-developer users and for debugging the memory graph visually.
 

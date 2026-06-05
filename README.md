@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-78%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-82%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -39,6 +39,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Has **31 built-in tools** out of the box — no plugins or configuration required
 - Includes **10 pre-built skill libraries** for docs, spreadsheets, PDFs, images, video, data analysis, REST APIs, databases, desktop automation, and Git
 - Uses token-efficient context management: conversation compaction, repo-map slices, memory/skill budgets, and compressed tool results
+- Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, and static dashboards
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
 
 Every session, MagAgent extracts facts, preferences, and patterns from your conversation and writes them into a MagGraph knowledge graph. Next session, it reads that graph to understand your tech stack, coding style, project context, and recurring patterns — without you having to repeat yourself.
@@ -239,6 +240,26 @@ MagAgent keeps context lean while preserving useful state:
 
 ---
 
+## Local Workbench
+
+MagAgent's workbench stores practical productivity state under each user profile:
+
+- **Task ledger** — `magent task add/list/done/report`
+- **Artifact workspace** — `magent artifact add/list`
+- **Project profiles** — `magent project profile/list`
+- **Inbox and routines** — `magent inbox add/triage`, `magent routine add/run`
+- **Follow-ups** — `magent followup add/list`
+- **Knowledge commands** — `magent knowledge remember/recall/forget`
+- **Review and planning** — `magent plan`, `magent review`, `magent run`
+- **Repo/test helpers** — `magent graph`, `magent test-intel`, `magent env-doctor`, `magent ci`
+- **Patch queue** — `magent patch save/list`
+- **Data/API/notes** — `magent data inspect`, `magent api save/list`, `magent notes`
+- **Session and usage** — `magent session timeline`, `magent stats`, `magent dashboard`
+
+Workbench files are plain JSON in `~/.config/magent/users/<username>/workbench/`.
+
+---
+
 ## SQLite Local Databases
 
 The agent can create and manage structured local databases — per user, per project, or user-specified.
@@ -413,6 +434,13 @@ magent gateway logs [-n N] [-f]  # View / follow gateway log
 magent setup           # First-run setup wizard
 magent mode <mode>     # Set permission mode globally
 magent doctor          # Health check: providers, memory, deps
+magent plan "goal"     # Generate a local implementation plan
+magent run "goal"      # Record an autonomous work-session plan
+magent review          # Heuristic local diff review
+magent graph           # Lightweight repo import graph
+magent test-intel      # Suggest tests for current git changes
+magent env-doctor      # Project environment checks
+magent dashboard       # Export static local dashboard
 magent --version       # Show version
 ```
 
@@ -554,6 +582,7 @@ src/magent/
 ├── tokens.py         # Lightweight token budgeting helpers
 ├── tools/            # 31 built-in tools (file, web, db, system)
 │   └── db.py         # SQLite named database tools
+├── workbench.py      # Local productivity ledgers and workflow helpers
 ├── logging.py        # JSONL session event logging
 ├── setup.py          # First-run wizard
 └── tui.py            # Rich terminal UI, streaming renderer
@@ -561,7 +590,7 @@ docs/
 ├── gateway/          # Gateway setup guides
 └── skills/           # Built-in skill SKILL.md files
 tests/
-└── unit/             # 78 unit tests (all mocked, no credentials needed)
+└── unit/             # 82 unit tests (all mocked, no credentials needed)
 ```
 
 ---

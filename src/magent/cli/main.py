@@ -43,6 +43,33 @@ app.add_typer(memory_app, name="memory")
 app.add_typer(gateway_app, name="gateway")
 mcp_app = typer.Typer(help="Manage MCP (Model Context Protocol) servers", name="mcp")
 app.add_typer(mcp_app, name="mcp")
+task_app = typer.Typer(help="Persistent task ledger", name="task")
+artifact_app = typer.Typer(help="Track generated artifacts", name="artifact")
+project_app = typer.Typer(help="Project profiles and routines", name="project")
+inbox_app = typer.Typer(help="Local command/task inbox", name="inbox")
+routine_app = typer.Typer(help="Recurring routine registry", name="routine")
+followup_app = typer.Typer(help="Follow-up reminders registry", name="followup")
+knowledge_app = typer.Typer(help="Personal knowledge commands", name="knowledge")
+api_app = typer.Typer(help="API workflow bookmarks", name="api")
+patch_app = typer.Typer(help="Patch queue", name="patch")
+session_app = typer.Typer(help="Session timeline and replay", name="session")
+data_app = typer.Typer(help="Data workspace helpers", name="data")
+policy_app = typer.Typer(help="Policy profiles", name="policy")
+for _name, _typer in [
+    ("task", task_app),
+    ("artifact", artifact_app),
+    ("project", project_app),
+    ("inbox", inbox_app),
+    ("routine", routine_app),
+    ("followup", followup_app),
+    ("knowledge", knowledge_app),
+    ("api", api_app),
+    ("patch", patch_app),
+    ("session", session_app),
+    ("data", data_app),
+    ("policy", policy_app),
+]:
+    app.add_typer(_typer, name=_name)
 
 console = Console()
 
@@ -81,6 +108,12 @@ def _build_extraction_provider(config):
     api_key = config.resolve_api_key(p_id)
     p_cfg = config.provider_config(p_id)
     return build_provider(p_id, m, api_key, p_cfg)
+
+
+def _store():
+    from magent.workbench import WorkbenchStore
+
+    return WorkbenchStore(_require_user())
 
 
 # ─────────────────────────────────────────────
@@ -317,6 +350,412 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
         return True
 
     return False
+
+
+# ─────────────────────────────────────────────
+# Workbench subcommands
+# ─────────────────────────────────────────────
+
+
+@task_app.command("add")
+def task_add_cmd(
+    title: str = typer.Argument(...),
+    project: str = typer.Option("", "--project", "-p"),
+    priority: str = typer.Option("normal", "--priority"),
+):
+    """Add a task to the persistent local task ledger."""
+    from magent.workbench import task_add
+
+    item = task_add(_store(), title, project, priority)
+    console.print(f"[green]✓ Added {item['id']}[/green] {item['title']}")
+
+
+@task_app.command("list")
+def task_list_cmd(
+    status: str | None = typer.Option(None, "--status"),
+    project: str | None = typer.Option(None, "--project", "-p"),
+):
+    """List tasks."""
+    from magent.workbench import task_list
+
+    tasks = task_list(_store(), status, project)
+    table = Table("ID", "Status", "Priority", "Project", "Title")
+    for task in tasks:
+        table.add_row(
+            task["id"],
+            task.get("status", "?"),
+            task.get("priority", ""),
+            task.get("project", ""),
+            task.get("title", ""),
+        )
+    console.print(table)
+
+
+@task_app.command("done")
+def task_done_cmd(task_id: str = typer.Argument(...)):
+    """Mark a task done."""
+    from magent.workbench import now_iso
+
+    item = _store().update_item("tasks", task_id, status="done", completed_at=now_iso())
+    if not item:
+        console.print(f"[red]Task not found: {task_id}[/red]")
+        raise typer.Exit(1)
+    console.print(f"[green]✓ Completed {task_id}[/green]")
+
+
+@task_app.command("report")
+def task_report_cmd():
+    """Show task counts by status and project."""
+    store = _store()
+    tasks = store.read("tasks", [])
+    by_status: dict[str, int] = {}
+    by_project: dict[str, int] = {}
+    for task in tasks:
+        by_status[task.get("status", "?")] = by_status.get(task.get("status", "?"), 0) + 1
+        project = task.get("project") or "(none)"
+        by_project[project] = by_project.get(project, 0) + 1
+    console.print(Panel(f"By status: {by_status}\nBy project: {by_project}", title="Task Ledger"))
+
+
+@artifact_app.command("add")
+def artifact_add_cmd(
+    path: str = typer.Argument(...),
+    kind: str = typer.Option("", "--kind", "-k"),
+    title: str = typer.Option("", "--title", "-t"),
+):
+    """Track a generated artifact."""
+    from magent.workbench import artifact_add
+
+    item = artifact_add(_store(), path, kind, title)
+    console.print(f"[green]✓ Tracked {item['id']}[/green] {item['path']}")
+
+
+@artifact_app.command("list")
+def artifact_list_cmd():
+    """List tracked artifacts."""
+    table = Table("ID", "Kind", "Exists", "Title", "Path")
+    for item in _store().read("artifacts", []):
+        table.add_row(
+            item["id"],
+            item.get("kind", ""),
+            "yes" if item.get("exists") else "no",
+            item.get("title", ""),
+            item.get("path", ""),
+        )
+    console.print(table)
+
+
+@knowledge_app.command("remember")
+def knowledge_remember_cmd(
+    text: str = typer.Argument(...),
+    tags: Annotated[list[str] | None, typer.Option("--tag", "-t")] = None,
+):
+    """Remember a personal knowledge note."""
+    from magent.workbench import remember
+
+    item = remember(_store(), text, tags or [])
+    console.print(f"[green]✓ Remembered {item['id']}[/green]")
+
+
+@knowledge_app.command("recall")
+def knowledge_recall_cmd(query: str = typer.Argument(...)):
+    """Recall personal knowledge notes."""
+    from magent.workbench import recall
+
+    table = Table("ID", "Tags", "Text")
+    for item in recall(_store(), query):
+        table.add_row(item["id"], ", ".join(item.get("tags", [])), item.get("text", "")[:100])
+    console.print(table)
+
+
+@knowledge_app.command("forget")
+def knowledge_forget_cmd(item_id: str = typer.Argument(...)):
+    """Forget a personal knowledge note."""
+    store = _store()
+    items = [item for item in store.read("knowledge", []) if item.get("id") != item_id]
+    store.write("knowledge", items)
+    console.print(f"[green]✓ Forgotten {item_id}[/green]")
+
+
+@project_app.command("profile")
+def project_profile_cmd(path: str = typer.Option(".", "--path", "-p")):
+    """Create or refresh a project profile."""
+    from magent.workbench import save_project_profile
+
+    profile = save_project_profile(_store(), path)
+    console.print(Panel(str(profile), title="Project Profile"))
+
+
+@project_app.command("list")
+def project_list_cmd():
+    """List saved project profiles."""
+    table = Table("Name", "Root", "Commands")
+    for item in _store().read("projects", []):
+        table.add_row(item.get("name", ""), item.get("root", ""), ", ".join(item.get("commands", [])))
+    console.print(table)
+
+
+@inbox_app.command("add")
+def inbox_add_cmd(text: str = typer.Argument(...), source: str = typer.Option("cli", "--source")):
+    """Add an item to the local inbox."""
+    item = _store().append("inbox", {"text": text, "source": source, "status": "new"})
+    console.print(f"[green]✓ Added {item['id']}[/green]")
+
+
+@inbox_app.command("list")
+def inbox_list_cmd(status: str | None = typer.Option(None, "--status")):
+    """List inbox items."""
+    items = _store().read("inbox", [])
+    if status:
+        items = [item for item in items if item.get("status") == status]
+    table = Table("ID", "Status", "Source", "Text")
+    for item in items:
+        table.add_row(item["id"], item.get("status", ""), item.get("source", ""), item.get("text", "")[:100])
+    console.print(table)
+
+
+@inbox_app.command("triage")
+def inbox_triage_cmd():
+    """Group inbox items into tasks and notes using simple heuristics."""
+    store = _store()
+    from magent.workbench import task_add
+
+    count = 0
+    items = store.read("inbox", [])
+    for item in items:
+        if item.get("status") != "new":
+            continue
+        if any(word in item.get("text", "").lower() for word in ("fix", "todo", "task", "build")):
+            task_add(store, item["text"])
+        item["status"] = "triaged"
+        count += 1
+    store.write("inbox", items)
+    console.print(f"[green]✓ Triaged {count} inbox items[/green]")
+
+
+@routine_app.command("add")
+def routine_add_cmd(name: str = typer.Argument(...), prompt: str = typer.Argument(...), schedule: str = typer.Option("", "--schedule")):
+    """Register a recurring routine prompt."""
+    item = _store().append("routines", {"name": name, "prompt": prompt, "schedule": schedule})
+    console.print(f"[green]✓ Added routine {item['id']}[/green]")
+
+
+@routine_app.command("list")
+def routine_list_cmd():
+    """List routines."""
+    table = Table("ID", "Name", "Schedule", "Prompt")
+    for item in _store().read("routines", []):
+        table.add_row(item["id"], item.get("name", ""), item.get("schedule", ""), item.get("prompt", "")[:80])
+    console.print(table)
+
+
+@routine_app.command("run")
+def routine_run_cmd(name_or_id: str = typer.Argument(...)):
+    """Print the prompt for a routine so it can be run as a one-shot task."""
+    for item in _store().read("routines", []):
+        if item.get("id") == name_or_id or item.get("name") == name_or_id:
+            console.print(item.get("prompt", ""))
+            return
+    console.print(f"[red]Routine not found: {name_or_id}[/red]")
+    raise typer.Exit(1)
+
+
+@followup_app.command("add")
+def followup_add_cmd(text: str = typer.Argument(...), when: str = typer.Option("", "--when")):
+    """Add a follow-up reminder entry."""
+    item = _store().append("followups", {"text": text, "when": when, "status": "open"})
+    console.print(f"[green]✓ Added {item['id']}[/green]")
+
+
+@followup_app.command("list")
+def followup_list_cmd():
+    """List follow-ups."""
+    table = Table("ID", "When", "Status", "Text")
+    for item in _store().read("followups", []):
+        table.add_row(item["id"], item.get("when", ""), item.get("status", ""), item.get("text", "")[:100])
+    console.print(table)
+
+
+@app.command("plan")
+def plan_cmd(goal: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Generate a local plan without modifying files."""
+    from magent.workbench import build_plan
+
+    console.print(build_plan(project, goal))
+
+
+@app.command("run")
+def run_cmd(
+    goal: str = typer.Argument(...),
+    budget: str = typer.Option("", "--budget", help="Human budget note, e.g. 30m"),
+    project: str | None = typer.Option(None, "--project"),
+):
+    """Record and print an autonomous work-session plan."""
+    store = _store()
+    item = store.append("runs", {"goal": goal, "budget": budget, "status": "planned"})
+    console.print(f"[green]✓ Planned run {item['id']}[/green]")
+    plan_cmd(goal, project or os.getcwd())
+
+
+@app.command("review")
+def review_cmd(base: str = typer.Option("HEAD", "--since"), project: str = typer.Option(".", "--project", "-p")):
+    """Review the local git diff for common risks."""
+    from magent.workbench import review_diff
+
+    findings = review_diff(project, base)
+    if not findings:
+        console.print("[green]No heuristic findings.[/green]")
+        return
+    table = Table("Priority", "Diff Line", "Finding", "Evidence")
+    for finding in findings:
+        table.add_row(finding["priority"], str(finding["line"]), finding["message"], finding["evidence"])
+    console.print(table)
+
+
+@app.command("graph")
+def graph_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Show a lightweight repository import graph."""
+    from magent.workbench import repo_graph
+
+    console.print_json(data=repo_graph(project))
+
+
+@app.command("test-intel")
+def test_intel_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Suggest tests related to current git changes."""
+    from magent.workbench import suggest_tests
+
+    suggestions = suggest_tests(project)
+    console.print("\n".join(suggestions) if suggestions else "[dim]No suggestions.[/dim]")
+
+
+@patch_app.command("save")
+def patch_save_cmd(name: str = typer.Option("", "--name"), project: str = typer.Option(".", "--project", "-p")):
+    """Save the current git diff to the patch queue."""
+    from magent.workbench import save_patch
+
+    item = save_patch(_store(), project, name)
+    console.print(f"[green]✓ Saved {item['id']}[/green] {item['path']}")
+
+
+@patch_app.command("list")
+def patch_list_cmd():
+    """List saved patches."""
+    table = Table("ID", "Name", "Bytes", "Path")
+    for item in _store().read("patches", []):
+        table.add_row(item["id"], item.get("name", ""), str(item.get("bytes", 0)), item.get("path", ""))
+    console.print(table)
+
+
+@app.command("env-doctor")
+def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Run project environment checks."""
+    from magent.workbench import env_doctor
+
+    table = Table("Check", "OK", "Detail")
+    for check in env_doctor(project):
+        table.add_row(check["check"], "yes" if check["ok"] else "no", check.get("detail", ""))
+    console.print(table)
+
+
+@app.command("ci")
+def ci_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Triage recent GitHub Actions runs with gh, when available."""
+    from magent.workbench import ci_triage
+
+    console.print_json(data=ci_triage(project))
+
+
+@app.command("docs-brief")
+def docs_brief_cmd(project: str = typer.Option(".", "--project", "-p"), out: str | None = typer.Option(None, "--out")):
+    """Generate a compact project documentation brief."""
+    from magent.workbench import docs_brief
+
+    text = docs_brief(project)
+    if out:
+        Path(out).write_text(text)
+        console.print(f"[green]✓ Wrote {out}[/green]")
+    else:
+        console.print(text)
+
+
+@data_app.command("inspect")
+def data_inspect_cmd(path: str = typer.Argument(...)):
+    """Inspect a CSV or SQLite file."""
+    from magent.workbench import inspect_data
+
+    console.print_json(data=inspect_data(path))
+
+
+@api_app.command("save")
+def api_save_cmd(name: str = typer.Argument(...), method: str = typer.Argument(...), url: str = typer.Argument(...)):
+    """Save an API endpoint bookmark."""
+    item = _store().append("api_endpoints", {"name": name, "method": method.upper(), "url": url})
+    console.print(f"[green]✓ Saved {item['id']}[/green]")
+
+
+@api_app.command("list")
+def api_list_cmd():
+    """List API endpoint bookmarks."""
+    table = Table("ID", "Name", "Method", "URL")
+    for item in _store().read("api_endpoints", []):
+        table.add_row(item["id"], item.get("name", ""), item.get("method", ""), item.get("url", ""))
+    console.print(table)
+
+
+@app.command("notes")
+def notes_cmd(path: str = typer.Argument(...)):
+    """Ingest meeting/working notes and extract tasks/decisions."""
+    from magent.workbench import ingest_notes
+
+    text = Path(path).read_text(encoding="utf-8")
+    console.print_json(data=ingest_notes(_store(), text))
+
+
+@session_app.command("timeline")
+def session_timeline_cmd(session_id: str | None = typer.Argument(None)):
+    """Show a recent session action timeline."""
+    from magent.workbench import session_timeline
+
+    events = session_timeline(session_id)
+    table = Table("Time", "Event", "Details")
+    for event in events:
+        detail = {k: v for k, v in event.items() if k not in {"ts", "event", "session"}}
+        table.add_row(event.get("ts", "")[:19], event.get("event", ""), str(detail)[:120])
+    console.print(table)
+
+
+@app.command("stats")
+def stats_cmd():
+    """Show approximate local usage and token stats."""
+    from magent.workbench import usage_stats
+
+    console.print_json(data=usage_stats())
+
+
+@policy_app.command("list")
+def policy_list_cmd():
+    """List built-in policy profiles."""
+    from magent.workbench import policy_profiles
+
+    console.print_json(data=policy_profiles())
+
+
+@app.command("dashboard")
+def dashboard_cmd(out: str = typer.Option("magent-dashboard.html", "--out")):
+    """Export a static local workbench dashboard."""
+    from magent.workbench import export_dashboard
+
+    path = export_dashboard(_store(), out)
+    console.print(f"[green]✓ Dashboard written to {path}[/green]")
+
+
+@memory_app.command("review")
+def memory_review_cmd():
+    """Show pending git changes in the current user's memory graph."""
+    from magent.workbench import memory_pending_summary
+
+    console.print_json(data=memory_pending_summary(_require_user()))
 
 
 # ─────────────────────────────────────────────
