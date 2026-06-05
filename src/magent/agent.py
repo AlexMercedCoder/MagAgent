@@ -5,15 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 from rich.console import Console
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.text import Text
 
 from magent.config import Config, user_memory_dir
 from magent.logging import SessionLogger
@@ -28,6 +25,7 @@ console = Console()
 AGENT_SYSTEM_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
 
 You have access to tools for reading/writing files, running shell commands, searching the codebase, and fetching information from the web.
+You also have access to MCP (Model Context Protocol) tools from connected servers — these appear as mcp__<server>__<tool_name>.
 
 Key behaviors:
 1. Always look at the user's memory context (provided below) — it tells you what you know about this user, their projects, and their preferences.
@@ -36,6 +34,7 @@ Key behaviors:
 4. If you find a useful URL during research, note it explicitly so it can be bookmarked.
 5. Think step-by-step for complex tasks. Break large tasks into smaller tool calls.
 6. After completing a task, briefly summarize what you did.
+7. For file reads over 100 lines, prefer outline_file first, then read only the relevant range.
 
 {memory_context}
 {skill_context}
@@ -75,6 +74,18 @@ class AgentSession:
             show_tool_calls=config.get("ui", "show_tool_calls", default=True),
         )
 
+        # MCP servers (optional — connect only if configured)
+        from magent.mcp import MCPManager
+
+        mcp_servers_cfg = config.get("mcp", "servers", default={})
+        self.mcp = MCPManager(mcp_servers_cfg if isinstance(mcp_servers_cfg, dict) else {})
+        # Start MCP connections in the background (don't block __init__)
+        self._mcp_start_task: asyncio.Task[Any] | None = None
+        if mcp_servers_cfg:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                self._mcp_start_task = loop.create_task(self.mcp.start_all())
+
         # Load skills
         project_skills_dir = Path(cwd) / ".magent" / "skills"
         self.skill_registry = SkillRegistry(
@@ -101,10 +112,7 @@ class AgentSession:
         if self.memory.available:
             recalled = self.memory.recall(user_message)
             if recalled:
-                memory_context = (
-                    "## Your Memory (what you know about this user)\n\n"
-                    f"{recalled}\n"
-                )
+                memory_context = f"## Your Memory (what you know about this user)\n\n{recalled}\n"
         skill_context = self.skill_registry.build_skill_context(user_message)
         return AGENT_SYSTEM_PROMPT.format(
             memory_context=memory_context,
@@ -117,12 +125,18 @@ class AgentSession:
         """
         Run the LLM + tool loop. Returns (final_text, updated_messages, tool_call_count).
         """
-        tool_defs = self.tools.get_tool_definitions()
+        # Wait for MCP servers to finish connecting (if still starting)
+        if self._mcp_start_task and not self._mcp_start_task.done():
+            await self._mcp_start_task
+
+        # Merge built-in tools + MCP tools
+        tool_defs = self.tools.get_tool_definitions() + self.mcp.get_tool_definitions()
         total_tool_calls = 0
 
         while True:
             try:
                 import litellm
+
                 litellm.suppress_debug_info = True
 
                 response = await litellm.acompletion(
@@ -154,11 +168,16 @@ class AgentSession:
                 except json.JSONDecodeError:
                     tool_args = {}
 
-                result = await self.tools.dispatch(tool_name, tool_args)
+                # Route to MCP or built-in tool
+                if self.mcp.is_mcp_tool(tool_name):
+                    result = await self.mcp.dispatch(tool_name, tool_args)
+                else:
+                    result = await self.tools.dispatch(tool_name, tool_args)
                 result_str = json.dumps(result, indent=2, default=str)
 
                 # Log the tool call
-                from magent.permissions import classify_shell_command, RiskTier
+                from magent.permissions import RiskTier, classify_shell_command
+
                 tier = RiskTier.AUTO
                 if tool_name == "run_shell":
                     tier = classify_shell_command(
@@ -167,11 +186,13 @@ class AgentSession:
                     )
                 self.logger.log_tool_call(tool_name, tool_args, result.get("ok", True), int(tier))
 
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc.id,
-                    "content": result_str,
-                })
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result_str,
+                    }
+                )
 
         return "", messages, total_tool_calls  # unreachable
 
@@ -189,11 +210,17 @@ class AgentSession:
         ]
 
         # Run tool loop first (tools don't stream)
-        tool_defs = self.tools.get_tool_definitions()
+        # Wait for MCP servers to finish connecting (if still starting)
+        if self._mcp_start_task and not self._mcp_start_task.done():
+            await self._mcp_start_task
+
+        # Merge built-in tools + MCP tools
+        tool_defs = self.tools.get_tool_definitions() + self.mcp.get_tool_definitions()
         total_tool_calls = 0
 
         try:
             import litellm
+
             litellm.suppress_debug_info = True
 
             # First pass: tool loop
@@ -223,12 +250,18 @@ class AgentSession:
                         tool_args = json.loads(tc.function.arguments)
                     except json.JSONDecodeError:
                         tool_args = {}
-                    result = await self.tools.dispatch(tool_name, tool_args)
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": json.dumps(result, default=str),
-                    })
+                    # Route to MCP or built-in tool
+                    if self.mcp.is_mcp_tool(tool_name):
+                        result = await self.mcp.dispatch(tool_name, tool_args)
+                    else:
+                        result = await self.tools.dispatch(tool_name, tool_args)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": json.dumps(result, default=str),
+                        }
+                    )
 
             # Final streaming pass — text only, no tools
             stream_response = await litellm.acompletion(
@@ -281,6 +314,7 @@ class AgentSession:
     async def spawn_subagent(self, task_id: str, description: str) -> str:
         """Spawn a focused sub-agent for a parallel task. Returns its result."""
         from magent.subagents import SubAgentRunner
+
         if self._subagent_runner is None:
             self._subagent_runner = SubAgentRunner(
                 username=self.username,
@@ -322,3 +356,5 @@ class AgentSession:
             self.memory.write_session_summary(self.session_id, "\n".join(summary_parts))
         self.logger.log_session_end(self.turn_count)
         self.logger.close()
+        # Stop all MCP server connections
+        await self.mcp.stop_all()

@@ -87,6 +87,9 @@ gateway = [
     "discord.py>=2.3",
     "python-telegram-bot>=21.0",
 ]
+mcp = [
+    "mcp[cli]>=1.0",
+]
 
 [project.scripts]
 magent = "magent.cli.main:app"

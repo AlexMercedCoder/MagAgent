@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
-import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +23,7 @@ class SessionLogger:
 
     def _write(self, event_type: str, data: dict[str, Any]) -> None:
         record = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "session": self.session_id,
             "user": self.username,
             "event": event_type,
@@ -33,49 +33,62 @@ class SessionLogger:
         self._f.flush()
 
     def log_session_start(self, provider: str, model: str, cwd: str) -> None:
-        self._write("session_start", {
-            "provider": provider,
-            "model": model,
-            "cwd": cwd,
-        })
+        self._write(
+            "session_start",
+            {
+                "provider": provider,
+                "model": model,
+                "cwd": cwd,
+            },
+        )
 
     def log_user_turn(self, turn_number: int, message: str) -> None:
-        self._write("user_turn", {
-            "turn": turn_number,
-            "message": message[:500],  # cap log size
-        })
+        self._write(
+            "user_turn",
+            {
+                "turn": turn_number,
+                "message": message[:500],  # cap log size
+            },
+        )
 
     def log_assistant_turn(self, turn_number: int, response: str, tool_calls: int = 0) -> None:
-        self._write("assistant_turn", {
-            "turn": turn_number,
-            "response_length": len(response),
-            "tool_calls": tool_calls,
-            "preview": response[:200],
-        })
+        self._write(
+            "assistant_turn",
+            {
+                "turn": turn_number,
+                "response_length": len(response),
+                "tool_calls": tool_calls,
+                "preview": response[:200],
+            },
+        )
 
     def log_tool_call(self, tool_name: str, args: dict, result_ok: bool, tier: int) -> None:
-        self._write("tool_call", {
-            "tool": tool_name,
-            "args": {k: str(v)[:100] for k, v in args.items()},
-            "ok": result_ok,
-            "tier": tier,
-        })
+        self._write(
+            "tool_call",
+            {
+                "tool": tool_name,
+                "args": {k: str(v)[:100] for k, v in args.items()},
+                "ok": result_ok,
+                "tier": tier,
+            },
+        )
 
     def log_memory_write(self, nodes_written: int, project_slug: str | None) -> None:
-        self._write("memory_write", {
-            "nodes": nodes_written,
-            "project": project_slug,
-        })
+        self._write(
+            "memory_write",
+            {
+                "nodes": nodes_written,
+                "project": project_slug,
+            },
+        )
 
     def log_session_end(self, total_turns: int) -> None:
         self._write("session_end", {"total_turns": total_turns})
         self._f.close()
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self._f.close()
-        except Exception:
-            pass
 
     @property
     def path(self) -> Path:
@@ -92,13 +105,15 @@ def list_session_logs(limit: int = 20) -> list[dict[str, Any]]:
         lines = f.read_text().splitlines()
         first = json.loads(lines[0]) if lines else {}
         last = json.loads(lines[-1]) if lines else {}
-        results.append({
-            "file": f.name,
-            "session": first.get("session", f.stem),
-            "user": first.get("user", "?"),
-            "started": first.get("ts", "?"),
-            "ended": last.get("ts", "?") if last.get("event") == "session_end" else "active",
-            "events": len(lines),
-            "bytes": f.stat().st_size,
-        })
+        results.append(
+            {
+                "file": f.name,
+                "session": first.get("session", f.stem),
+                "user": first.get("user", "?"),
+                "started": first.get("ts", "?"),
+                "ended": last.get("ts", "?") if last.get("event") == "session_end" else "active",
+                "events": len(lines),
+                "bytes": f.stat().st_size,
+            }
+        )
     return results

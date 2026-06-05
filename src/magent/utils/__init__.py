@@ -29,6 +29,7 @@ def run_doctor() -> None:
 
     # Python version
     import sys
+
     ok = sys.version_info >= (3, 12)
     checks.append(("Python >= 3.12", ok, f"Python {sys.version.split()[0]}"))
 
@@ -49,19 +50,24 @@ def run_doctor() -> None:
 
     # Config dir
     from magent.config import CONFIG_DIR, get_current_user
-    checks.append((
-        "Config directory",
-        CONFIG_DIR.exists(),
-        str(CONFIG_DIR),
-    ))
+
+    checks.append(
+        (
+            "Config directory",
+            CONFIG_DIR.exists(),
+            str(CONFIG_DIR),
+        )
+    )
 
     # Active user
     user = get_current_user()
-    checks.append((
-        "Active user",
-        bool(user),
-        user or "None — run: magent setup",
-    ))
+    checks.append(
+        (
+            "Active user",
+            bool(user),
+            user or "None — run: magent setup",
+        )
+    )
 
     # ripgrep (optional)
     rg = shutil.which("rg")

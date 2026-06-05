@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import sys
@@ -56,11 +57,7 @@ class Skill:
         return min(score, 1.0)
 
     def to_context_block(self) -> str:
-        return (
-            f"## Skill: {self.name}\n\n"
-            f"**Description:** {self.description}\n\n"
-            f"{self.body}\n"
-        )
+        return f"## Skill: {self.name}\n\n**Description:** {self.description}\n\n{self.body}\n"
 
     def to_lock_entry(self) -> dict[str, Any]:
         return {
@@ -83,10 +80,8 @@ def parse_skill_file(path: Path) -> Skill | None:
 
     fm_match = re.match(r"^---\n(.*?)\n---\n(.*)", content, re.DOTALL)
     if fm_match:
-        try:
+        with contextlib.suppress(Exception):
             frontmatter = yaml.safe_load(fm_match.group(1)) or {}
-        except Exception:
-            pass
         body = fm_match.group(2).strip()
 
     name = frontmatter.get("name") or path.stem

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import signal
@@ -44,15 +45,20 @@ class GatewayRunner:
 
         if platform == "slack":
             from magent.gateway.adapters.slack import SlackAdapter
+
             return SlackAdapter(platform_cfg, handler)
         elif platform == "discord":
             from magent.gateway.adapters.discord import DiscordAdapter
+
             return DiscordAdapter(platform_cfg, handler)
         elif platform == "telegram":
             from magent.gateway.adapters.telegram import TelegramAdapter
+
             return TelegramAdapter(platform_cfg, handler)
         else:
-            raise ValueError(f"Unknown platform: {platform!r}. Must be slack, discord, or telegram.")
+            raise ValueError(
+                f"Unknown platform: {platform!r}. Must be slack, discord, or telegram."
+            )
 
     async def run(self, platforms: list[str]) -> None:
         if not platforms:
@@ -95,10 +101,8 @@ class GatewayRunner:
 
     async def shutdown(self) -> None:
         for adapter in self._adapters:
-            try:
+            with contextlib.suppress(Exception):
                 await adapter.stop()
-            except Exception:
-                pass
         await self.router.close_all_sessions()
         if GATEWAY_PID_FILE.exists():
             GATEWAY_PID_FILE.unlink()

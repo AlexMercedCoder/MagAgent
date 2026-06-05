@@ -9,6 +9,7 @@ Manages per-user knowledge graph operations:
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -33,8 +34,14 @@ NODE_CONTACT = "contact"
 NODE_BOOKMARK = "bookmark"
 
 ALL_NODE_TYPES = [
-    NODE_PREFERENCE, NODE_PROJECT, NODE_PATTERN, NODE_SKILL_LEARNED,
-    NODE_FACT, NODE_SESSION_SUMMARY, NODE_ERROR_PATTERN, NODE_CONTACT,
+    NODE_PREFERENCE,
+    NODE_PROJECT,
+    NODE_PATTERN,
+    NODE_SKILL_LEARNED,
+    NODE_FACT,
+    NODE_SESSION_SUMMARY,
+    NODE_ERROR_PATTERN,
+    NODE_CONTACT,
     NODE_BOOKMARK,
 ]
 
@@ -52,6 +59,7 @@ class MemoryManager:
         """Open or initialize the MagGraph index."""
         try:
             import maggraph
+
             self._index = maggraph.open_index(str(self.memory_dir))
         except ImportError:
             console.print(
@@ -217,15 +225,13 @@ class MemoryManager:
         if not self.available:
             return
         node_id = f"session_{session_id}"
-        try:
+        with contextlib.suppress(Exception):
             self._index.create_node(
                 node_id,
                 node_type=NODE_SESSION_SUMMARY,
                 body=f"# Session {session_id}\n\n{summary}\n",
                 links=[],
             )
-        except Exception:
-            pass
 
     # ─────────────────────────────────────────────
     # Stats
@@ -278,11 +284,7 @@ class MemoryManager:
 
         # Disk usage
         try:
-            total_disk = sum(
-                f.stat().st_size
-                for f in self.memory_dir.rglob("*")
-                if f.is_file()
-            )
+            total_disk = sum(f.stat().st_size for f in self.memory_dir.rglob("*") if f.is_file())
             result["disk_bytes"] = total_disk
         except Exception:
             pass
@@ -290,6 +292,7 @@ class MemoryManager:
         # Git info
         try:
             import subprocess
+
             git_log = subprocess.run(
                 ["git", "log", "--oneline"],
                 cwd=self.memory_dir,
@@ -341,11 +344,13 @@ class MemoryManager:
                 try:
                     node = self._index.read_node(node_id)
                     if query_lower in node_id.lower() or query_lower in node.body.lower():
-                        results.append({
-                            "id": node.id,
-                            "type": node.node_type,
-                            "snippet": node.body[:200].replace("\n", " "),
-                        })
+                        results.append(
+                            {
+                                "id": node.id,
+                                "type": node.node_type,
+                                "snippet": node.body[:200].replace("\n", " "),
+                            }
+                        )
                         if len(results) >= max_results:
                             break
                 except Exception:

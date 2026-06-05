@@ -1,6 +1,5 @@
 """Tests for the memory extraction parser."""
 
-import pytest
 from magent.memory.extraction import parse_extraction_response
 
 

@@ -52,11 +52,13 @@ DEFAULT_MODELS = {
 
 def run_setup() -> None:
     """Interactive first-run setup wizard."""
-    console.print(Panel(
-        "[bold magenta]Welcome to MagAgent Setup![/bold magenta]\n\n"
-        "This wizard will configure your agent in under 2 minutes.",
-        border_style="magenta",
-    ))
+    console.print(
+        Panel(
+            "[bold magenta]Welcome to MagAgent Setup![/bold magenta]\n\n"
+            "This wizard will configure your agent in under 2 minutes.",
+            border_style="magenta",
+        )
+    )
 
     # Create config directories
     for d in [CONFIG_DIR, USERS_DIR, SKILLS_DIR, LOGS_DIR]:
@@ -68,16 +70,13 @@ def run_setup() -> None:
     if existing:
         console.print(f"[dim]Active user: [bold]{existing}[/bold][/dim]")
         change = Confirm.ask("Create a new user?", default=False)
-        if not change:
-            username = existing
-        else:
-            username = _prompt_create_user()
+        username = existing if not change else _prompt_create_user()
     else:
         username = _prompt_create_user()
 
     # Configure a provider
     console.print("\n[bold]Step 2: Choose your default AI provider[/bold]")
-    for i, (pid, label) in enumerate(PROVIDER_CHOICES, 1):
+    for i, (_pid, label) in enumerate(PROVIDER_CHOICES, 1):
         console.print(f"  [cyan]{i}[/cyan]. {label}")
 
     choice = Prompt.ask(
@@ -91,7 +90,7 @@ def run_setup() -> None:
         provider_id = "ollama"
 
     default_model = DEFAULT_MODELS.get(provider_id, "unknown")
-    model = Prompt.ask(f"Default model", default=default_model)
+    model = Prompt.ask("Default model", default=default_model)
 
     # Get API key
     api_key_env = _get_api_key(provider_id)
@@ -102,8 +101,12 @@ def run_setup() -> None:
         base_url = Prompt.ask("API base URL", default="http://localhost:8000/v1")
 
     # Memory extraction model
-    console.print("\n[bold]Step 3: Memory extraction model (can be different from main model)[/bold]")
-    console.print("[dim]A smaller/cheaper model can be used to extract memories after conversations.[/dim]")
+    console.print(
+        "\n[bold]Step 3: Memory extraction model (can be different from main model)[/bold]"
+    )
+    console.print(
+        "[dim]A smaller/cheaper model can be used to extract memories after conversations.[/dim]"
+    )
     same_as_main = Confirm.ask("Use same model for memory extraction?", default=True)
     if same_as_main:
         extract_provider = provider_id
@@ -134,13 +137,15 @@ def run_setup() -> None:
     console.print("\n[bold]Step 4: Testing provider connection...[/bold]")
     _smoke_test(provider_id, model, api_key_env, base_url)
 
-    console.print(Panel(
-        f"[bold green]✓ Setup complete![/bold green]\n\n"
-        f"  User:     [bold]{username}[/bold]\n"
-        f"  Provider: [bold]{provider_id}[/bold] / {model}\n\n"
-        f"Run [bold]magent[/bold] to start your first session.",
-        border_style="green",
-    ))
+    console.print(
+        Panel(
+            f"[bold green]✓ Setup complete![/bold green]\n\n"
+            f"  User:     [bold]{username}[/bold]\n"
+            f"  Provider: [bold]{provider_id}[/bold] / {model}\n\n"
+            f"Run [bold]magent[/bold] to start your first session.",
+            border_style="green",
+        )
+    )
 
 
 def _prompt_create_user() -> str:
@@ -178,17 +183,21 @@ def _get_api_key(provider_id: str) -> str | None:
     default_env = env_var_map.get(provider_id, f"{provider_id.upper().replace('-', '_')}_API_KEY")
 
     import os
+
     if os.environ.get(default_env):
         console.print(f"[dim]✓ Found {default_env} in environment[/dim]")
         return default_env
 
-    console.print(f"\n[dim]Set your API key in the environment variable: [bold]{default_env}[/bold][/dim]")
+    console.print(
+        f"\n[dim]Set your API key in the environment variable: [bold]{default_env}[/bold][/dim]"
+    )
     console.print(f"[dim]  export {default_env}=your-key-here[/dim]")
     return default_env
 
 
 def _smoke_test(provider_id: str, model: str, api_key_env: str | None, base_url: str | None):
     import os
+
     from magent.providers import build_provider, test_provider
 
     api_key = os.environ.get(api_key_env) if api_key_env else None
@@ -206,6 +215,8 @@ def _smoke_test(provider_id: str, model: str, api_key_env: str | None, base_url:
         if ok:
             console.print("[green]✓ Provider responded successfully[/green]")
         else:
-            console.print("[yellow]⚠ Provider did not respond. Check your API key / connection.[/yellow]")
+            console.print(
+                "[yellow]⚠ Provider did not respond. Check your API key / connection.[/yellow]"
+            )
     except Exception as e:
         console.print(f"[yellow]⚠ Could not test provider: {e}[/yellow]")

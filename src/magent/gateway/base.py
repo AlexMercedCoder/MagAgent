@@ -4,21 +4,22 @@ from __future__ import annotations
 
 import asyncio
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Callable, Coroutine
+from typing import Any
 
 
 @dataclass
 class IncomingMessage:
     """A message received from any gateway platform."""
-    platform: str           # "slack" | "discord" | "telegram"
-    message_id: str         # Platform-native message ID
-    user_id: str            # Platform user ID (for allowlist check)
-    username: str           # Human-readable name
-    channel_id: str         # Channel / chat ID
-    text: str               # Raw message text
-    is_dm: bool = False     # Direct message (vs. channel/group)
+
+    platform: str  # "slack" | "discord" | "telegram"
+    message_id: str  # Platform-native message ID
+    user_id: str  # Platform user ID (for allowlist check)
+    username: str  # Human-readable name
+    channel_id: str  # Channel / chat ID
+    text: str  # Raw message text
+    is_dm: bool = False  # Direct message (vs. channel/group)
     reply_to: str | None = None  # Thread/reply context
     raw: dict = field(default_factory=dict)  # Raw platform payload
 
@@ -26,11 +27,12 @@ class IncomingMessage:
 @dataclass
 class OutgoingMessage:
     """A response to send back to a platform."""
+
     platform: str
     channel_id: str
     text: str
-    reply_to: str | None = None   # Thread/message to reply to
-    is_code: bool = False          # Wrap in code block
+    reply_to: str | None = None  # Thread/message to reply to
+    is_code: bool = False  # Wrap in code block
     edit_message_id: str | None = None  # Edit an existing message
 
 
@@ -85,12 +87,14 @@ class GatewayAdapter(ABC):
         3. Edit/follow-up with result
         """
         # Step 1: Immediate acknowledgement
-        ack_id = await self.post_message(OutgoingMessage(
-            platform=self.platform_name,
-            channel_id=msg.channel_id,
-            text="⏳ Working on it...",
-            reply_to=msg.message_id,
-        ))
+        ack_id = await self.post_message(
+            OutgoingMessage(
+                platform=self.platform_name,
+                channel_id=msg.channel_id,
+                text="⏳ Working on it...",
+                reply_to=msg.message_id,
+            )
+        )
         await self.send_typing(msg.channel_id)
 
         # Step 2: Run agent
@@ -99,7 +103,7 @@ class GatewayAdapter(ABC):
                 self.handler(msg),
                 timeout=self.config.get("max_task_duration_seconds", 300),
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             result = "⚠️ Task timed out. Try breaking it into smaller steps."
         except Exception as e:
             result = f"❌ Error: {e}"
@@ -108,9 +112,11 @@ class GatewayAdapter(ABC):
         if ack_id:
             await self.update_message(msg.channel_id, ack_id, f"✅ {result}")
         else:
-            await self.post_message(OutgoingMessage(
-                platform=self.platform_name,
-                channel_id=msg.channel_id,
-                text=result,
-                reply_to=msg.message_id,
-            ))
+            await self.post_message(
+                OutgoingMessage(
+                    platform=self.platform_name,
+                    channel_id=msg.channel_id,
+                    text=result,
+                    reply_to=msg.message_id,
+                )
+            )

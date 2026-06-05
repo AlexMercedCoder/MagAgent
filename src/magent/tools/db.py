@@ -11,7 +11,7 @@ WAL mode is always enabled for performance and concurrent reads.
 
 from __future__ import annotations
 
-import json
+import contextlib
 import sqlite3
 import time
 from pathlib import Path
@@ -83,15 +83,19 @@ def list_databases(username: str) -> dict[str, Any]:
 
     dbs = []
     for f in sorted(db_dir.glob("*.db")):
-        dbs.append({
-            "name": f.stem,
-            "path": str(f),
-            "size_bytes": f.stat().st_size,
-        })
+        dbs.append(
+            {
+                "name": f.stem,
+                "path": str(f),
+                "size_bytes": f.stat().st_size,
+            }
+        )
     return {"ok": True, "databases": dbs}
 
 
-def db_query(username: str, sql: str, params: list | None = None, db_name: str = "default") -> dict[str, Any]:
+def db_query(
+    username: str, sql: str, params: list | None = None, db_name: str = "default"
+) -> dict[str, Any]:
     """
     Execute a SELECT query and return rows as JSON.
     Use db_name to target a specific named database (default: "default").
@@ -99,7 +103,10 @@ def db_query(username: str, sql: str, params: list | None = None, db_name: str =
     """
     sql_stripped = sql.strip().upper()
     if not sql_stripped.startswith("SELECT") and not sql_stripped.startswith("WITH"):
-        return {"ok": False, "error": "db_query only supports SELECT/WITH. Use db_execute for writes."}
+        return {
+            "ok": False,
+            "error": "db_query only supports SELECT/WITH. Use db_execute for writes.",
+        }
 
     try:
         conn = _get_db(username, db_name)
@@ -117,7 +124,9 @@ def db_query(username: str, sql: str, params: list | None = None, db_name: str =
         return {"ok": False, "error": str(e), "db": db_name}
 
 
-def db_execute(username: str, sql: str, params: list | None = None, db_name: str = "default") -> dict[str, Any]:
+def db_execute(
+    username: str, sql: str, params: list | None = None, db_name: str = "default"
+) -> dict[str, Any]:
     """
     Execute a write statement: INSERT, UPDATE, DELETE, CREATE TABLE, etc.
     Use db_name to target or create a specific named database.
@@ -133,10 +142,8 @@ def db_execute(username: str, sql: str, params: list | None = None, db_name: str
             "last_insert_rowid": cursor.lastrowid,
         }
     except sqlite3.Error as e:
-        try:
+        with contextlib.suppress(Exception):
             conn.rollback()
-        except Exception:
-            pass
         return {"ok": False, "error": str(e), "db": db_name}
 
 

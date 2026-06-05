@@ -6,7 +6,8 @@ Uses LiteLLM for unified access to all providers.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 from rich.console import Console
 
@@ -70,7 +71,14 @@ def _build_api_kwargs(
 
     # Custom base URL — always set for non-native providers
     base_url = provider_cfg.get("base_url") or PROVIDER_BASE_URLS.get(provider)
-    if base_url and provider not in ("openai", "anthropic", "google", "groq", "openrouter", "bedrock"):
+    if base_url and provider not in (
+        "openai",
+        "anthropic",
+        "google",
+        "groq",
+        "openrouter",
+        "bedrock",
+    ):
         kwargs["api_base"] = base_url
 
     # Resolve API key: passed-in > direct config > dummy for local endpoints
@@ -113,6 +121,7 @@ class Provider:
         """Non-streaming completion. Returns full response string."""
         try:
             import litellm
+
             litellm.suppress_debug_info = True
 
             response = await litellm.acompletion(
@@ -134,6 +143,7 @@ class Provider:
         """Streaming completion. Yields token chunks."""
         try:
             import litellm
+
             litellm.suppress_debug_info = True
 
             response = await litellm.acompletion(
@@ -152,8 +162,10 @@ class Provider:
 
     def as_extract_fn(self):
         """Return an async callable for memory extraction (non-streaming)."""
+
         async def _fn(messages: list[dict[str, str]]) -> str:
             return await self.complete(messages, temperature=0.1, max_tokens=2048)
+
         return _fn
 
 

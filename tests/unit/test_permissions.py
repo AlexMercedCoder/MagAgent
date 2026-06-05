@@ -1,11 +1,9 @@
 """Tests for the permission model."""
 
-import pytest
 from magent.permissions import (
     RiskTier,
-    classify_shell_command,
     classify_file_op,
-    check_permission,
+    classify_shell_command,
 )
 
 

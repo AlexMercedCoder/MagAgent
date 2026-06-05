@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import os
 import sys
+import tomllib  # type: ignore[no-redef]
 from pathlib import Path
 from typing import Any
-
-if sys.version_info >= (3, 11):
-    import tomllib  # stdlib in 3.11+
-else:
-    import tomli as tomllib  # type: ignore[no-redef]
 
 import tomli_w
 
@@ -136,10 +132,9 @@ class Config:
 
     @property
     def permission_mode(self) -> str:
-        return (
-            self._user.get("permissions", {}).get("mode")
-            or self._global.get("defaults", {}).get("permission_mode", "balanced")
-        )
+        return self._user.get("permissions", {}).get("mode") or self._global.get(
+            "defaults", {}
+        ).get("permission_mode", "balanced")
 
     @property
     def allowed_shell_patterns(self) -> list[str]:
@@ -161,17 +156,15 @@ class Config:
 
     @property
     def extraction_provider(self) -> str:
-        return (
-            self._user.get("memory", {}).get("extraction_provider")
-            or self._global.get("memory", {}).get("extraction_provider", "ollama")
-        )
+        return self._user.get("memory", {}).get("extraction_provider") or self._global.get(
+            "memory", {}
+        ).get("extraction_provider", "ollama")
 
     @property
     def extraction_model(self) -> str:
-        return (
-            self._user.get("memory", {}).get("extraction_model")
-            or self._global.get("memory", {}).get("extraction_model", "qwen2.5:7b")
-        )
+        return self._user.get("memory", {}).get("extraction_model") or self._global.get(
+            "memory", {}
+        ).get("extraction_model", "qwen2.5:7b")
 
     @property
     def auto_write(self) -> bool:
@@ -242,10 +235,7 @@ def load_user_profile(username: str) -> dict[str, Any]:
 
 def load_config(username: str | None = None) -> Config:
     global_cfg = load_global_config()
-    if username:
-        user_cfg = load_user_profile(username)
-    else:
-        user_cfg = {}
+    user_cfg = load_user_profile(username) if username else {}
     return Config(global_cfg, user_cfg)
 
 
@@ -269,11 +259,7 @@ def set_current_user(username: str) -> None:
 def list_users() -> list[str]:
     if not USERS_DIR.exists():
         return []
-    return sorted(
-        d.name
-        for d in USERS_DIR.iterdir()
-        if d.is_dir() and not d.name.startswith(".")
-    )
+    return sorted(d.name for d in USERS_DIR.iterdir() if d.is_dir() and not d.name.startswith("."))
 
 
 def user_exists(username: str) -> bool:
@@ -304,6 +290,7 @@ def create_user(username: str) -> None:
 def delete_user(username: str) -> None:
     """Remove user directory entirely."""
     import shutil
+
     user_dir = USERS_DIR / username
     if user_dir.exists():
         shutil.rmtree(user_dir)

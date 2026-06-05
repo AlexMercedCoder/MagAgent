@@ -20,6 +20,7 @@ console = Console()
 @dataclass
 class SubAgentTask:
     """Represents a task delegated to a sub-agent."""
+
     task_id: str
     description: str
     result: str = ""
@@ -55,11 +56,13 @@ class SubAgentRunner:
         task = SubAgentTask(task_id=task_id, description=description)
         self._tasks[task_id] = task
 
-        console.print(Panel(
-            f"[bold cyan]⚡ Spawning sub-agent[/bold cyan] [{task_id}]\n"
-            f"[dim]{description[:200]}[/dim]",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                f"[bold cyan]⚡ Spawning sub-agent[/bold cyan] [{task_id}]\n"
+                f"[dim]{description[:200]}[/dim]",
+                border_style="cyan",
+            )
+        )
 
         try:
             session = AgentSession(
@@ -77,8 +80,7 @@ class SubAgentRunner:
             task.done = True
 
             console.print(
-                f"[dim green]✓ Sub-agent [{task_id}] completed "
-                f"({len(response)} chars)[/dim green]"
+                f"[dim green]✓ Sub-agent [{task_id}] completed ({len(response)} chars)[/dim green]"
             )
 
         except Exception as e:

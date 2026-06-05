@@ -7,12 +7,13 @@ Requires: python-telegram-bot>=21.0
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from typing import Any
 
 from rich.console import Console
 
-from magent.gateway.base import GatewayAdapter, IncomingMessage, OutgoingMessage, MessageHandler
+from magent.gateway.base import GatewayAdapter, IncomingMessage, MessageHandler, OutgoingMessage
 
 console = Console()
 log = logging.getLogger("magent.gateway.telegram")
@@ -44,16 +45,17 @@ class TelegramAdapter(GatewayAdapter):
 
     async def start(self) -> None:
         try:
-            from telegram import Update, Bot
+            from telegram import Bot, Update
             from telegram.ext import (
                 Application,
-                MessageHandler as TGHandler,
                 filters,
+            )
+            from telegram.ext import (
+                MessageHandler as TGHandler,
             )
         except ImportError:
             raise RuntimeError(
-                "python-telegram-bot is not installed. "
-                "Run: pip install 'python-telegram-bot>=21.0'"
+                "python-telegram-bot is not installed. Run: pip install 'python-telegram-bot>=21.0'"
             )
 
         bot_token = self.config.get("bot_token", "")
@@ -74,9 +76,7 @@ class TelegramAdapter(GatewayAdapter):
         # Get bot's own username (for @mention detection in groups)
         bot_info = await app.bot.get_me()
         bot_username = bot_info.username
-        console.print(
-            f"[bold green]✓ Telegram gateway connected as @{bot_username}[/bold green]"
-        )
+        console.print(f"[bold green]✓ Telegram gateway connected as @{bot_username}[/bold green]")
 
         async def handle_message(update: Update, context) -> None:
             if not update.message or not update.message.text:
@@ -103,7 +103,7 @@ class TelegramAdapter(GatewayAdapter):
                 if mentioned:
                     text = text.replace(f"@{bot_username}", "").strip()
                 elif has_prefix:
-                    text = text[len(command_prefix):].strip()
+                    text = text[len(command_prefix) :].strip()
 
             if not text:
                 return
@@ -186,7 +186,7 @@ class TelegramAdapter(GatewayAdapter):
                     kwargs["reply_to_message_id"] = reply_id
                 sent = await self._bot.send_message(**kwargs)
             return str(sent.message_id) if sent else None
-        except Exception as e:
+        except Exception:
             # Retry without Markdown if parse error
             try:
                 sent = await self._bot.send_message(
@@ -230,13 +230,11 @@ class TelegramAdapter(GatewayAdapter):
         """Send Telegram 'typing...' action."""
         if not self._bot:
             return
-        try:
+        with contextlib.suppress(Exception):
             await self._bot.send_chat_action(
                 chat_id=int(channel_id),
                 action="typing",
             )
-        except Exception:
-            pass
 
 
 def _chunk_telegram(text: str, max_len: int = TELEGRAM_MAX_LEN) -> list[str]:

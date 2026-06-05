@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import time
 from collections import defaultdict
 from typing import Any
 
 from rich.console import Console
 
-from magent.config import load_config, get_current_user
+from magent.config import get_current_user
 from magent.gateway.base import IncomingMessage
 
 console = Console()
@@ -87,17 +87,16 @@ class MessageRouter:
             p_cfg = config.provider_config(config.default_provider)
             api_key = config.resolve_api_key(config.default_provider) or p_cfg.get("api_key")
 
-            provider = build_provider(
-                config.default_provider, config.default_model, api_key, p_cfg
-            )
+            provider = build_provider(config.default_provider, config.default_model, api_key, p_cfg)
             ext_p_cfg = config.provider_config(config.extraction_provider)
             ext_key = config.resolve_api_key(config.extraction_provider) or ext_p_cfg.get("api_key")
             ext_provider = build_provider(
                 config.extraction_provider, config.extraction_model, ext_key, ext_p_cfg
             )
 
-            from magent.agent import AgentSession
             import os
+
+            from magent.agent import AgentSession
 
             session = AgentSession(
                 username=self._username,
@@ -115,7 +114,9 @@ class MessageRouter:
         """Auth-check and dispatch a message. Returns response text."""
         allowed, reason = self.is_authorized(msg)
         if not allowed:
-            console.print(f"[dim red]Gateway blocked [{msg.platform}] {msg.username}: {reason}[/dim red]")
+            console.print(
+                f"[dim red]Gateway blocked [{msg.platform}] {msg.username}: {reason}[/dim red]"
+            )
             return f"⛔ {reason}"
 
         console.print(
@@ -134,8 +135,6 @@ class MessageRouter:
     async def close_all_sessions(self) -> None:
         """End all open agent sessions (writes memory, closes logs)."""
         for session in self._session_cache.values():
-            try:
+            with contextlib.suppress(Exception):
                 await session.end_session()
-            except Exception:
-                pass
         self._session_cache.clear()

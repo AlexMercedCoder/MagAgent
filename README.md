@@ -266,6 +266,7 @@ MagAgent ships with 8 pre-built skills in `docs/skills/`:
 | [REST API Testing](docs/skills/rest-api/SKILL.md) | api, http, endpoint, curl | http_request patterns + auth |
 | [SQLite Database](docs/skills/sqlite-database/SKILL.md) | sql, database, sqlite | Named DBs, common schemas |
 | [Desktop Automation](docs/skills/desktop-automation/SKILL.md) | notify, clipboard, open file | notify + clipboard + system info |
+| [Git Workflow](docs/skills/git-workflow/SKILL.md) | git, branch, commit, merge, rebase | Git best practices & conflict resolution |
 
 ### Writing Your Own Skill
 
@@ -478,6 +479,7 @@ bot_token = "..."
 | [docs/skills/rest-api/SKILL.md](docs/skills/rest-api/SKILL.md) | REST API testing and integration |
 | [docs/skills/sqlite-database/SKILL.md](docs/skills/sqlite-database/SKILL.md) | SQLite database patterns |
 | [docs/skills/desktop-automation/SKILL.md](docs/skills/desktop-automation/SKILL.md) | Desktop notifications, clipboard, system info |
+| [docs/skills/git-workflow/SKILL.md](docs/skills/git-workflow/SKILL.md) | Git workflows & conflict resolution |
 | [docs/gateway/setup-slack.md](docs/gateway/setup-slack.md) | Slack gateway setup (Socket Mode) |
 | [docs/gateway/setup-discord.md](docs/gateway/setup-discord.md) | Discord gateway setup |
 | [docs/gateway/setup-telegram.md](docs/gateway/setup-telegram.md) | Telegram gateway setup |

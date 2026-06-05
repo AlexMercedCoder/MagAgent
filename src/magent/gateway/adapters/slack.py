@@ -6,13 +6,13 @@ Requires: slack-bolt>=1.18, slack-sdk>=3.27
 
 from __future__ import annotations
 
-import asyncio
+import contextlib
 import logging
 from typing import Any
 
 from rich.console import Console
 
-from magent.gateway.base import GatewayAdapter, IncomingMessage, OutgoingMessage, MessageHandler
+from magent.gateway.base import GatewayAdapter, IncomingMessage, MessageHandler, OutgoingMessage
 
 console = Console()
 log = logging.getLogger("magent.gateway.slack")
@@ -43,12 +43,10 @@ class SlackAdapter(GatewayAdapter):
     def _make_app(self):
         """Lazily import and initialise slack-bolt App."""
         try:
-            from slack_bolt.async_app import AsyncApp
             from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
+            from slack_bolt.async_app import AsyncApp
         except ImportError:
-            raise RuntimeError(
-                "slack-bolt is not installed. Run: pip install 'slack-bolt>=1.18'"
-            )
+            raise RuntimeError("slack-bolt is not installed. Run: pip install 'slack-bolt>=1.18'")
 
         bot_token = self.config.get("bot_token", "")
         app_token = self.config.get("app_token", "")
@@ -66,6 +64,7 @@ class SlackAdapter(GatewayAdapter):
     def _strip_mention(self, text: str) -> str:
         """Remove <@UXXXXXX> bot mention from start of message."""
         import re
+
         return re.sub(r"^<@[A-Z0-9]+>\s*", "", text).strip()
 
     async def start(self) -> None:
@@ -75,6 +74,7 @@ class SlackAdapter(GatewayAdapter):
         # Fetch bot's own user ID (to detect self-mentions)
         try:
             from slack_sdk.web.async_client import AsyncWebClient
+
             client = AsyncWebClient(token=self.config["bot_token"])
             info = await client.auth_test()
             self._bot_user_id = info["user_id"]
@@ -129,16 +129,15 @@ class SlackAdapter(GatewayAdapter):
     async def stop(self) -> None:
         self._running = False
         if self._socket_handler:
-            try:
+            with contextlib.suppress(Exception):
                 await self._socket_handler.close_async()
-            except Exception:
-                pass
         console.print("[dim]Slack gateway stopped.[/dim]")
 
     async def post_message(self, msg: OutgoingMessage) -> str | None:
         """Post a message to Slack. Returns the message timestamp (ts) as ID."""
         try:
             from slack_sdk.web.async_client import AsyncWebClient
+
             client = AsyncWebClient(token=self.config["bot_token"])
 
             kwargs: dict[str, Any] = {
@@ -158,6 +157,7 @@ class SlackAdapter(GatewayAdapter):
         """Edit an existing Slack message."""
         try:
             from slack_sdk.web.async_client import AsyncWebClient
+
             client = AsyncWebClient(token=self.config["bot_token"])
             await client.chat_update(
                 channel=channel_id,

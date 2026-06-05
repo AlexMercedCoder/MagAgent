@@ -47,51 +47,113 @@ TIER_LABELS = {
 
 # Patterns that are always tier 0 (silent reads)
 _SILENT_PATTERNS: list[str] = [
-    "git status", "git log*", "git diff*", "git show*", "git branch*",
-    "ls*", "cat *", "head *", "tail *", "wc *", "find * -name*",
-    "echo *", "pwd", "whoami", "which *", "type *",
-    "rg *", "grep *", "fd *", "bat *",
+    "git status",
+    "git log*",
+    "git diff*",
+    "git show*",
+    "git branch*",
+    "ls*",
+    "cat *",
+    "head *",
+    "tail *",
+    "wc *",
+    "find * -name*",
+    "echo *",
+    "pwd",
+    "whoami",
+    "which *",
+    "type *",
+    "rg *",
+    "grep *",
+    "fd *",
+    "bat *",
 ]
 
 # Patterns that are tier 1 (auto with audit)
 _AUTO_PATTERNS: list[str] = [
-    "git add*", "git commit*", "git stash*", "git checkout*", "git switch*",
-    "git restore*", "git reset --soft*", "git reset --mixed*",
-    "npm install*", "npm run*", "npm test*", "npm ci*",
-    "yarn *", "pnpm *",
-    "pip install*", "pip uninstall*", "uv *",
-    "cargo build*", "cargo test*", "cargo run*", "cargo check*", "cargo fmt*",
+    "git add*",
+    "git commit*",
+    "git stash*",
+    "git checkout*",
+    "git switch*",
+    "git restore*",
+    "git reset --soft*",
+    "git reset --mixed*",
+    "npm install*",
+    "npm run*",
+    "npm test*",
+    "npm ci*",
+    "yarn *",
+    "pnpm *",
+    "pip install*",
+    "pip uninstall*",
+    "uv *",
+    "cargo build*",
+    "cargo test*",
+    "cargo run*",
+    "cargo check*",
+    "cargo fmt*",
     "cargo clippy*",
-    "pytest*", "python -m pytest*",
+    "pytest*",
+    "python -m pytest*",
     "make *",
-    "docker build*", "docker run*", "docker compose up*", "docker compose down*",
-    "go build*", "go test*", "go run*",
+    "docker build*",
+    "docker run*",
+    "docker compose up*",
+    "docker compose down*",
+    "go build*",
+    "go test*",
+    "go run*",
 ]
 
 # Patterns that are tier 2 (require confirm)
 _CONFIRM_PATTERNS: list[str] = [
-    "git push*", "git pull*", "git fetch*", "git merge*", "git rebase*",
-    "git reset --hard*", "git clean*",
-    "curl *", "wget *", "httpie *",
-    "ssh *", "scp *",
-    "docker push*", "docker pull*",
-    "npm publish*", "pip install --upgrade*",
-    "chmod *", "chown *",
+    "git push*",
+    "git pull*",
+    "git fetch*",
+    "git merge*",
+    "git rebase*",
+    "git reset --hard*",
+    "git clean*",
+    "curl *",
+    "wget *",
+    "httpie *",
+    "ssh *",
+    "scp *",
+    "docker push*",
+    "docker pull*",
+    "npm publish*",
+    "pip install --upgrade*",
+    "chmod *",
+    "chown *",
 ]
 
 # Anything matching these is always tier 3
 _BLOCK_PATTERNS: list[str] = [
-    "rm -rf*", "rm -r*", "rmdir*",
-    "sudo *", "su *",
-    "mkfs*", "fdisk*", "parted*",
-    "dd if=*", "shred *",
-    "> /etc/*", ">> /etc/*",
-    "systemctl*", "service *",
-    "iptables*", "ufw *",
-    "passwd *", "useradd*", "userdel*",
+    "rm -rf*",
+    "rm -r*",
+    "rmdir*",
+    "sudo *",
+    "su *",
+    "mkfs*",
+    "fdisk*",
+    "parted*",
+    "dd if=*",
+    "shred *",
+    "> /etc/*",
+    ">> /etc/*",
+    "systemctl*",
+    "service *",
+    "iptables*",
+    "ufw *",
+    "passwd *",
+    "useradd*",
+    "userdel*",
     "crontab*",
-    "kill -9*", "killall*",
-    "nc -l*", "ncat*",
+    "kill -9*",
+    "killall*",
+    "nc -l*",
+    "ncat*",
 ]
 
 
@@ -125,9 +187,11 @@ def classify_shell_command(
 # File operation tiers
 # ─────────────────────────────────────────────
 
+
 def classify_file_op(op: str, path: str, cwd: str) -> RiskTier:
     """Classify a file operation by type and path."""
     import os
+
     abs_path = os.path.abspath(os.path.join(cwd, path))
     in_cwd = abs_path.startswith(os.path.abspath(cwd))
 
@@ -143,6 +207,7 @@ def classify_file_op(op: str, path: str, cwd: str) -> RiskTier:
 # ─────────────────────────────────────────────
 # Permission gate
 # ─────────────────────────────────────────────
+
 
 class PermissionResult(NamedTuple):
     approved: bool
@@ -162,9 +227,9 @@ def check_permission(
     """
     # Determine effective approval threshold by mode
     auto_threshold = {
-        "silent": RiskTier.BLOCK,    # 0-2 auto, only 3 prompts
-        "balanced": RiskTier.CONFIRM, # 0-1 auto, 2 confirms, 3 blocks
-        "paranoid": RiskTier.AUTO,    # 0 auto, 1+ prompts
+        "silent": RiskTier.BLOCK,  # 0-2 auto, only 3 prompts
+        "balanced": RiskTier.CONFIRM,  # 0-1 auto, 2 confirms, 3 blocks
+        "paranoid": RiskTier.AUTO,  # 0 auto, 1+ prompts
         "yolo": RiskTier.BLOCK + 1,  # everything auto
     }.get(mode, RiskTier.CONFIRM)
 

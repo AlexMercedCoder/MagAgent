@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from magent.gateway.base import IncomingMessage, OutgoingMessage
 from magent.gateway.router import MessageRouter, RateLimiter
 
-
 # ─────────────────────────────────────────────
 # RateLimiter tests
 # ─────────────────────────────────────────────
+
 
 class TestRateLimiter:
     def test_allows_within_limit(self):
@@ -49,6 +50,7 @@ class TestRateLimiter:
 # ─────────────────────────────────────────────
 # MessageRouter auth tests
 # ─────────────────────────────────────────────
+
 
 def _make_msg(**kwargs) -> IncomingMessage:
     defaults = dict(
@@ -158,6 +160,7 @@ class TestMessageRouterHandle:
 # Base adapter ack_and_respond flow tests
 # ─────────────────────────────────────────────
 
+
 class ConcreteAdapter:
     """Minimal concrete GatewayAdapter for testing the base flow."""
 
@@ -261,14 +264,17 @@ class TestAckAndRespond:
 # Adapter utility function tests
 # ─────────────────────────────────────────────
 
+
 class TestSlackUtils:
     def test_truncate_under_limit_unchanged(self):
         from magent.gateway.adapters.slack import _truncate_slack
+
         text = "short message"
         assert _truncate_slack(text) == text
 
     def test_truncate_over_limit_adds_notice(self):
         from magent.gateway.adapters.slack import _truncate_slack
+
         long_text = "x" * 4000
         result = _truncate_slack(long_text, max_len=100)
         assert len(result) < 4000
@@ -278,11 +284,13 @@ class TestSlackUtils:
 class TestDiscordUtils:
     def test_chunk_short_message_single_chunk(self):
         from magent.gateway.adapters.discord import _chunk_discord
+
         text = "Hello world"
         assert _chunk_discord(text) == [text]
 
     def test_chunk_long_message_multiple_chunks(self):
         from magent.gateway.adapters.discord import _chunk_discord
+
         text = "line\n" * 500
         chunks = _chunk_discord(text, max_len=100)
         assert len(chunks) > 1
@@ -291,6 +299,7 @@ class TestDiscordUtils:
 
     def test_chunk_reassembles_to_original(self):
         from magent.gateway.adapters.discord import _chunk_discord
+
         text = "abc\ndef\nghi\njkl\n" * 50
         chunks = _chunk_discord(text, max_len=60)
         reassembled = "\n".join(c.strip("\n") for c in chunks)
@@ -302,11 +311,13 @@ class TestDiscordUtils:
 class TestTelegramUtils:
     def test_chunk_short_message_single_chunk(self):
         from magent.gateway.adapters.telegram import _chunk_telegram
+
         text = "Short message"
         assert _chunk_telegram(text) == [text]
 
     def test_chunk_long_message(self):
         from magent.gateway.adapters.telegram import _chunk_telegram
+
         text = "word " * 1000
         chunks = _chunk_telegram(text, max_len=200)
         assert len(chunks) > 1

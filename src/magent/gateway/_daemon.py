@@ -6,8 +6,9 @@ Usage: python -m magent.gateway._daemon slack discord telegram
 from __future__ import annotations
 
 import asyncio
-import sys
+import contextlib
 import logging
+import sys
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,10 +27,8 @@ def main() -> None:
 
     runner = GatewayRunner(config_data)
 
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(runner.run(platforms))
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":

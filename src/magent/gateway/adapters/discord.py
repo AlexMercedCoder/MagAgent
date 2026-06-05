@@ -7,12 +7,13 @@ Requires: discord.py>=2.3
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from typing import Any
 
 from rich.console import Console
 
-from magent.gateway.base import GatewayAdapter, IncomingMessage, OutgoingMessage, MessageHandler
+from magent.gateway.base import GatewayAdapter, IncomingMessage, MessageHandler, OutgoingMessage
 
 console = Console()
 log = logging.getLogger("magent.gateway.discord")
@@ -46,9 +47,7 @@ class DiscordAdapter(GatewayAdapter):
         try:
             import discord
         except ImportError:
-            raise RuntimeError(
-                "discord.py is not installed. Run: pip install 'discord.py>=2.3'"
-            )
+            raise RuntimeError("discord.py is not installed. Run: pip install 'discord.py>=2.3'")
 
         bot_token = self.config.get("bot_token", "")
         if not bot_token:
@@ -57,7 +56,7 @@ class DiscordAdapter(GatewayAdapter):
             )
 
         intents = discord.Intents.default()
-        intents.message_content = True   # Required for reading message text
+        intents.message_content = True  # Required for reading message text
         intents.dm_messages = True
 
         client = discord.Client(intents=intents)
@@ -102,7 +101,7 @@ class DiscordAdapter(GatewayAdapter):
                     text = text.replace(f"<@{client.user.id}>", "").strip()
                     text = text.replace(f"<@!{client.user.id}>", "").strip()
                 elif has_prefix:
-                    text = text[len(command_prefix):].strip()
+                    text = text[len(command_prefix) :].strip()
 
             if not text:
                 return
@@ -126,10 +125,8 @@ class DiscordAdapter(GatewayAdapter):
     async def stop(self) -> None:
         self._running = False
         if self._client:
-            try:
+            with contextlib.suppress(Exception):
                 await self._client.close()
-            except Exception:
-                pass
         console.print("[dim]Discord gateway stopped.[/dim]")
 
     async def post_message(self, msg: OutgoingMessage) -> str | None:
@@ -137,7 +134,7 @@ class DiscordAdapter(GatewayAdapter):
         if not self._client:
             return None
         try:
-            import discord
+
             channel = self._client.get_channel(int(msg.channel_id))
             if channel is None:
                 # Try fetching if not in cache (DM channels)
@@ -157,7 +154,7 @@ class DiscordAdapter(GatewayAdapter):
         if not self._client:
             return
         try:
-            import discord
+
             channel = self._client.get_channel(int(channel_id))
             if channel is None:
                 channel = await self._client.fetch_channel(int(channel_id))

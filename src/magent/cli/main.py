@@ -3,29 +3,26 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import signal
 import sys
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
-from rich.text import Text
 
 from magent import __version__
 from magent.config import (
     CONFIG_DIR,
-    USERS_DIR,
     create_user,
     delete_user,
     get_current_user,
     list_users,
     load_config,
-    save_global_config,
     set_current_user,
     user_exists,
     user_memory_dir,
@@ -43,6 +40,8 @@ gateway_app = typer.Typer(help="Remote gateway (Slack / Discord / Telegram)", na
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
 app.add_typer(gateway_app, name="gateway")
+mcp_app = typer.Typer(help="Manage MCP (Model Context Protocol) servers", name="mcp")
+app.add_typer(mcp_app, name="mcp")
 
 console = Console()
 
@@ -50,6 +49,7 @@ console = Console()
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
+
 
 def _require_user() -> str:
     user = get_current_user()
@@ -86,12 +86,13 @@ def _build_extraction_provider(config):
 # Root commands
 # ─────────────────────────────────────────────
 
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    provider: Optional[str] = typer.Option(None, "--provider", "-p", help="Provider ID"),
-    model: Optional[str] = typer.Option(None, "--model", "-m", help="Model name"),
-    project: Optional[str] = typer.Option(None, "--project", help="Project directory"),
+    provider: str | None = typer.Option(None, "--provider", "-p", help="Provider ID"),
+    model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
+    project: str | None = typer.Option(None, "--project", help="Project directory"),
     version: bool = typer.Option(False, "--version", "-v", help="Show version"),
 ):
     """
@@ -142,7 +143,7 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
         _shutdown()
         raise SystemExit(0)
 
-    import signal
+
     signal.signal(signal.SIGINT, _signal_handler)
 
     console.print(
@@ -186,6 +187,7 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
 def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> bool:
     """Handle slash commands. Returns True if handled."""
     import asyncio as _asyncio
+
     _loop = loop or _asyncio.get_event_loop()
 
     parts = cmd.strip().split(maxsplit=1)
@@ -193,19 +195,21 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
     arg = parts[1] if len(parts) > 1 else ""
 
     if command == "/help":
-        console.print(Panel(
-            "[bold]Available commands:[/bold]\n\n"
-            "  [cyan]/help[/cyan]            — Show this help\n"
-            "  [cyan]/memory[/cyan]          — Show memory stats\n"
-            "  [cyan]/skills[/cyan]          — List active skills\n"
-            "  [cyan]/model[/cyan]           — Show current model\n"
-            "  [cyan]/user[/cyan]            — Show current user\n"
-            "  [cyan]/mode <mode>[/cyan]     — Set permission mode (silent/balanced/paranoid/yolo)\n"
-            "  [cyan]/spawn <task>[/cyan]    — Spawn a sub-agent for a focused task\n"
-            "  [cyan]/clear[/cyan]           — Clear conversation history\n"
-            "  [cyan]/exit[/cyan]            — End session",
-            title="[bold cyan]MagAgent Help[/bold cyan]",
-        ))
+        console.print(
+            Panel(
+                "[bold]Available commands:[/bold]\n\n"
+                "  [cyan]/help[/cyan]            — Show this help\n"
+                "  [cyan]/memory[/cyan]          — Show memory stats\n"
+                "  [cyan]/skills[/cyan]          — List active skills\n"
+                "  [cyan]/model[/cyan]           — Show current model\n"
+                "  [cyan]/user[/cyan]            — Show current user\n"
+                "  [cyan]/mode <mode>[/cyan]     — Set permission mode (silent/balanced/paranoid/yolo)\n"
+                "  [cyan]/spawn <task>[/cyan]    — Spawn a sub-agent for a focused task\n"
+                "  [cyan]/clear[/cyan]           — Clear conversation history\n"
+                "  [cyan]/exit[/cyan]            — End session",
+                title="[bold cyan]MagAgent Help[/bold cyan]",
+            )
+        )
         return True
 
     if command == "/memory":
@@ -247,10 +251,12 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
             console.print("[yellow]Usage: /spawn <task description>[/yellow]")
             return True
         import uuid as _uuid
+
         task_id = f"sub_{_uuid.uuid4().hex[:6]}"
         console.print(f"[dim]Spawning sub-agent [{task_id}]...[/dim]")
         result = _loop.run_until_complete(session.spawn_subagent(task_id, arg))
         from magent.tui import print_response
+
         console.print(f"[dim cyan]Sub-agent [{task_id}] result:[/dim cyan]")
         print_response(result)
         return True
@@ -263,6 +269,7 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
 
     if command == "/db":
         from magent.tools.db import list_databases
+
         username = get_current_user() or "default"
         result = list_databases(username)
         dbs = result.get("databases", [])
@@ -271,6 +278,7 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
         else:
             t = Table("Database", "Size")
             from magent.utils import human_bytes
+
             for d in dbs:
                 t.add_row(d["name"], human_bytes(d["size_bytes"]))
             console.print(t)
@@ -282,6 +290,7 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
 # ─────────────────────────────────────────────
 # User subcommands
 # ─────────────────────────────────────────────
+
 
 @user_app.command("create")
 def user_create(name: str = typer.Argument(..., help="Username to create")):
@@ -356,16 +365,18 @@ def user_current():
 # Memory subcommands
 # ─────────────────────────────────────────────
 
+
 def _get_memory_manager():
     username = _require_user()
     memory_dir = user_memory_dir(username)
     from magent.memory import MemoryManager
+
     return MemoryManager(memory_dir), username
 
 
 @memory_app.command("stats")
 def memory_stats(
-    user: Optional[str] = typer.Option(None, "--user", "-u", help="Target user (default: current)"),
+    user: str | None = typer.Option(None, "--user", "-u", help="Target user (default: current)"),
 ):
     """Show memory graph statistics."""
     username = user or _require_user()
@@ -374,6 +385,7 @@ def memory_stats(
         raise typer.Exit(1)
     memory_dir = user_memory_dir(username)
     from magent.memory import MemoryManager
+
     mgr = MemoryManager(memory_dir)
     stats = mgr.stats()
     _print_memory_stats(stats, username)
@@ -428,12 +440,14 @@ def memory_show(node_id: str = typer.Argument(..., help="Node ID to display")):
     if not node:
         console.print(f"[red]Node '{node_id}' not found.[/red]")
         raise typer.Exit(1)
-    console.print(Panel(
-        f"[bold]Type:[/bold] {node['type']}\n"
-        f"[bold]Links:[/bold] {', '.join(node.get('links') or []) or 'none'}\n\n"
-        f"{node['body']}",
-        title=f"[bold cyan]{node_id}[/bold cyan]",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Type:[/bold] {node['type']}\n"
+            f"[bold]Links:[/bold] {', '.join(node.get('links') or []) or 'none'}\n\n"
+            f"{node['body']}",
+            title=f"[bold cyan]{node_id}[/bold cyan]",
+        )
+    )
 
 
 @memory_app.command("traverse")
@@ -467,11 +481,12 @@ def memory_delete(
 
 @memory_app.command("export")
 def memory_export(
-    out: Optional[str] = typer.Option(None, "--out", "-o"),
+    out: str | None = typer.Option(None, "--out", "-o"),
     fmt: str = typer.Option("json", "--format", "-f"),
 ):
     """Export the memory graph to JSON."""
     import json as json_mod
+
     mgr, username = _get_memory_manager()
     nodes = mgr.export_json()
     data = json_mod.dumps(nodes, indent=2, default=str)
@@ -493,7 +508,7 @@ def memory_reset(yes: bool = typer.Option(False, "--yes", "-y")):
         )
         if confirm.lower() != "yes":
             raise typer.Exit()
-    import shutil
+
     memory_dir = user_memory_dir(username)
     if memory_dir.exists():
         # Remove all .md files but keep maggraph.toml
@@ -505,7 +520,7 @@ def memory_reset(yes: bool = typer.Option(False, "--yes", "-y")):
 @memory_app.command("log")
 def memory_log(
     limit: int = typer.Option(20, "--limit", "-n", help="Max sessions to show"),
-    user: Optional[str] = typer.Option(None, "--user", "-u"),
+    user: str | None = typer.Option(None, "--user", "-u"),
 ):
     """Show recent session logs."""
     from magent.logging import list_session_logs
@@ -540,15 +555,19 @@ def memory_log(
 # Top-level commands
 # ─────────────────────────────────────────────
 
+
 @app.command("setup")
 def setup():
     """First-time setup wizard."""
     from magent.setup import run_setup
+
     run_setup()
 
 
 @app.command("mode")
-def set_mode(mode: str = typer.Argument(..., help="Permission mode: silent|balanced|paranoid|yolo")):
+def set_mode(
+    mode: str = typer.Argument(..., help="Permission mode: silent|balanced|paranoid|yolo"),
+):
     """Set the default permission mode for the current user."""
     valid = ("silent", "balanced", "paranoid", "yolo")
     if mode not in valid:
@@ -556,6 +575,7 @@ def set_mode(mode: str = typer.Argument(..., help="Permission mode: silent|balan
         raise typer.Exit(1)
     username = _require_user()
     from magent.config import load_user_profile, save_user_profile
+
     profile = load_user_profile(username)
     profile.setdefault("permissions", {})["mode"] = mode
     save_user_profile(username, profile)
@@ -566,12 +586,14 @@ def set_mode(mode: str = typer.Argument(..., help="Permission mode: silent|balan
 def doctor():
     """Run health checks: providers, maggraph, config."""
     from magent.utils import run_doctor
+
     run_doctor()
 
 
 # ─────────────────────────────────────────────
 # Gateway subcommands
 # ─────────────────────────────────────────────
+
 
 @gateway_app.command("start")
 def gateway_start(
@@ -580,7 +602,9 @@ def gateway_start(
         help="Platforms to start: slack discord telegram (default: all configured)",
     ),
     foreground: bool = typer.Option(
-        False, "--foreground", "-f",
+        False,
+        "--foreground",
+        "-f",
         help="Run in foreground instead of background daemon",
     ),
 ):
@@ -592,7 +616,7 @@ def gateway_start(
       magent gateway start slack telegram   # specific platforms
       magent gateway start discord -f       # foreground (for debugging)
     """
-    from magent.gateway import GatewayRunner, is_gateway_running, GATEWAY_LOG_FILE
+    from magent.gateway import GATEWAY_LOG_FILE, GatewayRunner, is_gateway_running
 
     running, pid = is_gateway_running()
     if running:
@@ -612,7 +636,9 @@ def gateway_start(
 
     # Determine which platforms to start
     if not platforms:
-        platforms = [p for p in ("slack", "discord", "telegram") if gw_cfg.get(p, {}).get("bot_token")]
+        platforms = [
+            p for p in ("slack", "discord", "telegram") if gw_cfg.get(p, {}).get("bot_token")
+        ]
         if not platforms:
             console.print(
                 "[red]No platform tokens found in [gateway.*] config.\n"
@@ -624,34 +650,35 @@ def gateway_start(
 
     if foreground:
         console.print(f"[bold]Starting gateway in foreground on: {', '.join(platforms)}[/bold]")
-        try:
+        with contextlib.suppress(KeyboardInterrupt):
             asyncio.run(runner.run(platforms))
-        except KeyboardInterrupt:
-            pass
         return
 
     # Background daemon via subprocess
     import subprocess as _sp
+
     GATEWAY_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, "-m", "magent.gateway._daemon"] + platforms
     with open(GATEWAY_LOG_FILE, "a") as logf:
         proc = _sp.Popen(
             cmd,
-            stdout=logf, stderr=logf,
+            stdout=logf,
+            stderr=logf,
             start_new_session=True,
         )
     console.print(
         f"[bold green]✓ Gateway started (PID {proc.pid}) on: {', '.join(platforms)}[/bold green]"
     )
     console.print(f"[dim]Logs: {GATEWAY_LOG_FILE}[/dim]")
-    console.print(f"[dim]Stop with: magent gateway stop[/dim]")
+    console.print("[dim]Stop with: magent gateway stop[/dim]")
 
 
 @gateway_app.command("stop")
 def gateway_stop():
     """Stop the running gateway daemon."""
-    from magent.gateway import is_gateway_running, GATEWAY_PID_FILE
     import signal as _sig
+
+    from magent.gateway import GATEWAY_PID_FILE, is_gateway_running
 
     running, pid = is_gateway_running()
     if not running:
@@ -670,7 +697,7 @@ def gateway_stop():
 @gateway_app.command("status")
 def gateway_status():
     """Show whether the gateway is running and on which platforms."""
-    from magent.gateway import is_gateway_running, GATEWAY_LOG_FILE
+    from magent.gateway import GATEWAY_LOG_FILE, is_gateway_running
 
     running, pid = is_gateway_running()
     if running:
@@ -683,8 +710,9 @@ def gateway_status():
 @gateway_app.command("init")
 def gateway_init():
     """Print an example [gateway] config block to add to config.toml."""
-    from magent.gateway import EXAMPLE_GATEWAY_CONFIG
     from magent.config import CONFIG_DIR
+    from magent.gateway import EXAMPLE_GATEWAY_CONFIG
+
     config_path = CONFIG_DIR / "config.toml"
     console.print(
         Panel(
@@ -709,13 +737,148 @@ def gateway_logs(
 
     if follow:
         import subprocess as _sp
-        try:
+
+        with contextlib.suppress(KeyboardInterrupt):
             _sp.run(["tail", "-f", str(GATEWAY_LOG_FILE)])
-        except KeyboardInterrupt:
-            pass
         return
 
     lines = GATEWAY_LOG_FILE.read_text().splitlines()
     for line in lines[-tail:]:
         console.print(line)
 
+
+# ─────────────────────────────────────────────
+# MCP COMMANDS
+# ─────────────────────────────────────────────
+
+EXAMPLE_MCP_CONFIG = """
+# Add to ~/.config/magent/config.toml:
+
+[mcp.servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+env = { GITHUB_TOKEN = "ghp_your_token_here" }
+
+[mcp.servers.filesystem]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"]
+
+[mcp.servers.postgres]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+timeout = 60
+
+# Browse more servers: https://github.com/modelcontextprotocol/servers
+"""
+
+
+@mcp_app.command("list")
+def mcp_list(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full tool schemas"),
+) -> None:
+    """List all configured MCP servers and their available tools."""
+    username = get_current_user()
+    if not username:
+        console.print("[red]No active user. Run 'magent setup' first.[/red]")
+        raise typer.Exit(1)
+
+    cfg = load_config(username)
+    mcp_servers = cfg.get("mcp", "servers", default={}) or {}
+    if not mcp_servers:
+        console.print("[yellow]No MCP servers configured.[/yellow]")
+        console.print("\nExample config:")
+        console.print(EXAMPLE_MCP_CONFIG, markup=False, highlight=False)
+        return
+
+    async def _list() -> None:
+        from magent.mcp import MCPManager
+
+        manager = MCPManager(mcp_servers)
+        console.print(f"\n[bold]Connecting to {len(mcp_servers)} MCP server(s)...[/bold]")
+        await manager.start_all()
+
+        for server_info in manager.list_servers():
+            name = server_info["name"]
+            ok = server_info["connected"]
+            cmd = server_info["command"]
+            args_str = " ".join(server_info["args"])
+            tools = server_info["tools"]
+
+            icon = "[green]●[/green]" if ok else "[red]●[/red]"
+            console.print(f"\n  {icon} [bold]{name}[/bold]  [dim]{cmd} {args_str}[/dim]")
+
+            if ok and tools:
+                table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
+                table.add_column("Tool", style="white")
+                table.add_column("Qualified Name", style="dim")
+                table.add_column("Description")
+                for tool in manager._clients[name].tools:
+                    table.add_row(
+                        tool.name,
+                        tool.qualified_name,
+                        (tool.description or "-")[:80],
+                    )
+                console.print(table)
+            elif not ok:
+                console.print(
+                    "    [dim red]Failed — check config and that the command is installed[/dim red]"
+                )
+            else:
+                console.print("    [dim](no tools)[/dim]")
+
+        await manager.stop_all()
+
+    asyncio.run(_list())
+
+
+@mcp_app.command("test")
+def mcp_test(
+    server: str = typer.Argument(..., help="Server name from config (e.g. github)"),
+) -> None:
+    """Test connection to a specific MCP server and list its tools."""
+    username = get_current_user()
+    if not username:
+        console.print("[red]No active user.[/red]")
+        raise typer.Exit(1)
+
+    cfg = load_config(username)
+    mcp_servers = cfg.get("mcp", "servers", default={}) or {}
+    if server not in mcp_servers:
+        console.print(f"[red]Server '{server}' not found in config.[/red]")
+        console.print(f"Configured: {list(mcp_servers.keys()) or '(none)'}")
+        raise typer.Exit(1)
+
+    async def _test() -> None:
+        from magent.mcp import MCPClient
+
+        srv_cfg = mcp_servers[server]
+        client = MCPClient(
+            server_name=server,
+            command=srv_cfg["command"],
+            args=srv_cfg.get("args", []),
+            env=srv_cfg.get("env"),
+            timeout=srv_cfg.get("timeout", 30.0),
+        )
+        console.print(f"\nConnecting to [bold]{server}[/bold]...")
+        ok = await client.connect()
+        if not ok:
+            console.print("[red]✗ Connection failed.[/red]")
+            raise typer.Exit(1)
+
+        console.print(f"[green]✓ Connected — {len(client.tools)} tools:[/green]")
+        for tool in client.tools:
+            console.print(f"  [bold]{tool.name}[/bold] — {tool.description}")
+            console.print(f"    [dim]{tool.qualified_name}[/dim]")
+        await client.disconnect()
+        console.print("\n[dim]Connection closed.[/dim]")
+
+    asyncio.run(_test())
+
+
+@mcp_app.command("init")
+def mcp_init() -> None:
+    """Print an example MCP config block for config.toml."""
+    console.print("\n[bold]Example MCP configuration:[/bold]")
+    console.print(EXAMPLE_MCP_CONFIG, markup=False, highlight=False)
+    console.print(f"[dim]Config: {CONFIG_DIR / 'config.toml'}[/dim]")
+    console.print("[dim]Browse servers: https://github.com/modelcontextprotocol/servers[/dim]\n")
