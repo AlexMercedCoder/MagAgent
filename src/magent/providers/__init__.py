@@ -16,6 +16,7 @@ console = Console()
 PROVIDER_BASE_URLS: dict[str, str] = {
     "nous-portal": "https://inference-api.nousresearch.com/v1",
     "opencode-zen": "https://opencode.ai/zen/v1",
+    "opencode-go": "https://opencode.ai/zen/v1",  # Go sub uses same Zen endpoint
     "ollama": "http://localhost:11434",
     "lmstudio": "http://localhost:1234/v1",
 }
@@ -23,6 +24,7 @@ PROVIDER_BASE_URLS: dict[str, str] = {
 PROVIDER_DISPLAY_NAMES: dict[str, str] = {
     "nous-portal": "Nous Portal",
     "opencode-zen": "OpenCode Zen",
+    "opencode-go": "OpenCode Go",
     "ollama": "Ollama (local)",
     "openai": "OpenAI",
     "anthropic": "Anthropic",
@@ -66,15 +68,17 @@ def _build_api_kwargs(
 
     kwargs: dict[str, Any] = {"model": litellm_model}
 
-    # Custom base URL for OpenAI-compat providers
+    # Custom base URL — always set for non-native providers
     base_url = provider_cfg.get("base_url") or PROVIDER_BASE_URLS.get(provider)
     if base_url and provider not in ("openai", "anthropic", "google", "groq", "openrouter", "bedrock"):
         kwargs["api_base"] = base_url
 
-    if api_key:
-        kwargs["api_key"] = api_key
-    elif provider in ("nous-portal", "opencode-zen", "lmstudio", "custom"):
-        kwargs["api_key"] = "sk-magent"  # dummy key for local/custom endpoints
+    # Resolve API key: passed-in > direct config > dummy for local endpoints
+    resolved_key = api_key or provider_cfg.get("api_key")
+    if resolved_key:
+        kwargs["api_key"] = resolved_key
+    elif provider in ("nous-portal", "opencode-zen", "opencode-go", "lmstudio", "custom", "ollama"):
+        kwargs["api_key"] = "sk-magent"  # dummy for local/custom OpenAI-compat endpoints
 
     return kwargs
 

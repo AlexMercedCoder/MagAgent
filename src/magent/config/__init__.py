@@ -66,8 +66,8 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
 
 DEFAULT_USER_PROFILE: dict[str, Any] = {
     "preferences": {
-        "default_provider": None,
-        "default_model": None,
+        "default_provider": "",
+        "default_model": "",
         "theme": "dark",
         "memory_budget_tokens": 4000,
     },
@@ -126,12 +126,12 @@ class Config:
 
     @property
     def default_provider(self) -> str:
-        user_pref = self._user.get("preferences", {}).get("default_provider")
+        user_pref = self._user.get("preferences", {}).get("default_provider") or ""
         return user_pref or self._global.get("defaults", {}).get("provider", "ollama")
 
     @property
     def default_model(self) -> str:
-        user_pref = self._user.get("preferences", {}).get("default_model")
+        user_pref = self._user.get("preferences", {}).get("default_model") or ""
         return user_pref or self._global.get("defaults", {}).get("model", "qwen2.5-coder:32b")
 
     @property

@@ -24,11 +24,12 @@ from magent.config import (
 console = Console()
 
 PROVIDER_CHOICES = [
+    ("opencode-go", "OpenCode Go (deepseek-v3-0324 — cheap, fast, great for coding)"),
     ("ollama", "Ollama (local — FREE, requires Ollama running)"),
     ("openai", "OpenAI (GPT-4o, GPT-5)"),
     ("anthropic", "Anthropic (Claude)"),
     ("nous-portal", "Nous Portal (Hermes 4 + 200+ models)"),
-    ("opencode-zen", "OpenCode Zen (curated coding models)"),
+    ("opencode-zen", "OpenCode Zen (premium curated models)"),
     ("google", "Google Gemini"),
     ("groq", "Groq (fast inference)"),
     ("openrouter", "OpenRouter (aggregator)"),
@@ -36,11 +37,12 @@ PROVIDER_CHOICES = [
 ]
 
 DEFAULT_MODELS = {
+    "opencode-go": "deepseek-v4-flash",
     "ollama": "qwen2.5-coder:32b",
     "openai": "gpt-4o",
-    "anthropic": "claude-3-5-sonnet-20241022",
+    "anthropic": "claude-sonnet-4-5",
     "nous-portal": "nous-hermes-4",
-    "opencode-zen": "gpt-5",
+    "opencode-zen": "deepseek-v4-flash",
     "google": "gemini-2.0-flash",
     "groq": "llama-3.3-70b-versatile",
     "openrouter": "deepseek/deepseek-chat",
