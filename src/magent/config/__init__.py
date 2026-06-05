@@ -30,7 +30,7 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.1.0",
+        "version": "0.1.1",
     },
     "defaults": {
         "provider": "ollama",
