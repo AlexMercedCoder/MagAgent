@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 if sys.version_info >= (3, 11):
-    import tomllib
+    import tomllib  # stdlib in 3.11+
 else:
     import tomli as tomllib  # type: ignore[no-redef]
 

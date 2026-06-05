@@ -9,7 +9,7 @@ description = "CLI-based local AI coding agent powered by MagGraph persistent me
 readme = "README.md"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Alex Merced" }]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 keywords = ["ai", "agent", "cli", "coding", "maggraph", "memory", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
