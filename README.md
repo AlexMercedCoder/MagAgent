@@ -4,7 +4,7 @@
 
 **A terminal-native AI coding agent with persistent memory, built for developers who want an assistant that genuinely learns them.**
 
-[![PyPI version](https://img.shields.io/pypi/v/magent.svg)](https://pypi.org/project/magent/)
+[![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-42%20passing-brightgreen.svg)](tests/)
@@ -49,13 +49,13 @@ Every session, MagAgent extracts facts, preferences, and patterns from your conv
 ### Install
 
 ```bash
-pip install magent
+pip install mag-agent
 
 # With gateway support (Slack/Discord/Telegram):
-pip install "magent[gateway]"
+pip install "mag-agent[gateway]"
 
 # Recommended: isolate with pipx
-pipx install magent
+pipx install mag-agent
 ```
 
 ### First-time setup

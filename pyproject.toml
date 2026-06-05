@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "magent"
+name = "mag-agent"
 version = "0.1.0"
 description = "MagAgent — CLI AI coding agent with persistent MagGraph memory. Like the Magpie: intelligent, tool-using, and never forgets."
 readme = "README.md"
