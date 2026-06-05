@@ -39,8 +39,10 @@ app = typer.Typer(
 )
 user_app = typer.Typer(help="Manage user profiles", name="user")
 memory_app = typer.Typer(help="Inspect and manage memory graph", name="memory")
+gateway_app = typer.Typer(help="Remote gateway (Slack / Discord / Telegram)", name="gateway")
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
+app.add_typer(gateway_app, name="gateway")
 
 console = Console()
 
@@ -257,6 +259,21 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
         session.conversation.clear()
         session.turn_count = 0
         console.print("[dim]Conversation history cleared.[/dim]")
+        return True
+
+    if command == "/db":
+        from magent.tools.db import list_databases
+        username = get_current_user() or "default"
+        result = list_databases(username)
+        dbs = result.get("databases", [])
+        if not dbs:
+            console.print("[dim]No databases yet. Use db_execute to create tables.[/dim]")
+        else:
+            t = Table("Database", "Size")
+            from magent.utils import human_bytes
+            for d in dbs:
+                t.add_row(d["name"], human_bytes(d["size_bytes"]))
+            console.print(t)
         return True
 
     return False
@@ -550,3 +567,155 @@ def doctor():
     """Run health checks: providers, maggraph, config."""
     from magent.utils import run_doctor
     run_doctor()
+
+
+# ─────────────────────────────────────────────
+# Gateway subcommands
+# ─────────────────────────────────────────────
+
+@gateway_app.command("start")
+def gateway_start(
+    platforms: list[str] = typer.Argument(
+        None,
+        help="Platforms to start: slack discord telegram (default: all configured)",
+    ),
+    foreground: bool = typer.Option(
+        False, "--foreground", "-f",
+        help="Run in foreground instead of background daemon",
+    ),
+):
+    """
+    Start the remote gateway on one or more platforms.
+
+    Examples:
+      magent gateway start                  # all configured platforms
+      magent gateway start slack telegram   # specific platforms
+      magent gateway start discord -f       # foreground (for debugging)
+    """
+    from magent.gateway import GatewayRunner, is_gateway_running, GATEWAY_LOG_FILE
+
+    running, pid = is_gateway_running()
+    if running:
+        console.print(f"[yellow]Gateway already running (PID {pid})[/yellow]")
+        raise typer.Exit(1)
+
+    username = _require_user()
+    config_data = load_config(username)._raw
+
+    gw_cfg = config_data.get("gateway", {})
+    if not gw_cfg:
+        console.print(
+            "[red]No [gateway] section in config.toml.\n"
+            "Run [bold]magent gateway init[/bold] to generate an example config.[/red]"
+        )
+        raise typer.Exit(1)
+
+    # Determine which platforms to start
+    if not platforms:
+        platforms = [p for p in ("slack", "discord", "telegram") if gw_cfg.get(p, {}).get("bot_token")]
+        if not platforms:
+            console.print(
+                "[red]No platform tokens found in [gateway.*] config.\n"
+                "Add bot_token values or specify platforms explicitly.[/red]"
+            )
+            raise typer.Exit(1)
+
+    runner = GatewayRunner(config_data)
+
+    if foreground:
+        console.print(f"[bold]Starting gateway in foreground on: {', '.join(platforms)}[/bold]")
+        try:
+            asyncio.run(runner.run(platforms))
+        except KeyboardInterrupt:
+            pass
+        return
+
+    # Background daemon via subprocess
+    import subprocess as _sp
+    GATEWAY_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [sys.executable, "-m", "magent.gateway._daemon"] + platforms
+    with open(GATEWAY_LOG_FILE, "a") as logf:
+        proc = _sp.Popen(
+            cmd,
+            stdout=logf, stderr=logf,
+            start_new_session=True,
+        )
+    console.print(
+        f"[bold green]✓ Gateway started (PID {proc.pid}) on: {', '.join(platforms)}[/bold green]"
+    )
+    console.print(f"[dim]Logs: {GATEWAY_LOG_FILE}[/dim]")
+    console.print(f"[dim]Stop with: magent gateway stop[/dim]")
+
+
+@gateway_app.command("stop")
+def gateway_stop():
+    """Stop the running gateway daemon."""
+    from magent.gateway import is_gateway_running, GATEWAY_PID_FILE
+    import signal as _sig
+
+    running, pid = is_gateway_running()
+    if not running:
+        console.print("[dim]No gateway is running.[/dim]")
+        raise typer.Exit()
+
+    try:
+        os.kill(pid, _sig.SIGTERM)
+        GATEWAY_PID_FILE.unlink(missing_ok=True)
+        console.print(f"[green]✓ Gateway (PID {pid}) stopped.[/green]")
+    except Exception as e:
+        console.print(f"[red]Failed to stop gateway: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@gateway_app.command("status")
+def gateway_status():
+    """Show whether the gateway is running and on which platforms."""
+    from magent.gateway import is_gateway_running, GATEWAY_LOG_FILE
+
+    running, pid = is_gateway_running()
+    if running:
+        console.print(f"[bold green]● Gateway running[/bold green] (PID {pid})")
+        console.print(f"[dim]Logs: {GATEWAY_LOG_FILE}[/dim]")
+    else:
+        console.print("[dim]○ Gateway is not running.[/dim]")
+
+
+@gateway_app.command("init")
+def gateway_init():
+    """Print an example [gateway] config block to add to config.toml."""
+    from magent.gateway import EXAMPLE_GATEWAY_CONFIG
+    from magent.config import CONFIG_DIR
+    config_path = CONFIG_DIR / "config.toml"
+    console.print(
+        Panel(
+            EXAMPLE_GATEWAY_CONFIG.strip(),
+            title="[bold cyan]Example Gateway Config[/bold cyan]",
+            subtitle=f"Add to {config_path}",
+        )
+    )
+
+
+@gateway_app.command("logs")
+def gateway_logs(
+    tail: int = typer.Option(50, "--tail", "-n", help="Number of lines to show"),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Follow log output"),
+):
+    """Show gateway log output."""
+    from magent.gateway import GATEWAY_LOG_FILE
+
+    if not GATEWAY_LOG_FILE.exists():
+        console.print("[dim]No gateway log file found.[/dim]")
+        raise typer.Exit()
+
+    if follow:
+        import subprocess as _sp
+        try:
+            _sp.run(["tail", "-f", str(GATEWAY_LOG_FILE)])
+        except KeyboardInterrupt:
+            pass
+        return
+
+    lines = GATEWAY_LOG_FILE.read_text().splitlines()
+    for line in lines[-tail:]:
+        console.print(line)
+

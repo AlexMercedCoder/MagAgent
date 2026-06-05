@@ -74,6 +74,11 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
 ]
+gateway = [
+    "slack-bolt>=1.18",
+    "discord.py>=2.3",
+    "python-telegram-bot>=21.0",
+]
 
 [project.scripts]
 magent = "magent.cli.main:app"
