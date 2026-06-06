@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import csv
 import difflib
 import hashlib
@@ -454,12 +455,21 @@ def review_diff(root: str | Path, base: str = "HEAD") -> list[dict[str, Any]]:
 def review_summary(root: str | Path, base: str = "HEAD") -> dict[str, Any]:
     findings = review_diff(root, base)
     categories = Counter(item.get("category", "general") for item in findings)
+    files = _run_git(root, ["diff", "--name-only", base, "--"]).splitlines()
+    file_groups = {
+        file: {
+            "related_tests": related_tests(root, file),
+            "risk": _file_risk(file),
+        }
+        for file in files
+    }
     return {
         "ok": not any(item.get("priority") in {"P0", "P1"} for item in findings),
         "base": base,
         "findings": findings,
         "categories": dict(categories),
-        "changed_files": _run_git(root, ["diff", "--name-only", base, "--"]).splitlines(),
+        "changed_files": files,
+        "files": file_groups,
     }
 
 
@@ -494,6 +504,119 @@ def repo_graph(root: str | Path) -> dict[str, Any]:
                 found.append(next(group for group in m.groups() if group))
         imports[rel] = sorted(set(found))
     return {"root": str(root_path), "python_imports": imports, "files": len(imports)}
+
+
+def code_index(root: str | Path) -> dict[str, Any]:
+    """Build a lightweight persistent code intelligence index."""
+    root_path = Path(root).resolve()
+    files = []
+    symbols = []
+    imports: dict[str, list[str]] = {}
+    for path in root_path.rglob("*.py"):
+        if _ignored(path):
+            continue
+        rel = path.relative_to(root_path).as_posix()
+        text = path.read_text(encoding="utf-8", errors="replace")
+        file_info = {"path": rel, "lines": len(text.splitlines()), "symbols": []}
+        try:
+            tree = ast.parse(text)
+            file_imports = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    file_imports.extend(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    file_imports.append(node.module)
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    item = {
+                        "name": node.name,
+                        "kind": "class" if isinstance(node, ast.ClassDef) else "function",
+                        "path": rel,
+                        "line": node.lineno,
+                        "doc": ast.get_docstring(node) or "",
+                    }
+                    symbols.append(item)
+                    file_info["symbols"].append(item)
+            imports[rel] = sorted(set(file_imports))
+        except SyntaxError:
+            imports[rel] = []
+        files.append(file_info)
+    return {
+        "root": str(root_path),
+        "files": files,
+        "symbols": symbols,
+        "imports": imports,
+        "test_map": test_map(root_path),
+        "updated_at": now_iso(),
+    }
+
+
+def save_code_index(store: WorkbenchStore, root: str | Path) -> dict[str, Any]:
+    index = code_index(root)
+    indexes = store.read("code_indexes", [])
+    indexes = [item for item in indexes if item.get("root") != index["root"]]
+    indexes.append(index)
+    store.write("code_indexes", indexes)
+    return index
+
+
+def search_symbols(store: WorkbenchStore, query: str, root: str | Path | None = None) -> list[dict[str, Any]]:
+    indexes = store.read("code_indexes", [])
+    if root:
+        root_str = str(Path(root).resolve())
+        indexes = [item for item in indexes if item.get("root") == root_str]
+    q = query.lower()
+    matches = []
+    for index in indexes:
+        for symbol in index.get("symbols", []):
+            haystack = f"{symbol.get('name', '')} {symbol.get('path', '')} {symbol.get('doc', '')}".lower()
+            if q in haystack:
+                matches.append({**symbol, "root": index.get("root")})
+    return matches
+
+
+def related_code(store: WorkbenchStore, root: str | Path, file: str) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    root_str = str(root_path)
+    indexes = [item for item in store.read("code_indexes", []) if item.get("root") == root_str]
+    index = indexes[-1] if indexes else code_index(root_path)
+    rel = Path(file).as_posix()
+    tests = index.get("test_map", {}).get(rel, [])
+    import_peers = [
+        path
+        for path, imports in index.get("imports", {}).items()
+        if path != rel and any(part in " ".join(imports) for part in Path(rel).stem.split("_"))
+    ]
+    return {"root": root_str, "file": rel, "tests": tests, "related": sorted(set(import_peers + tests))}
+
+
+def test_map(root: str | Path) -> dict[str, list[str]]:
+    root_path = Path(root).resolve()
+    tests = [p for p in root_path.rglob("test_*.py") if not _ignored(p)]
+    mapping: dict[str, list[str]] = {}
+    for source in root_path.rglob("*.py"):
+        if _ignored(source) or "test" in source.name or "tests" in source.parts:
+            continue
+        rel = source.relative_to(root_path).as_posix()
+        candidates = []
+        for test in tests:
+            if source.stem in test.stem or source.parent.name in test.as_posix():
+                candidates.append(test.relative_to(root_path).as_posix())
+        if candidates:
+            mapping[rel] = sorted(set(candidates))
+    return mapping
+
+
+def related_tests(root: str | Path, file: str) -> list[str]:
+    return test_map(root).get(Path(file).as_posix(), [])
+
+
+def run_related_tests(root: str | Path, file: str) -> dict[str, Any]:
+    tests = related_tests(root, file)
+    if not tests:
+        return {"ok": False, "error": "No related tests found", "tests": []}
+    command = "pytest " + " ".join(tests)
+    result = _run_command(root, command, timeout=120)
+    return {**result, "tests": tests}
 
 
 def suggest_tests(root: str | Path, changed_files: list[str] | None = None) -> list[str]:
@@ -1141,6 +1264,15 @@ def _review_category(message: str) -> str:
     if "debug" in text:
         return "debugging"
     return "correctness"
+
+
+def _file_risk(file: str) -> str:
+    lower = file.lower()
+    if any(part in lower for part in ("migration", "schema", "auth", "security", ".env")):
+        return "high"
+    if any(lower.endswith(suffix) for suffix in (".toml", ".yaml", ".yml", ".json", ".lock")):
+        return "medium"
+    return "normal"
 
 
 def _guess_reproduction_command(log: str, commands: list[str]) -> str:

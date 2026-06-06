@@ -59,6 +59,8 @@ data_app = typer.Typer(help="Data workspace helpers", name="data")
 policy_app = typer.Typer(help="Policy profiles", name="policy")
 docs_app = typer.Typer(help="Built-in MagAgent documentation", name="docs")
 checkpoint_app = typer.Typer(help="File write checkpoints", name="checkpoint")
+code_app = typer.Typer(help="Code intelligence index", name="code")
+test_app = typer.Typer(help="Test intelligence helpers", name="test")
 for _name, _typer in [
     ("task", task_app),
     ("artifact", artifact_app),
@@ -74,6 +76,8 @@ for _name, _typer in [
     ("policy", policy_app),
     ("docs", docs_app),
     ("checkpoint", checkpoint_app),
+    ("code", code_app),
+    ("test", test_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -869,6 +873,59 @@ def test_intel_cmd(project: str = typer.Option(".", "--project", "-p")):
     console.print("\n".join(suggestions) if suggestions else "[dim]No suggestions.[/dim]")
 
 
+@code_app.command("index")
+def code_index_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Build and save a code intelligence index."""
+    from magent.workbench import save_code_index
+
+    index = save_code_index(_store(), project)
+    console.print_json(data={"root": index["root"], "files": len(index["files"]), "symbols": len(index["symbols"])})
+
+
+@code_app.command("symbols")
+def code_symbols_cmd(query: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Search indexed code symbols."""
+    from magent.workbench import search_symbols
+
+    table = Table("Kind", "Name", "Path", "Line")
+    for item in search_symbols(_store(), query, project):
+        table.add_row(item.get("kind", ""), item.get("name", ""), item.get("path", ""), str(item.get("line", "")))
+    console.print(table)
+
+
+@code_app.command("related")
+def code_related_cmd(file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Show code and tests related to a file."""
+    from magent.workbench import related_code
+
+    console.print_json(data=related_code(_store(), project, file))
+
+
+@test_app.command("map")
+def test_map_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Build a source-to-test map."""
+    from magent.workbench import test_map
+
+    console.print_json(data=test_map(project))
+
+
+@test_app.command("related")
+def test_related_cmd(file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Show tests related to a source file."""
+    from magent.workbench import related_tests
+
+    for test in related_tests(project, file):
+        console.print(test)
+
+
+@test_app.command("run-related")
+def test_run_related_cmd(file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Run tests related to a source file."""
+    from magent.workbench import run_related_tests
+
+    console.print_json(data=run_related_tests(project, file))
+
+
 @patch_app.command("save")
 def patch_save_cmd(name: str = typer.Option("", "--name"), project: str = typer.Option(".", "--project", "-p")):
     """Save the current git diff to the patch queue."""
@@ -954,6 +1011,14 @@ def docs_brief_cmd(project: str = typer.Option(".", "--project", "-p"), out: str
         console.print(f"[green]✓ Wrote {out}[/green]")
     else:
         console.print(text)
+
+
+@app.command("tutorial")
+def tutorial_cmd():
+    """Show the built-in getting-started tutorial."""
+    from magent.docs import read_topic
+
+    console.print(read_topic("tutorial"))
 
 
 @data_app.command("inspect")
@@ -1217,6 +1282,30 @@ def memory_approve_cmd(message: str = typer.Option("Approve MagAgent memory upda
     from magent.workbench import memory_approve
 
     console.print_json(data=memory_approve(_require_user(), message=message))
+
+
+@memory_app.command("quality")
+def memory_quality_cmd():
+    """Report duplicate or suppressed memory nodes."""
+    mgr, _ = _get_memory_manager()
+    console.print_json(data=mgr.quality_report())
+
+
+@memory_app.command("merge")
+def memory_merge_cmd(target_id: str = typer.Argument(...), source_id: str = typer.Argument(...)):
+    """Merge source memory node into target and delete source."""
+    mgr, _ = _get_memory_manager()
+    console.print_json(data=mgr.merge_nodes(target_id, source_id))
+
+
+@memory_app.command("suppress")
+def memory_suppress_cmd(
+    node_id: str = typer.Argument(...),
+    reason: str = typer.Option("", "--reason", "-r"),
+):
+    """Mark a memory node as suppressed."""
+    mgr, _ = _get_memory_manager()
+    console.print_json(data=mgr.suppress_node(node_id, reason=reason))
 
 
 # ─────────────────────────────────────────────

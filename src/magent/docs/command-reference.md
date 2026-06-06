@@ -22,6 +22,7 @@ Core commands:
 - `magent ci`
 - `magent diagnostics`
 - `magent docs-brief`
+- `magent tutorial`
 - `magent notes`
 - `magent stats`
 - `magent dashboard`
@@ -54,6 +55,9 @@ Memory commands:
 - `magent memory sync`
 - `magent memory review`
 - `magent memory approve`
+- `magent memory quality`
+- `magent memory merge`
+- `magent memory suppress`
 
 Docs commands:
 
@@ -75,6 +79,20 @@ Checkpoint commands:
 - `magent checkpoint session-list`
 - `magent checkpoint session-diff`
 - `magent checkpoint session-restore`
+
+Code intelligence commands:
+
+- `magent code`
+- `magent code index`
+- `magent code symbols`
+- `magent code related`
+
+Test intelligence commands:
+
+- `magent test`
+- `magent test map`
+- `magent test related`
+- `magent test run-related`
 
 Workbench commands:
 

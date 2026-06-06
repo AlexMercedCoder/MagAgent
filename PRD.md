@@ -619,10 +619,10 @@ Shipped workbench surfaces include:
 - Routines and follow-ups: `magent routine add/list/run`, `magent followup add/list`
 - Personal knowledge: `magent knowledge remember/recall/forget`
 - Planning and review: `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent run`, `magent review --json`, `magent review --save`, `magent review-show`
-- Repo intelligence: `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
+- Repo intelligence: `magent graph`, `magent code index/symbols/related`, `magent test map/related/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
 - Patch queue: `magent patch save/list/apply/revert`
 - Checkpoint undo: `magent checkpoint list/show/diff/restore/restore-last/session-list/session-diff/session-restore`
-- Built-in documentation: `magent docs list/show/search/doctor/generate-reference`
+- Built-in documentation: `magent tutorial`, `magent docs list/show/search/doctor/generate-reference`
 - Data/API/notes helpers: `magent data inspect`, `magent api save/list`, `magent notes`
 - Session and usage views: `magent session timeline`, `magent stats`, `magent dashboard --serve`
 
@@ -635,7 +635,7 @@ Shipped workbench surfaces include:
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.8.0"
+version = "0.9.0"
 selective_tools = true
 
 [defaults]
@@ -659,6 +659,13 @@ semantic_enabled = true
 semantic_provider = "ollama"
 semantic_model = "nomic-embed-text"
 semantic_top_k = 8
+
+[models]
+coding = "openai/gpt-4.1"
+review = "anthropic/claude-sonnet-4"
+memory = "ollama/qwen2.5:7b"
+cheap = "opencode-go/deepseek-v4-flash"
+fallback = ["ollama/qwen2.5-coder:32b"]
 
 [context]
 compact_every_n_turns = 10

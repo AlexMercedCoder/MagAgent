@@ -73,6 +73,7 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
         "configuration",
         "troubleshooting",
         "recipes",
+        "tutorial",
     }
     missing_topics = sorted(required - slugs)
     docs_text = "\n".join(read_topic(topic.slug) for topic in topics)

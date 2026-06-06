@@ -10,6 +10,7 @@ def test_docs_topics_are_packaged():
     assert "commands" in topics
     assert "checkpoints" in topics
     assert "recipes" in topics
+    assert "tutorial" in topics
 
 
 def test_docs_search_finds_semantic_memory():

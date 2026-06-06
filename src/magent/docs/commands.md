@@ -11,15 +11,25 @@ Important command paths:
 - `magent docs search <query>`: search packaged docs.
 - `magent docs doctor`: verify built-in docs coverage.
 - `magent docs generate-reference`: generate command reference Markdown from the live CLI.
+- `magent tutorial`: show the built-in getting-started tutorial.
 - `magent memory stats`: show memory graph stats.
 - `magent memory index`: build semantic memory index.
 - `magent memory search <query>`: search memory.
+- `magent memory quality`: report duplicate-looking and suppressed memory nodes.
+- `magent memory merge <target-id> <source-id>`: merge one memory node into another.
+- `magent memory suppress <node-id>`: mark a memory node suppressed without deleting it.
 - `magent checkpoint list`: list file checkpoints.
 - `magent checkpoint restore <id>`: restore a checkpoint.
 - `magent checkpoint diff <id>`: compare checkpoint contents with the current file.
 - `magent checkpoint restore-last`: restore the most recent checkpoint.
 - `magent project commands`: show discovered project test/lint/build commands.
 - `magent project config`: show `.magent/config.toml` values.
+- `magent code index`: build and save a lightweight Python symbol/import/test index.
+- `magent code symbols <query>`: search indexed symbols.
+- `magent code related <file>`: show related tests and import peers for a file.
+- `magent test map`: map source files to likely test files.
+- `magent test related <file>`: show likely tests for a file.
+- `magent test run-related <file>`: run likely tests for a file.
 - `magent plan-run "goal"`: create a pending plan with diff/review context.
 - `magent plan-exec "goal"`: create an executable plan from current diff and optional commands.
 - `magent plan-preview <id>`: preview executable plan operations.

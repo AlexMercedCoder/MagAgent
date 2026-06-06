@@ -554,6 +554,57 @@ class MemoryManager:
                 nodes.append(n)
         return nodes
 
+    def quality_report(self) -> dict[str, Any]:
+        """Report duplicate-looking and suppressed memory nodes."""
+        nodes = self.export_json()
+        body_buckets: dict[str, list[str]] = {}
+        suppressed = []
+        for node in nodes:
+            body = re.sub(r"\s+", " ", node.get("body", "").strip().lower())
+            key = body[:240]
+            if key:
+                body_buckets.setdefault(key, []).append(node["id"])
+            if "suppressed: true" in body:
+                suppressed.append(node["id"])
+        duplicates = [ids for ids in body_buckets.values() if len(ids) > 1]
+        return {
+            "ok": True,
+            "nodes": len(nodes),
+            "duplicates": duplicates,
+            "suppressed": suppressed,
+            "duplicate_groups": len(duplicates),
+        }
+
+    def merge_nodes(self, target_id: str, source_id: str) -> dict[str, Any]:
+        """Append source body into target and delete source."""
+        target = self.read_node(target_id)
+        source = self.read_node(source_id)
+        if not target or not source or not self.available:
+            return {"ok": False, "error": "Target or source node not found"}
+        merged_body = (
+            target["body"].rstrip()
+            + "\n\n## Merged Memory\n\n"
+            + source["body"].strip()
+            + f"\n\nMerged-from: [[{source_id}]]\n"
+        )
+        try:
+            self._index.update_node(target_id, merged_body)
+            self._index.delete_node(source_id)
+            return {"ok": True, "target": target_id, "deleted": source_id}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def suppress_node(self, node_id: str, reason: str = "") -> dict[str, Any]:
+        node = self.read_node(node_id)
+        if not node or not self.available:
+            return {"ok": False, "error": f"Node not found: {node_id}"}
+        body = node["body"].rstrip() + f"\n\nSuppressed: true\nSuppressReason: {reason}\n"
+        try:
+            self._index.update_node(node_id, body)
+            return {"ok": True, "id": node_id, "reason": reason}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
 
 def _first_sentence_or_line(text: str) -> str:
     compact = re.sub(r"\s+", " ", (text or "").strip())

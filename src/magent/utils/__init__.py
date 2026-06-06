@@ -85,6 +85,15 @@ def run_doctor() -> None:
         provider_cfg = cfg.provider_config(provider_id)
         checks.append(("Default provider", bool(provider_id), provider_id or "not configured"))
         checks.append(("Default model", bool(cfg.default_model), cfg.default_model or "not configured"))
+        model_roles = cfg.model_roles
+        configured_roles = [key for key, value in model_roles.items() if value]
+        checks.append(
+            (
+                "Model routing",
+                True,
+                ", ".join(configured_roles) if configured_roles else "no role overrides configured",
+            )
+        )
         if provider_cfg.get("api_key_env"):
             import os
 

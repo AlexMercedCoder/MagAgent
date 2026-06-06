@@ -200,6 +200,8 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/m
 
 ### 1.2 · Codebase Repo-Map (Semantic Awareness)
 
+**Status:** MVP shipped in v0.9.0. `magent code index` builds a lightweight Python symbol/import/test index, `magent code symbols` searches saved symbols, and `magent code related` reports likely tests and import peers. Broader tree-sitter language coverage and prompt-time repo-map injection remain future work.
+
 **Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
 
 **What to build:**
@@ -576,7 +578,7 @@ timeout_seconds = 60
 
 ### 3.7 · Built-In Documentation and Self-Help
 
-**Status:** Expanded in v0.8.0. MagAgent ships packaged Markdown docs and recipes, exposes `magent docs list/show/search/doctor/generate-reference`, includes an internal `magent_docs_search` tool, and has tests around docs packaging/search.
+**Status:** Expanded in v0.9.0. MagAgent ships packaged Markdown docs, recipes, and a built-in `magent tutorial`; exposes `magent docs list/show/search/doctor/generate-reference`; includes an internal `magent_docs_search` tool; and has tests around docs packaging/search.
 
 **Why:** MagAgent should be able to explain itself without requiring the user to leave the terminal, open the README, or guess command syntax. A competitive general-use agent needs robust internal documentation for its own commands, configuration, workflows, memory model, safety model, and troubleshooting paths.
 

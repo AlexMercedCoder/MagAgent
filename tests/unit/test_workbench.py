@@ -183,6 +183,57 @@ def test_repo_graph_and_data_inspect(tmp_path: Path) -> None:
     assert data["rows"] == 1
 
 
+def test_code_index_symbols_and_related_tests(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src" / "billing.py").write_text(
+        'class Invoice:\n    """Invoice record."""\n\n'
+        "def total(items):\n    return sum(items)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tests" / "test_billing.py").write_text(
+        "from src.billing import total\n\n"
+        "def test_total():\n    assert total([1, 2]) == 3\n",
+        encoding="utf-8",
+    )
+
+    index = workbench.code_index(tmp_path)
+
+    assert index["root"] == str(tmp_path.resolve())
+    assert "src/billing.py" in index["test_map"]
+    assert index["test_map"]["src/billing.py"] == ["tests/test_billing.py"]
+    assert any(symbol["name"] == "Invoice" for symbol in index["symbols"])
+    assert workbench.related_tests(tmp_path, "src/billing.py") == ["tests/test_billing.py"]
+
+
+def test_code_index_persistence_symbol_search_and_related_code(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    project = tmp_path / "project"
+    (project / "src").mkdir(parents=True)
+    (project / "tests").mkdir()
+    (project / "src" / "orders.py").write_text(
+        "def create_order():\n    return {'ok': True}\n",
+        encoding="utf-8",
+    )
+    (project / "tests" / "test_orders.py").write_text(
+        "from src.orders import create_order\n\n"
+        "def test_create_order():\n    assert create_order()['ok']\n",
+        encoding="utf-8",
+    )
+    store = workbench.WorkbenchStore("alice")
+
+    saved = workbench.save_code_index(store, project)
+    matches = workbench.search_symbols(store, "create_order", project)
+    related = workbench.related_code(store, project, "src/orders.py")
+
+    assert saved["symbols"]
+    assert any(match["path"] == "src/orders.py" for match in matches)
+    assert related["tests"] == ["tests/test_orders.py"]
+    assert "tests/test_orders.py" in related["related"]
+
+
 def test_review_summary_has_categories(tmp_path: Path) -> None:
     import subprocess
 

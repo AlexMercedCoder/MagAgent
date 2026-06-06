@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-82%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-107%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -42,6 +42,8 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Ships built-in offline documentation and self-help search through `magent docs`
 - Creates restore checkpoints before agent file writes, edits, and deletes
 - Discovers project-local test/lint/build commands and reads `.magent/config.toml`
+- Builds a lightweight local code intelligence index for symbols, imports, related files, and targeted tests
+- Supports memory quality controls for duplicate review, node merge, and stale-node suppression
 - Supports executable plan records, session-level undo, command learning, saved reviews, and CI repair plans
 - Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, and static dashboards
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
@@ -86,6 +88,7 @@ magent
 ```bash
 magent ask "Refactor the auth module to use JWTs and add tests"
 magent docs list
+magent tutorial
 magent doctor
 ```
 
@@ -234,6 +237,9 @@ magent memory show project_myapp        # View a node
 magent memory traverse project_myapp    # BFS from a node
 magent memory review --diff             # Audit pending memory graph changes
 magent memory approve                   # Commit reviewed memory graph changes
+magent memory quality                   # Find duplicate-looking/suppressed nodes
+magent memory merge <target> <source>   # Merge duplicate memory nodes
+magent memory suppress <node-id>        # Mark stale memory suppressed
 magent memory ui                        # Open MagGraph dashboard
 magent memory sync status               # Run MagGraph sync status
 magent memory export --out backup.json  # Export all nodes as JSON
@@ -264,11 +270,13 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Task ledger** — `magent task add/list/done/report`
 - **Artifact workspace** — `magent artifact add/list`
 - **Project profiles** — `magent project profile/list/commands/config/command-history/command-promote`
+- **Code intelligence** — `magent code index/symbols/related`
+- **Test intelligence** — `magent test map/related/run-related`
 - **Inbox and routines** — `magent inbox add/triage`, `magent routine add/run`
 - **Follow-ups** — `magent followup add/list`
 - **Knowledge commands** — `magent knowledge remember/recall/forget`
 - **Review and planning** — `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent review --json`, `magent review --save`, `magent review-show`, `magent run`
-- **Repo/test helpers** — `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
+- **Repo/test helpers** — `magent graph`, `magent code index/symbols/related`, `magent test map/related/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
 - **Patch queue** — `magent patch save/list/apply/revert`
 - **Checkpoint undo** — `magent checkpoint list/show/diff/restore/restore-last/session-list/session-diff/session-restore`
 - **Built-in docs** — `magent docs list/show/search/doctor/generate-reference`
@@ -458,6 +466,12 @@ magent plan "goal"     # Generate a local implementation plan
 magent run "goal"      # Record an autonomous work-session plan
 magent review          # Heuristic local diff review
 magent graph           # Lightweight repo import graph
+magent code index      # Build local symbol/import/test index
+magent code symbols    # Search indexed code symbols
+magent code related    # Show related tests/import peers for a file
+magent test map        # Map source files to likely tests
+magent test related    # Show likely tests for a file
+magent test run-related # Run likely tests for a file
 magent test-intel      # Suggest tests for current git changes
 magent env-doctor      # Project environment checks
 magent dashboard       # Export static local dashboard
@@ -501,6 +515,13 @@ extraction_provider = "ollama"
 extraction_model = "qwen2.5:7b"
 encrypt = false
 recall_body_tokens = 220
+
+[models]
+coding = "openai/gpt-4.1"
+review = "anthropic/claude-sonnet-4"
+memory = "ollama/qwen2.5:7b"
+cheap = "opencode-go/deepseek-v4-flash"
+fallback = ["ollama/qwen2.5-coder:32b"]
 
 [context]
 compact_every_n_turns = 10

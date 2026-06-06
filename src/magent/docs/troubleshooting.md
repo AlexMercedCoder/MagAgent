@@ -11,6 +11,10 @@ Common issues:
 
 - Provider errors: confirm API keys or local Ollama availability.
 - Empty semantic search: run `magent memory index`.
+- No code symbols: run `magent code index` from the project root.
+- Missing targeted tests: run `magent test map` and confirm tests use `test_*.py` names.
+- Noisy memory recall: run `magent memory quality`, then merge or suppress stale nodes.
+- Model routing not used: run `magent doctor` and check the `[models]` table.
 - MagGraph errors: confirm `maggraph` is installed and the memory directory exists.
 - Gateway issues: run `magent gateway status` and inspect `magent gateway logs`.
 - GitHub Actions triage: run `magent ci --logs` in a repository with authenticated `gh`.

@@ -29,7 +29,7 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.8.0",
+        "version": "0.9.0",
         "selective_tools": True,
     },
     "defaults": {
@@ -81,6 +81,13 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "show_memory_writes": False,
     },
     "providers": {},
+    "models": {
+        "coding": "",
+        "review": "",
+        "memory": "",
+        "cheap": "",
+        "fallback": [],
+    },
     "mcp": {},
 }
 
@@ -272,6 +279,10 @@ class Config:
     @property
     def mcp_servers(self) -> dict[str, Any]:
         return self._global.get("mcp", {})
+
+    @property
+    def model_roles(self) -> dict[str, Any]:
+        return self._global.get("models", {})
 
     def provider_config(self, provider_id: str) -> dict[str, Any]:
         return self.providers.get(provider_id, {})
