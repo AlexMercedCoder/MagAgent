@@ -671,7 +671,7 @@ docs/
 ├── gateway/          # Gateway setup guides
 └── skills/           # Built-in skill SKILL.md files
 tests/
-└── unit/             # 166 unit tests (all mocked, no credentials needed)
+└── unit/             # 169 unit tests (all mocked, no credentials needed)
 ```
 
 ---
