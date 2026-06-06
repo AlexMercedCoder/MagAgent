@@ -310,7 +310,7 @@ Capabilities that significantly expand what MagAgent can do autonomously.
 
 ### 2.2 · Plan Mode (Draft Before Execute)
 
-**Status:** MVP shipped in v0.4.0. `magent plan` generates local implementation plans and `magent run` records autonomous work-session plans. Full intercepted tool execution and apply/discard workflows remain future work.
+**Status:** MVP expanded in v0.5.0. `magent plan --save` stores durable plans, `magent plan-list` audits them, and `magent plan-apply` marks approved plans applied with optional suggested checks. Full intercepted tool execution remains future work.
 
 **Why:** For complex multi-file tasks, show the user a complete plan with diff previews before applying any changes. This reduces mistakes on large refactors.
 
@@ -331,25 +331,26 @@ Capabilities that significantly expand what MagAgent can do autonomously.
 
 ### 2.3 · Vector Memory Search (Semantic Similarity)
 
+**Status:** Shipped in v0.5.0 as a local SQLite semantic sidecar. `magent memory index` builds embeddings from MagGraph nodes, `magent memory search` defaults to hybrid search, and `magent memory semantic status/reset` manages the sidecar. Ollama embeddings are used when available with deterministic offline vectors as fallback.
+
 **Why:** The current memory search is keyword-based (ripgrep over Markdown). Semantic similarity search would let MagAgent surface memories like *"you solved a similar auth bug 3 months ago"* even if the exact words don't match.
 
-**What to build:**
-- Add `chromadb` as an optional dependency (`pip install "mag-agent[vector]"`)
-- On every memory write, generate an embedding using the configured model (via LiteLLM's `embedding()` call — supports Ollama, OpenAI, etc.)
-- Store embeddings in a per-user ChromaDB collection alongside the MagGraph nodes
-- Update `MemoryManager.search()` to query ChromaDB for semantic matches first, then fall back to keyword search
-- Surface the top-3 semantically relevant memories in every system prompt
-- CLI: `magent memory search --semantic "jwt refresh token bug"` vs `--keyword`
+**What shipped:**
+- Rebuildable per-user SQLite vector index under `~/.config/magent/users/<user>/workbench/vector/`.
+- MagGraph remains the source of truth; vectors are disposable derived cache.
+- Hybrid search combines semantic similarity and keyword overlap, then falls back to keyword if the sidecar is empty.
+- Agent recall can use semantic anchors before BFS traversal.
+- CLI: `magent memory index`, `magent memory search --semantic "jwt refresh token bug"`, `magent memory search --keyword "jwt"`.
 
 **Config:**
 ```toml
 [memory]
-vector_search = true
-embedding_model = "nomic-embed-text"   # or text-embedding-ada-002
-embedding_provider = "ollama"
+semantic_enabled = true
+semantic_model = "nomic-embed-text"
+semantic_provider = "ollama"
 ```
 
-**Packages:** `chromadb>=0.5` (optional extra)
+**Packages:** no additional runtime dependency; uses stdlib SQLite and optional local Ollama HTTP.
 
 ---
 
@@ -436,7 +437,7 @@ Larger investments that position MagAgent as a platform rather than just a tool.
 
 ### 3.1 · Local Web Dashboard
 
-**Status:** MVP shipped in v0.4.0. `magent dashboard` exports a static local HTML dashboard with tasks, artifacts, and usage stats. The interactive FastAPI dashboard remains future work.
+**Status:** MVP expanded in v0.5.0. `magent dashboard` exports a local HTML dashboard and `magent dashboard --serve` serves it on localhost. A richer interactive FastAPI dashboard remains future work.
 
 **Why:** A local web UI makes memory visualization, session history browsing, and task management accessible without memorizing CLI commands — especially useful for non-developer users and for debugging the memory graph visually.
 

@@ -82,6 +82,31 @@ class SessionLogger:
             },
         )
 
+    def log_token_usage(
+        self,
+        provider: str,
+        model: str,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        total_tokens: int | None = None,
+        cost_usd: float | None = None,
+        estimated: bool = False,
+    ) -> None:
+        self._write(
+            "token_usage",
+            {
+                "provider": provider,
+                "model": model,
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens
+                if total_tokens is not None
+                else prompt_tokens + completion_tokens,
+                "cost_usd": cost_usd,
+                "estimated": estimated,
+            },
+        )
+
     def log_session_end(self, total_turns: int) -> None:
         self._write("session_end", {"total_turns": total_turns})
         self._f.close()

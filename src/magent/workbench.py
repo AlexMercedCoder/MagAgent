@@ -8,8 +8,11 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import threading
+import webbrowser
 from collections import Counter
 from datetime import UTC, datetime
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -192,6 +195,54 @@ def build_plan(root: str | Path, goal: str) -> str:
     return "\n".join(lines)
 
 
+def save_plan(store: WorkbenchStore, root: str | Path, goal: str) -> dict[str, Any]:
+    profile = project_profile(root)
+    checks = profile.get("commands") or ["git diff --stat"]
+    return store.append(
+        "plans",
+        {
+            "goal": goal,
+            "root": profile["root"],
+            "project": profile["name"],
+            "status": "draft",
+            "steps": [
+                "Inspect relevant files with outline/range reads.",
+                "Make small patch-oriented edits.",
+                "Run focused checks.",
+                "Review the diff and update docs/tests.",
+            ],
+            "checks": checks,
+            "plan_markdown": build_plan(root, goal),
+        },
+    )
+
+
+def list_plans(store: WorkbenchStore, status: str | None = None) -> list[dict[str, Any]]:
+    plans = store.read("plans", [])
+    if status:
+        plans = [plan for plan in plans if plan.get("status") == status]
+    return plans
+
+
+def apply_plan(store: WorkbenchStore, plan_id: str, run_checks: bool = False) -> dict[str, Any]:
+    plans = store.read("plans", [])
+    plan = next((item for item in plans if item.get("id") == plan_id), None)
+    if not plan:
+        return {"ok": False, "error": f"Plan not found: {plan_id}"}
+    check_results = []
+    if run_checks:
+        for command in plan.get("checks", []):
+            check_results.append(_run_command(plan.get("root", "."), command, timeout=120))
+    updated = store.update_item(
+        "plans",
+        plan_id,
+        status="applied",
+        applied_at=now_iso(),
+        check_results=check_results,
+    )
+    return {"ok": True, "plan": updated, "checks": check_results}
+
+
 def review_diff(root: str | Path, base: str = "HEAD") -> list[dict[str, Any]]:
     diff = _run_git(root, ["diff", base, "--"])
     findings = []
@@ -200,6 +251,8 @@ def review_diff(root: str | Path, base: str = "HEAD") -> list[dict[str, Any]]:
         ("P2", r"TODO|FIXME", "New TODO/FIXME may need tracking."),
         ("P2", r"except Exception\s*:\s*pass", "Broad silent exception can hide failures."),
         ("P3", r"print\(", "Debug print added; verify it is intentional."),
+        ("P2", r"subprocess\.run\([^)]*shell=True", "shell=True can expose command injection risk."),
+        ("P2", r"eval\(|exec\(", "Dynamic code execution added; verify input cannot reach it."),
     ]
     for lineno, line in enumerate(diff.splitlines(), start=1):
         if not line.startswith("+") or line.startswith("+++"):
@@ -214,6 +267,18 @@ def review_diff(root: str | Path, base: str = "HEAD") -> list[dict[str, Any]]:
                         "evidence": line[:160],
                     }
                 )
+    changed = _run_git(root, ["diff", "--name-only", base, "--"]).splitlines()
+    src_changed = [name for name in changed if name.startswith("src/")]
+    tests_changed = [name for name in changed if name.startswith("tests/") or "test" in Path(name).name]
+    if src_changed and not tests_changed:
+        findings.append(
+            {
+                "priority": "P2",
+                "line": 0,
+                "message": "Source changed without matching test changes.",
+                "evidence": ", ".join(src_changed[:5]),
+            }
+        )
     return findings
 
 
@@ -269,6 +334,30 @@ def save_patch(store: WorkbenchStore, root: str | Path, name: str = "") -> dict[
     )
 
 
+def apply_saved_patch(store: WorkbenchStore, patch_id: str, reverse: bool = False) -> dict[str, Any]:
+    patch = next((item for item in store.read("patches", []) if item.get("id") == patch_id), None)
+    if not patch:
+        return {"ok": False, "error": f"Patch not found: {patch_id}"}
+    path = Path(patch.get("path", ""))
+    if not path.exists():
+        return {"ok": False, "error": f"Patch file missing: {path}"}
+    root = patch.get("root") or "."
+    args = ["apply"]
+    if reverse:
+        args.append("-R")
+    check = _run_git_result(root, [*args, "--check", str(path)])
+    if check.returncode != 0:
+        return {"ok": False, "error": check.stderr or check.stdout, "checked": True}
+    applied = _run_git_result(root, [*args, str(path)])
+    return {
+        "ok": applied.returncode == 0,
+        "stdout": applied.stdout,
+        "stderr": applied.stderr,
+        "patch": patch,
+        "reverse": reverse,
+    }
+
+
 def env_doctor(root: str | Path) -> list[dict[str, Any]]:
     root_path = Path(root).resolve()
     checks = []
@@ -280,18 +369,69 @@ def env_doctor(root: str | Path) -> list[dict[str, Any]]:
     return checks
 
 
-def ci_triage(root: str | Path) -> dict[str, Any]:
+def ci_triage(root: str | Path, logs: bool = False) -> dict[str, Any]:
     gh = shutil.which("gh")
     if not gh:
         return {"ok": False, "error": "GitHub CLI not found"}
     result = subprocess.run(
-        [gh, "run", "list", "--limit", "5"],
+        [
+            gh,
+            "run",
+            "list",
+            "--limit",
+            "5",
+            "--json",
+            "databaseId,status,conclusion,displayTitle,headBranch,event,createdAt,url",
+        ],
         cwd=str(root),
         capture_output=True,
         text=True,
         timeout=30,
     )
-    return {"ok": result.returncode == 0, "stdout": result.stdout, "stderr": result.stderr}
+    data: dict[str, Any] = {"ok": result.returncode == 0, "stdout": result.stdout, "stderr": result.stderr}
+    try:
+        runs = json.loads(result.stdout) if result.stdout else []
+    except json.JSONDecodeError:
+        runs = []
+    data["runs"] = runs
+    failed = next((run for run in runs if run.get("conclusion") == "failure"), None)
+    if logs and failed:
+        view = subprocess.run(
+            [gh, "run", "view", str(failed["databaseId"]), "--log-failed"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        data["failed_run"] = failed
+        data["failed_log"] = (view.stdout or view.stderr)[-12000:]
+        data["repair_hints"] = _ci_repair_hints(data["failed_log"])
+    return data
+
+
+def project_diagnostics(root: str | Path) -> list[dict[str, Any]]:
+    root_path = Path(root).resolve()
+    checks: list[tuple[str, list[str], bool]] = []
+    if (root_path / "pyproject.toml").exists() and shutil.which("ruff"):
+        checks.append(("ruff", ["ruff", "check", "."], True))
+    if (root_path / "pyproject.toml").exists() and shutil.which("pytest"):
+        checks.append(("pytest", ["pytest", "-q"], True))
+    if (root_path / "package.json").exists() and shutil.which("npm"):
+        checks.append(("npm test", ["npm", "test"], True))
+    if (root_path / "tsconfig.json").exists() and shutil.which("npx"):
+        checks.append(("tsc", ["npx", "tsc", "--noEmit"], True))
+    if (root_path / "Cargo.toml").exists() and shutil.which("cargo"):
+        checks.append(("cargo check", ["cargo", "check"], True))
+    return [
+        {
+            "name": name,
+            "ok": result.returncode == 0,
+            "stdout": result.stdout[-4000:],
+            "stderr": result.stderr[-4000:],
+        }
+        for name, cmd, _ in checks
+        for result in [_run_command_args(root_path, cmd, timeout=90)]
+    ]
 
 
 def docs_brief(root: str | Path) -> str:
@@ -360,6 +500,10 @@ def usage_stats() -> dict[str, Any]:
     sessions = 0
     events = 0
     approx_tokens = 0
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    cost_usd = 0.0
     tools = Counter()
     for path in LOGS_DIR.glob("*.jsonl"):
         sessions += 1
@@ -372,10 +516,19 @@ def usage_stats() -> dict[str, Any]:
             approx_tokens += estimate_tokens(json.dumps(event))
             if event.get("event") == "tool_call":
                 tools[event.get("tool", "?")] += 1
+            if event.get("event") == "token_usage":
+                prompt_tokens += int(event.get("prompt_tokens") or 0)
+                completion_tokens += int(event.get("completion_tokens") or 0)
+                total_tokens += int(event.get("total_tokens") or 0)
+                cost_usd += float(event.get("cost_usd") or 0.0)
     return {
         "sessions": sessions,
         "events": events,
         "approx_tokens_logged": approx_tokens,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total_tokens,
+        "cost_usd": round(cost_usd, 6),
         "top_tools": tools.most_common(10),
     }
 
@@ -389,6 +542,8 @@ def export_dashboard(store: WorkbenchStore, out: str | Path) -> Path:
 <body>
 <h1>MagAgent Dashboard</h1>
 <h2>Tasks</h2><pre>{json.dumps(store.read("tasks", []), indent=2)}</pre>
+<h2>Plans</h2><pre>{json.dumps(store.read("plans", []), indent=2)}</pre>
+<h2>Patches</h2><pre>{json.dumps(store.read("patches", []), indent=2)}</pre>
 <h2>Artifacts</h2><pre>{json.dumps(store.read("artifacts", []), indent=2)}</pre>
 <h2>Usage</h2><pre>{json.dumps(stats, indent=2)}</pre>
 </body></html>
@@ -396,6 +551,21 @@ def export_dashboard(store: WorkbenchStore, out: str | Path) -> Path:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     return out_path
+
+
+def serve_dashboard(store: WorkbenchStore, port: int = 7820, open_browser: bool = False) -> dict[str, Any]:
+    path = export_dashboard(store, store.root / "dashboard.html")
+    class Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *args: Any, **kwargs: Any):
+            super().__init__(*args, directory=str(path.parent), **kwargs)
+
+    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{port}/{path.name}"
+    if open_browser:
+        webbrowser.open(url)
+    return {"ok": True, "url": url, "path": str(path)}
 
 
 def policy_profiles() -> dict[str, dict[str, Any]]:
@@ -421,12 +591,75 @@ def _run_git(root: str | Path, args: list[str]) -> str:
         return ""
 
 
+def _run_git_result(root: str | Path, args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def _run_command(root: str | Path, command: str, timeout: int = 60) -> dict[str, Any]:
+    result = subprocess.run(
+        command,
+        cwd=str(root),
+        shell=True,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return {
+        "command": command,
+        "ok": result.returncode == 0,
+        "returncode": result.returncode,
+        "stdout": result.stdout[-4000:],
+        "stderr": result.stderr[-4000:],
+    }
+
+
+def _run_command_args(root: str | Path, cmd: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=timeout)
+
+
+def _ci_repair_hints(log: str) -> list[str]:
+    hints = []
+    if "ModuleNotFoundError" in log or "ImportError" in log:
+        hints.append("Dependency/import failure: inspect pyproject/package lockfiles and import paths.")
+    if "AssertionError" in log or "FAILED" in log:
+        hints.append("Test failure: reproduce the failed test locally before editing.")
+    if "ruff" in log.lower() or "lint" in log.lower():
+        hints.append("Lint failure: run the linter locally and apply the focused fix.")
+    if "mypy" in log.lower() or "type" in log.lower():
+        hints.append("Type-check failure: inspect the reported symbol and narrow the type contract.")
+    return hints or ["Inspect failed_log, reproduce locally, patch, then rerun the failed command."]
+
+
 def _ignored(path: Path) -> bool:
     parts = set(path.parts)
     return bool(parts & {".git", ".venv", "__pycache__", "node_modules", "target"})
 
 
-def memory_pending_summary(username: str) -> dict[str, Any]:
+def memory_pending_summary(username: str, include_diff: bool = False) -> dict[str, Any]:
     memory_dir = user_memory_dir(username)
     changed = _run_git(memory_dir, ["status", "--short"]) if memory_dir.exists() else ""
-    return {"memory_dir": str(memory_dir), "changed": changed.splitlines()}
+    result = {"memory_dir": str(memory_dir), "changed": changed.splitlines()}
+    if include_diff and memory_dir.exists():
+        result["diff"] = _run_git(memory_dir, ["diff"])
+    return result
+
+
+def memory_approve(username: str, message: str = "Approve MagAgent memory updates") -> dict[str, Any]:
+    memory_dir = user_memory_dir(username)
+    if not (memory_dir / ".git").exists():
+        return {"ok": False, "error": "Memory directory is not a git repository"}
+    subprocess.run(["git", "add", "."], cwd=str(memory_dir), capture_output=True, text=True, timeout=30)
+    result = subprocess.run(
+        ["git", "commit", "-m", message],
+        cwd=str(memory_dir),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return {"ok": result.returncode == 0, "stdout": result.stdout, "stderr": result.stderr}

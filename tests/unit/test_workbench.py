@@ -30,6 +30,29 @@ def test_project_profile_and_plan(tmp_path: Path) -> None:
     assert "Add a feature" in plan
 
 
+def test_save_and_apply_plan(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
+    store = workbench.WorkbenchStore("alice")
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+
+    item = workbench.save_plan(store, project, "Ship a feature")
+    result = workbench.apply_plan(store, item["id"])
+
+    assert result["ok"] is True
+    assert result["plan"]["status"] == "applied"
+
+
+def test_apply_saved_patch_reports_missing_patch(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
+    store = workbench.WorkbenchStore("alice")
+
+    result = workbench.apply_saved_patch(store, "patch_404")
+
+    assert result["ok"] is False
+
+
 def test_repo_graph_and_data_inspect(tmp_path: Path) -> None:
     (tmp_path / "app.py").write_text("import json\nfrom pathlib import Path\n", encoding="utf-8")
     csv_path = tmp_path / "data.csv"

@@ -80,7 +80,7 @@ magent
 ### Quick one-shot task
 
 ```bash
-magent "Refactor the auth module to use JWTs and add tests"
+magent ask "Refactor the auth module to use JWTs and add tests"
 ```
 
 ---
@@ -218,9 +218,16 @@ Memory is extracted and written every **N turns** (configurable, default 5) and 
 
 ```bash
 magent memory stats                     # Node/edge counts, disk usage
-magent memory search "JWT"              # Keyword/full-text search
+magent memory index                     # Build/update semantic search sidecar
+magent memory search "JWT"              # Hybrid semantic + keyword search
+magent memory search --semantic "JWT"   # Force semantic search
+magent memory search --keyword "JWT"    # Force keyword/full-text search
+magent memory semantic status           # Inspect semantic sidecar status
+magent memory semantic reset            # Reset semantic sidecar
 magent memory show project_myapp        # View a node
 magent memory traverse project_myapp    # BFS from a node
+magent memory review --diff             # Audit pending memory graph changes
+magent memory approve                   # Commit reviewed memory graph changes
 magent memory ui                        # Open MagGraph dashboard
 magent memory sync status               # Run MagGraph sync status
 magent memory export --out backup.json  # Export all nodes as JSON
@@ -234,6 +241,8 @@ MagAgent keeps context lean while preserving useful state:
 - **Conversation compaction** summarizes older turns and keeps recent turns verbatim.
 - **Repository map slices** inject relevant file/symbol maps instead of whole files.
 - **Memory recall budgets** inject compact matches first, then a few excerpts.
+- **Semantic memory search** stores local SQLite embedding sidecars, uses Ollama embeddings when available, and falls back to deterministic offline vectors.
+- **Selective tool injection** sends a compact relevant tool subset to the model each turn instead of always injecting every built-in tool.
 - **Skill budgets** truncate long skill guidance before it crowds out the task.
 - **Tool result compression** trims large outputs and points the agent to targeted follow-ups.
 - **Large file reads** return previews; use `outline_file` and `read_file_range` for exact context.
@@ -250,11 +259,11 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Inbox and routines** — `magent inbox add/triage`, `magent routine add/run`
 - **Follow-ups** — `magent followup add/list`
 - **Knowledge commands** — `magent knowledge remember/recall/forget`
-- **Review and planning** — `magent plan`, `magent review`, `magent run`
-- **Repo/test helpers** — `magent graph`, `magent test-intel`, `magent env-doctor`, `magent ci`
-- **Patch queue** — `magent patch save/list`
+- **Review and planning** — `magent plan --save`, `magent plan-list`, `magent plan-apply`, `magent review`, `magent run`
+- **Repo/test helpers** — `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`
+- **Patch queue** — `magent patch save/list/apply/revert`
 - **Data/API/notes** — `magent data inspect`, `magent api save/list`, `magent notes`
-- **Session and usage** — `magent session timeline`, `magent stats`, `magent dashboard`
+- **Session and usage** — `magent session timeline`, `magent stats`, `magent dashboard`, `magent dashboard --serve`
 
 Workbench files are plain JSON in `~/.config/magent/users/<username>/workbench/`.
 

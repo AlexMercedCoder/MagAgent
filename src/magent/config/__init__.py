@@ -29,7 +29,8 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.4.0",
+        "version": "0.5.0",
+        "selective_tools": True,
     },
     "defaults": {
         "provider": "ollama",
@@ -48,6 +49,10 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "extraction_model": "qwen2.5:7b",
         "encrypt": False,
         "recall_body_tokens": 220,
+        "semantic_enabled": True,
+        "semantic_provider": "ollama",
+        "semantic_model": "nomic-embed-text",
+        "semantic_top_k": 8,
     },
     "context": {
         "compact_every_n_turns": 10,
@@ -182,6 +187,29 @@ class Config:
     @property
     def recall_body_tokens(self) -> int:
         return int(self._global.get("memory", {}).get("recall_body_tokens", 220))
+
+    @property
+    def semantic_memory_enabled(self) -> bool:
+        user_memory = self._user.get("memory", {})
+        if user_memory.get("semantic_enabled") is not None:
+            return bool(user_memory.get("semantic_enabled"))
+        return bool(self._global.get("memory", {}).get("semantic_enabled", True))
+
+    @property
+    def semantic_memory_provider(self) -> str:
+        return self._user.get("memory", {}).get("semantic_provider") or self._global.get(
+            "memory", {}
+        ).get("semantic_provider", "ollama")
+
+    @property
+    def semantic_memory_model(self) -> str:
+        return self._user.get("memory", {}).get("semantic_model") or self._global.get(
+            "memory", {}
+        ).get("semantic_model", "nomic-embed-text")
+
+    @property
+    def selective_tools(self) -> bool:
+        return bool(self._global.get("agent", {}).get("selective_tools", True))
 
     @property
     def write_every_n_turns(self) -> int:

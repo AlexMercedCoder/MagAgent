@@ -100,7 +100,7 @@ MagAgent is invoked from the terminal:
 magent
 
 # One-shot task
-magent "Refactor the auth module to use JWTs"
+magent ask "Refactor the auth module to use JWTs"
 
 # Target a specific project
 magent --project ~/code/myapp
@@ -618,11 +618,11 @@ Shipped workbench surfaces include:
 - Local inbox: `magent inbox add/list/triage`
 - Routines and follow-ups: `magent routine add/list/run`, `magent followup add/list`
 - Personal knowledge: `magent knowledge remember/recall/forget`
-- Planning and review: `magent plan`, `magent run`, `magent review`
-- Repo intelligence: `magent graph`, `magent test-intel`, `magent env-doctor`, `magent ci`
-- Patch queue: `magent patch save/list`
+- Planning and review: `magent plan --save`, `magent plan-list`, `magent plan-apply`, `magent run`, `magent review`
+- Repo intelligence: `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`
+- Patch queue: `magent patch save/list/apply/revert`
 - Data/API/notes helpers: `magent data inspect`, `magent api save/list`, `magent notes`
-- Session and usage views: `magent session timeline`, `magent stats`, `magent dashboard`
+- Session and usage views: `magent session timeline`, `magent stats`, `magent dashboard --serve`
 
 ---
 
@@ -633,7 +633,8 @@ Shipped workbench surfaces include:
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.4.0"
+version = "0.5.0"
+selective_tools = true
 
 [defaults]
 provider = "ollama"
@@ -652,6 +653,10 @@ extraction_provider = "ollama"
 extraction_model = "qwen2.5:7b"
 encrypt = false              # AES-256 encryption at rest (opt-in)
 recall_body_tokens = 220
+semantic_enabled = true
+semantic_provider = "ollama"
+semantic_model = "nomic-embed-text"
+semantic_top_k = 8
 
 [context]
 compact_every_n_turns = 10

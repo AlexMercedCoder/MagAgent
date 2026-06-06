@@ -37,9 +37,11 @@ app = typer.Typer(
 )
 user_app = typer.Typer(help="Manage user profiles", name="user")
 memory_app = typer.Typer(help="Inspect and manage memory graph", name="memory")
+memory_semantic_app = typer.Typer(help="Semantic memory sidecar", name="semantic")
 gateway_app = typer.Typer(help="Remote gateway (Slack / Discord / Telegram)", name="gateway")
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
+memory_app.add_typer(memory_semantic_app, name="semantic")
 app.add_typer(gateway_app, name="gateway")
 mcp_app = typer.Typer(help="Manage MCP (Model Context Protocol) servers", name="mcp")
 app.add_typer(mcp_app, name="mcp")
@@ -124,10 +126,7 @@ def _store():
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
-    task: Annotated[
-        str | None,
-        typer.Argument(help="Optional one-shot task to run non-interactively"),
-    ] = None,
+    task: str | None = typer.Option(None, "--task", "-t", help="Optional one-shot task to run"),
     provider: str | None = typer.Option(None, "--provider", "-p", help="Provider ID"),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
     project: str | None = typer.Option(None, "--project", help="Project directory"),
@@ -155,6 +154,22 @@ def main(
         _run_one_shot(username, config, main_provider, extract_provider, cwd, task)
     else:
         _run_repl(username, config, main_provider, extract_provider, cwd)
+
+
+@app.command("ask")
+def ask_cmd(
+    task: str = typer.Argument(..., help="One-shot task to run non-interactively"),
+    provider: str | None = typer.Option(None, "--provider", "-p", help="Provider ID"),
+    model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
+    project: str | None = typer.Option(None, "--project", help="Project directory"),
+):
+    """Run a one-shot MagAgent task."""
+    username = _require_user()
+    config = load_config(username)
+    cwd = project or os.getcwd()
+    main_provider = _build_provider(config, provider, model)
+    extract_provider = _build_extraction_provider(config)
+    _run_one_shot(username, config, main_provider, extract_provider, cwd, task)
 
 
 def _run_one_shot(username, config, main_provider, extract_provider, cwd, task):
@@ -577,11 +592,46 @@ def followup_list_cmd():
 
 
 @app.command("plan")
-def plan_cmd(goal: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def plan_cmd(
+    goal: str = typer.Argument(...),
+    project: str = typer.Option(".", "--project", "-p"),
+    save: bool = typer.Option(False, "--save", help="Save the plan in the local workbench"),
+):
     """Generate a local plan without modifying files."""
-    from magent.workbench import build_plan
+    from magent.workbench import build_plan, save_plan
 
-    console.print(build_plan(project, goal))
+    text = build_plan(project, goal)
+    console.print(text)
+    if save:
+        item = save_plan(_store(), project, goal)
+        console.print(f"[green]✓ Saved plan {item['id']}[/green]")
+
+
+@app.command("plan-list")
+def plan_list_cmd(status: str | None = typer.Option(None, "--status")):
+    """List saved plans."""
+    from magent.workbench import list_plans
+
+    table = Table("ID", "Status", "Project", "Goal")
+    for item in list_plans(_store(), status=status):
+        table.add_row(item["id"], item.get("status", ""), item.get("project", ""), item.get("goal", "")[:90])
+    console.print(table)
+
+
+@app.command("plan-apply")
+def plan_apply_cmd(
+    plan_id: str = typer.Argument(...),
+    run_checks: bool = typer.Option(False, "--run-checks"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+):
+    """Mark a saved plan applied, optionally running its suggested checks."""
+    from magent.workbench import apply_plan
+
+    if not yes:
+        confirm = Prompt.ask(f"Apply plan '{plan_id}'?", choices=["y", "n"], default="n")
+        if confirm != "y":
+            raise typer.Exit()
+    console.print_json(data=apply_plan(_store(), plan_id, run_checks=run_checks))
 
 
 @app.command("run")
@@ -647,6 +697,30 @@ def patch_list_cmd():
     console.print(table)
 
 
+@patch_app.command("apply")
+def patch_apply_cmd(patch_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")):
+    """Apply a saved patch after git apply --check passes."""
+    from magent.workbench import apply_saved_patch
+
+    if not yes:
+        confirm = Prompt.ask(f"Apply patch '{patch_id}'?", choices=["y", "n"], default="n")
+        if confirm != "y":
+            raise typer.Exit()
+    console.print_json(data=apply_saved_patch(_store(), patch_id))
+
+
+@patch_app.command("revert")
+def patch_revert_cmd(patch_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")):
+    """Reverse-apply a saved patch after git apply -R --check passes."""
+    from magent.workbench import apply_saved_patch
+
+    if not yes:
+        confirm = Prompt.ask(f"Reverse patch '{patch_id}'?", choices=["y", "n"], default="n")
+        if confirm != "y":
+            raise typer.Exit()
+    console.print_json(data=apply_saved_patch(_store(), patch_id, reverse=True))
+
+
 @app.command("env-doctor")
 def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Run project environment checks."""
@@ -659,11 +733,22 @@ def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 
 @app.command("ci")
-def ci_cmd(project: str = typer.Option(".", "--project", "-p")):
+def ci_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    logs: bool = typer.Option(False, "--logs", help="Include failed-run logs and repair hints"),
+):
     """Triage recent GitHub Actions runs with gh, when available."""
     from magent.workbench import ci_triage
 
-    console.print_json(data=ci_triage(project))
+    console.print_json(data=ci_triage(project, logs=logs))
+
+
+@app.command("diagnostics")
+def diagnostics_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Run available local diagnostics for the current project."""
+    from magent.workbench import project_diagnostics
+
+    console.print_json(data=project_diagnostics(project))
 
 
 @app.command("docs-brief")
@@ -742,20 +827,41 @@ def policy_list_cmd():
 
 
 @app.command("dashboard")
-def dashboard_cmd(out: str = typer.Option("magent-dashboard.html", "--out")):
-    """Export a static local workbench dashboard."""
-    from magent.workbench import export_dashboard
+def dashboard_cmd(
+    out: str = typer.Option("magent-dashboard.html", "--out"),
+    serve: bool = typer.Option(False, "--serve"),
+    port: int = typer.Option(7820, "--port"),
+    open_browser: bool = typer.Option(False, "--open"),
+):
+    """Export or serve a local workbench dashboard."""
+    from magent.workbench import export_dashboard, serve_dashboard
 
+    if serve:
+        result = serve_dashboard(_store(), port=port, open_browser=open_browser)
+        console.print_json(data=result)
+        console.print("[dim]Press Ctrl+C to stop.[/dim]")
+        try:
+            signal.pause()
+        except (AttributeError, KeyboardInterrupt):
+            return
     path = export_dashboard(_store(), out)
     console.print(f"[green]✓ Dashboard written to {path}[/green]")
 
 
 @memory_app.command("review")
-def memory_review_cmd():
+def memory_review_cmd(diff: bool = typer.Option(False, "--diff")):
     """Show pending git changes in the current user's memory graph."""
     from magent.workbench import memory_pending_summary
 
-    console.print_json(data=memory_pending_summary(_require_user()))
+    console.print_json(data=memory_pending_summary(_require_user(), include_diff=diff))
+
+
+@memory_app.command("approve")
+def memory_approve_cmd(message: str = typer.Option("Approve MagAgent memory updates", "--message", "-m")):
+    """Commit pending memory graph changes for the current user."""
+    from magent.workbench import memory_approve
+
+    console.print_json(data=memory_approve(_require_user(), message=message))
 
 
 # ─────────────────────────────────────────────
@@ -840,9 +946,21 @@ def user_current():
 def _get_memory_manager():
     username = _require_user()
     memory_dir = user_memory_dir(username)
+    config = load_config(username)
     from magent.memory import MemoryManager
 
-    return MemoryManager(memory_dir), username
+    return (
+        MemoryManager(
+            memory_dir,
+            budget_tokens=config.memory_budget_tokens,
+            max_node_tokens=config.recall_body_tokens,
+            username=username,
+            semantic_enabled=config.semantic_memory_enabled,
+            semantic_provider=config.semantic_memory_provider,
+            semantic_model=config.semantic_memory_model,
+        ),
+        username,
+    )
 
 
 @memory_app.command("stats")
@@ -890,17 +1008,54 @@ def _print_memory_stats(stats: dict, username: str):
 def memory_search(
     query: str = typer.Argument(..., help="Search query"),
     limit: int = typer.Option(10, "--limit", "-n"),
+    mode: str = typer.Option("hybrid", "--mode", help="keyword, semantic, or hybrid"),
+    keyword: bool = typer.Option(False, "--keyword", help="Force keyword search"),
+    semantic: bool = typer.Option(False, "--semantic", help="Force semantic search"),
 ):
     """Search the memory graph."""
     mgr, username = _get_memory_manager()
-    results = mgr.search(query, max_results=limit)
+    if keyword:
+        mode = "keyword"
+    if semantic:
+        mode = "semantic"
+    results = mgr.search(query, max_results=limit, mode=mode)
     if not results:
         console.print(f"[dim]No results for '{query}'[/dim]")
         return
-    t = Table("ID", "Type", "Snippet")
+    t = Table("ID", "Type", "Score", "Snippet")
     for r in results:
-        t.add_row(r["id"], r.get("type", "?"), r.get("snippet", "")[:80])
+        t.add_row(
+            r["id"],
+            r.get("type", "?"),
+            str(r.get("score", "")),
+            r.get("snippet", "")[:90],
+        )
     console.print(t)
+
+
+@memory_app.command("index")
+def memory_index_cmd():
+    """Build or update the semantic memory search index."""
+    mgr, _ = _get_memory_manager()
+    console.print_json(data=mgr.semantic_index())
+
+
+@memory_semantic_app.command("status")
+def memory_semantic_status_cmd():
+    """Show semantic memory sidecar status."""
+    mgr, _ = _get_memory_manager()
+    console.print_json(data=mgr.semantic_status())
+
+
+@memory_semantic_app.command("reset")
+def memory_semantic_reset_cmd(yes: bool = typer.Option(False, "--yes", "-y")):
+    """Reset the semantic memory sidecar index."""
+    mgr, _ = _get_memory_manager()
+    if not yes:
+        confirm = Prompt.ask("Reset semantic memory index?", choices=["y", "n"], default="n")
+        if confirm != "y":
+            raise typer.Exit()
+    console.print_json(data=mgr.semantic_reset())
 
 
 @memory_app.command("show")

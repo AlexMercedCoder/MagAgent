@@ -1008,6 +1008,52 @@ class ToolExecutor:
             ),
         ]
 
+    def get_tool_definitions_for_message(self, message: str) -> list[dict[str, Any]]:
+        """Return a compact relevant tool subset for a user turn."""
+        all_defs = self.get_tool_definitions()
+        by_name = {item["function"]["name"]: item for item in all_defs}
+        text = message.lower()
+        selected = {
+            "read_file",
+            "read_file_range",
+            "outline_file",
+            "list_dir",
+            "search_codebase",
+            "run_shell",
+            "edit_file",
+            "write_file",
+            "git_op",
+            "system_info",
+        }
+        if any(word in text for word in ("delete", "remove", "clean up", "rename")):
+            selected.add("delete_file")
+        if any(word in text for word in ("web", "url", "http", "api", "docs", "latest", "search online")):
+            selected.update({"web_search", "web_fetch", "http_request"})
+        if any(word in text for word in ("json", "csv", "sqlite", "database", "sql", "dataframe", "query")):
+            selected.update(
+                {
+                    "json_query",
+                    "db_query",
+                    "db_execute",
+                    "db_list_tables",
+                    "db_schema",
+                    "db_list_databases",
+                }
+            )
+        if any(word in text for word in ("image", "screenshot", "photo", "diagram", "vision")):
+            selected.add("read_image")
+        if any(word in text for word in ("zip", "archive", "compress", "extract", "tar")):
+            selected.update({"compress", "extract"})
+        if any(word in text for word in ("clipboard", "notify", "open file", "desktop")):
+            selected.update({"clipboard_read", "clipboard_write", "notify", "open_file"})
+        if any(word in text for word in ("diff", "compare")):
+            selected.add("diff_files")
+        if any(word in text for word in ("install", "package", "dependency")):
+            selected.add("install_package")
+        if len(text.split()) > 120 or any(word in text for word in ("everything", "full access", "all tools")):
+            selected.update(by_name)
+        return [by_name[name] for name in by_name if name in selected]
+
     async def dispatch(self, tool_name: str, tool_args: dict[str, Any]) -> ToolResult:
         """Dispatch a tool call by name."""
         a = tool_args

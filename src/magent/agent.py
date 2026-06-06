@@ -83,6 +83,10 @@ class AgentSession:
             memory_dir,
             config.memory_budget_tokens,
             max_node_tokens=config.recall_body_tokens,
+            username=username,
+            semantic_enabled=config.semantic_memory_enabled,
+            semantic_provider=config.semantic_memory_provider,
+            semantic_model=config.semantic_memory_model,
         )
         self.repo_map = RepoMapCache(cwd)
         self.tools = ToolExecutor(
@@ -169,7 +173,7 @@ class AgentSession:
         return self.conversation[-(keep + 1) : -1] if keep > 0 else []
 
     async def _run_tool_loop(
-        self, messages: list[dict[str, Any]]
+        self, messages: list[dict[str, Any]], user_message: str = ""
     ) -> tuple[str, list[dict[str, Any]], int]:
         """
         Run the LLM + tool loop. Returns (final_text, updated_messages, tool_call_count).
@@ -179,7 +183,7 @@ class AgentSession:
             await self._mcp_start_task
 
         # Merge built-in tools + MCP tools
-        tool_defs = self.tools.get_tool_definitions() + self.mcp.get_tool_definitions()
+        tool_defs = self._tool_definitions(user_message)
         total_tool_calls = 0
 
         while True:
@@ -196,6 +200,7 @@ class AgentSession:
                     max_tokens=4096,
                     **self.provider._base_kwargs,
                 )
+                self._log_llm_usage(response)
             except Exception as e:
                 return f"[Provider error: {e}]", messages, total_tool_calls
 
@@ -265,7 +270,7 @@ class AgentSession:
             await self._mcp_start_task
 
         # Merge built-in tools + MCP tools
-        tool_defs = self.tools.get_tool_definitions() + self.mcp.get_tool_definitions()
+        tool_defs = self._tool_definitions(user_message)
         total_tool_calls = 0
 
         try:
@@ -283,6 +288,7 @@ class AgentSession:
                     max_tokens=4096,
                     **self.provider._base_kwargs,
                 )
+                self._log_llm_usage(response)
                 choice = response.choices[0]
                 msg = choice.message
 
@@ -332,6 +338,13 @@ class AgentSession:
 
             self.conversation.append({"role": "assistant", "content": full_response})
             self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
+            self.logger.log_token_usage(
+                provider=self.provider.provider_id,
+                model=self.provider.model,
+                prompt_tokens=estimate_tokens(json.dumps(messages, default=str)),
+                completion_tokens=estimate_tokens(full_response),
+                estimated=True,
+            )
 
             if self.turn_count % self.config.write_every_n_turns == 0:
                 await self._maybe_write_memories()
@@ -354,7 +367,7 @@ class AgentSession:
         ]
         messages.append({"role": "user", "content": user_message})
 
-        response, _, tool_call_count = await self._run_tool_loop(messages)
+        response, _, tool_call_count = await self._run_tool_loop(messages, user_message)
         self.conversation.append({"role": "assistant", "content": response})
         self.logger.log_assistant_turn(self.turn_count, response, tool_call_count)
 
@@ -430,6 +443,36 @@ class AgentSession:
 
         text = json.dumps(compressed, indent=2, default=str)
         return truncate_to_tokens(text, max_tokens + 300, "[...tool result truncated...]")
+
+    def _tool_definitions(self, user_message: str) -> list[dict[str, Any]]:
+        if self.config.selective_tools:
+            builtins = self.tools.get_tool_definitions_for_message(user_message)
+        else:
+            builtins = self.tools.get_tool_definitions()
+        return builtins + self.mcp.get_tool_definitions()
+
+    def _log_llm_usage(self, response: Any) -> None:
+        usage = getattr(response, "usage", None)
+        if not usage:
+            return
+        prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+        completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        total_tokens = int(getattr(usage, "total_tokens", 0) or prompt_tokens + completion_tokens)
+        cost = None
+        try:
+            import litellm
+
+            cost = float(litellm.completion_cost(completion_response=response))
+        except Exception:
+            cost = None
+        self.logger.log_token_usage(
+            provider=self.provider.provider_id,
+            model=self.provider.model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            cost_usd=cost,
+        )
 
     async def spawn_subagent(self, task_id: str, description: str) -> str:
         """Spawn a focused sub-agent for a parallel task. Returns its result."""

@@ -48,12 +48,26 @@ ALL_NODE_TYPES = [
 class MemoryManager:
     """Manages a user's MagGraph knowledge graph."""
 
-    def __init__(self, memory_dir: Path, budget_tokens: int = 4000, max_node_tokens: int = 220):
+    def __init__(
+        self,
+        memory_dir: Path,
+        budget_tokens: int = 4000,
+        max_node_tokens: int = 220,
+        username: str | None = None,
+        semantic_enabled: bool = False,
+        semantic_provider: str = "ollama",
+        semantic_model: str = "nomic-embed-text",
+    ):
         self.memory_dir = memory_dir
         self.budget_tokens = budget_tokens
         self.max_node_tokens = max_node_tokens
+        self.username = username
+        self.semantic_enabled = semantic_enabled
+        self.semantic_provider = semantic_provider
+        self.semantic_model = semantic_model
         self.last_recall_stats: dict[str, int] = {"nodes": 0, "tokens": 0, "budget": budget_tokens}
         self._index = None
+        self._semantic = None
         self._init_graph()
 
     def _init_graph(self) -> None:
@@ -174,14 +188,24 @@ class MemoryManager:
         return truncate_to_tokens(rendered, budget, "[...memory truncated for context budget...]")
 
     def _find_anchor_nodes(self, query: str, max_anchors: int = 3) -> list[str]:
-        """Find node IDs most relevant to query via keyword matching."""
+        """Find node IDs most relevant to query via semantic and keyword matching."""
         if not self.available:
             return []
+
+        semantic_ids: list[str] = []
+        if self.semantic_enabled and self.username:
+            try:
+                semantic_ids = [
+                    item["id"]
+                    for item in self.semantic_search(query, max_results=max_anchors, mode="hybrid")
+                ]
+            except Exception:
+                semantic_ids = []
 
         try:
             all_ids = self._index.list_nodes()
         except Exception:
-            return []
+            return semantic_ids[:max_anchors]
 
         query_words = set(re.sub(r"[^\w\s]", " ", query.lower()).split())
         if not query_words:
@@ -209,7 +233,12 @@ class MemoryManager:
                 pass
 
         scored.sort(reverse=True)
-        return [nid for _, nid in scored[:max_anchors]]
+        keyword_ids = [nid for _, nid in scored[:max_anchors]]
+        merged: list[str] = []
+        for node_id in [*semantic_ids, *keyword_ids]:
+            if node_id not in merged:
+                merged.append(node_id)
+        return merged[:max_anchors]
 
     # ─────────────────────────────────────────────
     # Post-task memory write
@@ -398,10 +427,15 @@ class MemoryManager:
     # Search
     # ─────────────────────────────────────────────
 
-    def search(self, query: str, max_results: int = 10) -> list[dict[str, Any]]:
-        """Full-text search over node bodies and IDs."""
+    def search(self, query: str, max_results: int = 10, mode: str = "keyword") -> list[dict[str, Any]]:
+        """Search over memory nodes using keyword, semantic, or hybrid mode."""
         if not self.available:
             return []
+
+        if mode in {"semantic", "hybrid"} and self.username:
+            semantic = self.semantic_search(query, max_results=max_results, mode=mode)
+            if semantic:
+                return semantic
 
         query_lower = query.lower()
         results: list[dict[str, Any]] = []
@@ -426,6 +460,47 @@ class MemoryManager:
             pass
 
         return results
+
+    def semantic_index(self) -> dict[str, Any]:
+        """Rebuild/update the semantic sidecar index."""
+        if not self.username:
+            return {"ok": False, "error": "No username provided"}
+        return self._semantic_index().reindex(self._index)
+
+    def semantic_search(
+        self, query: str, max_results: int = 10, mode: str = "hybrid"
+    ) -> list[dict[str, Any]]:
+        """Search the semantic sidecar index. Falls back to keyword search if empty."""
+        if not self.username:
+            return []
+        index = self._semantic_index()
+        results = [item.as_dict() for item in index.search(query, top_k=max_results, mode=mode)]
+        if not results and mode != "keyword":
+            return self.search(query, max_results=max_results, mode="keyword")
+        return results
+
+    def semantic_status(self) -> dict[str, Any]:
+        if not self.username:
+            return {"ok": False, "error": "No username provided"}
+        return self._semantic_index().status()
+
+    def semantic_reset(self) -> dict[str, Any]:
+        if not self.username:
+            return {"ok": False, "error": "No username provided"}
+        self._semantic_index().reset()
+        return self.semantic_status()
+
+    def _semantic_index(self):
+        if self._semantic is None:
+            from magent.semantic_memory import SemanticMemoryIndex
+
+            self._semantic = SemanticMemoryIndex(
+                self.username or "default",
+                self.memory_dir,
+                provider=self.semantic_provider,
+                model=self.semantic_model,
+            )
+        return self._semantic
 
     def read_node(self, node_id: str) -> dict[str, Any] | None:
         if not self.available:
