@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.19.0
+
+- Added guided UX flows: `magent onboard`, `magent next`, `magent doctor --fix`, `magent doctor --json`, and profile presets.
+- Added provider/model/memory/subagent wizard commands for interactive CLI-first setup.
+- Added `magent project init` and `magent project wizard` to bootstrap `.magent/config.toml` and `.magent/playbook.toml`.
+- Added explicit provider access modes so OpenAI API, OpenAI Codex via ChatGPT plan, OpenCode Zen pay-as-you-go, and OpenCode Go subscription are distinct in setup and diagnostics.
+- Updated OpenCode Go defaults to use the Go subscription endpoint and environment variable.
+
 ## 0.18.0
 
 - Added CLI-first configuration commands for providers, model roles, memory behavior, gateway tokens, and sub-agent caps.

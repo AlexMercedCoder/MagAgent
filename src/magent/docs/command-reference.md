@@ -70,7 +70,9 @@ Generated from the active Typer command tree.
 - `magent memory`
 - `magent mode`
 - `magent model`
+- `magent next`
 - `magent notes`
+- `magent onboard`
 - `magent patch`
 - `magent plan`
 - `magent plan-apply`
@@ -82,6 +84,7 @@ Generated from the active Typer command tree.
 - `magent plan-sandbox`
 - `magent plan-show`
 - `magent policy`
+- `magent profile`
 - `magent project`
 - `magent provider`
 - `magent recipe`
@@ -187,6 +190,7 @@ Generated from the active Typer command tree.
 - `magent memory traverse`
 - `magent memory ui`
 - `magent memory unsuppress`
+- `magent memory wizard`
 
 ## model
 
@@ -194,6 +198,7 @@ Generated from the active Typer command tree.
 - `magent model doctor`
 - `magent model roles`
 - `magent model set-role`
+- `magent model wizard`
 
 ## patch
 
@@ -208,6 +213,11 @@ Generated from the active Typer command tree.
 
 - `magent policy list`
 
+## profile
+
+- `magent profile apply`
+- `magent profile list`
+
 ## project
 
 - `magent project command-history`
@@ -215,10 +225,12 @@ Generated from the active Typer command tree.
 - `magent project commands`
 - `magent project config`
 - `magent project doctor`
+- `magent project init`
 - `magent project list`
 - `magent project playbook`
 - `magent project profile`
 - `magent project roles`
+- `magent project wizard`
 
 ## provider
 
@@ -227,6 +239,7 @@ Generated from the active Typer command tree.
 - `magent provider list`
 - `magent provider set`
 - `magent provider test`
+- `magent provider wizard`
 
 ## recipe
 
@@ -256,6 +269,7 @@ Generated from the active Typer command tree.
 - `magent subagent configure`
 - `magent subagent run`
 - `magent subagent status`
+- `magent subagent wizard`
 
 ## task
 

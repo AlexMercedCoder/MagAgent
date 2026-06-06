@@ -6,16 +6,24 @@ Important command paths:
 - `magent --task "task"`: alternate one-shot task form.
 - `magent setup`: run first-time setup.
 - `magent configure`: run the friendly setup/configuration wizard.
+- `magent onboard`: apply a guided profile and bootstrap project UX defaults.
+- `magent next`: suggest useful next actions for the current repo and setup.
 - `magent doctor`: run install, provider, memory, docs, and integration checks.
+- `magent doctor --json`: emit actionable readiness checks.
+- `magent doctor --fix`: apply safe local fixes for missing UX defaults.
+- `magent profile list`: list guided provider/memory/subagent presets.
+- `magent profile apply <name>`: apply a guided preset.
 - `magent provider list`: list known providers and default models.
 - `magent provider detect`: detect provider readiness from environment variables.
 - `magent provider set <provider>`: set the default provider/model.
+- `magent provider wizard`: interactively choose provider, access mode, model, and key source.
 - `magent provider test`: test the configured provider connection.
 - `magent provider doctor`: show provider and configuration readiness.
 - `magent model roles`: show model routing roles.
 - `magent model set-role <role> <model>`: configure a model role.
 - `magent model clear-role <role>`: clear a model role.
 - `magent model doctor`: show model role readiness.
+- `magent model wizard`: interactively set common model roles.
 - `magent docs list`: list built-in documentation topics.
 - `magent docs show <topic>`: render a built-in documentation topic.
 - `magent docs search <query>`: search packaged docs.
@@ -45,6 +53,7 @@ Important command paths:
 - `magent memory inbox reject <candidate-id>`: reject one memory candidate.
 - `magent memory inbox edit <candidate-id> --body "..."`: edit candidate text before accepting it.
 - `magent memory configure`: configure memory write mode, semantic search, and extraction model settings.
+- `magent memory wizard`: interactively configure memory behavior.
 - `magent memory quality`: report duplicate-looking and suppressed memory nodes.
 - `magent memory merge <target-id> <source-id>`: merge one memory node into another.
 - `magent memory suppress <node-id>`: mark a memory node suppressed without deleting it.
@@ -59,6 +68,8 @@ Important command paths:
 - `magent project doctor`: report missing project command roles and recent outcomes.
 - `magent project playbook`: show `.magent/playbook.toml` routines.
 - `magent project playbook --init`: create a starter project playbook.
+- `magent project init`: create project config and playbook files.
+- `magent project wizard`: guided alias for project initialization.
 - `magent project config`: show `.magent/config.toml` values.
 - `magent code index`: build and save a lightweight Python symbol/import/test index.
 - `magent code symbols <query>`: search indexed symbols.
@@ -115,6 +126,7 @@ Important command paths:
 - `magent subagent configure`: configure sub-agent caps and defaults.
 - `magent subagent status`: show sub-agent configuration.
 - `magent subagent run <task>`: run a focused sub-agent task from the CLI.
+- `magent subagent wizard`: interactively configure sub-agent caps.
 - `magent gateway configure <platform>`: configure Slack, Discord, or Telegram tokens and allowlists.
 - `magent gateway wizard <platform>`: prompt for gateway token fields.
 - `magent gateway doctor`: show gateway readiness.

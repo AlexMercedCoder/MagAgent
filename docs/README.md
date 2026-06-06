@@ -24,10 +24,13 @@ Common setup tasks now have CLI-first flows:
 
 ```bash
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
+magent provider set openai --model gpt-5 --access codex
 magent model set-role review anthropic/claude-sonnet-4-5
 magent memory configure --mode inbox-first
 magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN"
 magent subagent configure --max 3 --parallel 2
+magent project init
+magent next
 ```
 
 ## Architecture And Workflow

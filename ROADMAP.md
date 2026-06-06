@@ -224,6 +224,8 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/m
 
 **v0.18.0 update:** Added CLI-first setup commands for providers, model roles, memory behavior, gateway platforms, and sub-agent orchestration caps so most common configuration can happen through guided commands instead of direct TOML edits.
 
+**v0.19.0 update:** Added guided onboarding, provider/model/memory/subagent wizards, project initialization, profile presets, doctor fix suggestions, next-action recommendations, and explicit OpenAI API vs Codex subscription plus OpenCode Zen vs Go access-mode distinctions.
+
 **Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
 
 **What to build:**

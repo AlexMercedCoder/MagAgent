@@ -125,6 +125,7 @@ def test_config_ux_helpers_update_toml_without_manual_editing(tmp_path: Path, mo
     magent_config.set_current_user("alice")
 
     provider = config_ux.set_default_provider("openai", "gpt-5", api_key_env="OPENAI_API_KEY")
+    codex = config_ux.set_default_provider("openai", "gpt-5", access_mode="codex")
     role = config_ux.set_model_role("review", "anthropic/claude-sonnet-4-5")
     memory = config_ux.configure_memory("alice", mode="inbox-first", semantic=False, write_every=3)
     subagents = config_ux.configure_subagents(max_subagents=5, max_parallel=2, model_role="cheap")
@@ -132,10 +133,34 @@ def test_config_ux_helpers_update_toml_without_manual_editing(tmp_path: Path, mo
     summary = config_ux.ux_doctor("alice")
 
     assert provider["provider"] == "openai"
+    assert codex["access_mode"] == "codex"
     assert role["value"] == "anthropic/claude-sonnet-4-5"
     assert memory["memory"]["inbox_first"] is True
     assert subagents["subagents"]["max_subagents"] == 5
     assert gateway["gateway"]["telegram"]["bot_token"] == "***"
     assert summary["provider"]["provider"] == "openai"
+    assert summary["provider"]["access_mode"] == "codex"
     assert summary["model_roles"]["review"] is True
     assert summary["gateways"]["telegram"] is True
+
+
+def test_config_ux_provider_access_modes_and_doctor_actions(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("alice")
+    magent_config.set_current_user("alice")
+
+    result = config_ux.set_default_provider(
+        "opencode-go",
+        "deepseek-v4-flash",
+        api_key_env="OPENCODE_GO_KEY",
+        access_mode="subscription",
+    )
+    detected = {item["id"]: item for item in config_ux.detect_provider_environment()}
+    doctor = config_ux.doctor_actions("alice")
+    fixed = config_ux.fix_doctor_actions("alice")
+
+    assert result["access_mode"] == "subscription"
+    assert detected["openai"]["access_modes"][1]["id"] == "codex"
+    assert detected["opencode-go"]["api_key_env"] == "OPENCODE_GO_KEY"
+    assert any(item["key"] == "opencode_go" for item in doctor["actions"])
+    assert fixed["after"]["summary"]["subagents"]["max_subagents"] == 3

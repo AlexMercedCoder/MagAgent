@@ -26,7 +26,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.18.0" in version.output
+    assert "MagAgent 0.19.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -82,6 +82,45 @@ def test_cli_first_configuration_commands(tmp_path: Path, monkeypatch) -> None:
     payload = json.loads(doctor.output)
     assert payload["provider"]["provider"] == "openai"
     assert payload["gateways"]["telegram"] is True
+
+
+def test_cli_guided_ux_commands(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    store = WorkbenchStore("cli-user")
+    store.append("tasks", {"title": "Remember guided UX", "status": "open"})
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+
+    profiles = runner.invoke(cli_main.app, ["profile", "list"])
+    applied = runner.invoke(cli_main.app, ["profile", "apply", "low-cost"])
+    initialized = runner.invoke(cli_main.app, ["project", "init", "--path", str(project)])
+    onboarded = runner.invoke(
+        cli_main.app,
+        ["onboard", "--profile", "coding-local", "--project", str(project), "--yes"],
+    )
+    suggested = runner.invoke(cli_main.app, ["next", "--project", str(project)])
+    doctor = runner.invoke(cli_main.app, ["doctor", "--json"])
+    fixed = runner.invoke(cli_main.app, ["doctor", "--fix"])
+
+    assert profiles.exit_code == 0
+    assert any(item["name"] == "low-cost" for item in json.loads(profiles.output)["profiles"])
+    assert applied.exit_code == 0
+    assert json.loads(applied.output)["profile"] == "low-cost"
+    assert initialized.exit_code == 0
+    assert (project / ".magent" / "playbook.toml").exists()
+    assert onboarded.exit_code == 0
+    assert json.loads(onboarded.output)["profile"]["profile"] == "coding-local"
+    assert suggested.exit_code == 0
+    assert json.loads(suggested.output)["actions"]
+    assert doctor.exit_code == 0
+    assert "actions" in json.loads(doctor.output)
+    assert fixed.exit_code == 0
+    assert "after" in json.loads(fixed.output)
 
 
 def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -> None:

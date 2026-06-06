@@ -9,7 +9,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-179%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-182%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -110,6 +110,8 @@ magent recipe run release-prep
 magent memory inbox
 magent plan-sandbox <plan-id> --dry-run
 magent eval init
+magent onboard --profile coding-cloud
+magent next
 ```
 
 ---
@@ -141,9 +143,18 @@ CLI-first provider setup:
 magent provider list
 magent provider detect
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
+magent provider set openai --model gpt-5 --access codex
+magent provider wizard
 magent provider test
 magent provider doctor
 ```
+
+Provider access modes are intentionally distinct:
+
+- OpenAI API: `magent provider set openai --access api --api-key-env OPENAI_API_KEY`
+- OpenAI Codex/ChatGPT plan: `magent provider set openai --access codex`, then run `codex login`
+- OpenCode Zen pay-as-you-go: `magent provider set opencode-zen --access payg --api-key-env OPENCODE_ZEN_KEY`
+- OpenCode Go subscription: `magent provider set opencode-go --access subscription --api-key-env OPENCODE_GO_KEY`
 
 Route different work to different models:
 
@@ -154,6 +165,7 @@ magent model set-role review anthropic/claude-sonnet-4-5
 magent model set-role memory ollama/qwen2.5:7b
 magent model set-role cheap openrouter/deepseek/deepseek-chat
 magent model set-role fallback "ollama/qwen2.5-coder:32b,openrouter/deepseek/deepseek-chat"
+magent model wizard
 ```
 
 ---
@@ -545,16 +557,25 @@ magent gateway logs [-n N] [-f]  # View / follow gateway log
 ```bash
 magent setup           # First-run setup wizard
 magent configure       # Friendly setup/configuration wizard
+magent onboard         # Apply guided profile + project defaults
+magent next            # Suggest useful next actions
+magent profile list    # Guided configuration presets
+magent profile apply   # Apply provider/memory/subagent preset
 magent provider list   # Known providers and default models
 magent provider detect # Provider readiness from local environment
 magent provider set    # Set default provider/model
+magent provider wizard # Interactive provider/access/model setup
 magent provider doctor # Provider/config readiness
 magent model roles     # Show role-specific model routing
 magent model set-role  # Set coding/review/memory/cheap/fallback role
+magent model wizard    # Interactive model role setup
 magent subagent status # Show sub-agent caps/defaults
 magent subagent run    # Run one focused sub-agent task
+magent subagent wizard # Interactive sub-agent setup
 magent mode <mode>     # Set permission mode globally
 magent doctor          # Health check: providers, memory, deps
+magent doctor --json   # Structured actionable readiness checks
+magent doctor --fix    # Apply safe local config fixes
 magent plan "goal"     # Generate a local implementation plan
 magent run "goal"      # Record an autonomous work-session plan
 magent review          # Heuristic local diff review
@@ -571,6 +592,8 @@ magent patch preview   # Preview a saved patch
 magent patch explain   # Explain patch impact
 magent workspace status # Show git/workbench status
 magent release check   # Run release readiness checks
+magent project init    # Bootstrap .magent config and playbook
+magent project wizard  # Guided project bootstrap
 magent env-doctor      # Project environment checks
 magent dashboard       # Export static local dashboard
 magent ui              # Serve live local operations UI
@@ -600,10 +623,13 @@ Prefer the CLI for common changes:
 
 ```bash
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
+magent provider set openai --model gpt-5 --access codex
 magent model set-role review anthropic/claude-sonnet-4-5
 magent memory configure --mode inbox-first --semantic --write-every 3
+magent memory wizard
 magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN"
 magent subagent configure --max 3 --parallel 2
+magent project init
 ```
 
 Full config at `~/.config/magent/config.toml`:

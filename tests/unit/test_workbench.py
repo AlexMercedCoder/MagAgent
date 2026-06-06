@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 from magent import workbench
+from magent.ux_flows import init_project, list_profiles
 
 
 def test_task_artifact_and_knowledge_store(tmp_path: Path, monkeypatch) -> None:
@@ -70,6 +71,20 @@ def test_project_command_roles_and_doctor_use_config_and_history(tmp_path: Path,
     assert doctor["ok"] is True
     assert doctor["roles"]["test"]["last_ok"] is True
     assert "typecheck" in doctor["missing"]
+
+
+def test_project_init_creates_playbook_and_config(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+
+    result = init_project(tmp_path)
+
+    assert result["ok"] is True
+    assert result["wrote_playbook"] is True
+    assert result["wrote_config"] is True
+    assert (tmp_path / ".magent" / "playbook.toml").exists()
+    assert (tmp_path / ".magent" / "config.toml").exists()
+    assert "test" in result["commands"]
+    assert any(item["name"] == "codex-subscription" for item in list_profiles()["profiles"])
 
 
 def test_save_and_apply_plan(tmp_path: Path, monkeypatch) -> None:

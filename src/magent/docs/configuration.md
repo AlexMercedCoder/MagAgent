@@ -27,12 +27,27 @@ Most everyday configuration can be done from the CLI:
 
 ```bash
 magent configure
+magent onboard
+magent profile list
+magent profile apply coding-cloud
 magent provider list
 magent provider detect
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
+magent provider set openai --model gpt-5 --access codex
+magent provider wizard
 magent provider test
 magent provider doctor
+magent doctor --json
+magent doctor --fix
+magent next
 ```
+
+Provider access modes are explicit:
+
+- `openai --access api` uses MagAgent's in-process LiteLLM provider and `OPENAI_API_KEY`.
+- `openai --access codex` records that you want Codex/ChatGPT-plan based workflows and checks for the `codex` CLI. Run `codex login` to sign in with ChatGPT.
+- `opencode-zen --access payg` uses OpenCode Zen pay-as-you-go credits/API keys.
+- `opencode-go --access subscription` uses the OpenCode Go subscription endpoint and `OPENCODE_GO_KEY`.
 
 Use model roles to route specific work to specialized or cheaper models:
 
@@ -45,6 +60,7 @@ magent model set-role cheap openrouter/deepseek/deepseek-chat
 magent model set-role fallback "ollama/qwen2.5-coder:32b,openrouter/deepseek/deepseek-chat"
 magent model clear-role cheap
 magent model doctor
+magent model wizard
 ```
 
 Memory behavior can be changed per active user:
@@ -52,6 +68,7 @@ Memory behavior can be changed per active user:
 ```bash
 magent memory configure --mode inbox-first --semantic --write-every 3
 magent memory configure --mode manual --no-semantic
+magent memory wizard
 ```
 
 Gateway platforms can be configured without pasting a TOML block:
@@ -69,6 +86,7 @@ The main agent can spawn focused sub-agents. Configure the cap and parallelism w
 magent subagent configure --max 3 --parallel 2 --model-role coding
 magent subagent status
 magent subagent run "Audit the auth tests"
+magent subagent wizard
 ```
 
 The cap is enforced by the sub-agent runner. Set `--max 0` to disable sub-agent spawning.
@@ -76,6 +94,13 @@ The cap is enforced by the sub-agent runner. Set `--max 0` to disable sub-agent 
 Project-local config:
 
 `<project>/.magent/config.toml`
+
+Bootstrap it from the CLI:
+
+```bash
+magent project init
+magent project wizard
+```
 
 Example:
 

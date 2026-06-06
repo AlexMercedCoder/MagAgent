@@ -43,6 +43,7 @@ browser_app = typer.Typer(help="Browser automation helpers", name="browser")
 provider_app = typer.Typer(help="Provider setup and diagnostics", name="provider")
 model_app = typer.Typer(help="Model role configuration", name="model")
 subagent_app = typer.Typer(help="Sub-agent configuration and runs", name="subagent")
+profile_app = typer.Typer(help="Guided UX configuration profiles", name="profile")
 
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
@@ -78,6 +79,7 @@ for _name, _typer in [
     ("provider", provider_app),
     ("model", model_app),
     ("subagent", subagent_app),
+    ("profile", profile_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -103,6 +105,7 @@ __all__ = [
     "patch_app",
     "policy_app",
     "provider_app",
+    "profile_app",
     "project_app",
     "release_app",
     "recipe_app",

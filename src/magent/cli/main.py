@@ -13,7 +13,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from magent import __version__
@@ -39,6 +39,7 @@ from magent.cli.app import (
     model_app,
     patch_app,
     policy_app,
+    profile_app,
     project_app,
     provider_app,
     recipe_app,
@@ -560,6 +561,26 @@ def project_playbook_cmd(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(playbook_template(), encoding="utf-8")
     console.print_json(data=playbook_summary(path))
+
+
+@project_app.command("init")
+def project_init_cmd(
+    path: str = typer.Option(".", "--path", "-p"),
+    force: bool = typer.Option(False, "--force"),
+):
+    """Create CLI-friendly MagAgent project config and playbook files."""
+    from magent.ux_flows import init_project
+
+    console.print_json(data=init_project(path, force=force))
+
+
+@project_app.command("wizard")
+def project_wizard_cmd(
+    path: str = typer.Option(".", "--path", "-p"),
+    force: bool = typer.Option(False, "--force"),
+):
+    """Guided project bootstrap alias for project init."""
+    project_init_cmd(path=path, force=force)
 
 
 @project_app.command("config")
@@ -1207,11 +1228,12 @@ def tools_disable_cmd(pack: str = typer.Argument(...)):
 @provider_app.command("list")
 def provider_list_cmd():
     """List known providers and default models."""
-    from magent.config_ux import provider_choices
+    from magent.config_ux import provider_access_modes, provider_choices
 
-    table = Table("Provider", "Default Model", "Description")
+    table = Table("Provider", "Default Model", "Access", "Description")
     for item in provider_choices():
-        table.add_row(item["id"], item["default_model"], item["label"])
+        access = ", ".join(mode["id"] for mode in provider_access_modes(item["id"]))
+        table.add_row(item["id"], item["default_model"], access, item["label"])
     console.print(table)
 
 
@@ -1230,6 +1252,7 @@ def provider_set_cmd(
     api_key_env: str = typer.Option("", "--api-key-env"),
     api_key: str = typer.Option("", "--api-key"),
     base_url: str = typer.Option("", "--base-url"),
+    access_mode: str = typer.Option("", "--access", help="api, codex, payg, subscription, or local"),
 ):
     """Set the default provider and model without editing config.toml."""
     from magent.config_ux import set_default_provider
@@ -1241,8 +1264,43 @@ def provider_set_cmd(
             api_key_env=api_key_env,
             api_key=api_key,
             base_url=base_url,
+            access_mode=access_mode,
         )
     )
+
+
+@provider_app.command("wizard")
+def provider_wizard_cmd():
+    """Interactively configure provider, access mode, model, and key source."""
+    from magent.config_ux import provider_access_modes, provider_choices, set_default_provider
+
+    choices = provider_choices()
+    for i, item in enumerate(choices, 1):
+        console.print(f"{i}. {item['id']} — {item['label']}")
+    choice = Prompt.ask("Provider number", default="1")
+    try:
+        selected = choices[int(choice) - 1]
+    except (ValueError, IndexError):
+        selected = choices[0]
+    modes = provider_access_modes(selected["id"])
+    for i, item in enumerate(modes, 1):
+        console.print(f"{i}. {item['id']} — {item['label']}")
+    access_choice = Prompt.ask("Access mode", default="1")
+    try:
+        access_mode = modes[int(access_choice) - 1]["id"]
+    except (ValueError, IndexError):
+        access_mode = modes[0]["id"]
+    model = Prompt.ask("Default model", default=selected["default_model"])
+    api_key_env = ""
+    if access_mode not in {"codex", "local"}:
+        default_env = {
+            "openai": "OPENAI_API_KEY",
+            "opencode-go": "OPENCODE_GO_KEY",
+            "opencode-zen": "OPENCODE_ZEN_KEY",
+        }.get(selected["id"], "")
+        api_key_env = Prompt.ask("API key environment variable", default=default_env)
+    result = set_default_provider(selected["id"], model, api_key_env=api_key_env, access_mode=access_mode)
+    console.print_json(data=result)
 
 
 @provider_app.command("test")
@@ -1318,6 +1376,21 @@ def model_doctor_cmd():
     console.print_json(data={"ok": True, "model_roles": ux_doctor(get_current_user())["model_roles"]})
 
 
+@model_app.command("wizard")
+def model_wizard_cmd():
+    """Interactively set common model roles from the current default model."""
+    from magent.config_ux import MODEL_ROLES, set_model_role
+
+    config = load_config(get_current_user())
+    default = f"{config.default_provider}/{config.default_model}"
+    results = []
+    for role in MODEL_ROLES:
+        value = Prompt.ask(f"{role} model", default=default if role != "fallback" else "")
+        if value:
+            results.append(set_model_role(role, value))
+    console.print_json(data={"ok": all(item.get("ok") for item in results), "results": results})
+
+
 @subagent_app.command("configure")
 def subagent_configure_cmd(
     max_subagents: int | None = typer.Option(None, "--max"),
@@ -1369,6 +1442,25 @@ def subagent_run_cmd(
 
     result = asyncio.run(_run())
     console.print_json(data=result.__dict__)
+
+
+@subagent_app.command("wizard")
+def subagent_wizard_cmd():
+    """Interactively configure sub-agent caps."""
+    from magent.config_ux import configure_subagents
+
+    max_subagents = int(Prompt.ask("Maximum sub-agents", default="3"))
+    max_parallel = int(Prompt.ask("Maximum parallel sub-agents", default="2"))
+    model_role = Prompt.ask("Model role", default="coding")
+    sandbox_mode = Prompt.ask("Sandbox mode (blank, copy, worktree, container)", default="")
+    console.print_json(
+        data=configure_subagents(
+            max_subagents=max_subagents,
+            max_parallel=max_parallel,
+            model_role=model_role,
+            sandbox_mode=sandbox_mode,
+        )
+    )
 
 
 @eval_app.command("init")
@@ -2313,6 +2405,28 @@ def memory_configure_cmd(
     )
 
 
+@memory_app.command("wizard")
+def memory_wizard_cmd():
+    """Interactively configure memory write and semantic recall settings."""
+    from magent.config_ux import configure_memory
+
+    mode = Prompt.ask("Memory mode", choices=["auto", "inbox-first", "manual"], default="inbox-first")
+    semantic = Confirm.ask("Enable semantic memory search?", default=True)
+    write_every = int(Prompt.ask("Write/check memory every N turns", default="3"))
+    extraction_provider = Prompt.ask("Extraction provider (blank keeps current)", default="")
+    extraction_model = Prompt.ask("Extraction model (blank keeps current)", default="")
+    console.print_json(
+        data=configure_memory(
+            _require_user(),
+            mode=mode,
+            semantic=semantic,
+            write_every=write_every,
+            extraction_provider=extraction_provider,
+            extraction_model=extraction_model,
+        )
+    )
+
+
 # ─────────────────────────────────────────────
 # Top-level commands
 # ─────────────────────────────────────────────
@@ -2334,6 +2448,58 @@ def configure_cmd():
     run_setup()
 
 
+@app.command("onboard")
+def onboard_cmd(
+    profile: str = typer.Option("coding-local", "--profile"),
+    project: str = typer.Option(".", "--project", "-p"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Apply defaults without prompts"),
+):
+    """Guide a user through core MagAgent readiness."""
+    from magent.ux_flows import apply_profile, init_project
+
+    username = _require_user()
+    selected = profile
+    if not yes:
+        selected = Prompt.ask("Configuration profile", default=profile)
+    profile_result = apply_profile(selected, username)
+    project_result = init_project(project)
+    console.print_json(
+        data={
+            "ok": bool(profile_result.get("ok") and project_result.get("ok")),
+            "profile": profile_result,
+            "project": project_result,
+            "next": ["magent doctor --json", "magent provider test", "magent next"],
+        }
+    )
+
+
+@app.command("next")
+def next_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Suggest useful next actions for the current repo and MagAgent setup."""
+    from magent.ux_flows import next_actions
+
+    console.print_json(data=next_actions(project, store=_store(), username=get_current_user()))
+
+
+@profile_app.command("list")
+def profile_list_cmd():
+    """List guided configuration presets."""
+    from magent.ux_flows import list_profiles
+
+    console.print_json(data=list_profiles())
+
+
+@profile_app.command("apply")
+def profile_apply_cmd(name: str = typer.Argument(...)):
+    """Apply a guided provider/memory/subagent preset."""
+    from magent.ux_flows import apply_profile
+
+    result = apply_profile(name, get_current_user())
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
 @app.command("mode")
 def set_mode(
     mode: str = typer.Argument(..., help="Permission mode: silent|balanced|paranoid|yolo"),
@@ -2353,13 +2519,32 @@ def set_mode(
 
 
 @app.command("doctor")
-def doctor():
+def doctor(
+    fix: bool = typer.Option(False, "--fix", help="Apply safe local fixes for missing UX defaults"),
+    json_output: bool = typer.Option(False, "--json", help="Emit structured doctor actions only"),
+):
     """Run health checks: providers, maggraph, config."""
-    from magent.config_ux import ux_doctor
+    from magent.config_ux import doctor_actions, fix_doctor_actions
     from magent.utils import run_doctor
 
+    if fix:
+        payload = fix_doctor_actions(get_current_user())
+        console.print_json(data=payload)
+        return
+    payload = doctor_actions(get_current_user())
+    if json_output:
+        console.print_json(data=payload)
+        return
     run_doctor()
-    console.print_json(data={"ux": ux_doctor(get_current_user())})
+    table = Table("UX Check", "OK", "Detail", "Try")
+    for item in payload["actions"]:
+        table.add_row(
+            item["key"],
+            "yes" if item["ok"] else "no",
+            item["detail"],
+            item.get("command", ""),
+        )
+    console.print(table)
 
 
 # ─────────────────────────────────────────────

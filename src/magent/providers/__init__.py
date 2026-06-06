@@ -16,7 +16,7 @@ console = Console()
 PROVIDER_BASE_URLS: dict[str, str] = {
     "nous-portal": "https://inference-api.nousresearch.com/v1",
     "opencode-zen": "https://opencode.ai/zen/v1",
-    "opencode-go": "https://opencode.ai/zen/v1",  # Go sub uses same Zen endpoint
+    "opencode-go": "https://opencode.ai/zen/go/v1",
     "ollama": "http://localhost:11434",
     "lmstudio": "http://localhost:1234/v1",
 }
