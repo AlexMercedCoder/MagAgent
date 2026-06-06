@@ -44,6 +44,7 @@ magent provider matrix
 magent provider recommend --goal coding
 magent provider explain mistral
 magent provider env
+magent provider test-matrix
 ```
 
 Provider access modes are explicit:
@@ -65,6 +66,29 @@ magent config diff
 magent config restore <backup-id>
 ```
 
+Natural-language config proposals cover a limited, schema-safe set of common edits. They
+show a diff, write an event log entry, and create a backup before applying:
+
+```bash
+magent config propose "use mistral by default, manual memory, cap 2 subagents"
+magent config proposals
+magent config apply <proposal-id>
+magent config discard <proposal-id>
+magent events list
+```
+
+High-risk proposals such as `yolo` permission mode require explicit confirmation at
+apply time. Proposals intentionally do not write secrets or arbitrary TOML.
+
+Permission profiles can be inspected and adjusted without opening `profile.toml`:
+
+```bash
+magent permission status
+magent permission explain paranoid
+magent permission set paranoid
+magent permission propose "allow pytest and git"
+```
+
 Use model roles to route specific work to specialized or cheaper models:
 
 ```bash
@@ -76,8 +100,12 @@ magent model set-role cheap openrouter/deepseek/deepseek-chat
 magent model set-role fallback "ollama/qwen2.5-coder:32b,openrouter/deepseek/deepseek-chat"
 magent model clear-role cheap
 magent model doctor
+magent model health
 magent model wizard
 ```
+
+Run `magent docs generate-config` to regenerate the packaged config reference from
+MagAgent's default config, permission modes, model roles, and provider catalog.
 
 Memory behavior can be changed per active user:
 

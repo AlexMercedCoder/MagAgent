@@ -88,6 +88,7 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
         "github",
         "comparisons",
         "providers",
+        "config-reference",
     }
     missing_topics = sorted(required - slugs)
     docs_text = "\n".join(read_topic(topic.slug) for topic in topics)
@@ -164,6 +165,70 @@ def render_provider_reference() -> str:
     return "\n".join(lines).strip() + "\n"
 
 
+def render_config_reference() -> str:
+    """Generate config reference Markdown from packaged defaults and catalogs."""
+    from magent.config import DEFAULT_GLOBAL_CONFIG, DEFAULT_USER_PROFILE
+    from magent.config_ux import MODEL_ROLES
+    from magent.permission_ux import PERMISSION_MODES
+    from magent.provider_catalog import PROVIDER_ORDER
+
+    lines = [
+        "# Config Reference",
+        "",
+        "Generated from MagAgent's packaged default config and provider metadata.",
+        "",
+        "## Global Config",
+        "",
+        "Stored at `~/.config/magent/config.toml`.",
+        "",
+    ]
+    lines.extend(_render_config_tree(DEFAULT_GLOBAL_CONFIG))
+    lines.extend(
+        [
+            "",
+            "## User Profile",
+            "",
+            "Stored at `~/.config/magent/users/<user>/profile.toml`.",
+            "",
+        ]
+    )
+    lines.extend(_render_config_tree(DEFAULT_USER_PROFILE))
+    lines.extend(
+        [
+            "",
+            "## Model Roles",
+            "",
+            "Use `magent model set-role <role> <provider/model>` and `magent model health`.",
+            "",
+        ]
+    )
+    for role in MODEL_ROLES:
+        lines.append(f"- `{role}`")
+    lines.extend(
+        [
+            "",
+            "## Permission Modes",
+            "",
+            "Use `magent permission explain <mode>` and `magent permission set <mode>`.",
+            "",
+        ]
+    )
+    for mode, description in sorted(PERMISSION_MODES.items()):
+        lines.append(f"- `{mode}`: {description}")
+    lines.extend(
+        [
+            "",
+            "## Provider IDs",
+            "",
+            "Use `magent provider matrix` and `magent provider test-matrix` for live readiness.",
+            "",
+        ]
+    )
+    for provider_id in PROVIDER_ORDER:
+        lines.append(f"- `{provider_id}`")
+    return "\n".join(lines).strip() + "\n"
+
+
 def _resolve_topic_path(slug: str) -> Path | None:
     root = docs_root()
     normalized = slug.strip().lower().replace("_", "-")
@@ -175,6 +240,28 @@ def _resolve_topic_path(slug: str) -> Path | None:
         if path.exists() and path.is_file():
             return path
     return None
+
+
+def _render_config_tree(data: dict[str, Any], prefix: str = "") -> list[str]:
+    lines = []
+    for key, value in data.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            lines.append(f"### `{path}`")
+            lines.append("")
+            lines.extend(_render_config_tree(value, path))
+        else:
+            rendered = repr(_display_default(value))
+            lines.append(f"- `{path}` default: `{rendered}`")
+    return lines
+
+
+def _display_default(value: Any) -> Any:
+    if isinstance(value, str):
+        home = str(Path.home())
+        if value.startswith(home):
+            return "~" + value[len(home):]
+    return value
 
 
 def _title_from_markdown(text: str) -> str:

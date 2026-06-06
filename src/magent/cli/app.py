@@ -29,6 +29,7 @@ session_app = typer.Typer(help="Session timeline and replay", name="session")
 data_app = typer.Typer(help="Data workspace helpers", name="data")
 policy_app = typer.Typer(help="Policy profiles", name="policy")
 docs_app = typer.Typer(help="Built-in MagAgent documentation", name="docs")
+events_app = typer.Typer(help="Workbench event log", name="events")
 checkpoint_app = typer.Typer(help="File write checkpoints", name="checkpoint")
 code_app = typer.Typer(help="Code intelligence index", name="code")
 test_app = typer.Typer(help="Test intelligence helpers", name="test")
@@ -45,6 +46,7 @@ provider_app = typer.Typer(help="Provider setup and diagnostics", name="provider
 model_app = typer.Typer(help="Model role configuration", name="model")
 subagent_app = typer.Typer(help="Sub-agent configuration and runs", name="subagent")
 profile_app = typer.Typer(help="Guided UX configuration profiles", name="profile")
+permission_app = typer.Typer(help="Permission profile UX", name="permission")
 
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
@@ -66,6 +68,7 @@ for _name, _typer in [
     ("data", data_app),
     ("policy", policy_app),
     ("docs", docs_app),
+    ("events", events_app),
     ("checkpoint", checkpoint_app),
     ("code", code_app),
     ("test", test_app),
@@ -82,6 +85,7 @@ for _name, _typer in [
     ("model", model_app),
     ("subagent", subagent_app),
     ("profile", profile_app),
+    ("permission", permission_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -96,6 +100,7 @@ __all__ = [
     "config_app",
     "data_app",
     "docs_app",
+    "events_app",
     "followup_app",
     "gateway_app",
     "eval_app",
@@ -109,6 +114,7 @@ __all__ = [
     "policy_app",
     "provider_app",
     "profile_app",
+    "permission_app",
     "project_app",
     "release_app",
     "recipe_app",

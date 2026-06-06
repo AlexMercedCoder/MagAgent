@@ -29,6 +29,7 @@ from magent.cli.app import (
     data_app,
     docs_app,
     eval_app,
+    events_app,
     followup_app,
     gateway_app,
     github_app,
@@ -39,6 +40,7 @@ from magent.cli.app import (
     memory_semantic_app,
     model_app,
     patch_app,
+    permission_app,
     policy_app,
     profile_app,
     project_app,
@@ -62,6 +64,8 @@ from magent.cli.command_context import (
     store,
 )
 from magent.cli.commands.config import register_config_commands
+from magent.cli.commands.events import register_event_commands
+from magent.cli.commands.permissions import register_permission_commands
 from magent.cli.commands.providers import register_provider_ux_commands
 from magent.config import (
     CONFIG_DIR,
@@ -78,6 +82,8 @@ from magent.config import (
 console = Console()
 register_provider_ux_commands(provider_app)
 register_config_commands(config_app)
+register_event_commands(events_app)
+register_permission_commands(permission_app)
 
 
 # ─────────────────────────────────────────────
@@ -1378,6 +1384,17 @@ def model_doctor_cmd():
     console.print_json(data={"ok": True, "model_roles": ux_doctor(get_current_user())["model_roles"]})
 
 
+@model_app.command("health")
+def model_health_cmd():
+    """Show model role provider/runtime health."""
+    from magent.config_ux import model_role_health
+
+    result = model_role_health()
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
 @model_app.command("wizard")
 def model_wizard_cmd():
     """Interactively set common model roles from the current default model."""
@@ -1798,6 +1815,17 @@ def docs_generate_providers_cmd(out: str | None = typer.Option(None, "--out", "-
 
     text = render_provider_reference()
     target = out or "src/magent/docs/providers.md"
+    Path(target).write_text(text, encoding="utf-8")
+    console.print(f"[green]✓ Wrote {target}[/green]")
+
+
+@docs_app.command("generate-config")
+def docs_generate_config_cmd(out: str | None = typer.Option(None, "--out", "-o")):
+    """Generate config reference Markdown from packaged defaults."""
+    from magent.docs import render_config_reference
+
+    text = render_config_reference()
+    target = out or "src/magent/docs/config-reference.md"
     Path(target).write_text(text, encoding="utf-8")
     console.print(f"[green]✓ Wrote {target}[/green]")
 

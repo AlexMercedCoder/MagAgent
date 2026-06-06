@@ -39,9 +39,13 @@ Generated from the active Typer command tree.
 
 ## config
 
+- `magent config apply`
 - `magent config backup`
 - `magent config diff`
+- `magent config discard`
 - `magent config list-backups`
+- `magent config proposals`
+- `magent config propose`
 - `magent config restore`
 - `magent config show`
 
@@ -69,6 +73,7 @@ Generated from the active Typer command tree.
 - `magent doctor`
 - `magent env-doctor`
 - `magent eval`
+- `magent events`
 - `magent followup`
 - `magent gateway`
 - `magent github`
@@ -83,6 +88,7 @@ Generated from the active Typer command tree.
 - `magent notes`
 - `magent onboard`
 - `magent patch`
+- `magent permission`
 - `magent plan`
 - `magent plan-apply`
 - `magent plan-discard`
@@ -122,6 +128,7 @@ Generated from the active Typer command tree.
 ## docs
 
 - `magent docs doctor`
+- `magent docs generate-config`
 - `magent docs generate-providers`
 - `magent docs generate-reference`
 - `magent docs list`
@@ -134,6 +141,11 @@ Generated from the active Typer command tree.
 - `magent eval list`
 - `magent eval report`
 - `magent eval run`
+
+## events
+
+- `magent events list`
+- `magent events show`
 
 ## followup
 
@@ -206,6 +218,7 @@ Generated from the active Typer command tree.
 
 - `magent model clear-role`
 - `magent model doctor`
+- `magent model health`
 - `magent model roles`
 - `magent model set-role`
 - `magent model wizard`
@@ -218,6 +231,13 @@ Generated from the active Typer command tree.
 - `magent patch preview`
 - `magent patch revert`
 - `magent patch save`
+
+## permission
+
+- `magent permission explain`
+- `magent permission propose`
+- `magent permission set`
+- `magent permission status`
 
 ## policy
 
@@ -254,6 +274,7 @@ Generated from the active Typer command tree.
 - `magent provider recommend`
 - `magent provider set`
 - `magent provider test`
+- `magent provider test-matrix`
 - `magent provider wizard`
 
 ## recipe

@@ -16,6 +16,16 @@ Important command paths:
 - `magent config list-backups`: list config backups.
 - `magent config diff`: diff current config against a backup.
 - `magent config restore <backup-id>`: restore config from a backup.
+- `magent config propose "request"`: create a safe config proposal from natural language.
+- `magent config proposals`: list pending config proposals.
+- `magent config apply <proposal-id>`: apply a proposal after backing up config.
+- `magent config discard <proposal-id>`: discard a proposal.
+- `magent permission status`: show the active user's permission profile.
+- `magent permission explain <mode>`: explain a permission mode.
+- `magent permission set <mode>`: set the active user's permission mode.
+- `magent permission propose "request"`: parse a permission request into a suggested action.
+- `magent events list`: list recent workbench events.
+- `magent events show <event-id>`: show one event record.
 - `magent profile list`: list guided provider/memory/subagent presets.
 - `magent profile apply <name>`: apply a guided preset.
 - `magent provider list`: list known providers and default models.
@@ -23,6 +33,7 @@ Important command paths:
 - `magent provider set <provider>`: set the default provider/model.
 - `magent provider wizard`: interactively choose provider, access mode, model, and key source.
 - `magent provider test`: test the configured provider connection.
+- `magent provider test-matrix`: test configured/ready providers and report skipped providers.
 - `magent provider doctor`: show provider and configuration readiness.
 - `magent provider recommend`: recommend providers for a goal.
 - `magent provider catalog-doctor`: validate provider catalog metadata.
@@ -30,6 +41,7 @@ Important command paths:
 - `magent model set-role <role> <model>`: configure a model role.
 - `magent model clear-role <role>`: clear a model role.
 - `magent model doctor`: show model role readiness.
+- `magent model health`: show model role provider/runtime health.
 - `magent model wizard`: interactively set common model roles.
 - `magent docs list`: list built-in documentation topics.
 - `magent docs show <topic>`: render a built-in documentation topic.
@@ -37,6 +49,7 @@ Important command paths:
 - `magent docs doctor`: verify built-in docs coverage.
 - `magent docs generate-reference`: generate command reference Markdown from the live CLI.
 - `magent docs generate-providers`: generate provider reference Markdown from the provider catalog.
+- `magent docs generate-config`: generate config reference Markdown from packaged defaults.
 - `magent browser snapshot <url>`: capture page title and visible text with Playwright.
 - `magent browser screenshot <url>`: capture a page screenshot with Playwright.
 - `magent eval init`: create a starter local eval suite.

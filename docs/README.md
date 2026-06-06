@@ -18,6 +18,7 @@ magent docs doctor
 - [Commands](../src/magent/docs/commands.md)
 - [Generated Command Reference](../src/magent/docs/command-reference.md)
 - [Generated Provider Reference](../src/magent/docs/providers.md)
+- [Generated Config Reference](../src/magent/docs/config-reference.md)
 - [Configuration](../src/magent/docs/configuration.md)
 - [Troubleshooting](../src/magent/docs/troubleshooting.md)
 
@@ -27,13 +28,19 @@ Common setup tasks now have CLI-first flows:
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
 magent provider matrix
 magent provider recommend --goal coding
+magent provider test-matrix
 magent provider set openai --model gpt-5 --access codex
 magent model set-role review anthropic/claude-sonnet-4-5
+magent model health
 magent memory configure --mode inbox-first
+magent permission status
+magent config propose "use manual memory and paranoid permissions"
+magent config proposals
 magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN"
 magent subagent configure --max 3 --parallel 2
 magent project init
 magent config backup
+magent events list
 magent next
 ```
 

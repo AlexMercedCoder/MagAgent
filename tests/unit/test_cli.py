@@ -26,7 +26,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.21.0" in version.output
+    assert "MagAgent 0.22.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -125,11 +125,13 @@ def test_cli_guided_ux_commands(tmp_path: Path, monkeypatch) -> None:
 
 def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
-    from magent import config_safety
+    from magent import config_safety, providers
 
     monkeypatch.setattr(config_safety, "CONFIG_DIR", magent_config.CONFIG_DIR)
     monkeypatch.setattr(config_safety, "GLOBAL_CONFIG", magent_config.GLOBAL_CONFIG)
     monkeypatch.setattr(config_safety, "BACKUP_DIR", magent_config.CONFIG_DIR / "backups")
+    monkeypatch.setattr(workbench, "USERS_DIR", magent_config.USERS_DIR)
+    monkeypatch.setattr(providers, "test_provider", _fake_test_provider)
     magent_config.create_user("cli-user")
     magent_config.set_current_user("cli-user")
     provider = runner.invoke(
@@ -141,12 +143,23 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     env = runner.invoke(cli_main.app, ["provider", "env"])
     recommended = runner.invoke(cli_main.app, ["provider", "recommend", "--goal", "coding"])
     catalog = runner.invoke(cli_main.app, ["provider", "catalog-doctor"])
+    test_matrix = runner.invoke(cli_main.app, ["provider", "test-matrix"])
+    model_health = runner.invoke(cli_main.app, ["model", "health"])
+    permission = runner.invoke(cli_main.app, ["permission", "set", "paranoid"])
+    permission_status = runner.invoke(cli_main.app, ["permission", "status"])
+    proposed = runner.invoke(cli_main.app, ["config", "propose", "use manual memory and paranoid permissions"])
+    proposals = runner.invoke(cli_main.app, ["config", "proposals"])
     backup = runner.invoke(cli_main.app, ["config", "backup"])
     show = runner.invoke(cli_main.app, ["config", "show"])
     diff = runner.invoke(cli_main.app, ["config", "diff"])
+    events = runner.invoke(cli_main.app, ["events", "list", "--json"])
     generated = runner.invoke(
         cli_main.app,
         ["docs", "generate-providers", "--out", str(tmp_path / "providers.md")],
+    )
+    generated_config = runner.invoke(
+        cli_main.app,
+        ["docs", "generate-config", "--out", str(tmp_path / "config-reference.md")],
     )
 
     assert provider.exit_code == 0
@@ -160,13 +173,32 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     assert any(item["id"] == "mistral" for item in json.loads(recommended.output)["recommendations"])
     assert catalog.exit_code == 0
     assert json.loads(catalog.output)["ok"] is True
+    assert test_matrix.exit_code == 0
+    assert any(item["provider"] == "mistral" for item in json.loads(test_matrix.output)["providers"])
+    assert model_health.exit_code == 0
+    assert permission.exit_code == 0
+    assert json.loads(permission.output)["mode"] == "paranoid"
+    assert permission_status.exit_code == 0
+    assert json.loads(permission_status.output)["mode"] == "paranoid"
+    assert proposed.exit_code == 0
+    assert json.loads(proposed.output)["proposal"]["id"]
+    assert proposals.exit_code == 0
+    assert json.loads(proposals.output)["proposals"]
     assert backup.exit_code == 0
     assert json.loads(backup.output)["backup_id"]
     assert show.exit_code == 0
     assert json.loads(show.output)["files"]["global"]["exists"] is True
     assert diff.exit_code == 0
+    assert events.exit_code == 0
+    assert json.loads(events.output)["events"]
     assert generated.exit_code == 0
     assert (tmp_path / "providers.md").exists()
+    assert generated_config.exit_code == 0
+    assert (tmp_path / "config-reference.md").exists()
+
+
+async def _fake_test_provider(provider) -> bool:
+    return True
 
 
 def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -> None:

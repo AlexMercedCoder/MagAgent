@@ -12,9 +12,19 @@ Future command modules should register command groups from `magent.cli.commands.
 
 `magent.cli.command_context` owns reusable command helpers such as current-user lookup, store creation, provider construction, and command-tree introspection. New command modules should depend on this helper layer instead of copying setup code.
 
-`magent.cli.commands.*` contains focused command registration modules. Provider UX and config safety commands use this pattern first; future command groups should migrate there incrementally.
+`magent.cli.commands.*` contains focused command registration modules. Provider UX,
+config safety/proposals, permissions, and event-log commands use this pattern first;
+future command groups should migrate there incrementally.
 
 `magent.config_ux` owns CLI-first configuration mutations and readiness summaries for providers, model roles, memory behavior, gateway setup, and sub-agent caps. Command handlers should call this module when they need to update global or user TOML instead of editing config dictionaries inline.
+
+`magent.config_proposals` owns schema-limited natural-language config proposals. It
+parses only known-safe operations, renders diffs, writes workbench events, creates
+backups, and delegates actual mutations to `magent.config_ux` and
+`magent.permission_ux`.
+
+`magent.permission_ux` owns friendly permission-mode status, explanations, and mode
+changes for user profiles.
 
 `magent.ux_flows` owns guided onboarding behavior: profile presets, project initialization, safe doctor fixes, and next-action recommendations. It composes config, workbench, memory inbox, and playbook helpers without making those lower-level modules depend on UX prompts.
 
@@ -44,6 +54,10 @@ Semantic search and memory quality tools live alongside this layer because they 
 Workbench state is local operational state: tasks, artifacts, project profiles, plans, reviews, patches, checkpoints, command history, release checks, dashboards, and docs helpers.
 
 `magent.workbench_store` owns the JSON-backed storage primitive. `magent.workbench` remains the compatibility facade for workbench functions. New workbench domains should move toward focused modules while being re-exported from `magent.workbench`.
+
+`magent.events` stores structured workbench events for trust and auditability. Config
+proposal creation, application, and discard operations record events there, and other
+state-changing UX flows should follow the same pattern.
 
 `magent.workbench_domains.*` exposes domain-specific import modules for plans, patches, checkpoints, project helpers, code/test intelligence, and release/workspace helpers. These modules currently preserve compatibility while providing stable targets for future extraction.
 

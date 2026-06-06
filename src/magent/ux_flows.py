@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -140,7 +141,7 @@ def init_project(root: str | Path = ".", *, force: bool = False) -> dict[str, An
 
 def next_actions(root: str | Path = ".", store: Any | None = None, username: str | None = None) -> dict[str, Any]:
     root_path = Path(root).resolve()
-    actions: list[dict[str, str]] = []
+    actions: list[dict[str, Any]] = []
     from magent.config_ux import doctor_actions
     from magent.memory_inbox import memory_inbox
     from magent.workbench import project_doctor
@@ -148,33 +149,88 @@ def next_actions(root: str | Path = ".", store: Any | None = None, username: str
     doctor = doctor_actions(username)
     for item in doctor["actions"]:
         if not item["ok"] and item.get("command"):
-            actions.append({"title": f"Fix {item['key']}", "command": item["command"], "reason": item["detail"]})
+            actions.append(
+                _next_action(
+                    f"Fix {item['key']}",
+                    item["command"],
+                    item["detail"],
+                    category="config",
+                    confidence=0.9 if item.get("fixable") else 0.75,
+                )
+            )
 
     project = project_doctor(root_path, store)
     if project.get("missing"):
         actions.append(
-            {
-                "title": "Bootstrap project commands",
-                "command": f"magent project init --path {root_path}",
-                "reason": f"Missing command roles: {', '.join(project['missing'][:4])}",
-            }
+            _next_action(
+                "Bootstrap project commands",
+                f"magent project init --path {root_path}",
+                f"Missing command roles: {', '.join(project['missing'][:4])}",
+                category="project",
+                confidence=0.82,
+            )
         )
 
     if store is not None:
         candidates = memory_inbox(store, root_path, limit=20).get("candidates", [])
         if candidates:
             actions.append(
-                {
-                    "title": "Review memory inbox",
-                    "command": f"magent memory inbox --project {root_path}",
-                    "reason": f"{len(candidates)} candidate(s) can be accepted, edited, or rejected.",
-                }
+                _next_action(
+                    "Review memory inbox",
+                    f"magent memory inbox --project {root_path}",
+                    f"{len(candidates)} candidate(s) can be accepted, edited, or rejected.",
+                    category="memory",
+                    confidence=0.88,
+                )
             )
+    git_status = _git_status(root_path)
+    if git_status:
+        actions.append(
+            _next_action(
+                "Inspect current patch",
+                f"magent workspace status --project {root_path}",
+                f"{len(git_status)} changed path(s) in git status.",
+                category="git",
+                confidence=0.72,
+            )
+        )
     actions.append(
-        {
-            "title": "Refresh context map",
-            "command": f"magent context map --project {root_path}",
-            "reason": "See memory, project, workbench, and promotion context in one place.",
-        }
+        _next_action(
+            "Refresh context map",
+            f"magent context map --project {root_path}",
+            "See memory, project, workbench, and promotion context in one place.",
+            category="context",
+            confidence=0.65,
+        )
     )
+    actions.sort(key=lambda item: item["confidence"], reverse=True)
     return {"ok": True, "root": str(root_path), "actions": actions[:7]}
+
+
+def _next_action(title: str, command: str, reason: str, *, category: str, confidence: float) -> dict[str, Any]:
+    return {
+        "title": title,
+        "command": command,
+        "reason": reason,
+        "category": category,
+        "confidence": round(confidence, 2),
+    }
+
+
+def _git_status(root_path: Path) -> list[str]:
+    if not (root_path / ".git").exists():
+        return []
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=root_path,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return []
+    if result.returncode != 0:
+        return []
+    return [line for line in result.stdout.splitlines() if line.strip()]

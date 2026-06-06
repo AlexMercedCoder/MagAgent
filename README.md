@@ -9,7 +9,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-188%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-190%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -154,6 +154,7 @@ magent provider matrix
 magent provider recommend --goal coding
 magent provider explain mistral
 magent provider env
+magent provider test-matrix
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
 magent provider set openai --model gpt-5 --access codex
 magent provider wizard
@@ -177,7 +178,17 @@ magent model set-role review anthropic/claude-sonnet-4-5
 magent model set-role memory ollama/qwen2.5:7b
 magent model set-role cheap openrouter/deepseek/deepseek-chat
 magent model set-role fallback "ollama/qwen2.5-coder:32b,openrouter/deepseek/deepseek-chat"
+magent model health
 magent model wizard
+```
+
+Review config changes before applying them:
+
+```bash
+magent config propose "use mistral by default, manual memory, cap 2 subagents"
+magent config proposals
+magent config apply <proposal-id>
+magent events list
 ```
 
 ---
@@ -270,8 +281,10 @@ MagAgent uses a **4-tier risk system** to auto-approve safe operations and only 
 | `yolo` | Fully autonomous — no prompts |
 
 ```bash
-magent mode balanced   # Set globally
-/mode paranoid         # Change in-session
+magent permission status
+magent permission explain paranoid
+magent permission set paranoid
+/mode paranoid
 ```
 
 Pre-approve patterns in your config (e.g. trust all `git` and `pytest` commands):

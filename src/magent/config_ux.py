@@ -266,6 +266,27 @@ def model_role_summary() -> dict[str, Any]:
     return {"ok": True, "roles": {role: cfg.get("models", {}).get(role, [] if role == "fallback" else "") for role in MODEL_ROLES}}
 
 
+def model_role_health() -> dict[str, Any]:
+    """Return readiness diagnostics for configured model roles."""
+    cfg = load_global_config()
+    providers = cfg.get("providers", {})
+    rows = []
+    for role in MODEL_ROLES:
+        value = cfg.get("models", {}).get(role, [] if role == "fallback" else "")
+        values = value if isinstance(value, list) else ([value] if value else [])
+        checks = [_model_value_health(item, providers) for item in values if item]
+        rows.append(
+            {
+                "role": role,
+                "configured": bool(values),
+                "value": value,
+                "checks": checks,
+                "ok": bool(values) and all(item["ok"] for item in checks),
+            }
+        )
+    return {"ok": all(row["ok"] or not row["configured"] for row in rows), "roles": rows}
+
+
 def configure_memory(
     username: str,
     *,
@@ -294,6 +315,42 @@ def configure_memory(
         memory["extraction_model"] = extraction_model
     save_user_profile(username, profile)
     return {"ok": True, "user": username, "memory": memory}
+
+
+def _model_value_health(value: str, providers: dict[str, Any]) -> dict[str, Any]:
+    provider_id = value.split("/", 1)[0] if "/" in value else ""
+    model = value.split("/", 1)[1] if "/" in value else value
+    if not provider_id:
+        return {
+            "ok": False,
+            "value": value,
+            "provider": "",
+            "model": model,
+            "reason": "Use provider/model format for explicit role routing.",
+        }
+    metadata = PROVIDER_CATALOG.get(provider_id)
+    if not metadata:
+        return {
+            "ok": False,
+            "value": value,
+            "provider": provider_id,
+            "model": model,
+            "reason": "Unknown provider.",
+        }
+    env_var = providers.get(provider_id, {}).get("api_key_env") or metadata.get("env", "")
+    ready = bool(metadata.get("local")) or metadata.get("access_mode") in {"local", "aws"} or bool(env_var and os.environ.get(env_var))
+    access_mode = providers.get(provider_id, {}).get("access_mode") or metadata.get("access_mode", "api")
+    if provider_id == "openai" and access_mode == "codex":
+        ready = shutil.which("codex") is not None
+    return {
+        "ok": ready,
+        "value": value,
+        "provider": provider_id,
+        "model": model,
+        "env": env_var,
+        "access_mode": access_mode,
+        "reason": "ready" if ready else f"Missing runtime or environment for {provider_id}.",
+    }
 
 
 def configure_subagents(

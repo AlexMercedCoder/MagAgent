@@ -3,8 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 
 from magent import config as magent_config
-from magent import config_safety, config_ux
+from magent import config_safety, config_ux, workbench_store
 from magent.config import Config
+from magent.config_proposals import (
+    apply_config_proposal,
+    discard_config_proposal,
+    propose_config_change,
+)
+from magent.events import list_events, show_event
+from magent.permission_ux import permission_set, permission_status
+from magent.workbench_store import WorkbenchStore
 
 
 def redirect_config(monkeypatch, root: Path) -> None:
@@ -215,3 +223,38 @@ def test_config_safety_backup_diff_and_restore(tmp_path: Path, monkeypatch) -> N
     assert restored["ok"] is True
     assert shown["files"]["global"]["exists"] is True
     assert config_safety.list_config_backups()["backups"]
+
+
+def test_config_proposals_events_permissions_and_model_health(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    monkeypatch.setattr(config_safety, "CONFIG_DIR", magent_config.CONFIG_DIR)
+    monkeypatch.setattr(config_safety, "GLOBAL_CONFIG", magent_config.GLOBAL_CONFIG)
+    monkeypatch.setattr(config_safety, "BACKUP_DIR", magent_config.CONFIG_DIR / "backups")
+    monkeypatch.setattr(workbench_store, "USERS_DIR", magent_config.USERS_DIR)
+    monkeypatch.setenv("MISTRAL_API_KEY", "secret")
+    magent_config.create_user("alice")
+    magent_config.set_current_user("alice")
+    store = WorkbenchStore("alice")
+
+    proposal = propose_config_change(
+        store,
+        "make mistral the default provider, set review to mistral, use manual memory, cap 2 subagents, paranoid permissions",
+        "alice",
+    )
+    applied = apply_config_proposal(store, proposal["proposal"]["id"], "alice")
+    events = list_events(store)
+    shown = show_event(store, events["events"][0]["id"])
+    discarded = discard_config_proposal(store, proposal["proposal"]["id"])
+    permission = permission_set("alice", "balanced")
+    health = config_ux.model_role_health()
+
+    assert proposal["ok"] is True
+    assert "mistral" in proposal["proposal"]["diff"]["global"]
+    assert applied["ok"] is True
+    assert applied["backup"]["backup_id"]
+    assert events["events"][0]["kind"] == "config.applied"
+    assert shown["ok"] is True
+    assert discarded["ok"] is True
+    assert permission["mode"] == "balanced"
+    assert permission_status("alice")["mode"] == "balanced"
+    assert any(row["role"] == "review" and row["ok"] for row in health["roles"])

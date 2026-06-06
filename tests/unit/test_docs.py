@@ -5,6 +5,7 @@ from magent.docs import (
     list_topics,
     read_topic,
     render_command_reference,
+    render_config_reference,
     render_provider_reference,
     search_docs,
 )
@@ -54,3 +55,12 @@ def test_render_provider_reference_uses_provider_catalog():
     assert "# Provider Reference" in text
     assert "`mistral`" in text
     assert "`deepinfra`" in text
+
+
+def test_render_config_reference_uses_defaults_and_catalog():
+    text = render_config_reference()
+
+    assert "# Config Reference" in text
+    assert "`defaults.provider`" in text
+    assert "`balanced`" in text
+    assert "`opencode-go`" in text

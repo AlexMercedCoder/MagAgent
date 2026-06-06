@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -61,3 +63,46 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
         console.print_json(data=result)
         if not result.get("ok"):
             raise typer.Exit(1)
+
+    @provider_app.command("test-matrix")
+    def provider_test_matrix_cmd(
+        all_providers: bool = typer.Option(False, "--all", help="Include providers that are not ready."),
+    ) -> None:
+        """Test configured/ready providers and report skipped providers."""
+        from magent.cli.command_context import build_provider
+        from magent.config import get_current_user, load_config
+        from magent.config_ux import provider_matrix
+        from magent.providers import test_provider
+
+        username = get_current_user()
+        config = load_config(username)
+        rows = []
+        for item in provider_matrix()["providers"]:
+            ready = bool(item["local"] or item["env_present"] or item["access_mode"] == "aws")
+            configured = bool(item["configured"] or item["id"] == config.default_provider)
+            should_test = configured and (ready or all_providers)
+            if not should_test:
+                rows.append(
+                    {
+                        "provider": item["id"],
+                        "ready": ready,
+                        "configured": configured,
+                        "tested": False,
+                        "ok": None,
+                        "reason": "not configured or missing runtime/env",
+                    }
+                )
+                continue
+            provider_obj = build_provider(config, item["id"], item["default_model"])
+            ok = asyncio.run(test_provider(provider_obj))
+            rows.append(
+                {
+                    "provider": item["id"],
+                    "ready": ready,
+                    "configured": configured,
+                    "tested": True,
+                    "ok": ok,
+                    "reason": "passed" if ok else "provider ping failed",
+                }
+            )
+        console.print_json(data={"ok": all(row["ok"] is not False for row in rows), "providers": rows})
