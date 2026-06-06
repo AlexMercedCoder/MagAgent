@@ -6,7 +6,7 @@ MagAgent is organized around four local layers. Keeping these layers distinct ma
 
 ### CLI And TUI
 
-`magent.cli.main` composes the Typer command tree and interactive session entry points. `magent.tui` owns Rich rendering helpers such as the startup banner, response panels, status lines, and streaming output.
+`magent.cli.app` composes the Typer app and command groups. `magent.cli.main` imports that app and owns command implementations, callbacks, and interactive session entry points. `magent.tui` owns Rich rendering helpers such as the startup banner, response panels, status lines, and streaming output.
 
 Future command modules should register command groups from `magent.cli.commands.*` while preserving `magent.cli.main:app` as the console entry point.
 

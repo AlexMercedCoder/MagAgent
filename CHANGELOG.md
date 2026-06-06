@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.2
+
+- Extracted Typer app and command-group composition into `magent.cli.app` while preserving `magent.cli.main:app`.
+- Added compatibility coverage for the shared CLI app object and registered command groups.
+- Updated architecture documentation to reflect CLI app composition as a separate boundary.
+
 ## 0.14.1
 
 - Moved the tool executor implementation into `magent.tools.executor` while preserving `from magent.tools import ToolExecutor`.
