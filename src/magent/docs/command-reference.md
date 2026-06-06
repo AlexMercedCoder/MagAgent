@@ -58,6 +58,7 @@ Memory commands:
 - `magent memory quality`
 - `magent memory merge`
 - `magent memory suppress`
+- `magent memory unsuppress`
 
 Docs commands:
 
@@ -92,6 +93,7 @@ Test intelligence commands:
 - `magent test`
 - `magent test map`
 - `magent test related`
+- `magent test explain`
 - `magent test run-related`
 
 Workbench commands:

@@ -152,7 +152,7 @@ def db_list_tables(username: str, db_name: str = "default") -> dict[str, Any]:
     try:
         conn = _get_db(username, db_name)
         tables_cur = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '_%' ORDER BY name"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT GLOB '_*' ORDER BY name"
         )
         tables = [row["name"] for row in tables_cur.fetchall()]
 

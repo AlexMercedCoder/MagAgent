@@ -46,6 +46,7 @@ Before accepting a larger change, run:
 ```bash
 magent review --json --save
 magent test related src/package/module.py
+magent test explain src/package/module.py
 magent test run-related src/package/module.py
 ```
 
@@ -63,8 +64,10 @@ When recall starts feeling noisy, run:
 
 ```bash
 magent memory quality
+magent memory merge <target-id> <source-id> --preview
 magent memory merge <target-id> <source-id>
 magent memory suppress <node-id> --reason "stale preference"
+magent memory unsuppress <node-id>
 ```
 
 Run `magent memory index` after larger memory changes to refresh semantic search.

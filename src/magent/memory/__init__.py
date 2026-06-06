@@ -594,6 +594,28 @@ class MemoryManager:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def merge_preview(self, target_id: str, source_id: str) -> dict[str, Any]:
+        """Preview a memory merge without changing the graph."""
+        target = self.read_node(target_id)
+        source = self.read_node(source_id)
+        if not target or not source or not self.available:
+            return {"ok": False, "error": "Target or source node not found"}
+        merged_body = (
+            target["body"].rstrip()
+            + "\n\n## Merged Memory\n\n"
+            + source["body"].strip()
+            + f"\n\nMerged-from: [[{source_id}]]\n"
+        )
+        return {
+            "ok": True,
+            "target": target_id,
+            "source": source_id,
+            "target_chars": len(target["body"]),
+            "source_chars": len(source["body"]),
+            "merged_chars": len(merged_body),
+            "preview": truncate_to_tokens(merged_body, 300),
+        }
+
     def suppress_node(self, node_id: str, reason: str = "") -> dict[str, Any]:
         node = self.read_node(node_id)
         if not node or not self.available:
@@ -602,6 +624,22 @@ class MemoryManager:
         try:
             self._index.update_node(node_id, body)
             return {"ok": True, "id": node_id, "reason": reason}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def unsuppress_node(self, node_id: str) -> dict[str, Any]:
+        node = self.read_node(node_id)
+        if not node or not self.available:
+            return {"ok": False, "error": f"Node not found: {node_id}"}
+        body = "\n".join(
+            line
+            for line in node["body"].splitlines()
+            if line.strip().lower() != "suppressed: true"
+            and not line.strip().lower().startswith("suppressreason:")
+        ).rstrip()
+        try:
+            self._index.update_node(node_id, body + "\n")
+            return {"ok": True, "id": node_id}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 

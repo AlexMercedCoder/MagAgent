@@ -18,6 +18,8 @@ Important command paths:
 - `magent memory quality`: report duplicate-looking and suppressed memory nodes.
 - `magent memory merge <target-id> <source-id>`: merge one memory node into another.
 - `magent memory suppress <node-id>`: mark a memory node suppressed without deleting it.
+- `magent memory merge --preview <target-id> <source-id>`: preview a merge before deleting.
+- `magent memory unsuppress <node-id>`: remove suppression markers.
 - `magent checkpoint list`: list file checkpoints.
 - `magent checkpoint restore <id>`: restore a checkpoint.
 - `magent checkpoint diff <id>`: compare checkpoint contents with the current file.
@@ -29,10 +31,12 @@ Important command paths:
 - `magent code related <file>`: show related tests and import peers for a file.
 - `magent test map`: map source files to likely test files.
 - `magent test related <file>`: show likely tests for a file.
+- `magent test explain <file>`: explain why tests were selected.
 - `magent test run-related <file>`: run likely tests for a file.
 - `magent plan-run "goal"`: create a pending plan with diff/review context.
 - `magent plan-exec "goal"`: create an executable plan from current diff and optional commands.
 - `magent plan-preview <id>`: preview executable plan operations.
+- `magent plan-apply --dry-run <id>`: preview plan apply without executing operations.
 - `magent plan-show <id>`: inspect a saved plan record.
 - `magent plan-discard <id>`: discard a saved plan.
 - `magent review --json`: emit structured review findings.

@@ -717,16 +717,17 @@ def plan_list_cmd(status: str | None = typer.Option(None, "--status")):
 def plan_apply_cmd(
     plan_id: str = typer.Argument(...),
     run_checks: bool = typer.Option(False, "--run-checks"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ):
     """Mark a saved plan applied, optionally running its suggested checks."""
     from magent.workbench import apply_plan
 
-    if not yes:
+    if not dry_run and not yes:
         confirm = Prompt.ask(f"Apply plan '{plan_id}'?", choices=["y", "n"], default="n")
         if confirm != "y":
             raise typer.Exit()
-    console.print_json(data=apply_plan(_store(), plan_id, run_checks=run_checks))
+    console.print_json(data=apply_plan(_store(), plan_id, run_checks=run_checks, dry_run=dry_run))
 
 
 @app.command("plan-exec")
@@ -916,6 +917,14 @@ def test_related_cmd(file: str = typer.Argument(...), project: str = typer.Optio
 
     for test in related_tests(project, file):
         console.print(test)
+
+
+@test_app.command("explain")
+def test_explain_cmd(file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Explain why tests are related to a source file."""
+    from magent.workbench import explain_related_tests
+
+    console.print_json(data=explain_related_tests(project, file))
 
 
 @test_app.command("run-related")
@@ -1292,10 +1301,15 @@ def memory_quality_cmd():
 
 
 @memory_app.command("merge")
-def memory_merge_cmd(target_id: str = typer.Argument(...), source_id: str = typer.Argument(...)):
+def memory_merge_cmd(
+    target_id: str = typer.Argument(...),
+    source_id: str = typer.Argument(...),
+    preview: bool = typer.Option(False, "--preview"),
+):
     """Merge source memory node into target and delete source."""
     mgr, _ = _get_memory_manager()
-    console.print_json(data=mgr.merge_nodes(target_id, source_id))
+    data = mgr.merge_preview(target_id, source_id) if preview else mgr.merge_nodes(target_id, source_id)
+    console.print_json(data=data)
 
 
 @memory_app.command("suppress")
@@ -1306,6 +1320,13 @@ def memory_suppress_cmd(
     """Mark a memory node as suppressed."""
     mgr, _ = _get_memory_manager()
     console.print_json(data=mgr.suppress_node(node_id, reason=reason))
+
+
+@memory_app.command("unsuppress")
+def memory_unsuppress_cmd(node_id: str = typer.Argument(...)):
+    """Remove suppressed markers from a memory node."""
+    mgr, _ = _get_memory_manager()
+    console.print_json(data=mgr.unsuppress_node(node_id))
 
 
 # ─────────────────────────────────────────────

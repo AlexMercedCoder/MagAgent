@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-107%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-141%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -44,6 +44,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Discovers project-local test/lint/build commands and reads `.magent/config.toml`
 - Builds a lightweight local code intelligence index for symbols, imports, related files, and targeted tests
 - Supports memory quality controls for duplicate review, node merge, and stale-node suppression
+- Includes a reliability test harness for the agent loop, provider layer, DB tools, CLI smokes, and packaged docs
 - Supports executable plan records, session-level undo, command learning, saved reviews, and CI repair plans
 - Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, and static dashboards
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
@@ -238,8 +239,10 @@ magent memory traverse project_myapp    # BFS from a node
 magent memory review --diff             # Audit pending memory graph changes
 magent memory approve                   # Commit reviewed memory graph changes
 magent memory quality                   # Find duplicate-looking/suppressed nodes
+magent memory merge <target> <source> --preview # Preview duplicate memory merges
 magent memory merge <target> <source>   # Merge duplicate memory nodes
 magent memory suppress <node-id>        # Mark stale memory suppressed
+magent memory unsuppress <node-id>      # Remove suppression markers
 magent memory ui                        # Open MagGraph dashboard
 magent memory sync status               # Run MagGraph sync status
 magent memory export --out backup.json  # Export all nodes as JSON
@@ -271,12 +274,12 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Artifact workspace** — `magent artifact add/list`
 - **Project profiles** — `magent project profile/list/commands/config/command-history/command-promote`
 - **Code intelligence** — `magent code index/symbols/related`
-- **Test intelligence** — `magent test map/related/run-related`
+- **Test intelligence** — `magent test map/related/explain/run-related`
 - **Inbox and routines** — `magent inbox add/triage`, `magent routine add/run`
 - **Follow-ups** — `magent followup add/list`
 - **Knowledge commands** — `magent knowledge remember/recall/forget`
 - **Review and planning** — `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent review --json`, `magent review --save`, `magent review-show`, `magent run`
-- **Repo/test helpers** — `magent graph`, `magent code index/symbols/related`, `magent test map/related/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
+- **Repo/test helpers** — `magent graph`, `magent code index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
 - **Patch queue** — `magent patch save/list/apply/revert`
 - **Checkpoint undo** — `magent checkpoint list/show/diff/restore/restore-last/session-list/session-diff/session-restore`
 - **Built-in docs** — `magent docs list/show/search/doctor/generate-reference`
@@ -471,6 +474,7 @@ magent code symbols    # Search indexed code symbols
 magent code related    # Show related tests/import peers for a file
 magent test map        # Map source files to likely tests
 magent test related    # Show likely tests for a file
+magent test explain    # Explain why tests were selected
 magent test run-related # Run likely tests for a file
 magent test-intel      # Suggest tests for current git changes
 magent env-doctor      # Project environment checks
@@ -601,6 +605,9 @@ pytest --cov=src/magent --cov-report=term-missing
 # Lint
 ruff check src/
 
+# Built-in docs coverage
+magent docs doctor
+
 # Type check
 mypy src/magent
 ```
@@ -631,7 +638,7 @@ docs/
 ├── gateway/          # Gateway setup guides
 └── skills/           # Built-in skill SKILL.md files
 tests/
-└── unit/             # 82 unit tests (all mocked, no credentials needed)
+└── unit/             # 141 unit tests (all mocked, no credentials needed)
 ```
 
 ---

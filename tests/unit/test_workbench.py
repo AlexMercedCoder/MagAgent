@@ -1,5 +1,6 @@
 """Tests for durable workbench primitives."""
 
+import subprocess
 from pathlib import Path
 
 from magent import workbench
@@ -101,6 +102,32 @@ def test_apply_saved_patch_reports_missing_patch(tmp_path: Path, monkeypatch) ->
     result = workbench.apply_saved_patch(store, "patch_404")
 
     assert result["ok"] is False
+
+
+def test_apply_plan_dry_run_and_failed_check(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
+    store = workbench.WorkbenchStore("alice")
+    plan = store.append(
+        "plans",
+        {
+            "goal": "Check failure",
+            "root": str(tmp_path),
+            "status": "pending",
+            "checks": ["pytest -q"],
+            "operations": [],
+        },
+    )
+
+    dry = workbench.apply_plan(store, plan["id"], dry_run=True)
+    failed = workbench.apply_plan(store, plan["id"], run_checks=True)
+
+    assert dry["ok"] is True
+    assert dry["dry_run"] is True
+    assert "Plan Preview" in dry["summary"]
+    assert failed["ok"] is False
+    assert failed["plan"]["status"] == "failed"
+    assert failed["checks"][0]["returncode"] != 0
+    assert "stderr_excerpt" in failed["checks"][0]
 
 
 def test_checkpoint_restore_file(tmp_path: Path, monkeypatch) -> None:
@@ -234,9 +261,107 @@ def test_code_index_persistence_symbol_search_and_related_code(
     assert "tests/test_orders.py" in related["related"]
 
 
-def test_review_summary_has_categories(tmp_path: Path) -> None:
-    import subprocess
+def test_related_code_accepts_absolute_file_path(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    project = tmp_path / "project"
+    (project / "src").mkdir(parents=True)
+    (project / "tests").mkdir()
+    source = project / "src" / "orders.py"
+    source.write_text("def create_order():\n    return {'ok': True}\n", encoding="utf-8")
+    (project / "tests" / "test_orders.py").write_text(
+        "from src.orders import create_order\n\n"
+        "def test_create_order():\n    assert create_order()['ok']\n",
+        encoding="utf-8",
+    )
+    store = workbench.WorkbenchStore("alice")
+    workbench.save_code_index(store, project)
 
+    assert workbench.related_tests(project, source) == ["tests/test_orders.py"]
+    related = workbench.related_code(store, project, source)
+
+    assert related["file"] == "src/orders.py"
+    assert related["tests"] == ["tests/test_orders.py"]
+
+
+def test_run_related_tests_uses_argument_list(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project with spaces"
+    (project / "src").mkdir(parents=True)
+    (project / "tests").mkdir()
+    (project / "src" / "billing.py").write_text("def total():\n    return 1\n", encoding="utf-8")
+    (project / "tests" / "test_billing.py").write_text(
+        "from src.billing import total\n\n"
+        "def test_total():\n    assert total() == 1\n",
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_args(root, cmd, timeout=60):
+        captured["root"] = root
+        captured["cmd"] = cmd
+        captured["timeout"] = timeout
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(workbench, "_run_command_args", fake_run_args)
+
+    result = workbench.run_related_tests(project, "src/billing.py")
+
+    assert captured["cmd"] == ["pytest", "tests/test_billing.py"]
+    assert captured["timeout"] == 120
+    assert result["ok"] is True
+    assert result["command"] == "pytest tests/test_billing.py"
+
+
+def test_related_tests_supports_common_non_python_patterns(tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src" / "widget.ts").write_text("export const widget = 1\n", encoding="utf-8")
+    (tmp_path / "src" / "calc.go").write_text("package src\n", encoding="utf-8")
+    (tmp_path / "src" / "lib.rs").write_text("pub fn lib() {}\n", encoding="utf-8")
+    (tmp_path / "tests" / "widget.test.ts").write_text(
+        "import { widget } from '../src/widget'\n", encoding="utf-8"
+    )
+    (tmp_path / "tests" / "calc_test.go").write_text("package tests\n", encoding="utf-8")
+    (tmp_path / "tests" / "lib_test.rs").write_text("use src::lib;\n", encoding="utf-8")
+
+    mapping = workbench.test_map(tmp_path)
+    explained = workbench.explain_related_tests(tmp_path, "src/widget.ts")
+
+    assert mapping["src/widget.ts"] == ["tests/widget.test.ts"]
+    assert mapping["src/calc.go"] == ["tests/calc_test.go"]
+    assert mapping["src/lib.rs"] == ["tests/lib_test.rs"]
+    assert explained["count"] == 1
+    assert explained["tests"][0]["reasons"]
+
+
+def test_run_related_tests_uses_project_related_template(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / ".magent").mkdir()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / ".magent" / "config.toml").write_text(
+        "[commands]\ntest_related = 'uv run pytest {tests}'\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "src" / "billing.py").write_text("def total():\n    return 1\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_billing.py").write_text(
+        "from src.billing import total\n\n"
+        "def test_total():\n    assert total() == 1\n",
+        encoding="utf-8",
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_args(root, cmd, timeout=60):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(workbench, "_run_command_args", fake_run_args)
+
+    result = workbench.run_related_tests(tmp_path, "src/billing.py")
+
+    assert captured["cmd"] == ["uv", "run", "pytest", "tests/test_billing.py"]
+    assert result["ok"] is True
+
+
+def test_review_summary_has_categories(tmp_path: Path) -> None:
     subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, text=True)
     subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path)
     subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path)

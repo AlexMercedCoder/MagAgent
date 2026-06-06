@@ -619,10 +619,11 @@ Shipped workbench surfaces include:
 - Routines and follow-ups: `magent routine add/list/run`, `magent followup add/list`
 - Personal knowledge: `magent knowledge remember/recall/forget`
 - Planning and review: `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent run`, `magent review --json`, `magent review --save`, `magent review-show`
-- Repo intelligence: `magent graph`, `magent code index/symbols/related`, `magent test map/related/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
+- Repo intelligence: `magent graph`, `magent code index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
 - Patch queue: `magent patch save/list/apply/revert`
 - Checkpoint undo: `magent checkpoint list/show/diff/restore/restore-last/session-list/session-diff/session-restore`
 - Built-in documentation: `magent tutorial`, `magent docs list/show/search/doctor/generate-reference`
+- Reliability surfaces: agent-loop harness, CLI smoke coverage, provider/config/DB/logging tests, and `magent docs show testing`
 - Data/API/notes helpers: `magent data inspect`, `magent api save/list`, `magent notes`
 - Session and usage views: `magent session timeline`, `magent stats`, `magent dashboard --serve`
 
@@ -635,7 +636,7 @@ Shipped workbench surfaces include:
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.9.0"
+version = "0.10.0"
 selective_tools = true
 
 [defaults]

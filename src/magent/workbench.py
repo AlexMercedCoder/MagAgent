@@ -8,6 +8,7 @@ import difflib
 import hashlib
 import json
 import re
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -274,15 +275,30 @@ def list_plans(store: WorkbenchStore, status: str | None = None) -> list[dict[st
     return plans
 
 
-def apply_plan(store: WorkbenchStore, plan_id: str, run_checks: bool = False) -> dict[str, Any]:
+def apply_plan(
+    store: WorkbenchStore,
+    plan_id: str,
+    run_checks: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
     plans = store.read("plans", [])
     plan = next((item for item in plans if item.get("id") == plan_id), None)
     if not plan:
         return {"ok": False, "error": f"Plan not found: {plan_id}"}
+    if dry_run:
+        return {
+            "ok": True,
+            "dry_run": True,
+            "plan": plan,
+            "summary": preview_plan(plan),
+            "operations": plan.get("operations", []),
+            "checks": plan.get("checks", []),
+        }
     operation_results = []
     for op in plan.get("operations", []):
         if op.get("type") == "shell":
-            operation_results.append(_run_command(plan.get("root", "."), op.get("command", ""), timeout=120))
+            result = _run_command(plan.get("root", "."), op.get("command", ""), timeout=120)
+            operation_results.append({**result, "operation": op, "stdout_excerpt": result.get("stdout", "")[-1200:], "stderr_excerpt": result.get("stderr", "")[-1200:]})
         elif op.get("type") == "patch":
             patch_path = op.get("path", "")
             if patch_path:
@@ -304,12 +320,15 @@ def apply_plan(store: WorkbenchStore, plan_id: str, run_checks: bool = False) ->
                         "ok": applied.returncode == 0,
                         "stdout": applied.stdout,
                         "stderr": applied.stderr,
+                        "stdout_excerpt": applied.stdout[-1200:],
+                        "stderr_excerpt": applied.stderr[-1200:],
                     }
                 )
     check_results = []
     if run_checks:
         for command in plan.get("checks", []):
-            check_results.append(_run_command(plan.get("root", "."), command, timeout=120))
+            result = _run_command(plan.get("root", "."), command, timeout=120)
+            check_results.append({**result, "stdout_excerpt": result.get("stdout", "")[-1200:], "stderr_excerpt": result.get("stderr", "")[-1200:]})
             record_command_result(
                 store,
                 plan.get("root", "."),
@@ -317,15 +336,18 @@ def apply_plan(store: WorkbenchStore, plan_id: str, run_checks: bool = False) ->
                 check_results[-1].get("ok", False),
                 source="plan-apply",
             )
+    ok = all(item.get("ok", False) for item in operation_results) and all(
+        item.get("ok", False) for item in check_results
+    )
     updated = store.update_item(
         "plans",
         plan_id,
-        status="applied",
+        status="applied" if ok else "failed",
         applied_at=now_iso(),
         operation_results=operation_results,
         check_results=check_results,
     )
-    return {"ok": True, "plan": updated, "operations": operation_results, "checks": check_results}
+    return {"ok": ok, "plan": updated, "operations": operation_results, "checks": check_results}
 
 
 def show_plan(store: WorkbenchStore, plan_id: str) -> dict[str, Any] | None:
@@ -579,7 +601,7 @@ def related_code(store: WorkbenchStore, root: str | Path, file: str) -> dict[str
     root_str = str(root_path)
     indexes = [item for item in store.read("code_indexes", []) if item.get("root") == root_str]
     index = indexes[-1] if indexes else code_index(root_path)
-    rel = Path(file).as_posix()
+    rel = _project_relative_path(root_path, file)
     tests = index.get("test_map", {}).get(rel, [])
     import_peers = [
         path
@@ -591,15 +613,27 @@ def related_code(store: WorkbenchStore, root: str | Path, file: str) -> dict[str
 
 def test_map(root: str | Path) -> dict[str, list[str]]:
     root_path = Path(root).resolve()
-    tests = [p for p in root_path.rglob("test_*.py") if not _ignored(p)]
+    test_patterns = ("test_*.py", "*_test.py", "*.test.js", "*.test.ts", "*_test.go", "*_test.rs")
+    tests = [
+        p
+        for pattern in test_patterns
+        for p in root_path.rglob(pattern)
+        if not _ignored(p)
+    ]
     mapping: dict[str, list[str]] = {}
-    for source in root_path.rglob("*.py"):
-        if _ignored(source) or "test" in source.name or "tests" in source.parts:
+    source_suffixes = {".py", ".js", ".ts", ".go", ".rs"}
+    for source in root_path.rglob("*"):
+        if (
+            _ignored(source)
+            or not source.is_file()
+            or source.suffix not in source_suffixes
+            or _looks_like_test_file(source)
+        ):
             continue
         rel = source.relative_to(root_path).as_posix()
         candidates = []
         for test in tests:
-            if source.stem in test.stem or source.parent.name in test.as_posix():
+            if _test_matches_source(root_path, source, test):
                 candidates.append(test.relative_to(root_path).as_posix())
         if candidates:
             mapping[rel] = sorted(set(candidates))
@@ -607,16 +641,41 @@ def test_map(root: str | Path) -> dict[str, list[str]]:
 
 
 def related_tests(root: str | Path, file: str) -> list[str]:
-    return test_map(root).get(Path(file).as_posix(), [])
+    root_path = Path(root).resolve()
+    return test_map(root_path).get(_project_relative_path(root_path, file), [])
+
+
+def explain_related_tests(root: str | Path, file: str) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    rel = _project_relative_path(root_path, file)
+    source = root_path / rel
+    tests = related_tests(root_path, rel)
+    explanations = [
+        {
+            "test": test,
+            "reasons": _test_match_reasons(root_path, source, root_path / test),
+        }
+        for test in tests
+    ]
+    return {"root": str(root_path), "file": rel, "tests": explanations, "count": len(explanations)}
 
 
 def run_related_tests(root: str | Path, file: str) -> dict[str, Any]:
     tests = related_tests(root, file)
     if not tests:
         return {"ok": False, "error": "No related tests found", "tests": []}
-    command = "pytest " + " ".join(tests)
-    result = _run_command(root, command, timeout=120)
-    return {**result, "tests": tests}
+    root_path = Path(root).resolve()
+    command_template = _related_test_command_template(root_path, tests)
+    cmd = shlex.split(command_template) if command_template else ["pytest", *tests]
+    result = _run_command_args(root, cmd, timeout=120)
+    return {
+        "command": shlex.join(cmd),
+        "ok": result.returncode == 0,
+        "returncode": result.returncode,
+        "stdout": result.stdout[-4000:],
+        "stderr": result.stderr[-4000:],
+        "tests": tests,
+    }
 
 
 def suggest_tests(root: str | Path, changed_files: list[str] | None = None) -> list[str]:
@@ -1206,6 +1265,71 @@ def _file_sha256(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
     except Exception:
         return ""
+
+
+def _project_relative_path(root: Path, file: str | Path) -> str:
+    path = Path(file).expanduser()
+    if path.is_absolute():
+        try:
+            return path.resolve(strict=False).relative_to(root.resolve(strict=False)).as_posix()
+        except ValueError:
+            return path.as_posix()
+    return path.as_posix()
+
+
+def _looks_like_test_file(path: Path) -> bool:
+    name = path.name
+    return (
+        name.startswith("test_")
+        or name.endswith("_test.py")
+        or ".test." in name
+        or name.endswith("_test.go")
+        or name.endswith("_test.rs")
+        or "tests" in path.parts
+    )
+
+
+def _test_matches_source(root: Path, source: Path, test: Path) -> bool:
+    return bool(_test_match_reasons(root, source, test))
+
+
+def _test_match_reasons(root: Path, source: Path, test: Path) -> list[str]:
+    source_stem = source.stem
+    source_parent = source.parent.name
+    test_name = test.name
+    test_text = test.as_posix()
+    reasons = []
+    if source_stem in test.stem or source_stem in test_name:
+        reasons.append("test filename contains source stem")
+    if source_parent and source_parent in test_text:
+        reasons.append("test path contains source package/directory")
+    try:
+        rel_no_suffix = source.relative_to(root).with_suffix("").as_posix()
+        import_name = rel_no_suffix.replace("/", ".")
+        content = test.read_text(encoding="utf-8", errors="replace")
+        if import_name in content or source_stem in content:
+            reasons.append("test imports or references source symbol")
+    except Exception:
+        pass
+    return sorted(set(reasons))
+
+
+def _related_test_command_template(root: Path, tests: list[str]) -> str:
+    commands = load_project_config(root).get("commands", {})
+    if isinstance(commands, dict):
+        for key in ("test_related", "test"):
+            value = commands.get(key)
+            if isinstance(value, str) and "{tests}" in value:
+                joined = " ".join(shlex.quote(test) for test in tests)
+                return value.replace("{tests}", joined)
+    suffixes = {Path(test).suffix for test in tests}
+    if suffixes & {".js", ".ts"}:
+        return "npm test -- " + " ".join(shlex.quote(test) for test in tests)
+    if suffixes == {".go"}:
+        return "go test ./..."
+    if suffixes == {".rs"}:
+        return "cargo test"
+    return ""
 
 
 def _read_toml(path: Path) -> dict[str, Any]:

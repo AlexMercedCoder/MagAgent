@@ -1,0 +1,19 @@
+# Changelog
+
+## 0.10.0
+
+- Added reliability-focused test coverage for the agent loop, CLI smokes, config, providers, DB tools, logging, memory quality controls, and tool behavior.
+- Improved `magent plan-apply` with `--dry-run`, saved stdout/stderr excerpts, and failed status reporting when operations or checks fail.
+- Expanded test intelligence to cover `*_test.py`, JS/TS `.test.*`, Go `_test.go`, and Rust `_test.rs` patterns.
+- Added `magent test explain <file>` to show why related tests were selected.
+- Added project-local `{tests}` command template support for targeted test runs.
+- Added `magent memory merge --preview` and `magent memory unsuppress`.
+- Fixed related-code/test lookups for absolute paths inside the project.
+- Fixed SQLite table listing so user tables are no longer hidden by SQL wildcard behavior.
+
+## 0.9.0
+
+- Added code intelligence index commands.
+- Added test mapping and related-test commands.
+- Added memory quality controls.
+- Added provider role config and built-in tutorial documentation.

@@ -39,15 +39,26 @@
 
 1. Run `magent test map`.
 2. Check a file with `magent test related src/package/module.py`.
-3. Run only likely tests with `magent test run-related src/package/module.py`.
-4. Fall back to broader project commands with `magent project commands`.
+3. Ask why tests were selected with `magent test explain src/package/module.py`.
+4. Run only likely tests with `magent test run-related src/package/module.py`.
+5. Fall back to broader project commands with `magent project commands`.
 
 ## Clean noisy memory
 
 1. Run `magent memory quality`.
-2. Merge duplicates with `magent memory merge <target-id> <source-id>`.
-3. Suppress stale nodes with `magent memory suppress <node-id> --reason "stale"`.
-4. Refresh semantic search with `magent memory index`.
+2. Preview duplicate merges with `magent memory merge <target-id> <source-id> --preview`.
+3. Merge duplicates with `magent memory merge <target-id> <source-id>`.
+4. Suppress stale nodes with `magent memory suppress <node-id> --reason "stale"`.
+5. Reverse a suppression with `magent memory unsuppress <node-id>`.
+6. Refresh semantic search with `magent memory index`.
+
+## Apply plans safely
+
+1. Create an executable plan with `magent plan-exec "goal"`.
+2. Preview operations with `magent plan-preview <id>`.
+3. Dry-run apply metadata with `magent plan-apply --dry-run <id>`.
+4. Apply with `magent plan-apply --yes <id> --run-checks`.
+5. Inspect saved stdout/stderr excerpts with `magent plan-show <id>`.
 
 ## Configure provider roles
 

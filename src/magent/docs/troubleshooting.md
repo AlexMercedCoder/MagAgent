@@ -13,7 +13,9 @@ Common issues:
 - Empty semantic search: run `magent memory index`.
 - No code symbols: run `magent code index` from the project root.
 - Missing targeted tests: run `magent test map` and confirm tests use `test_*.py` names.
+- Unexpected targeted tests: run `magent test explain <file>` to see match reasons.
 - Noisy memory recall: run `magent memory quality`, then merge or suppress stale nodes.
+- Accidental memory suppression: run `magent memory unsuppress <node-id>`.
 - Model routing not used: run `magent doctor` and check the `[models]` table.
 - MagGraph errors: confirm `maggraph` is installed and the memory directory exists.
 - Gateway issues: run `magent gateway status` and inspect `magent gateway logs`.
