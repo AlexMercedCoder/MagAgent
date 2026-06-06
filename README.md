@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/brand/magagent-logo.png" alt="MagAgent logo" width="220">
+
 # 🐦‍⬛ MagAgent
 
 **A terminal-native AI coding agent with persistent memory, built for developers who want an assistant that genuinely learns them.**
