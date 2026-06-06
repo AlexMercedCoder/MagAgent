@@ -27,6 +27,8 @@ magent docs doctor
 - [Context Map](../src/magent/docs/context.md)
 - [Project Playbooks](../src/magent/docs/playbooks.md)
 - [Recipes](../src/magent/docs/recipes.md)
+- [Sandboxed Execution](../src/magent/docs/sandbox.md)
+- [Evals](../src/magent/docs/evals.md)
 - [Patch Workflow](../src/magent/docs/patch-workflow.md)
 - [Checkpoints](../src/magent/docs/checkpoints.md)
 - [Testing And Reliability](../src/magent/docs/testing.md)
@@ -36,6 +38,9 @@ magent docs doctor
 - [Memory](../src/magent/docs/memory.md)
 - [Semantic Memory](../src/magent/docs/semantic-memory.md)
 - [Tool Capability Packs](../src/magent/docs/tool-packs.md)
+- [Browser Automation](../src/magent/docs/browser.md)
+- [GitHub Workflows](../src/magent/docs/github.md)
+- [Comparisons](../src/magent/docs/comparisons.md)
 
 ## Interfaces
 
@@ -51,6 +56,12 @@ magent docs doctor
 ## Skill Docs
 
 MagAgent includes repo-level skill documentation under [`docs/skills`](skills). These files describe task-specific patterns for document generation, spreadsheets, PDFs, images, video/audio, data analysis, REST APIs, SQLite, desktop automation, and Git workflows.
+
+## Screenshots, Demos, And Examples
+
+- [Cockpit screenshot mockup](assets/magent-cockpit.svg)
+- [Cockpit demo GIF](assets/magent-cockpit-demo.gif)
+- [Release prep recipe example](examples/release-prep-recipe.json)
 
 ## Keeping Docs Current
 

@@ -37,6 +37,9 @@ release_app = typer.Typer(help="Release checks and notes", name="release")
 context_app = typer.Typer(help="Current project context map", name="context")
 recipe_app = typer.Typer(help="Reusable workflow recipes", name="recipe")
 tools_app = typer.Typer(help="Tool capability packs", name="tools")
+eval_app = typer.Typer(help="Local benchmark/eval suites", name="eval")
+github_app = typer.Typer(help="GitHub PR and issue workflows", name="github")
+browser_app = typer.Typer(help="Browser automation helpers", name="browser")
 
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
@@ -66,6 +69,9 @@ for _name, _typer in [
     ("context", context_app),
     ("recipe", recipe_app),
     ("tools", tools_app),
+    ("eval", eval_app),
+    ("github", github_app),
+    ("browser", browser_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -74,12 +80,15 @@ __all__ = [
     "app",
     "artifact_app",
     "checkpoint_app",
+    "browser_app",
     "code_app",
     "context_app",
     "data_app",
     "docs_app",
     "followup_app",
     "gateway_app",
+    "eval_app",
+    "github_app",
     "inbox_app",
     "knowledge_app",
     "mcp_app",

@@ -1,0 +1,16 @@
+{
+  "name": "release-prep",
+  "description": "Prepare a Python package release with checks, docs, build, and package verification.",
+  "steps": [
+    "Run release readiness checks.",
+    "Run docs doctor and update stale docs.",
+    "Build wheel and sdist artifacts.",
+    "Run twine check before upload."
+  ],
+  "commands": [
+    "magent release check",
+    "magent docs doctor",
+    "python -m build",
+    "python -m twine check dist/*"
+  ]
+}

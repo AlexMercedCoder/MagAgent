@@ -27,8 +27,8 @@ PACKS: dict[str, dict[str, Any]] = {
         "tools": ["run_shell", "run_python", "install_package", "search_codebase", "git_op", "system_info"],
     },
     "web": {
-        "description": "Web search, web fetch, and raw HTTP requests.",
-        "tools": ["web_search", "web_fetch", "http_request"],
+        "description": "Web search, web fetch, raw HTTP requests, and Playwright browser helpers.",
+        "tools": ["web_search", "web_fetch", "http_request", "browser_snapshot", "browser_screenshot"],
     },
     "data": {
         "description": "Structured local data helpers.",

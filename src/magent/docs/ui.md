@@ -25,6 +25,7 @@ The UI combines the same local data used by the CLI:
 - release readiness checks and release notes endpoints
 - memory inbox candidates with a promote action
 - saved patch previews and checkpoint diffs
+- cockpit state for pending plans, recipes, sandbox runs, failed commands, and release checks
 
 ## API Endpoints
 
@@ -35,6 +36,7 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/docs/topic?slug=overview`
 - `/api/release/check`
 - `/api/release/notes`
+- `/api/cockpit`
 - `/api/memory/inbox`
 - `/api/memory/promote?id=<candidate-id>`
 - `/api/patch/preview?id=<patch-id>`

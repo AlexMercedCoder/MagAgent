@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.16.0
+
+- Added sandboxed plan and recipe execution with worktree, copy, and Docker container modes.
+- Added local eval suite scaffolding and reports with `magent eval`.
+- Added optional Playwright browser snapshot and screenshot commands plus agent tools.
+- Added GitHub issue, PR, and checks commands backed by the authenticated `gh` CLI.
+- Upgraded the local UI into a cockpit view with pending plans, memory inbox, recipes, sandbox runs, failed commands, and release checks.
+- Added comparison docs, sandbox/eval/browser/GitHub docs, repo screenshot/demo assets, and recipe examples.
+- Continued modularization with sandbox, eval, browser, GitHub, cockpit, and tool capability helper modules.
+
 ## 0.15.0
 
 - Added workflow recipes with `magent recipe list/show/save/run`, including built-in release prep, bug triage, docs audit, dependency upgrade, and test repair routines.

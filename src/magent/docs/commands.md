@@ -11,6 +11,18 @@ Important command paths:
 - `magent docs search <query>`: search packaged docs.
 - `magent docs doctor`: verify built-in docs coverage.
 - `magent docs generate-reference`: generate command reference Markdown from the live CLI.
+- `magent browser snapshot <url>`: capture page title and visible text with Playwright.
+- `magent browser screenshot <url>`: capture a page screenshot with Playwright.
+- `magent eval init`: create a starter local eval suite.
+- `magent eval list`: list local eval suites.
+- `magent eval run <suite>`: run eval verification commands.
+- `magent eval report`: show recent eval reports.
+- `magent github status`: check GitHub CLI authentication.
+- `magent github issues`: list GitHub issues.
+- `magent github issue <number>`: show one issue.
+- `magent github prs`: list pull requests.
+- `magent github pr <number>`: show one pull request.
+- `magent github checks`: show pull request checks.
 - `magent tutorial`: show the built-in getting-started tutorial.
 - `magent memory stats`: show memory graph stats.
 - `magent memory index`: build semantic memory index.
@@ -48,6 +60,8 @@ Important command paths:
 - `magent plan-exec "goal"`: create an executable plan from current diff and optional commands.
 - `magent plan-preview <id>`: preview executable plan operations.
 - `magent plan-apply --dry-run <id>`: preview plan apply without executing operations.
+- `magent plan-apply <id> --sandbox worktree`: run plan operations in a sandbox.
+- `magent plan-sandbox <id>`: run or preview a plan in a worktree, copy, or container sandbox.
 - `magent plan-show <id>`: inspect a saved plan record.
 - `magent plan-discard <id>`: discard a saved plan.
 - `magent review --json`: emit structured review findings.
@@ -82,6 +96,7 @@ Important command paths:
 - `magent recipe show <name>`: inspect a workflow recipe.
 - `magent recipe save <name> --step "..." --command "..."`: save a reusable workflow.
 - `magent recipe run <name>`: create a pending execution plan from a workflow recipe.
+- `magent recipe sandbox <name>`: create and run a recipe plan in a sandbox.
 - `magent tools list`: list capability packs and enabled state.
 - `magent tools explain <pack>`: explain one capability pack.
 - `magent tools enable <pack>`: enable a capability pack for runtime tool loading.

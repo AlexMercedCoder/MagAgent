@@ -13,7 +13,7 @@ Built-in packs:
 
 - `files`: file reads, writes, diffs, archives, image reads, and docs search
 - `shell`: shell, Python subprocess, package install, search, git, and system info
-- `web`: web search, fetch, and HTTP requests
+- `web`: web search, fetch, HTTP requests, browser snapshots, and browser screenshots
 - `data`: JSON query helpers
 - `db`: named SQLite database helpers
 - `desktop`: notifications, clipboard, and open-file helpers

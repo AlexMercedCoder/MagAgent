@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-169%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-176%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -39,15 +39,18 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Documents architecture boundaries for memory, workbench, context, tools, CLI/TUI, and compatibility-safe refactors
 - Saves and runs reusable workflow recipes for release prep, bug triage, docs audits, dependency upgrades, and test repair
 - Reads project playbooks from `.magent/playbook.toml` for command routines, release checklists, review rules, and context defaults
+- Runs saved plans and recipes in worktree, copied, or Docker-backed sandboxes
+- Provides local eval suite scaffolding for repeatable repo tasks
 - Maintains a **persistent memory graph** per user that grows smarter over time
 - Connects to **11+ AI providers** (local and cloud) via a single config
-- Has **31 built-in tools** out of the box — no plugins or configuration required
+- Has **33 built-in tools** out of the box — no plugins or configuration required
 - Includes **10 pre-built skill libraries** for docs, spreadsheets, PDFs, images, video, data analysis, REST APIs, databases, desktop automation, and Git
 - Uses token-efficient context management: conversation compaction, repo-map slices, memory/skill budgets, and compressed tool results
 - Ships built-in offline documentation and self-help search through `magent docs`
 - Creates restore checkpoints before agent file writes, edits, and deletes
 - Reviews memory candidates through `magent memory inbox` before promoting selected facts into MagGraph
 - Groups runtime tools into capability packs that can be enabled or disabled with `magent tools`
+- Adds optional Playwright browser snapshots/screenshots and GitHub PR/issue commands through `gh`
 - Discovers project-local test/lint/build commands and reads `.magent/config.toml`
 - Builds a lightweight local code intelligence index for symbols, imports, related files, and targeted tests
 - Supports memory quality controls for duplicate review, node merge, and stale-node suppression
@@ -101,6 +104,8 @@ magent tutorial
 magent doctor
 magent recipe run release-prep
 magent memory inbox
+magent plan-sandbox <plan-id> --dry-run
+magent eval init
 ```
 
 ---
@@ -130,7 +135,7 @@ Configure multiple providers and switch mid-session: `/model anthropic/claude-3-
 
 ## Tools
 
-MagAgent ships with **31 built-in tools** the agent can call without any setup.
+MagAgent ships with **33 built-in tools** the agent can call without any setup.
 
 Tool capability packs make selective loading explicit:
 
@@ -139,6 +144,15 @@ magent tools list
 magent tools explain web
 magent tools disable desktop
 magent tools enable desktop
+```
+
+Browser automation is optional:
+
+```bash
+pip install "mag-agent[browser]"
+playwright install
+magent browser snapshot https://example.com
+magent browser screenshot https://example.com --out example.png
 ```
 
 ### File & Code Tools
@@ -168,6 +182,8 @@ magent tools enable desktop
 | `web_search` | DuckDuckGo search (real results, no API key) | Auto |
 | `web_fetch` | Fetch URL, clean article extraction via trafilatura | Auto |
 | `http_request` | Full HTTP client: GET/POST/PUT/PATCH/DELETE | Auto |
+| `browser_snapshot` | Capture title and visible text with Playwright | Auto |
+| `browser_screenshot` | Capture a page screenshot with Playwright | Auto |
 
 ### Data Tools
 
@@ -657,7 +673,7 @@ src/magent/
 ├── skills/           # SKILL.md discovery, matching, lockfile
 ├── subagents/        # Sub-agent runner
 ├── tokens.py         # Lightweight token budgeting helpers
-├── tools/            # 31 built-in tools (file, web, db, system)
+├── tools/            # 33 built-in tools (file, web/browser, db, system)
 │   ├── executor.py   # ToolExecutor implementation
 │   └── db.py         # SQLite named database tools
 ├── context.py        # Context map and memory promotion bridge
@@ -671,7 +687,7 @@ docs/
 ├── gateway/          # Gateway setup guides
 └── skills/           # Built-in skill SKILL.md files
 tests/
-└── unit/             # 169 unit tests (all mocked, no credentials needed)
+└── unit/             # 176 unit tests (all mocked, no credentials needed)
 ```
 
 ---

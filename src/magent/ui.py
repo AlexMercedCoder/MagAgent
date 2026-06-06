@@ -29,6 +29,7 @@ from magent.workbench import (
     workspace_clean_report,
     workspace_status,
 )
+from magent.workbench_cockpit import cockpit_state
 
 
 def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | None = None) -> dict[str, Any]:
@@ -55,6 +56,7 @@ def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | N
         "command_history": command_history(store, root)[:20],
         "memory_quality": memory_quality,
         "usage": usage_stats(),
+        "cockpit": cockpit_state(store, root),
         "docs": [{"slug": topic.slug, "title": topic.title} for topic in list_topics()],
     }
 
@@ -83,6 +85,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#f1f3f6;border-radius:
 <header><h1>MagAgent UI</h1><div id="project" class="muted"></div></header>
 <main>
 <section><h2>Workspace</h2><div class="row"><button onclick="refresh()">Refresh</button><button onclick="loadReleaseCheck()">Release Check</button></div><pre id="workspace">Loading...</pre></section>
+<section><h2>Cockpit</h2><div class="row"><button onclick="loadCockpit()">Refresh Cockpit</button></div><pre id="cockpit">Loading...</pre></section>
 <section><h2>Plans</h2><div class="metric" id="planCount">0</div><pre id="plans"></pre></section>
 <section><h2>Patches</h2><div class="metric" id="patchCount">0</div><div class="row"><input id="patchId" placeholder="Patch ID"><button onclick="inspectPatch()">Inspect</button></div><pre id="patches"></pre></section>
 <section><h2>Checkpoints</h2><div class="metric" id="checkpointCount">0</div><div class="row"><input id="checkpointId" placeholder="Checkpoint ID"><button onclick="inspectCheckpoint()">Diff</button></div><pre id="checkpoints"></pre></section>
@@ -98,6 +101,7 @@ async function refresh(){
  const data=await getJson('/api/state');
  document.getElementById('project').textContent=data.project;
  show('workspace',data.workspace); show('plans',data.plans); show('patches',data.patches);
+ show('cockpit',data.cockpit);
  show('checkpoints',data.checkpoints); show('doctor',data.project_doctor); show('memory',data.memory_quality);
  show('commands',data.command_history); show('docs',data.docs);
  document.getElementById('planCount').textContent=data.plans.length;
@@ -106,6 +110,7 @@ async function refresh(){
 }
 async function searchDocs(){const q=encodeURIComponent(document.getElementById('docQuery').value);show('docs',await getJson('/api/docs/search?q='+q))}
 async function loadReleaseCheck(){show('workspace',await getJson('/api/release/check'))}
+async function loadCockpit(){show('cockpit',await getJson('/api/cockpit'))}
 async function loadMemoryInbox(){show('memory',await getJson('/api/memory/inbox'))}
 async function promoteMemory(){const id=encodeURIComponent(document.getElementById('memoryId').value);show('memory',await getJson('/api/memory/promote?id='+id))}
 async function inspectPatch(){const id=encodeURIComponent(document.getElementById('patchId').value);show('patches',await getJson('/api/patch/preview?id='+id))}
@@ -148,6 +153,8 @@ def serve_ui(
                     self.wfile.write(payload)
                 elif parsed.path == "/api/state":
                     self._json(ui_state(store, root, username=username))
+                elif parsed.path == "/api/cockpit":
+                    self._json(cockpit_state(store, root))
                 elif parsed.path == "/api/docs/search":
                     self._json(search_docs(query.get("q", [""])[0]))
                 elif parsed.path == "/api/docs/topic":

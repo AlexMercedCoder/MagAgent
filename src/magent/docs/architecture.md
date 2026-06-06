@@ -79,6 +79,18 @@ Future tool modules should split by capability:
 
 `magent.ui` serves the local browser dashboard. `magent.ui_actions` owns actionable handlers for release checks, memory promotion, patch preview, and checkpoint diffs so browser endpoints share the same domain helpers as the CLI.
 
+`magent.workbench_cockpit` aggregates an action-oriented cockpit state for the UI, including pending plans, memory inbox candidates, recipes, sandbox runs, failed commands, and release checks.
+
+### Sandboxes, Evals, Browser, And GitHub
+
+`magent.sandbox` owns isolated plan and recipe execution in worktree, copy, and Docker container modes.
+
+`magent.evals` owns local JSON eval suites and run reports.
+
+`magent.browser` owns optional Playwright-backed browser snapshot and screenshot helpers.
+
+`magent.github_workflows` owns GitHub PR and issue commands through the authenticated `gh` CLI.
+
 ## Compatibility Rule
 
 Public imports should remain stable unless a major version explicitly changes them:

@@ -15,6 +15,11 @@ Generated from the active Typer command tree.
 - `magent artifact open`
 - `magent artifact show`
 
+## browser
+
+- `magent browser screenshot`
+- `magent browser snapshot`
+
 ## checkpoint
 
 - `magent checkpoint diff`
@@ -41,6 +46,7 @@ Generated from the active Typer command tree.
 - `magent api`
 - `magent artifact`
 - `magent ask`
+- `magent browser`
 - `magent checkpoint`
 - `magent ci`
 - `magent code`
@@ -52,8 +58,10 @@ Generated from the active Typer command tree.
 - `magent docs-brief`
 - `magent doctor`
 - `magent env-doctor`
+- `magent eval`
 - `magent followup`
 - `magent gateway`
+- `magent github`
 - `magent graph`
 - `magent inbox`
 - `magent knowledge`
@@ -69,6 +77,7 @@ Generated from the active Typer command tree.
 - `magent plan-list`
 - `magent plan-preview`
 - `magent plan-run`
+- `magent plan-sandbox`
 - `magent plan-show`
 - `magent policy`
 - `magent project`
@@ -102,6 +111,13 @@ Generated from the active Typer command tree.
 - `magent docs search`
 - `magent docs show`
 
+## eval
+
+- `magent eval init`
+- `magent eval list`
+- `magent eval report`
+- `magent eval run`
+
 ## followup
 
 - `magent followup add`
@@ -114,6 +130,15 @@ Generated from the active Typer command tree.
 - `magent gateway start`
 - `magent gateway status`
 - `magent gateway stop`
+
+## github
+
+- `magent github checks`
+- `magent github issue`
+- `magent github issues`
+- `magent github pr`
+- `magent github prs`
+- `magent github status`
 
 ## inbox
 
@@ -184,6 +209,7 @@ Generated from the active Typer command tree.
 
 - `magent recipe list`
 - `magent recipe run`
+- `magent recipe sandbox`
 - `magent recipe save`
 - `magent recipe show`
 

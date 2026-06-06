@@ -21,13 +21,16 @@ from magent.cli.app import (
     api_app,
     app,
     artifact_app,
+    browser_app,
     checkpoint_app,
     code_app,
     context_app,
     data_app,
     docs_app,
+    eval_app,
     followup_app,
     gateway_app,
+    github_app,
     inbox_app,
     knowledge_app,
     mcp_app,
@@ -704,16 +707,58 @@ def plan_apply_cmd(
     plan_id: str = typer.Argument(...),
     run_checks: bool = typer.Option(False, "--run-checks"),
     dry_run: bool = typer.Option(False, "--dry-run"),
+    sandbox: str | None = typer.Option(None, "--sandbox", help="Run in worktree, copy, or container sandbox"),
+    keep_sandbox: bool = typer.Option(False, "--keep-sandbox"),
+    image: str = typer.Option("python:3.12", "--image", help="Container image for --sandbox container"),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ):
     """Mark a saved plan applied, optionally running its suggested checks."""
     from magent.workbench import apply_plan
 
+    if sandbox:
+        from magent.sandbox import execute_plan_sandbox, sandbox_plan_preview
+
+        if dry_run:
+            console.print_json(data=sandbox_plan_preview(_store(), plan_id, mode=sandbox))
+            return
+        if not yes:
+            confirm = Prompt.ask(f"Run plan '{plan_id}' in {sandbox} sandbox?", choices=["y", "n"], default="n")
+            if confirm != "y":
+                raise typer.Exit()
+        console.print_json(
+            data=execute_plan_sandbox(
+                _store(),
+                plan_id,
+                mode=sandbox,
+                run_checks=run_checks,
+                keep=keep_sandbox,
+                image=image,
+            )
+        )
+        return
     if not dry_run and not yes:
         confirm = Prompt.ask(f"Apply plan '{plan_id}'?", choices=["y", "n"], default="n")
         if confirm != "y":
             raise typer.Exit()
     console.print_json(data=apply_plan(_store(), plan_id, run_checks=run_checks, dry_run=dry_run))
+
+
+@app.command("plan-sandbox")
+def plan_sandbox_cmd(
+    plan_id: str = typer.Argument(...),
+    mode: str = typer.Option("worktree", "--mode"),
+    run_checks: bool = typer.Option(False, "--run-checks"),
+    dry_run: bool = typer.Option(False, "--dry-run"),
+    keep: bool = typer.Option(False, "--keep"),
+    image: str = typer.Option("python:3.12", "--image"),
+):
+    """Run or preview a saved plan in an isolated sandbox."""
+    from magent.sandbox import execute_plan_sandbox, sandbox_plan_preview
+
+    if dry_run:
+        console.print_json(data=sandbox_plan_preview(_store(), plan_id, mode=mode))
+        return
+    console.print_json(data=execute_plan_sandbox(_store(), plan_id, mode=mode, run_checks=run_checks, keep=keep, image=image))
 
 
 @app.command("plan-exec")
@@ -1087,6 +1132,34 @@ def recipe_run_cmd(name: str = typer.Argument(...), project: str = typer.Option(
         raise typer.Exit(1)
 
 
+@recipe_app.command("sandbox")
+def recipe_sandbox_cmd(
+    name: str = typer.Argument(...),
+    project: str = typer.Option(".", "--project", "-p"),
+    mode: str = typer.Option("worktree", "--mode"),
+    run_checks: bool = typer.Option(False, "--run-checks"),
+    keep: bool = typer.Option(False, "--keep"),
+    image: str = typer.Option("python:3.12", "--image"),
+):
+    """Materialize a recipe and run it in a sandbox."""
+    from magent.recipes import run_recipe
+    from magent.sandbox import execute_plan_sandbox
+
+    result = run_recipe(_store(), name, project)
+    if not result.get("ok"):
+        console.print_json(data=result)
+        raise typer.Exit(1)
+    plan_id = result["plan"]["id"]
+    console.print_json(
+        data={
+            "ok": True,
+            "recipe": result["recipe"],
+            "plan": result["plan"],
+            "sandbox": execute_plan_sandbox(_store(), plan_id, mode=mode, run_checks=run_checks, keep=keep, image=image),
+        }
+    )
+
+
 @tools_app.command("list")
 def tools_list_cmd():
     """List tool capability packs and enabled state."""
@@ -1126,6 +1199,120 @@ def tools_disable_cmd(pack: str = typer.Argument(...)):
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)
+
+
+@eval_app.command("init")
+def eval_init_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Create a starter local eval suite."""
+    from magent.evals import init_evals
+
+    console.print_json(data=init_evals(project))
+
+
+@eval_app.command("list")
+def eval_list_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """List local eval suites."""
+    from magent.evals import list_eval_suites
+
+    console.print_json(data={"ok": True, "suites": list_eval_suites(project)})
+
+
+@eval_app.command("run")
+def eval_run_cmd(
+    suite: str = typer.Argument("evals/magagent-evals.json"),
+    project: str = typer.Option(".", "--project", "-p"),
+):
+    """Run a local eval suite's verification commands."""
+    from magent.evals import run_eval_suite
+
+    console.print_json(data=run_eval_suite(project, suite, store=_store()))
+
+
+@eval_app.command("report")
+def eval_report_cmd(limit: int = typer.Option(20, "--limit", "-n")):
+    """Show recent eval run reports."""
+    from magent.evals import eval_report
+
+    console.print_json(data={"ok": True, "runs": eval_report(_store(), limit=limit)})
+
+
+@browser_app.command("snapshot")
+def browser_snapshot_cmd(url: str = typer.Argument(...), wait_ms: int = typer.Option(500, "--wait-ms")):
+    """Capture title and text from a page using Playwright."""
+    from magent.browser import browser_snapshot
+
+    console.print_json(data=asyncio.run(browser_snapshot(url, wait_ms=wait_ms)))
+
+
+@browser_app.command("screenshot")
+def browser_screenshot_cmd(
+    url: str = typer.Argument(...),
+    out: str = typer.Option("magent-browser.png", "--out", "-o"),
+    wait_ms: int = typer.Option(500, "--wait-ms"),
+):
+    """Capture a page screenshot using Playwright."""
+    from magent.browser import browser_screenshot
+
+    console.print_json(data=asyncio.run(browser_screenshot(url, out, wait_ms=wait_ms)))
+
+
+@github_app.command("status")
+def github_status_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Check gh availability and authentication."""
+    from magent.github_workflows import github_status
+
+    console.print_json(data=github_status(project))
+
+
+@github_app.command("issues")
+def github_issues_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    limit: int = typer.Option(20, "--limit", "-n"),
+    state: str = typer.Option("open", "--state"),
+):
+    """List GitHub issues with gh."""
+    from magent.github_workflows import list_issues
+
+    console.print_json(data=list_issues(project, limit=limit, state=state))
+
+
+@github_app.command("prs")
+def github_prs_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    limit: int = typer.Option(20, "--limit", "-n"),
+    state: str = typer.Option("open", "--state"),
+):
+    """List GitHub pull requests with gh."""
+    from magent.github_workflows import list_prs
+
+    console.print_json(data=list_prs(project, limit=limit, state=state))
+
+
+@github_app.command("issue")
+def github_issue_cmd(number: int = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Show one GitHub issue with gh."""
+    from magent.github_workflows import show_issue
+
+    console.print_json(data=show_issue(project, number))
+
+
+@github_app.command("pr")
+def github_pr_cmd(number: int = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Show one GitHub pull request with gh."""
+    from magent.github_workflows import show_pr
+
+    console.print_json(data=show_pr(project, number))
+
+
+@github_app.command("checks")
+def github_checks_cmd(
+    number: int | None = typer.Argument(None),
+    project: str = typer.Option(".", "--project", "-p"),
+):
+    """Show pull request checks with gh."""
+    from magent.github_workflows import pr_checks
+
+    console.print_json(data=pr_checks(project, number))
 
 
 @app.command("env-doctor")

@@ -641,6 +641,28 @@ class ToolExecutor:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    async def browser_snapshot(self, url: str, wait_ms: int = 500) -> ToolResult:
+        """Capture title and body text from a page with Playwright."""
+        tier = RiskTier.AUTO
+        self._log_tool("browser_snapshot", url, tier)
+        perm = check_permission(f"Browser snapshot: {url}", tier, self.permission_mode)
+        if not perm.approved:
+            return {"ok": False, "error": "Permission denied"}
+        from magent.browser import browser_snapshot
+
+        return await browser_snapshot(url, wait_ms=wait_ms)
+
+    async def browser_screenshot(self, url: str, path: str, wait_ms: int = 500) -> ToolResult:
+        """Capture a page screenshot with Playwright."""
+        abs_path, tier = self._path_tier("write", path)
+        self._log_tool("browser_screenshot", f"{url} -> {abs_path}", tier)
+        perm = check_permission(f"Browser screenshot: {url}", tier, self.permission_mode)
+        if not perm.approved:
+            return {"ok": False, "error": "Permission denied"}
+        from magent.browser import browser_screenshot
+
+        return await browser_screenshot(url, str(abs_path), wait_ms=wait_ms)
+
     # ─────────────────────────────────────────────
     # DATA TOOLS
     # ─────────────────────────────────────────────
@@ -967,6 +989,23 @@ class ToolExecutor:
                 },
             ),
             _def(
+                "browser_snapshot",
+                "Capture page title and visible text using Playwright.",
+                {
+                    "url": ("string", "Page URL"),
+                    "wait_ms": ("integer", "Milliseconds to wait after load"),
+                },
+            ),
+            _def(
+                "browser_screenshot",
+                "Capture a page screenshot using Playwright.",
+                {
+                    "url": ("string", "Page URL"),
+                    "path": ("string", "Output image path"),
+                    "wait_ms": ("integer", "Milliseconds to wait after load"),
+                },
+            ),
+            _def(
                 "json_query",
                 "Run a JMESPath query over a JSON file or JSON string.",
                 {
@@ -1068,6 +1107,8 @@ class ToolExecutor:
             selected.add("delete_file")
         if any(word in text for word in ("web", "url", "http", "api", "docs", "latest", "search online")):
             selected.update({"web_search", "web_fetch", "http_request"})
+        if any(word in text for word in ("browser", "screenshot", "page", "playwright")):
+            selected.update({"browser_snapshot", "browser_screenshot"})
         if any(word in text for word in ("json", "csv", "sqlite", "database", "sql", "dataframe", "query")):
             selected.update(
                 {
@@ -1120,6 +1161,10 @@ class ToolExecutor:
             "web_fetch": lambda: self.web_fetch(a["url"], a.get("extract_article", True)),
             "http_request": lambda: self.http_request(
                 a["method"], a["url"], a.get("headers"), a.get("body"), a.get("timeout", 30)
+            ),
+            "browser_snapshot": lambda: self.browser_snapshot(a["url"], a.get("wait_ms", 500)),
+            "browser_screenshot": lambda: self.browser_screenshot(
+                a["url"], a["path"], a.get("wait_ms", 500)
             ),
             "json_query": lambda: self.json_query(a["path_or_json"], a["query"]),
             "system_info": lambda: self.system_info(),
