@@ -479,6 +479,34 @@ def artifact_list_cmd():
     console.print(table)
 
 
+@artifact_app.command("show")
+def artifact_show_cmd(artifact_id: str = typer.Argument(...)):
+    """Show artifact metadata."""
+    from magent.workbench import artifact_show
+
+    item = artifact_show(_store(), artifact_id)
+    if not item:
+        console.print(f"[red]Artifact not found: {artifact_id}[/red]")
+        raise typer.Exit(1)
+    console.print_json(data=item)
+
+
+@artifact_app.command("checksum")
+def artifact_checksum_cmd(artifact_id: str = typer.Argument(...)):
+    """Calculate and store an artifact checksum."""
+    from magent.workbench import artifact_checksum
+
+    console.print_json(data=artifact_checksum(_store(), artifact_id))
+
+
+@artifact_app.command("open")
+def artifact_open_cmd(artifact_id: str = typer.Argument(...)):
+    """Show the local path for an artifact."""
+    from magent.workbench import artifact_open_info
+
+    console.print_json(data=artifact_open_info(_store(), artifact_id))
+
+
 @knowledge_app.command("remember")
 def knowledge_remember_cmd(
     text: str = typer.Argument(...),
@@ -544,6 +572,33 @@ def project_config_cmd(path: str = typer.Option(".", "--path", "-p")):
     from magent.workbench import load_project_config
 
     console.print_json(data=load_project_config(path))
+
+
+@project_app.command("command-history")
+def project_command_history_cmd(path: str = typer.Option(".", "--path", "-p")):
+    """Show learned command outcomes for a project."""
+    from magent.workbench import command_history
+
+    table = Table("Time", "OK", "Source", "Command")
+    for item in command_history(_store(), path):
+        table.add_row(
+            item.get("created_at", "")[:19],
+            "yes" if item.get("ok") else "no",
+            item.get("source", ""),
+            item.get("command", ""),
+        )
+    console.print(table)
+
+
+@project_app.command("command-promote")
+def project_command_promote_cmd(
+    command: str = typer.Argument(...),
+    path: str = typer.Option(".", "--path", "-p"),
+):
+    """Promote a command into the saved project profile."""
+    from magent.workbench import promote_command
+
+    console.print_json(data=promote_command(_store(), path, command))
 
 
 @inbox_app.command("add")
@@ -670,6 +725,39 @@ def plan_apply_cmd(
     console.print_json(data=apply_plan(_store(), plan_id, run_checks=run_checks))
 
 
+@app.command("plan-exec")
+def plan_exec_cmd(
+    goal: str = typer.Argument(...),
+    project: str = typer.Option(".", "--project", "-p"),
+    command: Annotated[list[str] | None, typer.Option("--command", "-c")] = None,
+    no_diff: bool = typer.Option(False, "--no-diff"),
+):
+    """Create an executable plan from current diff and optional shell commands."""
+    from magent.workbench import save_execution_plan
+
+    item = save_execution_plan(
+        _store(),
+        project,
+        goal,
+        commands=command or [],
+        include_diff=not no_diff,
+    )
+    console.print(f"[green]✓ Saved executable plan {item['id']}[/green]")
+    console.print(item.get("preview", ""))
+
+
+@app.command("plan-preview")
+def plan_preview_cmd(plan_id: str = typer.Argument(...)):
+    """Preview executable operations for a saved plan."""
+    from magent.workbench import preview_plan, show_plan
+
+    item = show_plan(_store(), plan_id)
+    if not item:
+        console.print(f"[red]Plan not found: {plan_id}[/red]")
+        raise typer.Exit(1)
+    console.print(item.get("preview") or preview_plan(item))
+
+
 @app.command("plan-run")
 def plan_run_cmd(goal: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
     """Create a pending plan-run record with checks, review, and diff context."""
@@ -722,10 +810,17 @@ def review_cmd(
     base: str = typer.Option("HEAD", "--since"),
     project: str = typer.Option(".", "--project", "-p"),
     json_out: bool = typer.Option(False, "--json", help="Emit structured JSON"),
+    save: bool = typer.Option(False, "--save", help="Save review findings to the workbench"),
 ):
     """Review the local git diff for common risks."""
-    from magent.workbench import review_diff, review_summary
+    from magent.workbench import review_diff, review_summary, save_review
 
+    if save:
+        item = save_review(_store(), project, base)
+        console.print(f"[green]✓ Saved review {item['id']}[/green]")
+        if json_out:
+            console.print_json(data=item)
+        return
     if json_out:
         console.print_json(data=review_summary(project, base))
         return
@@ -743,6 +838,18 @@ def review_cmd(
             finding["evidence"],
         )
     console.print(table)
+
+
+@app.command("review-show")
+def review_show_cmd(review_id: str = typer.Argument(...)):
+    """Show a saved review."""
+    from magent.workbench import review_show
+
+    item = review_show(_store(), review_id)
+    if not item:
+        console.print(f"[red]Review not found: {review_id}[/red]")
+        raise typer.Exit(1)
+    console.print_json(data=item)
 
 
 @app.command("graph")
@@ -820,11 +927,12 @@ def ci_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     logs: bool = typer.Option(False, "--logs", help="Include failed-run logs and repair hints"),
     repair_plan: bool = typer.Option(False, "--repair-plan", help="Include a local CI repair plan"),
+    save: bool = typer.Option(False, "--save", help="Save repair plan to the plan ledger"),
 ):
     """Triage recent GitHub Actions runs with gh, when available."""
     from magent.workbench import ci_triage
 
-    console.print_json(data=ci_triage(project, logs=logs, repair_plan=repair_plan))
+    console.print_json(data=ci_triage(project, logs=logs, repair_plan=repair_plan, store=_store(), save=save))
 
 
 @app.command("diagnostics")
@@ -832,7 +940,7 @@ def diagnostics_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Run available local diagnostics for the current project."""
     from magent.workbench import project_diagnostics
 
-    console.print_json(data=project_diagnostics(project))
+    console.print_json(data=project_diagnostics(project, store=_store()))
 
 
 @app.command("docs-brief")
@@ -1053,6 +1161,46 @@ def checkpoint_restore_last_cmd(yes: bool = typer.Option(False, "--yes", "-y")):
         if confirm != "y":
             raise typer.Exit()
     console.print_json(data=restore_latest_checkpoint(_store()))
+
+
+@checkpoint_app.command("session-list")
+def checkpoint_session_list_cmd():
+    """List checkpoint sessions."""
+    from magent.workbench import checkpoint_sessions
+
+    table = Table("Session", "Count", "Last", "Paths")
+    for item in checkpoint_sessions(_store()):
+        table.add_row(
+            item.get("session_id", ""),
+            str(item.get("count", 0)),
+            item.get("last_at", "")[:19],
+            ", ".join(item.get("paths", []))[:120],
+        )
+    console.print(table)
+
+
+@checkpoint_app.command("session-diff")
+def checkpoint_session_diff_cmd(session_id: str = typer.Argument(...)):
+    """Show combined diffs for a checkpoint session."""
+    from magent.workbench import checkpoint_session_diff
+
+    result = checkpoint_session_diff(_store(), session_id)
+    console.print(result.get("diff") or "[dim]No diff.[/dim]")
+
+
+@checkpoint_app.command("session-restore")
+def checkpoint_session_restore_cmd(
+    session_id: str = typer.Argument(...),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+):
+    """Restore all checkpoints for a session in reverse order."""
+    from magent.workbench import checkpoint_session_restore
+
+    if not yes:
+        confirm = Prompt.ask(f"Restore checkpoint session '{session_id}'?", choices=["y", "n"], default="n")
+        if confirm != "y":
+            raise typer.Exit()
+    console.print_json(data=checkpoint_session_restore(_store(), session_id))
 
 
 @memory_app.command("review")

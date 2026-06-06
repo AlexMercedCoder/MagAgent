@@ -96,6 +96,7 @@ class AgentSession:
             show_tool_calls=config.get("ui", "show_tool_calls", default=True),
             username=username,
             tool_budgets=config.get("tool_budgets", default={}),
+            session_id=self.session_id,
         )
 
         # MCP servers (optional — connect only if configured)

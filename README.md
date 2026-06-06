@@ -42,6 +42,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Ships built-in offline documentation and self-help search through `magent docs`
 - Creates restore checkpoints before agent file writes, edits, and deletes
 - Discovers project-local test/lint/build commands and reads `.magent/config.toml`
+- Supports executable plan records, session-level undo, command learning, saved reviews, and CI repair plans
 - Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, and static dashboards
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
 
@@ -262,15 +263,16 @@ MagAgent's workbench stores practical productivity state under each user profile
 
 - **Task ledger** — `magent task add/list/done/report`
 - **Artifact workspace** — `magent artifact add/list`
-- **Project profiles** — `magent project profile/list/commands/config`
+- **Project profiles** — `magent project profile/list/commands/config/command-history/command-promote`
 - **Inbox and routines** — `magent inbox add/triage`, `magent routine add/run`
 - **Follow-ups** — `magent followup add/list`
 - **Knowledge commands** — `magent knowledge remember/recall/forget`
-- **Review and planning** — `magent plan --save`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent review --json`, `magent run`
-- **Repo/test helpers** — `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan`
+- **Review and planning** — `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent review --json`, `magent review --save`, `magent review-show`, `magent run`
+- **Repo/test helpers** — `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
 - **Patch queue** — `magent patch save/list/apply/revert`
-- **Checkpoint undo** — `magent checkpoint list/show/diff/restore/restore-last`
+- **Checkpoint undo** — `magent checkpoint list/show/diff/restore/restore-last/session-list/session-diff/session-restore`
 - **Built-in docs** — `magent docs list/show/search/doctor/generate-reference`
+- **Artifact registry** — `magent artifact add/list/show/open/checksum`
 - **Data/API/notes** — `magent data inspect`, `magent api save/list`, `magent notes`
 - **Session and usage** — `magent session timeline`, `magent stats`, `magent dashboard`, `magent dashboard --serve`
 

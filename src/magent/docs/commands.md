@@ -21,10 +21,23 @@ Important command paths:
 - `magent project commands`: show discovered project test/lint/build commands.
 - `magent project config`: show `.magent/config.toml` values.
 - `magent plan-run "goal"`: create a pending plan with diff/review context.
+- `magent plan-exec "goal"`: create an executable plan from current diff and optional commands.
+- `magent plan-preview <id>`: preview executable plan operations.
 - `magent plan-show <id>`: inspect a saved plan record.
 - `magent plan-discard <id>`: discard a saved plan.
 - `magent review --json`: emit structured review findings.
+- `magent review --save`: save structured review findings.
+- `magent review-show <id>`: inspect a saved review.
 - `magent ci --repair-plan`: include a local CI repair plan.
+- `magent ci --repair-plan --save`: save a CI repair plan to the plan ledger.
+- `magent project command-history`: show learned command outcomes.
+- `magent project command-promote <command>`: save a command into the project profile.
+- `magent artifact show <id>`: show artifact metadata.
+- `magent artifact checksum <id>`: calculate artifact checksum.
+- `magent artifact open <id>`: show artifact path/open metadata.
+- `magent checkpoint session-list`: list checkpoint sessions.
+- `magent checkpoint session-diff <session-id>`: show combined session diff.
+- `magent checkpoint session-restore <session-id>`: restore a session's checkpoints.
 - `magent plan --save "goal"`: save a draft plan.
 - `magent patch save`: save the current git diff.
 - `magent patch apply <id>`: apply a saved patch.

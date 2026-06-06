@@ -15,12 +15,17 @@ Useful commands:
 - `magent knowledge remember/recall/forget`
 - `magent plan --save`
 - `magent plan-run`
+- `magent plan-exec`
+- `magent plan-preview`
 - `magent plan-list`
 - `magent plan-show`
 - `magent plan-apply`
 - `magent plan-discard`
 - `magent patch save/list/apply/revert`
 - `magent checkpoint list/show/diff/restore/restore-last`
+- `magent review --save`
+- `magent review-show`
+- `magent artifact show/open/checksum`
 - `magent dashboard`
 - `magent dashboard --serve`
 

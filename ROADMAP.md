@@ -224,7 +224,7 @@ repo_map_languages = ["python", "typescript", "go"]
 
 ### 1.3 · Checkpoint & Undo System
 
-**Status:** Expanded in v0.7.0. MagAgent snapshots files before writes/edits/deletes, lists and restores checkpoints, shows checkpoint diffs, and can restore the latest checkpoint.
+**Status:** Expanded in v0.8.0. MagAgent snapshots files before writes/edits/deletes, lists and restores checkpoints, shows checkpoint diffs, restores the latest checkpoint, and can diff/restore all checkpoints for an agent session.
 
 **Why:** Before any file write, edit, or delete, snapshot the affected files. Users can then `/undo` the last N operations and restore exactly. This is the #1 trust-building feature — Cline's human-in-the-loop proved it decisively.
 
@@ -312,7 +312,7 @@ Capabilities that significantly expand what MagAgent can do autonomously.
 
 ### 2.2 · Plan Mode (Draft Before Execute)
 
-**Status:** MVP expanded in v0.7.0. `magent plan --save` stores durable plans, `magent plan-run` creates pending plan records with diff/review context, `magent plan-show` inspects them, `magent plan-discard` discards them, and `magent plan-apply` marks approved plans applied with optional suggested checks. Full intercepted tool execution remains future work.
+**Status:** MVP expanded in v0.8.0. `magent plan --save` stores durable plans, `magent plan-run` creates pending plan records with diff/review context, `magent plan-exec` buffers current diffs and shell commands as executable operations, `magent plan-preview` inspects them, `magent plan-discard` discards them, and `magent plan-apply` executes buffered operations and optional checks. Full intercepted live tool execution remains future work.
 
 **Why:** For complex multi-file tasks, show the user a complete plan with diff previews before applying any changes. This reduces mistakes on large refactors.
 
@@ -358,7 +358,7 @@ semantic_provider = "ollama"
 
 ### 2.4 · Workspace / Project Profiles
 
-**Status:** Expanded in v0.7.0. Project profiles now discover commands from package manifests, Makefiles, Justfiles, language manifests, and project-local `.magent/config.toml`; `magent project commands` and `magent project config` expose that information.
+**Status:** Expanded in v0.8.0. Project profiles discover commands from package manifests, Makefiles, Justfiles, language manifests, and project-local `.magent/config.toml`; diagnostics records command outcomes; `magent project command-history` and `magent project command-promote` support command learning.
 
 **Why:** Different projects have different rules — different linters, different shell commands to trust, different models to use. A per-project `.magent/config.toml` file lets the agent adapt automatically.
 
@@ -576,7 +576,7 @@ timeout_seconds = 60
 
 ### 3.7 · Built-In Documentation and Self-Help
 
-**Status:** Expanded in v0.7.0. MagAgent ships packaged Markdown docs, exposes `magent docs list/show/search/doctor/generate-reference`, includes an internal `magent_docs_search` tool, and has tests around docs packaging/search.
+**Status:** Expanded in v0.8.0. MagAgent ships packaged Markdown docs and recipes, exposes `magent docs list/show/search/doctor/generate-reference`, includes an internal `magent_docs_search` tool, and has tests around docs packaging/search.
 
 **Why:** MagAgent should be able to explain itself without requiring the user to leave the terminal, open the README, or guess command syntax. A competitive general-use agent needs robust internal documentation for its own commands, configuration, workflows, memory model, safety model, and troubleshooting paths.
 

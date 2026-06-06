@@ -115,8 +115,33 @@ def artifact_add(store: WorkbenchStore, path: str, kind: str = "", title: str = 
             "path": str(p),
             "kind": kind or p.suffix.lstrip(".") or "file",
             "exists": p.exists(),
+            "checksum": _file_sha256(p) if p.exists() and p.is_file() else "",
         },
     )
+
+
+def artifact_show(store: WorkbenchStore, artifact_id: str) -> dict[str, Any] | None:
+    return next((item for item in store.read("artifacts", []) if item.get("id") == artifact_id), None)
+
+
+def artifact_checksum(store: WorkbenchStore, artifact_id: str) -> dict[str, Any]:
+    item = artifact_show(store, artifact_id)
+    if not item:
+        return {"ok": False, "error": f"Artifact not found: {artifact_id}"}
+    path = Path(item.get("path", "")).expanduser().resolve(strict=False)
+    if not path.exists() or not path.is_file():
+        return {"ok": False, "error": f"Artifact file not found: {path}"}
+    checksum = _file_sha256(path)
+    store.update_item("artifacts", artifact_id, checksum=checksum, exists=True)
+    return {"ok": True, "id": artifact_id, "path": str(path), "sha256": checksum}
+
+
+def artifact_open_info(store: WorkbenchStore, artifact_id: str) -> dict[str, Any]:
+    item = artifact_show(store, artifact_id)
+    if not item:
+        return {"ok": False, "error": f"Artifact not found: {artifact_id}"}
+    path = Path(item.get("path", "")).expanduser().resolve(strict=False)
+    return {"ok": path.exists(), "path": str(path), "kind": item.get("kind", ""), "exists": path.exists()}
 
 
 def remember(store: WorkbenchStore, text: str, tags: list[str] | None = None) -> dict:
@@ -253,18 +278,53 @@ def apply_plan(store: WorkbenchStore, plan_id: str, run_checks: bool = False) ->
     plan = next((item for item in plans if item.get("id") == plan_id), None)
     if not plan:
         return {"ok": False, "error": f"Plan not found: {plan_id}"}
+    operation_results = []
+    for op in plan.get("operations", []):
+        if op.get("type") == "shell":
+            operation_results.append(_run_command(plan.get("root", "."), op.get("command", ""), timeout=120))
+        elif op.get("type") == "patch":
+            patch_path = op.get("path", "")
+            if patch_path:
+                check = _run_git_result(plan.get("root", "."), ["apply", "--check", patch_path])
+                if check.returncode != 0:
+                    operation_results.append(
+                        {
+                            "operation": op,
+                            "ok": False,
+                            "stdout": check.stdout,
+                            "stderr": check.stderr,
+                        }
+                    )
+                    continue
+                applied = _run_git_result(plan.get("root", "."), ["apply", patch_path])
+                operation_results.append(
+                    {
+                        "operation": op,
+                        "ok": applied.returncode == 0,
+                        "stdout": applied.stdout,
+                        "stderr": applied.stderr,
+                    }
+                )
     check_results = []
     if run_checks:
         for command in plan.get("checks", []):
             check_results.append(_run_command(plan.get("root", "."), command, timeout=120))
+            record_command_result(
+                store,
+                plan.get("root", "."),
+                command,
+                check_results[-1].get("ok", False),
+                source="plan-apply",
+            )
     updated = store.update_item(
         "plans",
         plan_id,
         status="applied",
         applied_at=now_iso(),
+        operation_results=operation_results,
         check_results=check_results,
     )
-    return {"ok": True, "plan": updated, "checks": check_results}
+    return {"ok": True, "plan": updated, "operations": operation_results, "checks": check_results}
 
 
 def show_plan(store: WorkbenchStore, plan_id: str) -> dict[str, Any] | None:
@@ -291,6 +351,59 @@ def save_plan_run(store: WorkbenchStore, root: str | Path, goal: str) -> dict[st
         diff_stat=diff_stat,
         review=review_summary(root_path),
     ) or item
+
+
+def save_execution_plan(
+    store: WorkbenchStore,
+    root: str | Path,
+    goal: str,
+    commands: list[str] | None = None,
+    include_diff: bool = True,
+) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    item = save_plan(store, root_path, goal)
+    operations = []
+    if include_diff:
+        diff = _run_git(root_path, ["diff"])
+        if diff.strip():
+            patch_dir = store.root / "plan_patches"
+            patch_dir.mkdir(parents=True, exist_ok=True)
+            patch_path = patch_dir / f"{item['id']}.patch"
+            patch_path.write_text(diff, encoding="utf-8")
+            operations.append({"type": "patch", "path": str(patch_path), "bytes": len(diff.encode())})
+    for command in commands or []:
+        operations.append({"type": "shell", "command": command})
+    return store.update_item(
+        "plans",
+        item["id"],
+        status="pending",
+        mode="execution",
+        operations=operations,
+        preview=preview_plan({**item, "operations": operations}),
+    ) or item
+
+
+def preview_plan(plan: dict[str, Any]) -> str:
+    lines = [
+        f"# Plan Preview: {plan.get('goal', plan.get('id', 'plan'))}",
+        "",
+        f"- ID: `{plan.get('id', '')}`",
+        f"- Status: `{plan.get('status', '')}`",
+        f"- Root: `{plan.get('root', '')}`",
+        "",
+        "## Operations",
+    ]
+    operations = plan.get("operations") or []
+    if not operations:
+        lines.append("- No executable operations buffered.")
+    for index, op in enumerate(operations, start=1):
+        if op.get("type") == "shell":
+            lines.append(f"{index}. Run `{op.get('command', '')}`")
+        elif op.get("type") == "patch":
+            lines.append(f"{index}. Apply patch `{op.get('path', '')}` ({op.get('bytes', 0)} bytes)")
+        else:
+            lines.append(f"{index}. {op}")
+    return "\n".join(lines)
 
 
 def review_diff(root: str | Path, base: str = "HEAD") -> list[dict[str, Any]]:
@@ -348,6 +461,23 @@ def review_summary(root: str | Path, base: str = "HEAD") -> dict[str, Any]:
         "categories": dict(categories),
         "changed_files": _run_git(root, ["diff", "--name-only", base, "--"]).splitlines(),
     }
+
+
+def save_review(store: WorkbenchStore, root: str | Path, base: str = "HEAD") -> dict[str, Any]:
+    summary = review_summary(root, base)
+    return store.append(
+        "reviews",
+        {
+            "root": str(Path(root).resolve()),
+            "base": base,
+            "summary": summary,
+            "status": "open",
+        },
+    )
+
+
+def review_show(store: WorkbenchStore, review_id: str) -> dict[str, Any] | None:
+    return next((item for item in store.read("reviews", []) if item.get("id") == review_id), None)
 
 
 def repo_graph(root: str | Path) -> dict[str, Any]:
@@ -431,6 +561,7 @@ def create_checkpoint(
     root: str | Path,
     path: str | Path,
     operation: str,
+    session_id: str = "manual",
 ) -> dict[str, Any]:
     store = WorkbenchStore(username)
     target = Path(path).expanduser().resolve(strict=False)
@@ -453,6 +584,7 @@ def create_checkpoint(
         "checkpoints",
         {
             "operation": operation,
+            "session_id": session_id,
             "root": str(root_path),
             "path": str(target),
             "existed": existed,
@@ -528,6 +660,100 @@ def restore_latest_checkpoint(store: WorkbenchStore) -> dict[str, Any]:
     return restore_checkpoint(store, items[0]["id"])
 
 
+def checkpoint_sessions(store: WorkbenchStore) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    for item in store.read("checkpoints", []):
+        session_id = item.get("session_id") or "manual"
+        entry = grouped.setdefault(
+            session_id,
+            {
+                "session_id": session_id,
+                "count": 0,
+                "paths": set(),
+                "first_at": item.get("created_at"),
+                "last_at": item.get("created_at"),
+            },
+        )
+        entry["count"] += 1
+        entry["paths"].add(item.get("path", ""))
+        entry["last_at"] = item.get("created_at") or entry["last_at"]
+    result = []
+    for entry in grouped.values():
+        entry["paths"] = sorted(p for p in entry["paths"] if p)
+        result.append(entry)
+    return sorted(result, key=lambda item: item.get("last_at") or "", reverse=True)
+
+
+def checkpoint_session_diff(store: WorkbenchStore, session_id: str) -> dict[str, Any]:
+    diffs = []
+    for item in store.read("checkpoints", []):
+        if (item.get("session_id") or "manual") != session_id:
+            continue
+        diff = checkpoint_diff(store, item["id"])
+        if diff.get("ok") and diff.get("diff"):
+            diffs.append(diff)
+    return {
+        "ok": True,
+        "session_id": session_id,
+        "diff": "\n".join(item["diff"] for item in diffs),
+        "count": len(diffs),
+    }
+
+
+def checkpoint_session_restore(store: WorkbenchStore, session_id: str) -> dict[str, Any]:
+    items = [
+        item
+        for item in reversed(store.read("checkpoints", []))
+        if (item.get("session_id") or "manual") == session_id
+    ]
+    results = [restore_checkpoint(store, item["id"]) for item in items]
+    return {"ok": all(item.get("ok") for item in results), "session_id": session_id, "results": results}
+
+
+def record_command_result(
+    store: WorkbenchStore,
+    root: str | Path,
+    command: str,
+    ok: bool,
+    source: str = "manual",
+) -> dict[str, Any]:
+    return store.append(
+        "command_history",
+        {
+            "root": str(Path(root).resolve()),
+            "command": command,
+            "ok": ok,
+            "source": source,
+        },
+    )
+
+
+def command_history(store: WorkbenchStore, root: str | Path | None = None) -> list[dict[str, Any]]:
+    items = store.read("command_history", [])
+    if root:
+        root_str = str(Path(root).resolve())
+        items = [item for item in items if item.get("root") == root_str]
+    return list(reversed(items))
+
+
+def promote_command(store: WorkbenchStore, root: str | Path, command: str) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    profiles = store.read("projects", [])
+    profile = next((item for item in profiles if item.get("root") == str(root_path)), None)
+    if not profile:
+        profile = save_project_profile(store, root_path)
+        profiles = store.read("projects", [])
+    commands = list(profile.get("commands", []))
+    if command not in commands:
+        commands.append(command)
+    for item in profiles:
+        if item.get("root") == str(root_path):
+            item["commands"] = commands
+            item["updated_at"] = now_iso()
+    store.write("projects", profiles)
+    return {"ok": True, "root": str(root_path), "command": command, "commands": commands}
+
+
 def env_doctor(root: str | Path) -> list[dict[str, Any]]:
     root_path = Path(root).resolve()
     checks = []
@@ -539,7 +765,13 @@ def env_doctor(root: str | Path) -> list[dict[str, Any]]:
     return checks
 
 
-def ci_triage(root: str | Path, logs: bool = False, repair_plan: bool = False) -> dict[str, Any]:
+def ci_triage(
+    root: str | Path,
+    logs: bool = False,
+    repair_plan: bool = False,
+    store: WorkbenchStore | None = None,
+    save: bool = False,
+) -> dict[str, Any]:
     gh = shutil.which("gh")
     if not gh:
         return {"ok": False, "error": "GitHub CLI not found"}
@@ -578,6 +810,21 @@ def ci_triage(root: str | Path, logs: bool = False, repair_plan: bool = False) -
         data["repair_hints"] = _ci_repair_hints(data["failed_log"])
     if repair_plan:
         data["repair_plan"] = ci_repair_plan(root, data)
+        if save and store is not None:
+            data["saved_plan"] = store.append(
+                "plans",
+                {
+                    "goal": data["repair_plan"]["goal"],
+                    "root": str(Path(root).resolve()),
+                    "project": Path(root).resolve().name,
+                    "status": "pending",
+                    "mode": "ci-repair",
+                    "steps": data["repair_plan"]["steps"],
+                    "checks": [data["repair_plan"].get("reproduce", "")],
+                    "ci": data.get("failed_run"),
+                    "repair_hints": data["repair_plan"].get("hints", []),
+                },
+            )
     return data
 
 
@@ -603,7 +850,7 @@ def ci_repair_plan(root: str | Path, triage: dict[str, Any] | None = None) -> di
     }
 
 
-def project_diagnostics(root: str | Path) -> list[dict[str, Any]]:
+def project_diagnostics(root: str | Path, store: WorkbenchStore | None = None) -> list[dict[str, Any]]:
     root_path = Path(root).resolve()
     checks: list[tuple[str, list[str], bool]] = []
     if (root_path / "pyproject.toml").exists() and shutil.which("ruff"):
@@ -616,7 +863,7 @@ def project_diagnostics(root: str | Path) -> list[dict[str, Any]]:
         checks.append(("tsc", ["npx", "tsc", "--noEmit"], True))
     if (root_path / "Cargo.toml").exists() and shutil.which("cargo"):
         checks.append(("cargo check", ["cargo", "check"], True))
-    return [
+    results = [
         {
             "name": name,
             "ok": result.returncode == 0,
@@ -626,6 +873,10 @@ def project_diagnostics(root: str | Path) -> list[dict[str, Any]]:
         for name, cmd, _ in checks
         for result in [_run_command_args(root_path, cmd, timeout=90)]
     ]
+    if store is not None:
+        for item in results:
+            record_command_result(store, root_path, item["name"], item["ok"], source="diagnostics")
+    return results
 
 
 def docs_brief(root: str | Path) -> str:
@@ -825,6 +1076,13 @@ def _run_command(root: str | Path, command: str, timeout: int = 60) -> dict[str,
 
 def _run_command_args(root: str | Path, cmd: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=timeout)
+
+
+def _file_sha256(path: Path) -> str:
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except Exception:
+        return ""
 
 
 def _read_toml(path: Path) -> dict[str, Any]:

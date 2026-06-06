@@ -60,6 +60,7 @@ class ToolExecutor:
         show_tool_calls: bool = True,
         username: str = "default",
         tool_budgets: dict[str, int] | None = None,
+        session_id: str = "manual",
     ):
         self.cwd = cwd
         self.permission_mode = permission_mode
@@ -67,12 +68,13 @@ class ToolExecutor:
         self.show_tool_calls = show_tool_calls
         self.username = username
         self.tool_budgets = {**DEFAULT_TOOL_BUDGETS, **(tool_budgets or {})}
+        self.session_id = session_id
 
     def _checkpoint(self, abs_path: Path, operation: str) -> str:
         try:
             from magent.workbench import create_checkpoint
 
-            item = create_checkpoint(self.username, self.cwd, abs_path, operation)
+            item = create_checkpoint(self.username, self.cwd, abs_path, operation, self.session_id)
             return str(item.get("id", ""))
         except Exception:
             return ""

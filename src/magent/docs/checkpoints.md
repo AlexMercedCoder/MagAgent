@@ -9,6 +9,9 @@ Useful commands:
 - `magent checkpoint diff <id>`
 - `magent checkpoint restore <id>`
 - `magent checkpoint restore-last`
+- `magent checkpoint session-list`
+- `magent checkpoint session-diff <session-id>`
+- `magent checkpoint session-restore <session-id>`
 
 Checkpoints live under:
 

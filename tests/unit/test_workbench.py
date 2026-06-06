@@ -77,6 +77,23 @@ def test_plan_show_and_discard(tmp_path: Path, monkeypatch) -> None:
     assert result["plan"]["status"] == "discarded"
 
 
+def test_save_execution_plan_with_command(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
+    store = workbench.WorkbenchStore("alice")
+
+    item = workbench.save_execution_plan(
+        store,
+        tmp_path,
+        "Run checks",
+        commands=["python --version"],
+        include_diff=False,
+    )
+
+    assert item["mode"] == "execution"
+    assert item["operations"][0]["type"] == "shell"
+    assert "python --version" in item["preview"]
+
+
 def test_apply_saved_patch_reports_missing_patch(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
     store = workbench.WorkbenchStore("alice")
@@ -131,6 +148,27 @@ def test_checkpoint_restore_created_file_removes_it(tmp_path: Path, monkeypatch)
     assert not target.exists()
 
 
+def test_checkpoint_session_restore(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
+    target = tmp_path / "project" / "session.py"
+    target.parent.mkdir()
+    target.write_text("before", encoding="utf-8")
+    checkpoint = workbench.create_checkpoint(
+        "alice", target.parent, target, "edit_file", session_id="sess1"
+    )
+    target.write_text("after", encoding="utf-8")
+    store = workbench.WorkbenchStore("alice")
+
+    sessions = workbench.checkpoint_sessions(store)
+    diff = workbench.checkpoint_session_diff(store, "sess1")
+    restored = workbench.checkpoint_session_restore(store, "sess1")
+
+    assert sessions[0]["session_id"] == "sess1"
+    assert checkpoint["id"] in [item["checkpoint"] for item in restored["results"]]
+    assert "-before" in diff["diff"]
+    assert target.read_text(encoding="utf-8") == "before"
+
+
 def test_repo_graph_and_data_inspect(tmp_path: Path) -> None:
     (tmp_path / "app.py").write_text("import json\nfrom pathlib import Path\n", encoding="utf-8")
     csv_path = tmp_path / "data.csv"
@@ -161,6 +199,34 @@ def test_review_summary_has_categories(tmp_path: Path) -> None:
 
     assert summary["findings"]
     assert "debugging" in summary["categories"] or "tests" in summary["categories"]
+
+
+def test_saved_review_and_command_learning_and_artifact(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
+    store = workbench.WorkbenchStore("alice")
+    artifact_path = tmp_path / "report.txt"
+    artifact_path.write_text("hello", encoding="utf-8")
+
+    review = workbench.save_review(store, tmp_path)
+    history = workbench.record_command_result(store, tmp_path, "pytest -q", True)
+    promoted = workbench.promote_command(store, tmp_path, "pytest -q")
+    artifact = workbench.artifact_add(store, str(artifact_path))
+    checksum = workbench.artifact_checksum(store, artifact["id"])
+
+    assert workbench.review_show(store, review["id"]) is not None
+    assert workbench.command_history(store, tmp_path)[0]["id"] == history["id"]
+    assert "pytest -q" in promoted["commands"]
+    assert checksum["ok"] is True
+    assert workbench.artifact_show(store, artifact["id"]) is not None
+
+
+def test_ci_repair_plan_guess(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+
+    plan = workbench.ci_repair_plan(tmp_path, {"failed_log": "pytest failed"})
+
+    assert plan["reproduce"] == "pytest -q"
+    assert plan["steps"]
 
 
 def test_notes_ingest_creates_tasks_and_decisions(tmp_path: Path, monkeypatch) -> None:

@@ -6,6 +6,8 @@ Core commands:
 
 - `magent ask`
 - `magent plan`
+- `magent plan-exec`
+- `magent plan-preview`
 - `magent plan-run`
 - `magent plan-list`
 - `magent plan-apply`
@@ -13,6 +15,7 @@ Core commands:
 - `magent plan-discard`
 - `magent run`
 - `magent review`
+- `magent review-show`
 - `magent graph`
 - `magent test-intel`
 - `magent env-doctor`
@@ -69,6 +72,9 @@ Checkpoint commands:
 - `magent checkpoint diff`
 - `magent checkpoint restore`
 - `magent checkpoint restore-last`
+- `magent checkpoint session-list`
+- `magent checkpoint session-diff`
+- `magent checkpoint session-restore`
 
 Workbench commands:
 
@@ -80,11 +86,16 @@ Workbench commands:
 - `magent artifact`
 - `magent artifact add`
 - `magent artifact list`
+- `magent artifact show`
+- `magent artifact open`
+- `magent artifact checksum`
 - `magent project`
 - `magent project profile`
 - `magent project list`
 - `magent project commands`
 - `magent project config`
+- `magent project command-history`
+- `magent project command-promote`
 - `magent inbox`
 - `magent inbox add`
 - `magent inbox list`
