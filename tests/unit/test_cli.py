@@ -17,7 +17,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.10.0" in version.output
+    assert "MagAgent 0.11.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -74,6 +74,62 @@ def test_cli_code_and_test_commands(tmp_path: Path, monkeypatch) -> None:
     assert "tests/test_orders.py" in related_tests.output
     assert explained.exit_code == 0
     assert json.loads(explained.output)["count"] == 1
+
+
+def test_cli_project_patch_workspace_and_release_commands(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / ".magent").mkdir()
+    (project / ".magent" / "config.toml").write_text(
+        "[commands]\ntest = 'pytest -q'\nlint = 'ruff check src tests'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("cli-test")
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(
+        workbench,
+        "release_check",
+        lambda store, project: {"ok": True, "checks": [{"name": "tests", "ok": True}]},
+    )
+    monkeypatch.setattr(
+        workbench,
+        "release_notes",
+        lambda project, since="HEAD~5": {"ok": True, "markdown": "# Notes"},
+    )
+    patch = store.append(
+        "patches",
+        {
+            "name": "demo",
+            "path": str(project / "demo.patch"),
+            "bytes": 20,
+            "root": str(project),
+        },
+    )
+    (project / "demo.patch").write_text("diff --git a/a b/a\n+++ b/a\n+new\n", encoding="utf-8")
+
+    roles = runner.invoke(cli_main.app, ["project", "roles", "--path", str(project)])
+    doctor = runner.invoke(cli_main.app, ["project", "doctor", "--path", str(project)])
+    preview = runner.invoke(cli_main.app, ["patch", "preview", patch["id"]])
+    explain = runner.invoke(cli_main.app, ["patch", "explain", patch["id"]])
+    workspace_status = runner.invoke(cli_main.app, ["workspace", "status", "--project", str(project)])
+    release_check = runner.invoke(cli_main.app, ["release", "check", "--project", str(project)])
+    release_notes = runner.invoke(cli_main.app, ["release", "notes", "--project", str(project)])
+
+    assert roles.exit_code == 0
+    assert json.loads(roles.output)["test"] == "pytest -q"
+    assert doctor.exit_code == 0
+    assert "missing" in json.loads(doctor.output)
+    assert preview.exit_code == 0
+    assert json.loads(preview.output)["stats"]["added"] == 1
+    assert explain.exit_code == 0
+    assert "changes" in json.loads(explain.output)["summary"]
+    assert workspace_status.exit_code == 0
+    assert json.loads(workspace_status.output)["patches"] == 1
+    assert release_check.exit_code == 0
+    assert json.loads(release_check.output)["ok"] is True
+    assert release_notes.exit_code == 0
+    assert json.loads(release_notes.output)["markdown"] == "# Notes"
 
 
 def test_cli_memory_quality(monkeypatch) -> None:

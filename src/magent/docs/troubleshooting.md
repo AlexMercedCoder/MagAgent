@@ -23,7 +23,11 @@ Common issues:
 - GitHub Actions repair planning: run `magent ci --repair-plan`.
 - Project checks: run `magent diagnostics`.
 - Project command discovery: run `magent project commands`.
+- Project command roles: run `magent project doctor`.
 - Undo an agent file change: run `magent checkpoint restore-last`.
+- Patch apply confusion: run `magent patch preview <id>` and `magent patch explain <id>`.
+- Workspace clutter: run `magent workspace clean-report`.
+- Release readiness: run `magent release check`.
 - Missing command docs: run `magent docs doctor`.
 
 For a clean first setup, run `magent setup`, create or switch to a user, then run `magent doctor`.

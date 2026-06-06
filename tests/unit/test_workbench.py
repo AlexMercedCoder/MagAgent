@@ -52,6 +52,26 @@ def test_project_command_discovery_reads_local_config_and_manifests(tmp_path: Pa
     assert profile["config"]["commands"]["test"] == "pytest tests/unit"
 
 
+def test_project_command_roles_and_doctor_use_config_and_history(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    (tmp_path / ".magent").mkdir()
+    (tmp_path / ".magent" / "config.toml").write_text(
+        "[commands]\ntest = 'pytest -q'\nlint = 'ruff check src tests'\nrelease = 'python -m build'\n",
+        encoding="utf-8",
+    )
+    store = workbench.WorkbenchStore("alice")
+    workbench.record_command_result(store, tmp_path, "pytest -q", True)
+
+    roles = workbench.project_command_roles(tmp_path)
+    doctor = workbench.project_doctor(tmp_path, store)
+
+    assert roles["test"] == "pytest -q"
+    assert roles["lint"] == "ruff check src tests"
+    assert doctor["ok"] is True
+    assert doctor["roles"]["test"]["last_ok"] is True
+    assert "typecheck" in doctor["missing"]
+
+
 def test_save_and_apply_plan(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
     store = workbench.WorkbenchStore("alice")
@@ -102,6 +122,31 @@ def test_apply_saved_patch_reports_missing_patch(tmp_path: Path, monkeypatch) ->
     result = workbench.apply_saved_patch(store, "patch_404")
 
     assert result["ok"] is False
+
+
+def test_patch_preview_explain_and_workspace_reports(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path)
+    (tmp_path / "app.py").write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "baseline"], cwd=tmp_path, capture_output=True, text=True)
+    (tmp_path / "app.py").write_text("new\n", encoding="utf-8")
+    store = workbench.WorkbenchStore("alice")
+
+    patch = workbench.save_patch(store, tmp_path, "change app")
+    preview = workbench.patch_preview(store, patch["id"])
+    explained = workbench.patch_explain(store, patch["id"])
+    status = workbench.workspace_status(store, tmp_path)
+    clean = workbench.workspace_clean_report(store, tmp_path)
+
+    assert preview["ok"] is True
+    assert preview["stats"]["files_changed"] == ["app.py"]
+    assert explained["summary"].startswith(f"Patch `{patch['id']}` changes 1 file")
+    assert status["patches"] == 1
+    assert status["git_status"]
+    assert clean["suggestions"]
 
 
 def test_apply_plan_dry_run_and_failed_check(tmp_path: Path, monkeypatch) -> None:
@@ -375,6 +420,34 @@ def test_review_summary_has_categories(tmp_path: Path) -> None:
 
     assert summary["findings"]
     assert "debugging" in summary["categories"] or "tests" in summary["categories"]
+    assert workbench.review_fails_threshold(summary["findings"], "P2") is True
+    assert workbench.review_fails_threshold(summary["findings"], "P0") is False
+
+
+def test_release_check_and_notes(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=tmp_path)
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=tmp_path)
+    (tmp_path / "README.md").write_text("demo\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=tmp_path, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "baseline"], cwd=tmp_path, capture_output=True, text=True)
+    store = workbench.WorkbenchStore("alice")
+    calls = []
+
+    def fake_run_args(root, cmd, timeout=60):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(workbench, "_run_command_args", fake_run_args)
+
+    check = workbench.release_check(store, tmp_path)
+    notes = workbench.release_notes(tmp_path, since="HEAD~1")
+
+    assert check["ok"] is True
+    assert [item["name"] for item in check["checks"]] == ["tests", "lint", "docs"]
+    assert len(calls) == 3
+    assert "baseline" in notes["markdown"]
 
 
 def test_saved_review_and_command_learning_and_artifact(tmp_path: Path, monkeypatch) -> None:

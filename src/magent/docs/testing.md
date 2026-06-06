@@ -22,3 +22,6 @@ High-confidence coverage focuses on:
 
 Use `magent test explain <file>` when targeted test selection is surprising. Use
 `magent plan-apply --dry-run <plan-id>` before executing buffered plan operations.
+
+For release readiness, run `magent release check`. For scriptable reviews, use
+`magent review --fail-on P1`.

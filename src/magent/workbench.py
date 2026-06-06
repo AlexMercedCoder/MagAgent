@@ -219,6 +219,59 @@ def infer_project_commands(root: Path) -> list[str]:
     return sorted(dict.fromkeys(command for command in commands if command.strip()))
 
 
+COMMAND_ROLES = ("test", "test_related", "lint", "typecheck", "format", "build", "release")
+
+
+def project_command_roles(root: str | Path) -> dict[str, str]:
+    root_path = Path(root).resolve()
+    project_cfg = load_project_config(root_path)
+    configured = project_cfg.get("commands", {})
+    roles: dict[str, str] = {}
+    if isinstance(configured, dict):
+        for role in COMMAND_ROLES:
+            value = configured.get(role)
+            if isinstance(value, str) and value.strip():
+                roles[role] = value.strip()
+            elif isinstance(value, list) and value:
+                roles[role] = " && ".join(str(item) for item in value if str(item).strip())
+    inferred = infer_project_commands(root_path)
+    for command in inferred:
+        lower = command.lower()
+        if "pytest" in lower or "npm test" in lower or "cargo test" in lower or "go test" in lower:
+            roles.setdefault("test", command)
+        if "ruff" in lower or "eslint" in lower or "clippy" in lower:
+            roles.setdefault("lint", command)
+        if "tsc" in lower or "typecheck" in lower:
+            roles.setdefault("typecheck", command)
+        if "build" in lower:
+            roles.setdefault("build", command)
+    return roles
+
+
+def project_doctor(root: str | Path, store: WorkbenchStore | None = None) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    roles = project_command_roles(root_path)
+    history = command_history(store, root_path) if store is not None else []
+    role_status = {}
+    for role in COMMAND_ROLES:
+        command = roles.get(role, "")
+        last = next((item for item in history if item.get("command") == command), None) if command else None
+        role_status[role] = {
+            "configured": bool(command),
+            "command": command,
+            "last_ok": last.get("ok") if last else None,
+            "last_run": last.get("created_at") if last else "",
+        }
+    missing = [role for role, item in role_status.items() if not item["configured"]]
+    return {
+        "ok": "test" not in missing,
+        "root": str(root_path),
+        "roles": role_status,
+        "missing": missing,
+        "config": load_project_config(root_path),
+    }
+
+
 def load_project_config(root: str | Path) -> dict[str, Any]:
     path = Path(root).resolve() / ".magent" / "config.toml"
     return _read_toml(path)
@@ -495,6 +548,12 @@ def review_summary(root: str | Path, base: str = "HEAD") -> dict[str, Any]:
     }
 
 
+def review_fails_threshold(findings: list[dict[str, Any]], threshold: str) -> bool:
+    priorities = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
+    threshold_score = priorities.get(threshold.upper(), 1)
+    return any(priorities.get(str(item.get("priority", "P3")).upper(), 3) <= threshold_score for item in findings)
+
+
 def save_review(store: WorkbenchStore, root: str | Path, base: str = "HEAD") -> dict[str, Any]:
     summary = review_summary(root, base)
     return store.append(
@@ -714,8 +773,43 @@ def save_patch(store: WorkbenchStore, root: str | Path, name: str = "") -> dict[
     )
 
 
+def patch_show(store: WorkbenchStore, patch_id: str) -> dict[str, Any] | None:
+    return next((item for item in store.read("patches", []) if item.get("id") == patch_id), None)
+
+
+def patch_preview(store: WorkbenchStore, patch_id: str, max_chars: int = 12000) -> dict[str, Any]:
+    patch = patch_show(store, patch_id)
+    if not patch:
+        return {"ok": False, "error": f"Patch not found: {patch_id}"}
+    path = Path(patch.get("path", ""))
+    if not path.exists():
+        return {"ok": False, "error": f"Patch file missing: {path}"}
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return {
+        "ok": True,
+        "patch": patch,
+        "diff": text[:max_chars],
+        "truncated": len(text) > max_chars,
+        "stats": _patch_stats(text),
+    }
+
+
+def patch_explain(store: WorkbenchStore, patch_id: str) -> dict[str, Any]:
+    preview = patch_preview(store, patch_id)
+    if not preview.get("ok"):
+        return preview
+    stats = preview["stats"]
+    summary = [
+        f"Patch `{patch_id}` changes {stats['files']} file(s).",
+        f"Adds {stats['added']} line(s) and removes {stats['removed']} line(s).",
+    ]
+    if stats["files_changed"]:
+        summary.append("Files: " + ", ".join(stats["files_changed"][:12]))
+    return {**preview, "summary": " ".join(summary)}
+
+
 def apply_saved_patch(store: WorkbenchStore, patch_id: str, reverse: bool = False) -> dict[str, Any]:
-    patch = next((item for item in store.read("patches", []) if item.get("id") == patch_id), None)
+    patch = patch_show(store, patch_id)
     if not patch:
         return {"ok": False, "error": f"Patch not found: {patch_id}"}
     path = Path(patch.get("path", ""))
@@ -736,6 +830,54 @@ def apply_saved_patch(store: WorkbenchStore, patch_id: str, reverse: bool = Fals
         "patch": patch,
         "reverse": reverse,
     }
+
+
+def workspace_status(store: WorkbenchStore, root: str | Path) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    git_status = _run_git(root_path, ["status", "--short"])
+    pending_plans = [
+        item for item in store.read("plans", []) if item.get("status") in {"draft", "pending", "failed"}
+    ]
+    patches = store.read("patches", [])
+    sessions = checkpoint_sessions(store)
+    failed_commands = [
+        item for item in command_history(store, root_path) if item.get("ok") is False
+    ][:10]
+    indexes = [
+        item for item in store.read("code_indexes", []) if item.get("root") == str(root_path)
+    ]
+    code_index = indexes[-1] if indexes else None
+    return {
+        "ok": True,
+        "root": str(root_path),
+        "git_status": git_status.splitlines(),
+        "pending_plans": len(pending_plans),
+        "patches": len(patches),
+        "checkpoint_sessions": len(sessions),
+        "failed_commands": failed_commands,
+        "code_index": {
+            "present": bool(code_index),
+            "updated_at": code_index.get("updated_at", "") if code_index else "",
+            "files": len(code_index.get("files", [])) if code_index else 0,
+            "symbols": len(code_index.get("symbols", [])) if code_index else 0,
+        },
+    }
+
+
+def workspace_clean_report(store: WorkbenchStore, root: str | Path) -> dict[str, Any]:
+    status = workspace_status(store, root)
+    suggestions = []
+    if status["git_status"]:
+        suggestions.append("Review or commit local git changes.")
+    if status["pending_plans"]:
+        suggestions.append("Apply, discard, or inspect pending plans.")
+    if status["patches"]:
+        suggestions.append("Review saved patches and remove stale ones manually if no longer needed.")
+    if not status["code_index"]["present"]:
+        suggestions.append("Run `magent code index` to refresh code intelligence.")
+    if status["failed_commands"]:
+        suggestions.append("Inspect failed command history before release.")
+    return {**status, "suggestions": suggestions}
 
 
 def create_checkpoint(
@@ -1059,6 +1201,42 @@ def project_diagnostics(root: str | Path, store: WorkbenchStore | None = None) -
         for item in results:
             record_command_result(store, root_path, item["name"], item["ok"], source="diagnostics")
     return results
+
+
+def release_check(store: WorkbenchStore | None = None, root: str | Path = ".") -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    checks: list[dict[str, Any]] = []
+    commands = [
+        ("tests", ["python", "-m", "pytest", "-q"]),
+        ("lint", ["python", "-m", "ruff", "check", "src", "tests"]),
+        ("docs", ["magent", "docs", "doctor"]),
+    ]
+    for name, cmd in commands:
+        result = _run_command_args(root_path, cmd, timeout=180)
+        item = {
+            "name": name,
+            "command": shlex.join(cmd),
+            "ok": result.returncode == 0,
+            "returncode": result.returncode,
+            "stdout": result.stdout[-3000:],
+            "stderr": result.stderr[-3000:],
+        }
+        checks.append(item)
+        if store is not None:
+            record_command_result(store, root_path, item["command"], item["ok"], source="release-check")
+    return {"ok": all(item["ok"] for item in checks), "root": str(root_path), "checks": checks}
+
+
+def release_notes(root: str | Path = ".", since: str = "HEAD~5") -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    log = _run_git(root_path, ["log", "--oneline", f"{since}..HEAD"])
+    if not log.strip():
+        log = _run_git(root_path, ["log", "--oneline", "-5"])
+    commits = [line.strip() for line in log.splitlines() if line.strip()]
+    notes = ["# Release Notes", "", "## Changes", ""]
+    notes.extend(f"- {commit}" for commit in commits)
+    notes.extend(["", "## Verification", "", "- Run `magent release check`."])
+    return {"ok": True, "root": str(root_path), "since": since, "commits": commits, "markdown": "\n".join(notes)}
 
 
 def docs_brief(root: str | Path) -> str:
@@ -1397,6 +1575,25 @@ def _file_risk(file: str) -> str:
     if any(lower.endswith(suffix) for suffix in (".toml", ".yaml", ".yml", ".json", ".lock")):
         return "medium"
     return "normal"
+
+
+def _patch_stats(diff: str) -> dict[str, Any]:
+    files = []
+    added = 0
+    removed = 0
+    for line in diff.splitlines():
+        if line.startswith("+++ b/"):
+            files.append(line.removeprefix("+++ b/"))
+        elif line.startswith("+") and not line.startswith("+++"):
+            added += 1
+        elif line.startswith("-") and not line.startswith("---"):
+            removed += 1
+    return {
+        "files": len(set(files)),
+        "files_changed": sorted(set(files)),
+        "added": added,
+        "removed": removed,
+    }
 
 
 def _guess_reproduction_command(log: str, commands: list[str]) -> str:

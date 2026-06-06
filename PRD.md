@@ -620,6 +620,7 @@ Shipped workbench surfaces include:
 - Personal knowledge: `magent knowledge remember/recall/forget`
 - Planning and review: `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent run`, `magent review --json`, `magent review --save`, `magent review-show`
 - Repo intelligence: `magent graph`, `magent code index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
+- Workspace/release workflows: `magent patch preview/explain`, `magent workspace status/clean-report`, `magent project roles/doctor`, `magent release check/notes`, `magent review --fail-on`
 - Patch queue: `magent patch save/list/apply/revert`
 - Checkpoint undo: `magent checkpoint list/show/diff/restore/restore-last/session-list/session-diff/session-restore`
 - Built-in documentation: `magent tutorial`, `magent docs list/show/search/doctor/generate-reference`
@@ -636,7 +637,7 @@ Shipped workbench surfaces include:
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.10.0"
+version = "0.11.0"
 selective_tools = true
 
 [defaults]

@@ -25,6 +25,8 @@ Important command paths:
 - `magent checkpoint diff <id>`: compare checkpoint contents with the current file.
 - `magent checkpoint restore-last`: restore the most recent checkpoint.
 - `magent project commands`: show discovered project test/lint/build commands.
+- `magent project roles`: show command roles such as test, lint, build, and release.
+- `magent project doctor`: report missing project command roles and recent outcomes.
 - `magent project config`: show `.magent/config.toml` values.
 - `magent code index`: build and save a lightweight Python symbol/import/test index.
 - `magent code symbols <query>`: search indexed symbols.
@@ -40,6 +42,7 @@ Important command paths:
 - `magent plan-show <id>`: inspect a saved plan record.
 - `magent plan-discard <id>`: discard a saved plan.
 - `magent review --json`: emit structured review findings.
+- `magent review --fail-on P1`: exit non-zero for findings at or above a priority.
 - `magent review --save`: save structured review findings.
 - `magent review-show <id>`: inspect a saved review.
 - `magent ci --repair-plan`: include a local CI repair plan.
@@ -54,9 +57,15 @@ Important command paths:
 - `magent checkpoint session-restore <session-id>`: restore a session's checkpoints.
 - `magent plan --save "goal"`: save a draft plan.
 - `magent patch save`: save the current git diff.
+- `magent patch preview <id>`: preview a saved patch.
+- `magent patch explain <id>`: summarize saved patch impact.
 - `magent patch apply <id>`: apply a saved patch.
 - `magent ci --logs`: inspect recent GitHub Actions failures.
 - `magent diagnostics`: run local project diagnostics.
 - `magent dashboard --serve`: serve the local dashboard.
+- `magent workspace status`: report git/workbench status.
+- `magent workspace clean-report`: show non-destructive cleanup suggestions.
+- `magent release check`: run release readiness checks.
+- `magent release notes`: generate release notes from recent commits.
 
 Use `magent <command> --help` for command-specific Typer help.

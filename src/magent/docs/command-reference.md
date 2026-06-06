@@ -113,6 +113,8 @@ Workbench commands:
 - `magent project profile`
 - `magent project list`
 - `magent project commands`
+- `magent project roles`
+- `magent project doctor`
 - `magent project config`
 - `magent project command-history`
 - `magent project command-promote`
@@ -137,6 +139,8 @@ Workbench commands:
 - `magent patch`
 - `magent patch save`
 - `magent patch list`
+- `magent patch preview`
+- `magent patch explain`
 - `magent patch apply`
 - `magent patch revert`
 - `magent session`
@@ -145,6 +149,18 @@ Workbench commands:
 - `magent data inspect`
 - `magent policy`
 - `magent policy list`
+
+Workspace commands:
+
+- `magent workspace`
+- `magent workspace status`
+- `magent workspace clean-report`
+
+Release commands:
+
+- `magent release`
+- `magent release check`
+- `magent release notes`
 
 Gateway commands:
 

@@ -60,6 +60,21 @@
 4. Apply with `magent plan-apply --yes <id> --run-checks`.
 5. Inspect saved stdout/stderr excerpts with `magent plan-show <id>`.
 
+## Patch-first editing
+
+1. Save local changes with `magent patch save --name "change name"`.
+2. Preview the patch with `magent patch preview <id>`.
+3. Explain impact with `magent patch explain <id>`.
+4. Check the workspace with `magent workspace status`.
+5. Apply or reverse the patch with `magent patch apply <id>` or `magent patch revert <id>`.
+
+## Prepare a release
+
+1. Run `magent workspace clean-report`.
+2. Run `magent release check`.
+3. Generate notes with `magent release notes`.
+4. Run `magent review --fail-on P1`.
+
 ## Configure provider roles
 
 1. Edit `~/.config/magent/config.toml`.

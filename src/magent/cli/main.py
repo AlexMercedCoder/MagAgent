@@ -61,6 +61,8 @@ docs_app = typer.Typer(help="Built-in MagAgent documentation", name="docs")
 checkpoint_app = typer.Typer(help="File write checkpoints", name="checkpoint")
 code_app = typer.Typer(help="Code intelligence index", name="code")
 test_app = typer.Typer(help="Test intelligence helpers", name="test")
+workspace_app = typer.Typer(help="Workspace status and cleanup reports", name="workspace")
+release_app = typer.Typer(help="Release checks and notes", name="release")
 for _name, _typer in [
     ("task", task_app),
     ("artifact", artifact_app),
@@ -78,6 +80,8 @@ for _name, _typer in [
     ("checkpoint", checkpoint_app),
     ("code", code_app),
     ("test", test_app),
+    ("workspace", workspace_app),
+    ("release", release_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -570,6 +574,22 @@ def project_commands_cmd(path: str = typer.Option(".", "--path", "-p")):
         console.print(command)
 
 
+@project_app.command("roles")
+def project_roles_cmd(path: str = typer.Option(".", "--path", "-p")):
+    """Show project command roles."""
+    from magent.workbench import project_command_roles
+
+    console.print_json(data=project_command_roles(path))
+
+
+@project_app.command("doctor")
+def project_doctor_cmd(path: str = typer.Option(".", "--path", "-p")):
+    """Report missing/broken project command roles."""
+    from magent.workbench import project_doctor
+
+    console.print_json(data=project_doctor(path, _store()))
+
+
 @project_app.command("config")
 def project_config_cmd(path: str = typer.Option(".", "--path", "-p")):
     """Show project-local .magent/config.toml values."""
@@ -816,9 +836,10 @@ def review_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     json_out: bool = typer.Option(False, "--json", help="Emit structured JSON"),
     save: bool = typer.Option(False, "--save", help="Save review findings to the workbench"),
+    fail_on: str | None = typer.Option(None, "--fail-on", help="Exit non-zero if findings at or above priority exist"),
 ):
     """Review the local git diff for common risks."""
-    from magent.workbench import review_diff, review_summary, save_review
+    from magent.workbench import review_diff, review_fails_threshold, review_summary, save_review
 
     if save:
         item = save_review(_store(), project, base)
@@ -827,7 +848,10 @@ def review_cmd(
             console.print_json(data=item)
         return
     if json_out:
-        console.print_json(data=review_summary(project, base))
+        summary = review_summary(project, base)
+        console.print_json(data=summary)
+        if fail_on and review_fails_threshold(summary.get("findings", []), fail_on):
+            raise typer.Exit(1)
         return
     findings = review_diff(project, base)
     if not findings:
@@ -843,6 +867,8 @@ def review_cmd(
             finding["evidence"],
         )
     console.print(table)
+    if fail_on and review_fails_threshold(findings, fail_on):
+        raise typer.Exit(1)
 
 
 @app.command("review-show")
@@ -953,6 +979,22 @@ def patch_list_cmd():
     console.print(table)
 
 
+@patch_app.command("preview")
+def patch_preview_cmd(patch_id: str = typer.Argument(...)):
+    """Preview a saved patch."""
+    from magent.workbench import patch_preview
+
+    console.print_json(data=patch_preview(_store(), patch_id))
+
+
+@patch_app.command("explain")
+def patch_explain_cmd(patch_id: str = typer.Argument(...)):
+    """Explain saved patch impact."""
+    from magent.workbench import patch_explain
+
+    console.print_json(data=patch_explain(_store(), patch_id))
+
+
 @patch_app.command("apply")
 def patch_apply_cmd(patch_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")):
     """Apply a saved patch after git apply --check passes."""
@@ -975,6 +1017,41 @@ def patch_revert_cmd(patch_id: str = typer.Argument(...), yes: bool = typer.Opti
         if confirm != "y":
             raise typer.Exit()
     console.print_json(data=apply_saved_patch(_store(), patch_id, reverse=True))
+
+
+@workspace_app.command("status")
+def workspace_status_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Show git/workbench status for the workspace."""
+    from magent.workbench import workspace_status
+
+    console.print_json(data=workspace_status(_store(), project))
+
+
+@workspace_app.command("clean-report")
+def workspace_clean_report_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Show non-destructive cleanup suggestions."""
+    from magent.workbench import workspace_clean_report
+
+    console.print_json(data=workspace_clean_report(_store(), project))
+
+
+@release_app.command("check")
+def release_check_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """Run release readiness checks."""
+    from magent.workbench import release_check
+
+    console.print_json(data=release_check(_store(), project))
+
+
+@release_app.command("notes")
+def release_notes_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    since: str = typer.Option("HEAD~5", "--since"),
+):
+    """Generate release notes from recent commits."""
+    from magent.workbench import release_notes
+
+    console.print_json(data=release_notes(project, since=since))
 
 
 @app.command("env-doctor")

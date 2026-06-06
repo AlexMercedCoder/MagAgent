@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.0
+
+- Added patch-first workflow commands: `magent patch preview` and `magent patch explain`.
+- Added project command roles and `magent project doctor`.
+- Added `magent workspace status` and `magent workspace clean-report`.
+- Added `magent release check` and `magent release notes`.
+- Added `magent review --fail-on <priority>` for scriptable review gates.
+- Added packaged patch workflow documentation.
+- Improved review summaries with scriptable failure thresholds.
+
 ## 0.10.0
 
 - Added reliability-focused test coverage for the agent loop, CLI smokes, config, providers, DB tools, logging, memory quality controls, and tool behavior.

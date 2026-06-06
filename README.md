@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-141%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -45,6 +45,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Builds a lightweight local code intelligence index for symbols, imports, related files, and targeted tests
 - Supports memory quality controls for duplicate review, node merge, and stale-node suppression
 - Includes a reliability test harness for the agent loop, provider layer, DB tools, CLI smokes, and packaged docs
+- Supports patch-first coding workflows, workspace status reports, project command roles, and release readiness checks
 - Supports executable plan records, session-level undo, command learning, saved reviews, and CI repair plans
 - Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, and static dashboards
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
@@ -272,7 +273,7 @@ MagAgent's workbench stores practical productivity state under each user profile
 
 - **Task ledger** — `magent task add/list/done/report`
 - **Artifact workspace** — `magent artifact add/list`
-- **Project profiles** — `magent project profile/list/commands/config/command-history/command-promote`
+- **Project profiles** — `magent project profile/list/commands/roles/doctor/config/command-history/command-promote`
 - **Code intelligence** — `magent code index/symbols/related`
 - **Test intelligence** — `magent test map/related/explain/run-related`
 - **Inbox and routines** — `magent inbox add/triage`, `magent routine add/run`
@@ -281,6 +282,7 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Review and planning** — `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent review --json`, `magent review --save`, `magent review-show`, `magent run`
 - **Repo/test helpers** — `magent graph`, `magent code index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
 - **Patch queue** — `magent patch save/list/apply/revert`
+- **Patch-first workflow** — `magent patch preview/explain`, `magent workspace status/clean-report`
 - **Checkpoint undo** — `magent checkpoint list/show/diff/restore/restore-last/session-list/session-diff/session-restore`
 - **Built-in docs** — `magent docs list/show/search/doctor/generate-reference`
 - **Artifact registry** — `magent artifact add/list/show/open/checksum`
@@ -477,6 +479,10 @@ magent test related    # Show likely tests for a file
 magent test explain    # Explain why tests were selected
 magent test run-related # Run likely tests for a file
 magent test-intel      # Suggest tests for current git changes
+magent patch preview   # Preview a saved patch
+magent patch explain   # Explain patch impact
+magent workspace status # Show git/workbench status
+magent release check   # Run release readiness checks
 magent env-doctor      # Project environment checks
 magent dashboard       # Export static local dashboard
 magent --version       # Show version
@@ -638,7 +644,7 @@ docs/
 ├── gateway/          # Gateway setup guides
 └── skills/           # Built-in skill SKILL.md files
 tests/
-└── unit/             # 141 unit tests (all mocked, no credentials needed)
+└── unit/             # 145 unit tests (all mocked, no credentials needed)
 ```
 
 ---
