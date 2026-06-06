@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.20.0
+
+- Added first-class setup/UX support for LM Studio, AWS Bedrock, Mistral AI, DeepSeek, xAI, Perplexity, Cerebras, Together AI, Fireworks AI, and DeepInfra.
+- Added a shared provider catalog so setup choices, default models, environment variables, access modes, display names, base URLs, and runtime prefixes stay in sync.
+- Expanded LiteLLM runtime routing for `mistral`, `deepseek`, `xai`, `perplexity`, `cerebras`, `together_ai`, `fireworks_ai`, and `deepinfra`.
+- Updated provider docs, PRD provider tables, and tests for the expanded provider surface.
+
 ## 0.19.0
 
 - Added guided UX flows: `magent onboard`, `magent next`, `magent doctor --fix`, `magent doctor --json`, and profile presets.

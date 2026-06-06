@@ -22,7 +22,7 @@ Unlike traditional agents that treat every session as stateless, MagAgent contin
 | Pain Point | Status Quo | MagAgent Solution |
 |---|---|---|
 | No persistent memory across sessions | Every session starts cold | MagGraph stores structured knowledge indefinitely |
-| Locked to one model/provider | Many agents favor one provider | Provider-agnostic layer; 10+ providers |
+| Locked to one model/provider | Many agents favor one provider | Provider-agnostic layer; 20 provider options |
 | Single-user assumption | Agents configured per-install | Multi-user profiles, each with isolated memory graph |
 | Permission fatigue | Ask permission for every action | Risk-tiered automation model (silent / auto / confirm / block) |
 | Opaque internal state | No insight into what agent "knows" | `magent memory stats` command: node/edge counts, disk usage |
@@ -262,6 +262,14 @@ All providers are accessed via **LiteLLM**, which provides a unified OpenAI-comp
 | **OpenRouter** | `openrouter` | Aggregator for 200+ models |
 | **AWS Bedrock** | `bedrock` | Enterprise deployments |
 | **LM Studio** | `lmstudio` | Local models with GUI; OpenAI-compatible |
+| **Mistral AI** | `mistral` | Mistral-hosted models |
+| **DeepSeek** | `deepseek` | DeepSeek chat/reasoning models |
+| **xAI** | `xai` | Grok models |
+| **Perplexity** | `perplexity` | Sonar search/research models |
+| **Cerebras** | `cerebras` | Fast inference models |
+| **Together AI** | `together_ai` | Hosted open models |
+| **Fireworks AI** | `fireworks_ai` | Hosted open and coding models |
+| **DeepInfra** | `deepinfra` | Hosted open models |
 | **Custom** | `custom` | Any OpenAI-compatible endpoint |
 
 ### 7.3 Provider Configuration
@@ -286,6 +294,18 @@ default_model = "qwen2.5-coder:32b"
 [providers.openai]
 api_key_env = "OPENAI_API_KEY"
 default_model = "gpt-4o"
+
+[providers.mistral]
+api_key_env = "MISTRAL_API_KEY"
+default_model = "mistral-large-latest"
+
+[providers.deepseek]
+api_key_env = "DEEPSEEK_API_KEY"
+default_model = "deepseek-chat"
+
+[providers.together_ai]
+api_key_env = "TOGETHERAI_API_KEY"
+default_model = "moonshotai/Kimi-K2.5"
 
 [defaults]
 provider = "ollama"        # Default provider (local-first default)
@@ -639,7 +659,7 @@ Shipped workbench surfaces include:
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.19.0"
+version = "0.20.0"
 selective_tools = true
 
 [defaults]
@@ -796,7 +816,7 @@ Vector databases require running a server and treat memory as opaque blobs. MagG
 
 ### Why LiteLLM over a custom abstraction?
 
-LiteLLM is the de-facto standard for multi-provider LLM access. It handles retries, streaming, fallbacks, and cost tracking. Building our own would be reinventing the wheel — especially for supporting 10+ providers cleanly.
+LiteLLM is the de-facto standard for multi-provider LLM access. It handles retries, streaming, fallbacks, and cost tracking. Building our own would be reinventing the wheel — especially for supporting 20 provider options cleanly.
 
 ### Why risk-tiered permissions over always-ask or always-allow?
 
@@ -830,7 +850,7 @@ Skills as Markdown files are editable by non-developers, committable to repos, r
 | Session continuity | Users report agent "remembers" preferences across sessions |
 | Skill loading time | < 200ms per skill |
 | Graph node count at 6 months | Avg 100–500 nodes per active user |
-| Provider coverage | 10+ providers working in v1 |
+| Provider coverage | 20 provider options working in v1 |
 | Permission interruption rate | < 5% of operations require user confirmation in balanced mode |
 
 ---

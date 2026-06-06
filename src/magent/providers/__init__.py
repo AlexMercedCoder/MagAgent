@@ -10,31 +10,19 @@ from typing import Any
 
 from rich.console import Console
 
+from magent.provider_catalog import (
+    OPENAI_COMPATIBLE_PROVIDERS,
+    provider_base_urls,
+    provider_display_names,
+    provider_metadata,
+)
+
 console = Console()
 
 # Provider base URL registry
-PROVIDER_BASE_URLS: dict[str, str] = {
-    "nous-portal": "https://inference-api.nousresearch.com/v1",
-    "opencode-zen": "https://opencode.ai/zen/v1",
-    "opencode-go": "https://opencode.ai/zen/go/v1",
-    "ollama": "http://localhost:11434",
-    "lmstudio": "http://localhost:1234/v1",
-}
+PROVIDER_BASE_URLS: dict[str, str] = provider_base_urls()
 
-PROVIDER_DISPLAY_NAMES: dict[str, str] = {
-    "nous-portal": "Nous Portal",
-    "opencode-zen": "OpenCode Zen",
-    "opencode-go": "OpenCode Go",
-    "ollama": "Ollama (local)",
-    "openai": "OpenAI",
-    "anthropic": "Anthropic",
-    "google": "Google Gemini",
-    "groq": "Groq",
-    "openrouter": "OpenRouter",
-    "bedrock": "AWS Bedrock",
-    "lmstudio": "LM Studio (local)",
-    "custom": "Custom Endpoint",
-}
+PROVIDER_DISPLAY_NAMES: dict[str, str] = provider_display_names()
 
 
 def _build_litellm_model(provider: str, model: str) -> str:
@@ -53,7 +41,12 @@ def _build_litellm_model(provider: str, model: str) -> str:
         return f"openrouter/{model}"
     if provider == "bedrock":
         return f"bedrock/{model}"
-    # For custom OpenAI-compat providers (nous-portal, opencode-zen, lmstudio, custom)
+    metadata = provider_metadata(provider)
+    prefix = metadata.get("litellm")
+    if prefix == "openai-compatible":
+        return f"openai/{model}"
+    if prefix:
+        return model if model.startswith(f"{prefix}/") else f"{prefix}/{model}"
     return f"openai/{model}"
 
 
@@ -77,6 +70,14 @@ def _build_api_kwargs(
         "groq",
         "openrouter",
         "bedrock",
+        "mistral",
+        "deepseek",
+        "xai",
+        "perplexity",
+        "cerebras",
+        "together_ai",
+        "fireworks_ai",
+        "deepinfra",
     ):
         kwargs["api_base"] = base_url
 
@@ -84,7 +85,7 @@ def _build_api_kwargs(
     resolved_key = api_key or provider_cfg.get("api_key")
     if resolved_key:
         kwargs["api_key"] = resolved_key
-    elif provider in ("nous-portal", "opencode-zen", "opencode-go", "lmstudio", "custom", "ollama"):
+    elif provider in OPENAI_COMPATIBLE_PROVIDERS or provider == "ollama":
         kwargs["api_key"] = "sk-magent"  # dummy for local/custom OpenAI-compat endpoints
 
     return kwargs

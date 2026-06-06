@@ -20,34 +20,12 @@ from magent.config import (
     set_current_user,
     user_exists,
 )
+from magent.provider_catalog import default_models, provider_choices, provider_env_vars
 
 console = Console()
 
-PROVIDER_CHOICES = [
-    ("opencode-go", "OpenCode Go subscription (low-cost open coding models)"),
-    ("ollama", "Ollama (local — FREE, requires Ollama running)"),
-    ("openai", "OpenAI API (GPT-4o, GPT-5; use Codex mode for ChatGPT plan access)"),
-    ("anthropic", "Anthropic (Claude)"),
-    ("nous-portal", "Nous Portal (Hermes 4 + 200+ models)"),
-    ("opencode-zen", "OpenCode Zen pay-as-you-go (premium curated models)"),
-    ("google", "Google Gemini"),
-    ("groq", "Groq (fast inference)"),
-    ("openrouter", "OpenRouter (aggregator)"),
-    ("custom", "Custom OpenAI-compatible endpoint"),
-]
-
-DEFAULT_MODELS = {
-    "opencode-go": "deepseek-v4-flash",
-    "ollama": "qwen2.5-coder:32b",
-    "openai": "gpt-5",
-    "anthropic": "claude-sonnet-4-5",
-    "nous-portal": "nous-hermes-4",
-    "opencode-zen": "deepseek-v4-flash",
-    "google": "gemini-2.0-flash",
-    "groq": "llama-3.3-70b-versatile",
-    "openrouter": "deepseek/deepseek-chat",
-    "custom": "your-model-name",
-}
+PROVIDER_CHOICES = provider_choices()
+DEFAULT_MODELS = default_models()
 
 
 def run_setup() -> None:
@@ -171,15 +149,7 @@ def _get_api_key(provider_id: str) -> str | None:
     if provider_id in local:
         return None
 
-    env_var_map = {
-        "openai": "OPENAI_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-        "nous-portal": "NOUS_API_KEY",
-        "opencode-zen": "OPENCODE_ZEN_KEY",
-        "google": "GEMINI_API_KEY",
-        "groq": "GROQ_API_KEY",
-        "openrouter": "OPENROUTER_API_KEY",
-    }
+    env_var_map = provider_env_vars()
     default_env = env_var_map.get(provider_id, f"{provider_id.upper().replace('-', '_')}_API_KEY")
 
     import os

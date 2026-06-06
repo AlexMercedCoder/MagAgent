@@ -1273,6 +1273,7 @@ def provider_set_cmd(
 def provider_wizard_cmd():
     """Interactively configure provider, access mode, model, and key source."""
     from magent.config_ux import provider_access_modes, provider_choices, set_default_provider
+    from magent.provider_catalog import provider_env_vars
 
     choices = provider_choices()
     for i, item in enumerate(choices, 1):
@@ -1293,11 +1294,7 @@ def provider_wizard_cmd():
     model = Prompt.ask("Default model", default=selected["default_model"])
     api_key_env = ""
     if access_mode not in {"codex", "local"}:
-        default_env = {
-            "openai": "OPENAI_API_KEY",
-            "opencode-go": "OPENCODE_GO_KEY",
-            "opencode-zen": "OPENCODE_ZEN_KEY",
-        }.get(selected["id"], "")
+        default_env = provider_env_vars().get(selected["id"], "")
         api_key_env = Prompt.ask("API key environment variable", default=default_env)
     result = set_default_provider(selected["id"], model, api_key_env=api_key_env, access_mode=access_mode)
     console.print_json(data=result)

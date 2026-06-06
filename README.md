@@ -9,7 +9,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-182%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-183%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -45,7 +45,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Runs saved plans and recipes in worktree, copied, or Docker-backed sandboxes
 - Provides local eval suite scaffolding for repeatable repo tasks
 - Maintains a **persistent memory graph** per user that grows smarter over time
-- Connects to **11+ AI providers** (local and cloud) via a single config
+- Connects to **20 provider options** (local and cloud) via a single config
 - Has **33 built-in tools** out of the box — no plugins or configuration required
 - Includes **10 pre-built skill libraries** for docs, spreadsheets, PDFs, images, video, data analysis, REST APIs, databases, desktop automation, and Git
 - Uses token-efficient context management: conversation compaction, repo-map slices, memory/skill budgets, and compressed tool results
@@ -133,6 +133,14 @@ MagAgent uses [LiteLLM](https://github.com/BerriAI/litellm) under the hood, supp
 | **OpenRouter** | `openrouter` | 200+ model aggregator |
 | **LM Studio** | `lmstudio` | Local GUI-managed models |
 | **AWS Bedrock** | `bedrock` | Enterprise / VPC |
+| **Mistral AI** | `mistral` | Mistral-hosted models |
+| **DeepSeek** | `deepseek` | DeepSeek chat/reasoning models |
+| **xAI** | `xai` | Grok models |
+| **Perplexity** | `perplexity` | Sonar search/research models |
+| **Cerebras** | `cerebras` | Fast inference models |
+| **Together AI** | `together_ai` | Hosted open models |
+| **Fireworks AI** | `fireworks_ai` | Hosted open and coding models |
+| **DeepInfra** | `deepinfra` | Hosted open models |
 | **Custom** | `custom` | Any OpenAI-compatible endpoint |
 
 Configure multiple providers and switch mid-session: `/model anthropic/claude-3-5-sonnet`

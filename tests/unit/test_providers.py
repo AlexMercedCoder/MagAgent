@@ -6,6 +6,8 @@ from types import SimpleNamespace
 import pytest
 
 from magent.providers import (
+    PROVIDER_BASE_URLS,
+    PROVIDER_DISPLAY_NAMES,
     Provider,
     ProviderError,
     _build_api_kwargs,
@@ -27,6 +29,16 @@ def test_build_litellm_model_for_supported_provider_ids() -> None:
     assert _build_litellm_model("groq", "llama") == "groq/llama"
     assert _build_litellm_model("openrouter", "deepseek/chat") == "openrouter/deepseek/chat"
     assert _build_litellm_model("bedrock", "anthropic.claude") == "bedrock/anthropic.claude"
+    assert _build_litellm_model("mistral", "mistral-large-latest") == "mistral/mistral-large-latest"
+    assert _build_litellm_model("deepseek", "deepseek-chat") == "deepseek/deepseek-chat"
+    assert _build_litellm_model("xai", "grok-4") == "xai/grok-4"
+    assert _build_litellm_model("perplexity", "sonar-pro") == "perplexity/sonar-pro"
+    assert _build_litellm_model("cerebras", "llama3.1-8b") == "cerebras/llama3.1-8b"
+    assert _build_litellm_model("together_ai", "moonshotai/Kimi-K2.5") == "together_ai/moonshotai/Kimi-K2.5"
+    assert _build_litellm_model("fireworks_ai", "accounts/fireworks/models/deepseek-coder-v2-instruct") == (
+        "fireworks_ai/accounts/fireworks/models/deepseek-coder-v2-instruct"
+    )
+    assert _build_litellm_model("deepinfra", "openai/gpt-oss-120b") == "deepinfra/openai/gpt-oss-120b"
     assert _build_litellm_model("custom", "model") == "openai/model"
 
 
@@ -48,6 +60,24 @@ def test_build_api_kwargs_sets_base_and_keys() -> None:
     assert local["api_base"] == "http://localhost:11434"
     assert local["api_key"] == "sk-magent"
     assert native == {"model": "gpt-4.1", "api_key": "key"}
+
+
+def test_provider_catalog_exposes_new_easy_provider_batch() -> None:
+    expected = {
+        "lmstudio",
+        "bedrock",
+        "mistral",
+        "deepseek",
+        "xai",
+        "perplexity",
+        "cerebras",
+        "together_ai",
+        "fireworks_ai",
+        "deepinfra",
+    }
+
+    assert expected <= set(PROVIDER_DISPLAY_NAMES)
+    assert PROVIDER_BASE_URLS["lmstudio"] == "http://localhost:1234/v1"
 
 
 @pytest.mark.asyncio

@@ -12,10 +12,20 @@ from magent.config import (
     save_global_config,
     save_user_profile,
 )
-from magent.setup import DEFAULT_MODELS, PROVIDER_CHOICES
+from magent.provider_catalog import (
+    default_access_modes,
+    default_models,
+    provider_env_vars,
+    provider_metadata,
+)
+from magent.provider_catalog import (
+    provider_choices as catalog_provider_choices,
+)
 
 MODEL_ROLES = ("coding", "review", "memory", "cheap", "fallback")
 GATEWAY_PLATFORMS = ("slack", "discord", "telegram")
+DEFAULT_MODELS = default_models()
+PROVIDER_CHOICES = catalog_provider_choices()
 PROVIDER_ACCESS_MODES: dict[str, list[dict[str, str]]] = {
     "openai": [
         {
@@ -43,12 +53,15 @@ PROVIDER_ACCESS_MODES: dict[str, list[dict[str, str]]] = {
             "description": "Use the Go subscription API key and Go model endpoint.",
         }
     ],
+    "bedrock": [
+        {
+            "id": "aws",
+            "label": "AWS credentials",
+            "description": "Use AWS profile/environment credentials for Bedrock.",
+        }
+    ],
 }
-DEFAULT_ACCESS_MODE = {
-    "openai": "api",
-    "opencode-zen": "payg",
-    "opencode-go": "subscription",
-}
+DEFAULT_ACCESS_MODE = default_access_modes()
 
 
 def provider_choices() -> list[dict[str, str]]:
@@ -80,16 +93,7 @@ def provider_access_modes(provider_id: str) -> list[dict[str, str]]:
 
 def detect_provider_environment() -> list[dict[str, Any]]:
     """Detect likely provider readiness from env vars and local defaults."""
-    env_map = {
-        "openai": "OPENAI_API_KEY",
-        "anthropic": "ANTHROPIC_API_KEY",
-        "nous-portal": "NOUS_API_KEY",
-        "opencode-zen": "OPENCODE_ZEN_KEY",
-        "opencode-go": "OPENCODE_GO_KEY",
-        "google": "GEMINI_API_KEY",
-        "groq": "GROQ_API_KEY",
-        "openrouter": "OPENROUTER_API_KEY",
-    }
+    env_map = provider_env_vars()
     detected = []
     for item in provider_choices():
         provider_id = item["id"]
@@ -102,7 +106,7 @@ def detect_provider_environment() -> list[dict[str, Any]]:
                 "env_present": bool(env_var and os.environ.get(env_var)),
                 "access_modes": access_modes,
                 "codex_cli": shutil.which("codex") if provider_id == "openai" else "",
-                "local": provider_id in {"ollama", "lmstudio", "custom"},
+                "local": bool(provider_metadata(provider_id).get("local")) or provider_id == "custom",
             }
         )
     return detected

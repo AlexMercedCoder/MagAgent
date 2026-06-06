@@ -162,5 +162,15 @@ def test_config_ux_provider_access_modes_and_doctor_actions(tmp_path: Path, monk
     assert result["access_mode"] == "subscription"
     assert detected["openai"]["access_modes"][1]["id"] == "codex"
     assert detected["opencode-go"]["api_key_env"] == "OPENCODE_GO_KEY"
+    assert detected["mistral"]["api_key_env"] == "MISTRAL_API_KEY"
+    assert detected["deepseek"]["default_model"] == "deepseek-chat"
+    assert detected["xai"]["api_key_env"] == "XAI_API_KEY"
+    assert detected["perplexity"]["api_key_env"] == "PERPLEXITYAI_API_KEY"
+    assert detected["cerebras"]["api_key_env"] == "CEREBRAS_API_KEY"
+    assert detected["together_ai"]["api_key_env"] == "TOGETHERAI_API_KEY"
+    assert detected["fireworks_ai"]["api_key_env"] == "FIREWORKS_API_KEY"
+    assert detected["deepinfra"]["api_key_env"] == "DEEPINFRA_API_KEY"
+    assert detected["lmstudio"]["local"] is True
+    assert detected["bedrock"]["recommended_access"] == "aws"
     assert any(item["key"] == "opencode_go" for item in doctor["actions"])
     assert fixed["after"]["summary"]["subagents"]["max_subagents"] == 3

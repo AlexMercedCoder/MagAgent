@@ -49,6 +49,8 @@ Provider access modes are explicit:
 - `opencode-zen --access payg` uses OpenCode Zen pay-as-you-go credits/API keys.
 - `opencode-go --access subscription` uses the OpenCode Go subscription endpoint and `OPENCODE_GO_KEY`.
 
+The setup/provider UX includes local providers, direct model providers, aggregators, and hosted open-model platforms: Ollama, LM Studio, OpenAI, Anthropic, Google Gemini, Groq, OpenRouter, AWS Bedrock, Nous Portal, OpenCode Zen, OpenCode Go, Mistral AI, DeepSeek, xAI, Perplexity, Cerebras, Together AI, Fireworks AI, DeepInfra, and custom OpenAI-compatible endpoints.
+
 Use model roles to route specific work to specialized or cheaper models:
 
 ```bash

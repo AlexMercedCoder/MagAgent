@@ -226,6 +226,8 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/m
 
 **v0.19.0 update:** Added guided onboarding, provider/model/memory/subagent wizards, project initialization, profile presets, doctor fix suggestions, next-action recommendations, and explicit OpenAI API vs Codex subscription plus OpenCode Zen vs Go access-mode distinctions.
 
+**v0.20.0 update:** Added a shared provider catalog and first-class setup/runtime UX for LM Studio, AWS Bedrock, Mistral AI, DeepSeek, xAI, Perplexity, Cerebras, Together AI, Fireworks AI, and DeepInfra.
+
 **Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
 
 **What to build:**
