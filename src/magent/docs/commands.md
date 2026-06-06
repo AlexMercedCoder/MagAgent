@@ -63,6 +63,7 @@ Important command paths:
 - `magent ci --logs`: inspect recent GitHub Actions failures.
 - `magent diagnostics`: run local project diagnostics.
 - `magent dashboard --serve`: serve the local dashboard.
+- `magent ui`: serve the live local operations UI.
 - `magent workspace status`: report git/workbench status.
 - `magent workspace clean-report`: show non-destructive cleanup suggestions.
 - `magent release check`: run release readiness checks.

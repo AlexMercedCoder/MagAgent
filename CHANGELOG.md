@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0
+
+- Added `magent ui`, a live local operations dashboard served on `127.0.0.1`.
+- Added read-only UI endpoints for workspace state, docs search/topic reads, release checks, and release notes.
+- Added packaged `ui` documentation and updated command docs, tutorial, workbench docs, and README references.
+- Added unit coverage for UI state aggregation, rendered HTML, local HTTP serving, and CLI startup behavior.
+
 ## 0.11.0
 
 - Added patch-first workflow commands: `magent patch preview` and `magent patch explain`.

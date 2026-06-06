@@ -26,6 +26,7 @@ Core commands:
 - `magent notes`
 - `magent stats`
 - `magent dashboard`
+- `magent ui`
 - `magent setup`
 - `magent mode`
 - `magent doctor`

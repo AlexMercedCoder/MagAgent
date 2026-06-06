@@ -17,7 +17,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.11.0" in version.output
+    assert "MagAgent 0.12.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -30,6 +30,39 @@ def test_cli_docs_doctor() -> None:
     assert payload["ok"] is True
     assert payload["missing_topics"] == []
     assert payload["missing_commands"] == []
+
+
+def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("cli-test")
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_main, "_require_user", lambda: "cli-test")
+
+    import magent.ui
+
+    monkeypatch.setattr(
+        magent.ui,
+        "serve_ui",
+        lambda store, project, username, port, open_browser: {
+            "ok": True,
+            "url": f"http://127.0.0.1:{port}/",
+            "project": project,
+            "username": username,
+        },
+    )
+    monkeypatch.setattr(
+        cli_main.signal,
+        "pause",
+        lambda: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    result = runner.invoke(cli_main.app, ["ui", "--project", str(project), "--port", "9999"])
+
+    assert result.exit_code == 0
+    assert "http://127.0.0.1:9999/" in result.output
+    assert "cli-test" in result.output
 
 
 def test_cli_code_and_test_commands(tmp_path: Path, monkeypatch) -> None:

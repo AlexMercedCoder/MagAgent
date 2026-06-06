@@ -28,5 +28,6 @@ Useful commands:
 - `magent artifact show/open/checksum`
 - `magent dashboard`
 - `magent dashboard --serve`
+- `magent ui`
 
 Workbench files are local JSON and are safe to inspect directly.

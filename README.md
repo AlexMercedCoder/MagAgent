@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-149%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -33,7 +33,7 @@ The name also nods to **[MagGraph](https://github.com/AlexMercedCoder/MagGraph)*
 
 MagAgent is a **CLI-first AI coding agent** that:
 
-- Runs entirely in your terminal — no IDE plugin, no web UI required
+- Runs entirely in your terminal, with an optional local operations UI when you want a browser view
 - Maintains a **persistent memory graph** per user that grows smarter over time
 - Connects to **11+ AI providers** (local and cloud) via a single config
 - Has **31 built-in tools** out of the box — no plugins or configuration required
@@ -47,7 +47,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Includes a reliability test harness for the agent loop, provider layer, DB tools, CLI smokes, and packaged docs
 - Supports patch-first coding workflows, workspace status reports, project command roles, and release readiness checks
 - Supports executable plan records, session-level undo, command learning, saved reviews, and CI repair plans
-- Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, and static dashboards
+- Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, static dashboards, and a live local UI
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
 
 Every session, MagAgent extracts facts, preferences, and patterns from your conversation and writes them into a MagGraph knowledge graph. Next session, it reads that graph to understand your tech stack, coding style, project context, and recurring patterns — without you having to repeat yourself.
@@ -287,7 +287,7 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Built-in docs** — `magent docs list/show/search/doctor/generate-reference`
 - **Artifact registry** — `magent artifact add/list/show/open/checksum`
 - **Data/API/notes** — `magent data inspect`, `magent api save/list`, `magent notes`
-- **Session and usage** — `magent session timeline`, `magent stats`, `magent dashboard`, `magent dashboard --serve`
+- **Session and usage** — `magent session timeline`, `magent stats`, `magent dashboard`, `magent dashboard --serve`, `magent ui`
 
 Workbench files are plain JSON in `~/.config/magent/users/<username>/workbench/`.
 
@@ -485,6 +485,7 @@ magent workspace status # Show git/workbench status
 magent release check   # Run release readiness checks
 magent env-doctor      # Project environment checks
 magent dashboard       # Export static local dashboard
+magent ui              # Serve live local operations UI
 magent --version       # Show version
 ```
 

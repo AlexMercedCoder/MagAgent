@@ -204,6 +204,8 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/m
 
 **v0.10.0 update:** Test intelligence now covers common Python, JS/TS, Go, and Rust test naming patterns, includes `magent test explain`, and can use project-local `{tests}` command templates for targeted runs.
 
+**v0.12.0 update:** Added `magent ui`, a live read-only local operations dashboard over workspace state, project doctor, patches, checkpoints, memory quality, docs search, and release checks.
+
 **v0.11.0 update:** Added project command roles, project doctor, workspace status, patch preview/explain, release checks, and scriptable review failure thresholds.
 
 **Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
@@ -447,7 +449,7 @@ Larger investments that position MagAgent as a platform rather than just a tool.
 
 ### 3.1 · Local Web Dashboard
 
-**Status:** MVP expanded in v0.5.0. `magent dashboard` exports a local HTML dashboard and `magent dashboard --serve` serves it on localhost. A richer interactive FastAPI dashboard remains future work.
+**Status:** MVP expanded in v0.12.0. `magent dashboard` exports a local HTML dashboard, `magent dashboard --serve` serves it on localhost, and `magent ui` provides a live read-only local operations dashboard.
 
 **Why:** A local web UI makes memory visualization, session history browsing, and task management accessible without memorizing CLI commands — especially useful for non-developer users and for debugging the memory graph visually.
 

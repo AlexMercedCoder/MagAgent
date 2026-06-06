@@ -12,12 +12,17 @@ more tokens doing useful work.
 6. Map tests with `magent test map`.
 7. Run targeted tests with `magent test run-related <file>`.
 8. Check memory health with `magent memory quality`.
-9. Use `magent docs search <query>` whenever you forget a command.
+9. Open the local operations dashboard with `magent ui`.
+10. Use `magent docs search <query>` whenever you forget a command.
 
 For larger changes, run `magent plan-exec`, inspect with `magent plan-preview`, then apply with `magent plan-apply`.
 For patch-first work, save diffs with `magent patch save`, inspect them with
 `magent patch preview` and `magent patch explain`, then check the whole
 workspace with `magent workspace status`.
+
+Run `magent ui` during a larger session when you want a browser view of plans,
+patches, checkpoints, memory quality, command history, docs search, and release
+checks.
 
 ## First Project Pass
 

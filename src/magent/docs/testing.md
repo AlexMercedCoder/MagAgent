@@ -18,10 +18,14 @@ High-confidence coverage focuses on:
 - memory quality controls and semantic memory
 - provider routing and config loading
 - SQLite data tools and tool result shaping
-- packaged docs coverage
+- packaged docs coverage and local UI endpoints
 
 Use `magent test explain <file>` when targeted test selection is surprising. Use
 `magent plan-apply --dry-run <plan-id>` before executing buffered plan operations.
 
 For release readiness, run `magent release check`. For scriptable reviews, use
 `magent review --fail-on P1`.
+
+Use `magent ui` for a live read-only view of workspace status, project doctor,
+patches, checkpoints, memory quality, docs search, and release checks while
+running local verification.

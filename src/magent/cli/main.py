@@ -1191,6 +1191,25 @@ def dashboard_cmd(
     console.print(f"[green]✓ Dashboard written to {path}[/green]")
 
 
+@app.command("ui")
+def ui_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    port: int = typer.Option(7830, "--port"),
+    open_browser: bool = typer.Option(False, "--open"),
+):
+    """Serve the local operations UI."""
+    from magent.ui import serve_ui
+
+    username = _require_user()
+    result = serve_ui(_store(), project=project, username=username, port=port, open_browser=open_browser)
+    console.print_json(data=result)
+    console.print("[dim]Press Ctrl+C to stop.[/dim]")
+    try:
+        signal.pause()
+    except (AttributeError, KeyboardInterrupt):
+        return
+
+
 @docs_app.command("list")
 def docs_list_cmd():
     """List built-in documentation topics."""
