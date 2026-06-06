@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from typing import Any
 
@@ -39,12 +40,18 @@ def accept_candidate(store: Any, memory_manager: Any, candidate_id: str, project
     if not candidate:
         return {"ok": False, "error": f"Memory inbox candidate not found: {candidate_id}"}
     record = PromotionCandidateRecord.from_mapping(candidate)
+    since_unix = int(time.time()) - 1
     written = memory_manager.write_memories(
         [record.to_memory_item()],
         project_slug=_slug(Path(project).resolve().name),
     )
     _record_decision(store, candidate_id, status="accepted", written=written)
-    return {"ok": written > 0, "written": written, "candidate": record.to_memory_item()}
+    return {
+        "ok": written > 0,
+        "written": written,
+        "candidate": record.to_memory_item(),
+        "changes": _memory_changes_since(memory_manager, since_unix),
+    }
 
 
 def reject_candidate(store: Any, candidate_id: str, reason: str = "") -> dict[str, Any]:
@@ -116,6 +123,16 @@ def _session_candidates(limit: int = 5) -> list[dict[str, Any]]:
             }
         )
     return candidates
+
+
+def _memory_changes_since(memory_manager: Any, since_unix: int) -> list[dict[str, Any]]:
+    changed_since = getattr(memory_manager, "changed_since", None)
+    if not callable(changed_since):
+        return []
+    try:
+        return changed_since(since_unix)
+    except Exception:
+        return []
 
 
 def _slug(text: str) -> str:

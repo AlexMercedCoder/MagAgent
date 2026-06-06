@@ -31,6 +31,8 @@ magent memory promote --all
 
 Promotion writes selected candidates into MagGraph using the same memory manager as normal agent sessions. This keeps operational records in the workbench until you decide they are important enough to become long-term knowledge.
 
+After promotion, MagAgent asks MagGraph for `changed_since` entries so callers can update memory views from the change feed instead of rescanning the full graph.
+
 Good promotion candidates include:
 
 - project command profiles

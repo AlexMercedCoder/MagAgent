@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.26.0
+
+- Bumped the MagGraph dependency to `maggraph>=0.2.0`.
+- Replaced MagAgent's keyword memory scans with MagGraph's native structured search API while keeping the optional semantic sidecar for semantic and hybrid modes.
+- Switched memory recall context to MagGraph recall bundles with compact excerpts, links, backlinks, and explicit relevance reasons.
+- Routed new memory writes through MagGraph memory-node helpers for consistent `preference`, `project_fact`, `decision`, `task`, `session_summary`, `bookmark`, and `tool_failure` schemas.
+- Routed memory merge, suppress, and unsuppress operations through MagGraph's durable quality primitives.
+- Added single-file index refresh and change-feed use after memory writes, inbox acceptance, and promotion.
+- Updated memory docs and tests for graph-native search, recall provenance, backlinks, and change tracking.
+
 ## 0.25.0
 
 - Added MCP-first plugin imports with `magent plugin mcp import` and safe config application through `magent plugin mcp apply`.

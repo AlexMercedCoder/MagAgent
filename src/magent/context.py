@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 from typing import Any
 
@@ -215,11 +216,13 @@ def promote_candidate(
     if not match:
         return {"ok": False, "error": f"Promotion candidate not found: {source}/{source_id}"}
     record = PromotionCandidateRecord.from_mapping(match)
+    since_unix = int(time.time()) - 1
     written = memory_manager.write_memories([record.to_memory_item()], project_slug=_slug(Path(project).resolve().name))
     return {
         "ok": written > 0,
         "written": written,
         "candidate": record.to_memory_item(),
+        "changes": _memory_changes_since(memory_manager, since_unix),
     }
 
 
@@ -236,8 +239,14 @@ def promote_all_candidates(
         PromotionCandidateRecord.from_mapping(candidate).to_memory_item()
         for candidate in candidates
     ]
+    since_unix = int(time.time()) - 1
     written = memory_manager.write_memories(memory_items, project_slug=_slug(Path(project).resolve().name))
-    return {"ok": written == len(candidates), "written": written, "candidates": candidates}
+    return {
+        "ok": written == len(candidates),
+        "written": written,
+        "candidates": candidates,
+        "changes": _memory_changes_since(memory_manager, since_unix),
+    }
 
 
 def _candidate(
@@ -275,3 +284,13 @@ def _frontmatter_body(title: str, fields: dict[str, Any], details: str = "") -> 
 def _slug(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", str(text).lower()).strip("_")
     return slug[:72] or "item"
+
+
+def _memory_changes_since(memory_manager: Any, since_unix: int) -> list[dict[str, Any]]:
+    changed_since = getattr(memory_manager, "changed_since", None)
+    if not callable(changed_since):
+        return []
+    try:
+        return changed_since(since_unix)
+    except Exception:
+        return []

@@ -304,7 +304,7 @@ allowed_shell_patterns = ["git *", "npm *", "pytest *", "cargo *"]
 
 ## Memory Graph
 
-MagAgent's memory is powered by **[MagGraph](https://github.com/AlexMercedCoder/MagGraph)** — a Rust-backed in-process graph database that stores nodes as plain Markdown files in a Git repository.
+MagAgent's memory is powered by **[MagGraph](https://github.com/AlexMercedCoder/MagGraph)** — a Rust-backed in-process graph database that stores nodes as plain Markdown files in a Git repository. MagAgent uses MagGraph's native search, recall bundles, backlinks, change feed, and memory quality primitives so recall stays compact and provenance-aware.
 
 ```
 ~/.config/magent/users/<username>/memory/
@@ -328,6 +328,8 @@ MagAgent's memory is powered by **[MagGraph](https://github.com/AlexMercedCoder/
 | `bookmark` | URLs and references the agent saved for you |
 
 Memory is extracted and written every **N turns** (configurable, default 5) and always at session end.
+
+Memory writes use MagGraph's agent-oriented node schema helpers. Inbox acceptance and context promotion refresh only changed files and return change-feed entries instead of forcing a full graph rescan.
 
 ```bash
 magent memory stats                     # Node/edge counts, disk usage
@@ -358,8 +360,9 @@ MagAgent keeps context lean while preserving useful state:
 
 - **Conversation compaction** summarizes older turns and keeps recent turns verbatim.
 - **Repository map slices** inject relevant file/symbol maps instead of whole files.
-- **Memory recall budgets** inject compact matches first, then a few excerpts.
+- **Memory recall budgets** inject MagGraph recall bundles with compact excerpts, links, backlinks, metadata, and relevance reasons.
 - **Semantic memory search** stores local SQLite embedding sidecars, uses Ollama embeddings when available, and falls back to deterministic offline vectors.
+- **Graph-native keyword search** covers IDs, types, frontmatter/tags, body text, links, suppression, and recency before MagAgent adds semantic ranking.
 - **Selective tool injection** sends a compact relevant tool subset to the model each turn instead of always injecting every built-in tool.
 - **Skill budgets** truncate long skill guidance before it crowds out the task.
 - **Tool result compression** trims large outputs and points the agent to targeted follow-ups.

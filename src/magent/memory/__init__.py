@@ -44,6 +44,18 @@ ALL_NODE_TYPES = [
     NODE_BOOKMARK,
 ]
 
+MAGGRAPH_MEMORY_KIND_BY_TYPE = {
+    NODE_PREFERENCE: "preference",
+    NODE_PROJECT: "project_fact",
+    NODE_PATTERN: "decision",
+    NODE_SKILL_LEARNED: "decision",
+    NODE_FACT: "project_fact",
+    NODE_SESSION_SUMMARY: "session_summary",
+    NODE_ERROR_PATTERN: "tool_failure",
+    NODE_CONTACT: "project_fact",
+    NODE_BOOKMARK: "bookmark",
+}
+
 
 class MemoryManager:
     """Manages a user's MagGraph knowledge graph."""
@@ -102,48 +114,88 @@ class MemoryManager:
         if not self.available:
             return ""
 
-        anchor_ids = self._find_anchor_nodes(query, max_anchors=3)
+        anchors = self._find_anchor_nodes(query, max_anchors=3)
+        anchor_ids = [item["id"] for item in anchors]
         if not anchor_ids:
             return ""
 
-        ordered_ids: list[str] = []
-        seen_ids: set[str] = set()
-
-        for anchor_id in anchor_ids:
-            try:
-                result = self._index.traverse(anchor_id, depth=depth, order="bfs")
-                for node in result.nodes:
-                    if node.id not in seen_ids:
-                        seen_ids.add(node.id)
-                        ordered_ids.append(node.id)
-            except Exception:
-                pass
-
-        rendered = self._format_recall_nodes(ordered_ids, anchor_ids)
+        rendered = self._format_recall_nodes(anchors, depth=depth)
         self.last_recall_stats = {
-            "nodes": len(ordered_ids),
+            "nodes": len(anchor_ids),
             "tokens": estimate_tokens(rendered),
             "budget": self.budget_tokens,
         }
         return rendered
 
-    def _format_recall_nodes(self, node_ids: list[str], anchor_ids: list[str]) -> str:
-        """Render compact memory snippets plus a few relevant excerpts."""
-        if not node_ids:
+    def _format_recall_nodes(self, anchors: list[dict[str, Any]], depth: int = 2) -> str:
+        """Render compact graph-native recall bundles with provenance."""
+        if not anchors:
             return ""
 
         budget = self.budget_tokens
         excerpt_budget = max(40, self.max_node_tokens)
+        anchor_ids = [item["id"] for item in anchors]
         lines = [
             "# MagAgent Memory Recall",
             "",
             f"- Anchors: {', '.join(f'`{node_id}`' for node_id in anchor_ids)}",
-            f"- Nodes considered: {len(node_ids)}",
+            f"- Nodes considered: {len(anchor_ids)}",
             f"- Budget: ~{budget} tokens",
             "",
-            "## Compact Matches",
+            "## Why These Memories",
             "",
         ]
+
+        for anchor in anchors:
+            matched = ", ".join(anchor.get("matched", [])) or "graph search"
+            backlinks = ", ".join(f"`{item}`" for item in anchor.get("backlinks", [])) or "none"
+            lines.append(
+                f"- `{anchor['id']}` matched {matched}; score {anchor.get('score', '')}; backlinks: {backlinks}"
+            )
+
+        lines.extend(
+            [
+                "",
+                "## Recall Bundles",
+                "",
+            ]
+        )
+
+        bundles = self._recall_bundles(anchors, body_chars=excerpt_budget * 4)
+        if bundles:
+            for bundle in bundles:
+                markdown = str(bundle.get("markdown") or "").strip()
+                if markdown:
+                    lines.extend([markdown, ""])
+                    continue
+                backlinks = ", ".join(f"`{item}`" for item in bundle.get("backlinks", [])) or "none"
+                links = ", ".join(f"`{item}`" for item in bundle.get("links", [])) or "none"
+                lines.extend(
+                    [
+                        f"### {bundle.get('id', '')}",
+                        "",
+                        f"- Type: `{bundle.get('type', '')}`",
+                        f"- Links: {links}",
+                        f"- Backlinks: {backlinks}",
+                        f"- Reason: {bundle.get('relevance_reason', '')}",
+                        "",
+                        truncate_to_tokens(str(bundle.get("body_excerpt", "")), excerpt_budget),
+                        "",
+                    ]
+                )
+            return truncate_to_tokens(
+                "\n".join(lines).strip(),
+                budget,
+                "[...memory truncated for context budget...]",
+            )
+
+        node_ids = self._expanded_node_ids(anchor_ids, depth=depth)
+        lines.extend(
+            [
+            "## Compact Matches",
+            "",
+            ]
+        )
 
         loaded: list[Any] = []
         for node_id in node_ids:
@@ -187,25 +239,60 @@ class MemoryManager:
         rendered = "\n".join(lines).strip()
         return truncate_to_tokens(rendered, budget, "[...memory truncated for context budget...]")
 
-    def _find_anchor_nodes(self, query: str, max_anchors: int = 3) -> list[str]:
-        """Find node IDs most relevant to query via semantic and keyword matching."""
+    def _recall_bundles(self, anchors: list[dict[str, Any]], body_chars: int) -> list[dict[str, Any]]:
+        """Return MagGraph recall bundles when available."""
+        if not hasattr(self._index, "recall_bundle"):
+            return []
+        bundles: list[dict[str, Any]] = []
+        for anchor in anchors:
+            try:
+                bundle = self._index.recall_bundle(
+                    anchor["id"],
+                    reason=anchor.get("reason", ""),
+                    body_chars=body_chars,
+                )
+                bundles.append(dict(bundle))
+            except Exception:
+                continue
+        return bundles
+
+    def _expanded_node_ids(self, anchor_ids: list[str], depth: int = 2) -> list[str]:
+        """Fallback traversal expansion for MagGraph versions without recall bundles."""
+        ordered_ids: list[str] = []
+        seen_ids: set[str] = set()
+        for anchor_id in anchor_ids:
+            try:
+                result = self._index.traverse(anchor_id, depth=depth, order="bfs")
+                for node in result.nodes:
+                    if node.id not in seen_ids:
+                        seen_ids.add(node.id)
+                        ordered_ids.append(node.id)
+            except Exception:
+                if anchor_id not in seen_ids:
+                    seen_ids.add(anchor_id)
+                    ordered_ids.append(anchor_id)
+        return ordered_ids
+
+    def _find_anchor_nodes(self, query: str, max_anchors: int = 3) -> list[dict[str, Any]]:
+        """Find node IDs most relevant to query via semantic and graph-native keyword matching."""
         if not self.available:
             return []
 
-        semantic_ids: list[str] = []
+        semantic_results: list[dict[str, Any]] = []
         if self.semantic_enabled and self.username:
             try:
-                semantic_ids = [
-                    item["id"]
-                    for item in self.semantic_search(query, max_results=max_anchors, mode="hybrid")
-                ]
+                semantic_results = self.semantic_search(query, max_results=max_anchors, mode="hybrid")
             except Exception:
-                semantic_ids = []
+                semantic_results = []
+
+        native_results = self._native_search(query, max_results=max_anchors)
+        if native_results:
+            return _merge_anchor_results(semantic_results, native_results, max_anchors)
 
         try:
             all_ids = self._index.list_nodes()
         except Exception:
-            return semantic_ids[:max_anchors]
+            return _merge_anchor_results(semantic_results, [], max_anchors)
 
         query_words = set(re.sub(r"[^\w\s]", " ", query.lower()).split())
         if not query_words:
@@ -233,12 +320,11 @@ class MemoryManager:
                 pass
 
         scored.sort(reverse=True)
-        keyword_ids = [nid for _, nid in scored[:max_anchors]]
-        merged: list[str] = []
-        for node_id in [*semantic_ids, *keyword_ids]:
-            if node_id not in merged:
-                merged.append(node_id)
-        return merged[:max_anchors]
+        keyword_results = [
+            {"id": nid, "type": "", "score": score, "matched": ["fallback_keyword"], "reason": "fallback keyword scan"}
+            for score, nid in scored[:max_anchors]
+        ]
+        return _merge_anchor_results(semantic_results, keyword_results, max_anchors)
 
     # ─────────────────────────────────────────────
     # Post-task memory write
@@ -300,9 +386,19 @@ class MemoryManager:
                     body = body.rstrip() + f"\nTags: {', '.join(map(str, tags))}\n"
 
             try:
-                existing_ids = self._index.list_nodes()
-                if node_id in existing_ids:
+                existing = self.read_node(node_id)
+                if existing:
                     self._index.update_node(node_id, body)
+                    self._refresh_changed_file(node_id)
+                elif hasattr(self._index, "create_memory_node"):
+                    kind = self._memory_kind_for_item(item)
+                    self._index.create_memory_node(
+                        node_id,
+                        kind=kind,
+                        body=body,
+                        links=links,
+                    )
+                    self._refresh_changed_file(node_id)
                 else:
                     self._index.create_node(
                         node_id,
@@ -322,12 +418,17 @@ class MemoryManager:
             return
         node_id = f"session_{session_id}"
         with contextlib.suppress(Exception):
-            self._index.create_node(
-                node_id,
-                node_type=NODE_SESSION_SUMMARY,
-                body=f"# Session {session_id}\n\n{summary}\n",
-                links=[],
-            )
+            body = f"# Session {session_id}\n\n{summary}\n"
+            if hasattr(self._index, "create_memory_node"):
+                self._index.create_memory_node(node_id, kind="session_summary", body=body, links=[])
+            else:
+                self._index.create_node(
+                    node_id,
+                    node_type=NODE_SESSION_SUMMARY,
+                    body=body,
+                    links=[],
+                )
+            self._refresh_changed_file(node_id)
 
     # ─────────────────────────────────────────────
     # Stats
@@ -423,6 +524,15 @@ class MemoryManager:
 
         return result
 
+    def changed_since(self, since_unix: int) -> list[dict[str, Any]]:
+        """Return MagGraph change-feed entries when available."""
+        if not self.available or not hasattr(self._index, "changed_since"):
+            return []
+        try:
+            return [dict(item) for item in self._index.changed_since(since_unix)]
+        except Exception:
+            return []
+
     # ─────────────────────────────────────────────
     # Search
     # ─────────────────────────────────────────────
@@ -436,6 +546,10 @@ class MemoryManager:
             semantic = self.semantic_search(query, max_results=max_results, mode=mode)
             if semantic:
                 return semantic
+
+        native = self._native_search(query, max_results=max_results)
+        if native:
+            return native
 
         query_lower = query.lower()
         results: list[dict[str, Any]] = []
@@ -461,6 +575,24 @@ class MemoryManager:
 
         return results
 
+    def _native_search(self, query: str, max_results: int = 10) -> list[dict[str, Any]]:
+        """Search through MagGraph's structured query API."""
+        if not self.available or not hasattr(self._index, "search"):
+            return []
+        try:
+            results = []
+            for item in self._index.search(query=query, include_suppressed=False, limit=max_results):
+                data = dict(item)
+                data.setdefault("type", data.get("node_type", ""))
+                data["snippet"] = str(data.get("summary") or "").replace("\n", " ")
+                data["reason"] = _search_reason(data)
+                with contextlib.suppress(Exception):
+                    data["backlinks"] = self._index.backlinks(data["id"])
+                results.append(data)
+            return results
+        except Exception:
+            return []
+
     def semantic_index(self) -> dict[str, Any]:
         """Rebuild/update the semantic sidecar index."""
         if not self.username:
@@ -475,6 +607,11 @@ class MemoryManager:
             return []
         index = self._semantic_index()
         results = [item.as_dict() for item in index.search(query, top_k=max_results, mode=mode)]
+        for item in results:
+            item.setdefault("matched", ["semantic"])
+            item.setdefault("reason", "semantic sidecar match")
+            with contextlib.suppress(Exception):
+                item["backlinks"] = self._index.backlinks(item["id"])
         if not results and mode != "keyword":
             return self.search(query, max_results=max_results, mode="keyword")
         return results
@@ -577,6 +714,13 @@ class MemoryManager:
 
     def merge_nodes(self, target_id: str, source_id: str) -> dict[str, Any]:
         """Append source body into target and delete source."""
+        if self.available and hasattr(self._index, "merge_nodes"):
+            try:
+                self._index.merge_nodes(target_id, source_id)
+                self._refresh_changed_file(target_id)
+                return {"ok": True, "target": target_id, "deleted": source_id}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
         target = self.read_node(target_id)
         source = self.read_node(source_id)
         if not target or not source or not self.available:
@@ -617,6 +761,13 @@ class MemoryManager:
         }
 
     def suppress_node(self, node_id: str, reason: str = "") -> dict[str, Any]:
+        if self.available and hasattr(self._index, "suppress_node"):
+            try:
+                self._index.suppress_node(node_id, reason=reason or None)
+                self._refresh_changed_file(node_id)
+                return {"ok": True, "id": node_id, "reason": reason}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
         node = self.read_node(node_id)
         if not node or not self.available:
             return {"ok": False, "error": f"Node not found: {node_id}"}
@@ -628,6 +779,13 @@ class MemoryManager:
             return {"ok": False, "error": str(e)}
 
     def unsuppress_node(self, node_id: str) -> dict[str, Any]:
+        if self.available and hasattr(self._index, "unsuppress_node"):
+            try:
+                self._index.unsuppress_node(node_id)
+                self._refresh_changed_file(node_id)
+                return {"ok": True, "id": node_id}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
         node = self.read_node(node_id)
         if not node or not self.available:
             return {"ok": False, "error": f"Node not found: {node_id}"}
@@ -643,6 +801,38 @@ class MemoryManager:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def backlinks(self, node_id: str) -> list[str]:
+        """Return nodes that link to the given memory node."""
+        if not self.available or not hasattr(self._index, "backlinks"):
+            return []
+        try:
+            return list(self._index.backlinks(node_id))
+        except Exception:
+            return []
+
+    def _memory_kind_for_item(self, item: dict[str, Any]) -> str:
+        tags = {str(tag).lower() for tag in item.get("tags", [])}
+        node_type = item.get("type", NODE_FACT)
+        if "task" in tags:
+            return "task"
+        if "failure" in tags or "command" in tags or node_type == NODE_ERROR_PATTERN:
+            return "tool_failure"
+        return MAGGRAPH_MEMORY_KIND_BY_TYPE.get(node_type, "project_fact")
+
+    def _refresh_changed_file(self, node_id: str) -> None:
+        """Update a single MagGraph index entry after a write when supported."""
+        if not hasattr(self._index, "update_file"):
+            return
+        node = self.read_node(node_id)
+        if not node:
+            return
+        rel_path = node.get("path") or f"{node_id}.md"
+        candidates = [str(rel_path), str(self.memory_dir / str(rel_path))]
+        for candidate in candidates:
+            with contextlib.suppress(Exception):
+                self._index.update_file(candidate)
+                return
+
 
 def _first_sentence_or_line(text: str) -> str:
     compact = re.sub(r"\s+", " ", (text or "").strip())
@@ -650,3 +840,28 @@ def _first_sentence_or_line(text: str) -> str:
         return ""
     sentence = re.split(r"(?<=[.!?])\s+", compact, maxsplit=1)[0]
     return sentence or compact.splitlines()[0]
+
+
+def _merge_anchor_results(
+    semantic_results: list[dict[str, Any]],
+    keyword_results: list[dict[str, Any]],
+    limit: int,
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in [*semantic_results, *keyword_results]:
+        node_id = item.get("id")
+        if not node_id or node_id in seen:
+            continue
+        seen.add(node_id)
+        merged.append(item)
+        if len(merged) >= limit:
+            break
+    return merged
+
+
+def _search_reason(item: dict[str, Any]) -> str:
+    matched = ", ".join(item.get("matched") or [])
+    if matched:
+        return f"MagGraph search matched {matched}"
+    return "MagGraph search result"
