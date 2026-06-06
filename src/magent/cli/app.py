@@ -47,6 +47,8 @@ model_app = typer.Typer(help="Model role configuration", name="model")
 subagent_app = typer.Typer(help="Sub-agent configuration and runs", name="subagent")
 profile_app = typer.Typer(help="Guided UX configuration profiles", name="profile")
 permission_app = typer.Typer(help="Permission profile UX", name="permission")
+performance_app = typer.Typer(help="Local performance diagnostics", name="performance")
+workbench_app = typer.Typer(help="Workbench storage maintenance", name="workbench")
 
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
@@ -86,6 +88,8 @@ for _name, _typer in [
     ("subagent", subagent_app),
     ("profile", profile_app),
     ("permission", permission_app),
+    ("performance", performance_app),
+    ("workbench", workbench_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -115,6 +119,7 @@ __all__ = [
     "provider_app",
     "profile_app",
     "permission_app",
+    "performance_app",
     "project_app",
     "release_app",
     "recipe_app",
@@ -127,4 +132,5 @@ __all__ = [
     "subagent_app",
     "user_app",
     "workspace_app",
+    "workbench_app",
 ]

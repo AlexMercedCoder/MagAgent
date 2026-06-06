@@ -30,6 +30,7 @@ magent configure
 magent onboard
 magent profile list
 magent profile apply coding-cloud
+magent profile apply lightweight
 magent provider list
 magent provider detect
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
@@ -106,6 +107,10 @@ magent model wizard
 
 Run `magent docs generate-config` to regenerate the packaged config reference from
 MagAgent's default config, permission modes, model roles, and provider catalog.
+
+Use `magent profile apply lightweight` on constrained machines or very large
+repositories. It lowers memory/repo-map budgets, disables semantic memory for the
+active user, and limits sub-agent parallelism.
 
 Memory behavior can be changed per active user:
 

@@ -62,6 +62,23 @@ PROFILE_PRESETS: dict[str, dict[str, Any]] = {
         "models": {"coding": "openai/gpt-5", "review": "openai/gpt-5"},
         "permissions": {"mode": "paranoid"},
     },
+    "lightweight": {
+        "description": "Low-overhead defaults for older laptops, small VPSes, or large repos.",
+        "provider": {"id": "ollama", "model": "qwen2.5-coder:7b", "access_mode": "local"},
+        "memory": {"mode": "manual", "semantic": False, "write_every": 10},
+        "subagents": {"max_subagents": 1, "max_parallel": 1, "model_role": "coding"},
+        "models": {"coding": "ollama/qwen2.5-coder:7b", "memory": ""},
+        "defaults": {
+            "memory_budget_tokens": 1800,
+            "repo_map_budget_tokens": 700,
+            "skill_budget_tokens": 1000,
+        },
+        "context": {
+            "max_history_tokens": 3500,
+            "keep_recent_turns": 4,
+            "compact_every_n_turns": 6,
+        },
+    },
 }
 
 
@@ -88,6 +105,8 @@ def apply_profile(name: str, username: str | None = None) -> dict[str, Any]:
     )
     cfg = load_global_config()
     cfg.setdefault("models", {}).update(profile.get("models", {}))
+    cfg.setdefault("defaults", {}).update(profile.get("defaults", {}))
+    cfg.setdefault("context", {}).update(profile.get("context", {}))
     if "permissions" in profile:
         cfg.setdefault("defaults", {})["permission_mode"] = profile["permissions"].get("mode", "balanced")
     save_global_config(cfg)

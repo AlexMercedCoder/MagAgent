@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from magent.project_scan import iter_project_files
 from magent.tokens import estimate_tokens, truncate_to_tokens
 
 IGNORE_DIRS = {
@@ -130,24 +131,13 @@ class RepoMapCache:
         return entries
 
     def _iter_files(self, limit: int):
-        yielded = 0
-        stack = [self.root]
-        while stack and yielded < limit:
-            current = stack.pop()
-            try:
-                children = sorted(current.iterdir(), key=lambda p: (p.is_file(), p.name), reverse=True)
-            except OSError:
-                continue
-            for child in children:
-                if child.is_dir():
-                    if child.name not in IGNORE_DIRS and not child.name.startswith("."):
-                        stack.append(child)
-                    continue
-                if child.suffix in SOURCE_EXTS or child.name in IMPORTANT_FILES:
-                    yielded += 1
-                    yield child
-                    if yielded >= limit:
-                        break
+        yield from iter_project_files(
+            self.root,
+            suffixes=SOURCE_EXTS,
+            names=IMPORTANT_FILES,
+            limit=limit,
+            ignore_dirs=IGNORE_DIRS,
+        )
 
 
 def _words(text: str) -> set[str]:

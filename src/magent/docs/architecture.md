@@ -30,6 +30,10 @@ changes for user profiles.
 
 `magent.provider_catalog` is the shared source of truth for provider metadata: setup labels, default models, environment variables, access modes, display names, LiteLLM routing modes, and OpenAI-compatible base URLs. Provider additions should start there, then add focused tests for runtime model routing and config detection.
 
+`magent.project_scan` owns bounded project file iteration. Repo maps, code
+indexes, test maps, and performance diagnostics should use this shared scanner
+so file caps, git-aware discovery, and ignored directories remain consistent.
+
 ### Agent Runtime
 
 `magent.agent` coordinates provider calls, memory recall, tool dispatch, checkpoints, and memory writes for interactive and one-shot sessions.
@@ -58,6 +62,10 @@ Workbench state is local operational state: tasks, artifacts, project profiles, 
 `magent.events` stores structured workbench events for trust and auditability. Config
 proposal creation, application, and discard operations record events there, and other
 state-changing UX flows should follow the same pattern.
+
+`magent.workbench_maintenance` owns workbench storage statistics, pruning, and
+JSON compaction for high-volume local stores. New history-like stores should be
+included there when they can grow indefinitely.
 
 `magent.workbench_domains.*` exposes domain-specific import modules for plans, patches, checkpoints, project helpers, code/test intelligence, and release/workspace helpers. These modules currently preserve compatibility while providing stable targets for future extraction.
 

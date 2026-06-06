@@ -26,7 +26,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.22.1" in version.output
+    assert "MagAgent 0.23.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -98,6 +98,7 @@ def test_cli_guided_ux_commands(tmp_path: Path, monkeypatch) -> None:
 
     profiles = runner.invoke(cli_main.app, ["profile", "list"])
     applied = runner.invoke(cli_main.app, ["profile", "apply", "low-cost"])
+    lightweight = runner.invoke(cli_main.app, ["profile", "apply", "lightweight"])
     initialized = runner.invoke(cli_main.app, ["project", "init", "--path", str(project)])
     onboarded = runner.invoke(
         cli_main.app,
@@ -108,9 +109,12 @@ def test_cli_guided_ux_commands(tmp_path: Path, monkeypatch) -> None:
     fixed = runner.invoke(cli_main.app, ["doctor", "--fix"])
 
     assert profiles.exit_code == 0
+    assert any(item["name"] == "lightweight" for item in json.loads(profiles.output)["profiles"])
     assert any(item["name"] == "low-cost" for item in json.loads(profiles.output)["profiles"])
     assert applied.exit_code == 0
     assert json.loads(applied.output)["profile"] == "low-cost"
+    assert lightweight.exit_code == 0
+    assert json.loads(lightweight.output)["profile"] == "lightweight"
     assert initialized.exit_code == 0
     assert (project / ".magent" / "playbook.toml").exists()
     assert onboarded.exit_code == 0
@@ -161,6 +165,10 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
         cli_main.app,
         ["docs", "generate-config", "--out", str(tmp_path / "config-reference.md")],
     )
+    perf = runner.invoke(cli_main.app, ["performance", "doctor", "--json", "--project", str(tmp_path)])
+    workbench_stats = runner.invoke(cli_main.app, ["workbench", "stats"])
+    workbench_prune = runner.invoke(cli_main.app, ["workbench", "prune", "--dry-run"])
+    workbench_compact = runner.invoke(cli_main.app, ["workbench", "compact"])
 
     assert provider.exit_code == 0
     assert matrix.exit_code == 0
@@ -195,6 +203,14 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     assert (tmp_path / "providers.md").exists()
     assert generated_config.exit_code == 0
     assert (tmp_path / "config-reference.md").exists()
+    assert perf.exit_code == 0
+    assert json.loads(perf.output)["repo"]["files_seen"] >= 0
+    assert workbench_stats.exit_code == 0
+    assert json.loads(workbench_stats.output)["ok"] is True
+    assert workbench_prune.exit_code == 0
+    assert json.loads(workbench_prune.output)["dry_run"] is True
+    assert workbench_compact.exit_code == 0
+    assert json.loads(workbench_compact.output)["ok"] is True
 
 
 async def _fake_test_provider(provider) -> bool:

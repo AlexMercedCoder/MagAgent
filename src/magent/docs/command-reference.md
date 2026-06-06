@@ -88,6 +88,7 @@ Generated from the active Typer command tree.
 - `magent notes`
 - `magent onboard`
 - `magent patch`
+- `magent performance`
 - `magent permission`
 - `magent plan`
 - `magent plan-apply`
@@ -119,6 +120,7 @@ Generated from the active Typer command tree.
 - `magent tutorial`
 - `magent ui`
 - `magent user`
+- `magent workbench`
 - `magent workspace`
 
 ## data
@@ -232,6 +234,10 @@ Generated from the active Typer command tree.
 - `magent patch revert`
 - `magent patch save`
 
+## performance
+
+- `magent performance doctor`
+
 ## permission
 
 - `magent permission explain`
@@ -335,6 +341,12 @@ Generated from the active Typer command tree.
 - `magent user delete`
 - `magent user list`
 - `magent user switch`
+
+## workbench
+
+- `magent workbench compact`
+- `magent workbench prune`
+- `magent workbench stats`
 
 ## workspace
 

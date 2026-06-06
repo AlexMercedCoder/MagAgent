@@ -40,6 +40,7 @@ from magent.cli.app import (
     memory_semantic_app,
     model_app,
     patch_app,
+    performance_app,
     permission_app,
     policy_app,
     profile_app,
@@ -54,6 +55,7 @@ from magent.cli.app import (
     test_app,
     tools_app,
     user_app,
+    workbench_app,
     workspace_app,
 )
 from magent.cli.command_context import (
@@ -65,8 +67,10 @@ from magent.cli.command_context import (
 )
 from magent.cli.commands.config import register_config_commands
 from magent.cli.commands.events import register_event_commands
+from magent.cli.commands.performance import register_performance_commands
 from magent.cli.commands.permissions import register_permission_commands
 from magent.cli.commands.providers import register_provider_ux_commands
+from magent.cli.commands.workbench import register_workbench_commands
 from magent.config import (
     CONFIG_DIR,
     create_user,
@@ -84,6 +88,8 @@ register_provider_ux_commands(provider_app)
 register_config_commands(config_app)
 register_event_commands(events_app)
 register_permission_commands(permission_app)
+register_performance_commands(performance_app)
+register_workbench_commands(workbench_app)
 
 
 # ─────────────────────────────────────────────
@@ -951,7 +957,8 @@ def code_index_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Build and save a code intelligence index."""
     from magent.workbench import save_code_index
 
-    index = save_code_index(_store(), project)
+    with console.status("[bold]Indexing code...[/bold]"):
+        index = save_code_index(_store(), project)
     console.print_json(data={"root": index["root"], "files": len(index["files"]), "symbols": len(index["symbols"])})
 
 
@@ -979,7 +986,9 @@ def test_map_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Build a source-to-test map."""
     from magent.workbench import test_map
 
-    console.print_json(data=test_map(project))
+    with console.status("[bold]Mapping tests...[/bold]"):
+        result = test_map(project)
+    console.print_json(data=result)
 
 
 @test_app.command("related")
@@ -1086,7 +1095,9 @@ def release_check_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Run release readiness checks."""
     from magent.workbench import release_check
 
-    console.print_json(data=release_check(_store(), project))
+    with console.status("[bold]Running release checks...[/bold]"):
+        result = release_check(_store(), project)
+    console.print_json(data=result)
 
 
 @release_app.command("notes")
@@ -2222,7 +2233,9 @@ def memory_search(
 def memory_index_cmd():
     """Build or update the semantic memory search index."""
     mgr, _ = _get_memory_manager()
-    console.print_json(data=mgr.semantic_index())
+    with console.status("[bold]Indexing semantic memory...[/bold]"):
+        result = mgr.semantic_index()
+    console.print_json(data=result)
 
 
 @memory_semantic_app.command("status")

@@ -29,5 +29,10 @@ Useful commands:
 - `magent dashboard`
 - `magent dashboard --serve`
 - `magent ui`
+- `magent workbench stats`
+- `magent workbench prune --dry-run`
+- `magent workbench compact`
 
-Workbench files are local JSON and are safe to inspect directly.
+Workbench files are local JSON and are safe to inspect directly. High-volume
+stores such as command history, events, sandbox runs, eval runs, and checkpoints
+can be pruned with `magent workbench prune` after reviewing `--dry-run` output.

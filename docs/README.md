@@ -21,6 +21,7 @@ magent docs doctor
 - [Generated Config Reference](../src/magent/docs/config-reference.md)
 - [Configuration](../src/magent/docs/configuration.md)
 - [Troubleshooting](../src/magent/docs/troubleshooting.md)
+- [Performance](../src/magent/docs/performance.md)
 
 Common setup tasks now have CLI-first flows:
 

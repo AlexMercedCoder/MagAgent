@@ -11,6 +11,10 @@ Important command paths:
 - `magent doctor`: run install, provider, memory, docs, and integration checks.
 - `magent doctor --json`: emit actionable readiness checks.
 - `magent doctor --fix`: apply safe local fixes for missing UX defaults.
+- `magent performance doctor`: inspect startup, repo, workbench, memory, and config performance.
+- `magent workbench stats`: show local workbench store sizes and maintenance recommendations.
+- `magent workbench prune`: prune old high-volume workbench records.
+- `magent workbench compact`: rewrite JSON workbench stores and report bytes reclaimed.
 - `magent config show`: show global and current-user config files.
 - `magent config backup`: back up global and current-user config files.
 - `magent config list-backups`: list config backups.

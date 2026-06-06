@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import heapq
 import json
 import math
 import re
@@ -190,13 +191,15 @@ class SemanticMemoryIndex:
                 "SELECT node_id, chunk_id, node_type, text, embedding, embedding_dim FROM memory_embeddings"
             ).fetchall()
 
-        results: list[SemanticSearchResult] = []
+        scored_rows = []
         for node_id, chunk_id, node_type, text, blob, dim in rows:
+            lexical_score = keyword_score(query_terms, text)
+            if mode == "hybrid" and lexical_score <= 0 and len(rows) > 1000:
+                continue
             semantic_score = 0.0
             if query_vec:
                 vec = _unpack_vector(blob, dim)
                 semantic_score = cosine(query_vec, vec)
-            lexical_score = keyword_score(query_terms, text)
             if mode == "semantic":
                 score = semantic_score
             elif mode == "keyword":
@@ -204,22 +207,25 @@ class SemanticMemoryIndex:
             else:
                 score = (semantic_score * 0.72) + (lexical_score * 0.28)
             if score > 0:
-                results.append(
-                    SemanticSearchResult(
-                        node_id=node_id,
-                        chunk_id=int(chunk_id),
-                        node_type=node_type,
-                        text=text,
-                        score=score,
-                        semantic_score=semantic_score,
-                        keyword_score=lexical_score,
+                scored_rows.append(
+                    (
+                        score,
+                        SemanticSearchResult(
+                            node_id=node_id,
+                            chunk_id=int(chunk_id),
+                            node_type=node_type,
+                            text=text,
+                            score=score,
+                            semantic_score=semantic_score,
+                            keyword_score=lexical_score,
+                        ),
                     )
                 )
 
-        results.sort(key=lambda item: item.score, reverse=True)
+        top_candidates = heapq.nlargest(max(top_k * 4, top_k), scored_rows, key=lambda item: item[0])
         deduped: list[SemanticSearchResult] = []
         seen_nodes: set[str] = set()
-        for item in results:
+        for _, item in top_candidates:
             if item.node_id in seen_nodes:
                 continue
             seen_nodes.add(item.node_id)

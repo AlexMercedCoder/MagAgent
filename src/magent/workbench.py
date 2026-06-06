@@ -23,6 +23,7 @@ from typing import Any
 
 from magent import workbench_store as _workbench_store
 from magent.config import LOGS_DIR, USERS_DIR, user_memory_dir
+from magent.project_scan import ignored_path, iter_project_files
 from magent.tokens import estimate_tokens
 from magent.workbench_store import now_iso
 
@@ -1630,19 +1631,11 @@ def _ci_repair_hints(log: str) -> list[str]:
 
 
 def _ignored(path: Path) -> bool:
-    parts = set(path.parts)
-    return bool(parts & {".git", ".venv", "__pycache__", "node_modules", "target"})
+    return ignored_path(path)
 
 
 def _iter_project_files(root: Path, *, suffixes: set[str], limit: int):
-    yielded = 0
-    for path in root.rglob("*"):
-        if yielded >= limit:
-            break
-        if _ignored(path) or not path.is_file() or path.suffix not in suffixes:
-            continue
-        yielded += 1
-        yield path
+    yield from iter_project_files(root, suffixes=suffixes, limit=limit)
 
 
 def _read_text_safe(path: Path) -> str:
