@@ -12,7 +12,9 @@ from typing import Any
 
 from rich.console import Console
 
+from magent.agent_defs import resolve_invocation
 from magent.config import Config, user_memory_dir
+from magent.hooks import run_hooks
 from magent.logging import SessionLogger
 from magent.memory import MemoryManager
 from magent.memory.extraction import extract_memories
@@ -132,6 +134,9 @@ class AgentSession:
         slug = name.lower().replace(" ", "_").replace("-", "_")
         return slug[:40] if slug else None
 
+    def _cwd(self) -> str:
+        return str(getattr(self, "cwd", "."))
+
     def _build_system_prompt(self, user_message: str) -> str:
         memory_context = ""
         if self.memory.available:
@@ -225,10 +230,16 @@ class AgentSession:
                     tool_args = {}
 
                 # Route to MCP or built-in tool
+                run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
                 if self.mcp.is_mcp_tool(tool_name):
                     result = await self.mcp.dispatch(tool_name, tool_args)
                 else:
                     result = await self.tools.dispatch(tool_name, tool_args)
+                run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
+                if tool_name in {"write_file", "edit_file", "delete_file"}:
+                    run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
+                if tool_name == "run_shell" and not result.get("ok", True):
+                    run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
                 self._observe_tool_result(tool_name, tool_args, result)
                 result_str = self._compress_tool_result(tool_name, result)
 
@@ -258,6 +269,7 @@ class AgentSession:
 
     async def stream_chat(self, user_message: str) -> AsyncIterator[str]:
         """Stream the agent response token by token. Yields text chunks."""
+        user_message = self._resolve_agent_message(user_message)
         self.turn_count += 1
         self.logger.log_user_turn(self.turn_count, user_message)
         self.conversation.append({"role": "user", "content": user_message})
@@ -312,10 +324,16 @@ class AgentSession:
                     except json.JSONDecodeError:
                         tool_args = {}
                     # Route to MCP or built-in tool
+                    run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
                     if self.mcp.is_mcp_tool(tool_name):
                         result = await self.mcp.dispatch(tool_name, tool_args)
                     else:
                         result = await self.tools.dispatch(tool_name, tool_args)
+                    run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
+                    if tool_name in {"write_file", "edit_file", "delete_file"}:
+                        run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
+                    if tool_name == "run_shell" and not result.get("ok", True):
+                        run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
                     self._observe_tool_result(tool_name, tool_args, result)
                     messages.append(
                         {
@@ -364,6 +382,7 @@ class AgentSession:
 
     async def chat(self, user_message: str) -> str:
         """Non-streaming completion. Returns full response string."""
+        user_message = self._resolve_agent_message(user_message)
         self.turn_count += 1
         self.logger.log_user_turn(self.turn_count, user_message)
         self.conversation.append({"role": "user", "content": user_message})
@@ -384,6 +403,14 @@ class AgentSession:
         self._maybe_compact_conversation()
 
         return response
+
+    def _resolve_agent_message(self, user_message: str) -> str:
+        invocation = resolve_invocation(user_message, self._cwd())
+        if invocation.get("ok"):
+            agent = invocation.get("agent", {})
+            self.scratchpad["active_agent"] = agent.get("name")
+            return invocation["message"]
+        return user_message
 
     def _maybe_compact_conversation(self) -> None:
         keep = self.config.keep_recent_turns

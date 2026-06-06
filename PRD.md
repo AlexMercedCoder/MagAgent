@@ -659,7 +659,7 @@ Shipped workbench surfaces include:
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.23.0"
+version = "0.24.0"
 selective_tools = true
 
 [defaults]

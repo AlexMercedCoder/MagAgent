@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from magent.context import promotion_candidates
+from magent.hooks import run_hooks
 from magent.records import PromotionCandidateRecord
 from magent.workbench import session_timeline
 from magent.workbench_store import now_iso
@@ -18,6 +19,7 @@ def memory_inbox(store: Any, project: str | Path = ".", limit: int = 30) -> dict
     decisions = _decisions_by_id(store)
     candidates = []
     for candidate in promotion_candidates(store, project, limit=limit):
+        run_hooks(project, "memory_candidate", {"candidate": candidate})
         decision = decisions.get(candidate["id"], {})
         status = decision.get("status", "pending")
         if status == "rejected":

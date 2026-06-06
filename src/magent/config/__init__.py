@@ -29,7 +29,7 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.23.0",
+        "version": "0.24.0",
         "selective_tools": True,
         "max_subagents": 3,
     },

@@ -18,6 +18,7 @@ from rich.table import Table
 
 from magent import __version__
 from magent.cli.app import (
+    agent_app,
     api_app,
     app,
     artifact_app,
@@ -26,6 +27,7 @@ from magent.cli.app import (
     code_app,
     config_app,
     context_app,
+    daemon_app,
     data_app,
     docs_app,
     eval_app,
@@ -33,8 +35,10 @@ from magent.cli.app import (
     followup_app,
     gateway_app,
     github_app,
+    hook_app,
     inbox_app,
     knowledge_app,
+    lsp_app,
     mcp_app,
     memory_app,
     memory_semantic_app,
@@ -42,6 +46,7 @@ from magent.cli.app import (
     patch_app,
     performance_app,
     permission_app,
+    plugin_app,
     policy_app,
     profile_app,
     project_app,
@@ -65,10 +70,15 @@ from magent.cli.command_context import (
     require_user,
     store,
 )
+from magent.cli.commands.agents import register_agent_commands
 from magent.cli.commands.config import register_config_commands
+from magent.cli.commands.daemon import register_daemon_commands
 from magent.cli.commands.events import register_event_commands
+from magent.cli.commands.hooks import register_hook_commands
+from magent.cli.commands.lsp import register_lsp_commands
 from magent.cli.commands.performance import register_performance_commands
 from magent.cli.commands.permissions import register_permission_commands
+from magent.cli.commands.plugins import register_plugin_commands
 from magent.cli.commands.providers import register_provider_ux_commands
 from magent.cli.commands.workbench import register_workbench_commands
 from magent.config import (
@@ -84,11 +94,16 @@ from magent.config import (
 )
 
 console = Console()
+register_agent_commands(agent_app)
 register_provider_ux_commands(provider_app)
 register_config_commands(config_app)
+register_daemon_commands(daemon_app)
 register_event_commands(events_app)
+register_hook_commands(hook_app)
+register_lsp_commands(lsp_app)
 register_permission_commands(permission_app)
 register_performance_commands(performance_app)
+register_plugin_commands(plugin_app)
 register_workbench_commands(workbench_app)
 
 

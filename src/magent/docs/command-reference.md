@@ -2,6 +2,13 @@
 
 Generated from the active Typer command tree.
 
+## agent
+
+- `magent agent create`
+- `magent agent list`
+- `magent agent run`
+- `magent agent show`
+
 ## api
 
 - `magent api list`
@@ -55,6 +62,7 @@ Generated from the active Typer command tree.
 
 ## core
 
+- `magent agent`
 - `magent api`
 - `magent artifact`
 - `magent ask`
@@ -65,6 +73,7 @@ Generated from the active Typer command tree.
 - `magent config`
 - `magent configure`
 - `magent context`
+- `magent daemon`
 - `magent dashboard`
 - `magent data`
 - `magent diagnostics`
@@ -78,8 +87,10 @@ Generated from the active Typer command tree.
 - `magent gateway`
 - `magent github`
 - `magent graph`
+- `magent hook`
 - `magent inbox`
 - `magent knowledge`
+- `magent lsp`
 - `magent mcp`
 - `magent memory`
 - `magent mode`
@@ -99,6 +110,7 @@ Generated from the active Typer command tree.
 - `magent plan-run`
 - `magent plan-sandbox`
 - `magent plan-show`
+- `magent plugin`
 - `magent policy`
 - `magent profile`
 - `magent project`
@@ -122,6 +134,13 @@ Generated from the active Typer command tree.
 - `magent user`
 - `magent workbench`
 - `magent workspace`
+
+## daemon
+
+- `magent daemon enqueue`
+- `magent daemon list`
+- `magent daemon run-once`
+- `magent daemon start`
 
 ## data
 
@@ -174,6 +193,12 @@ Generated from the active Typer command tree.
 - `magent github prs`
 - `magent github status`
 
+## hook
+
+- `magent hook init`
+- `magent hook list`
+- `magent hook run`
+
 ## inbox
 
 - `magent inbox add`
@@ -185,6 +210,14 @@ Generated from the active Typer command tree.
 - `magent knowledge forget`
 - `magent knowledge recall`
 - `magent knowledge remember`
+
+## lsp
+
+- `magent lsp definition`
+- `magent lsp diagnostics`
+- `magent lsp references`
+- `magent lsp status`
+- `magent lsp symbols`
 
 ## mcp
 
@@ -244,6 +277,13 @@ Generated from the active Typer command tree.
 - `magent permission propose`
 - `magent permission set`
 - `magent permission status`
+
+## plugin
+
+- `magent plugin disable`
+- `magent plugin enable`
+- `magent plugin install`
+- `magent plugin list`
 
 ## policy
 

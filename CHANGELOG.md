@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.24.0
+
+- Added Markdown agent definitions from `.magent/agents/*.md`, user config agents, built-ins, and enabled plugin agent packs.
+- Added manual agent invocation with `@review`, `@explore`, `@docs`, and custom agent names.
+- Added project hook automation for pre/post tool calls, post-edit events, command failures, memory candidates, and release checks.
+- Added LSP-aware code intelligence commands for status, symbols, diagnostics, definitions, and references, with bounded local fallbacks.
+- Added a durable local background queue with `magent daemon` for asks, recipes, plans, shell tasks, followups, and gateway background work.
+- Added local plugin packaging commands for installable packs containing agents, recipes, skills, tools, and MCP configuration.
+- Updated packaged docs, repo docs, architecture docs, generated references, and release tests for the new extension systems.
+
 ## 0.21.0
 
 - Added provider UX commands: `magent provider matrix`, `explain`, `env`, `recommend`, and `catalog-doctor`.

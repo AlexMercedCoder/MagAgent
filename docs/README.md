@@ -22,6 +22,11 @@ magent docs doctor
 - [Configuration](../src/magent/docs/configuration.md)
 - [Troubleshooting](../src/magent/docs/troubleshooting.md)
 - [Performance](../src/magent/docs/performance.md)
+- [Agent Definitions](../src/magent/docs/agents.md)
+- [Hooks](../src/magent/docs/hooks.md)
+- [Code Intelligence](../src/magent/docs/lsp.md)
+- [Background Worker](../src/magent/docs/daemon.md)
+- [Plugins](../src/magent/docs/plugins.md)
 
 Common setup tasks now have CLI-first flows:
 
@@ -39,6 +44,11 @@ magent config propose "use manual memory and paranoid permissions"
 magent config proposals
 magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN"
 magent subagent configure --max 3 --parallel 2
+magent agent create review-helper
+magent hook init
+magent lsp diagnostics
+magent daemon enqueue shell "pytest -q"
+magent plugin list
 magent project init
 magent config backup
 magent events list

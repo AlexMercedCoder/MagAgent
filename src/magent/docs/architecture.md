@@ -40,6 +40,12 @@ so file caps, git-aware discovery, and ignored directories remain consistent.
 
 `magent.subagents` lets the main agent delegate focused work to child sessions. The runner enforces the configured sub-agent cap and parallelism defaults before spawning child sessions.
 
+`magent.agent_defs` loads built-in, user, project, and plugin-backed Markdown agent definitions. Manual `@review`, `@explore`, and `@docs` invocations are resolved before provider calls so specialist prompts can be reused from chat, one-shot tasks, and future sub-agent orchestration.
+
+`magent.hooks` runs project-local lifecycle hooks around tool calls, edits, command failures, memory candidates, and release checks. Runtime modules should emit hook events through this facade instead of executing hook commands directly.
+
+`magent.lsp` owns local code-intelligence helpers. It detects installed language servers and provides bounded fallbacks for symbols, diagnostics, definitions, and references. Review and diagnostics flows consume this module instead of duplicating syntax checks.
+
 The agent should depend on stable facades:
 
 - `magent.memory.MemoryManager`
@@ -118,7 +124,7 @@ state and must not run tests, linters, release checks, or other long-running
 commands. Expensive actions belong behind explicit button endpoints such as
 `/api/release/check`.
 
-### Sandboxes, Evals, Browser, And GitHub
+### Sandboxes, Evals, Browser, GitHub, And Background Work
 
 `magent.sandbox` owns isolated plan and recipe execution in worktree, copy, and Docker container modes.
 
@@ -127,6 +133,10 @@ commands. Expensive actions belong behind explicit button endpoints such as
 `magent.browser` owns optional Playwright-backed browser snapshot and screenshot helpers.
 
 `magent.github_workflows` owns GitHub PR and issue commands through the authenticated `gh` CLI.
+
+`magent.daemon` owns the durable background queue for asks, recipes, plans, shell tasks, scheduled followups, and gateway work. It uses the workbench store so queued work remains inspectable and resumable.
+
+`magent.plugins` owns installable extension pack metadata and enabled state. Plugin packs can carry agents, recipes, skills, tool bundles, and MCP config; currently enabled plugin agent directories participate directly in agent discovery.
 
 ## Compatibility Rule
 

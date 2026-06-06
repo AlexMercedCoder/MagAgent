@@ -18,6 +18,7 @@ gateway_app = typer.Typer(help="Remote gateway (Slack / Discord / Telegram)", na
 mcp_app = typer.Typer(help="Manage MCP (Model Context Protocol) servers", name="mcp")
 task_app = typer.Typer(help="Persistent task ledger", name="task")
 artifact_app = typer.Typer(help="Track generated artifacts", name="artifact")
+agent_app = typer.Typer(help="Project and user agent definitions", name="agent")
 project_app = typer.Typer(help="Project profiles and routines", name="project")
 inbox_app = typer.Typer(help="Local command/task inbox", name="inbox")
 routine_app = typer.Typer(help="Recurring routine registry", name="routine")
@@ -42,6 +43,10 @@ tools_app = typer.Typer(help="Tool capability packs", name="tools")
 eval_app = typer.Typer(help="Local benchmark/eval suites", name="eval")
 github_app = typer.Typer(help="GitHub PR and issue workflows", name="github")
 browser_app = typer.Typer(help="Browser automation helpers", name="browser")
+hook_app = typer.Typer(help="Project workflow hooks", name="hook")
+lsp_app = typer.Typer(help="LSP-backed code intelligence", name="lsp")
+daemon_app = typer.Typer(help="Background worker queue", name="daemon")
+plugin_app = typer.Typer(help="Installable extension packs", name="plugin")
 provider_app = typer.Typer(help="Provider setup and diagnostics", name="provider")
 model_app = typer.Typer(help="Model role configuration", name="model")
 subagent_app = typer.Typer(help="Sub-agent configuration and runs", name="subagent")
@@ -59,6 +64,7 @@ app.add_typer(mcp_app, name="mcp")
 for _name, _typer in [
     ("task", task_app),
     ("artifact", artifact_app),
+    ("agent", agent_app),
     ("project", project_app),
     ("inbox", inbox_app),
     ("routine", routine_app),
@@ -83,6 +89,10 @@ for _name, _typer in [
     ("eval", eval_app),
     ("github", github_app),
     ("browser", browser_app),
+    ("hook", hook_app),
+    ("lsp", lsp_app),
+    ("daemon", daemon_app),
+    ("plugin", plugin_app),
     ("provider", provider_app),
     ("model", model_app),
     ("subagent", subagent_app),
@@ -96,6 +106,7 @@ for _name, _typer in [
 __all__ = [
     "api_app",
     "app",
+    "agent_app",
     "artifact_app",
     "checkpoint_app",
     "browser_app",
@@ -103,19 +114,23 @@ __all__ = [
     "context_app",
     "config_app",
     "data_app",
+    "daemon_app",
     "docs_app",
     "events_app",
     "followup_app",
     "gateway_app",
     "eval_app",
     "github_app",
+    "hook_app",
     "inbox_app",
     "knowledge_app",
     "mcp_app",
     "memory_app",
     "memory_semantic_app",
+    "lsp_app",
     "patch_app",
     "policy_app",
+    "plugin_app",
     "provider_app",
     "profile_app",
     "permission_app",

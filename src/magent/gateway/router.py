@@ -125,6 +125,17 @@ class MessageRouter:
         )
 
         try:
+            if self.config.get("background"):
+                from magent.daemon import enqueue_task
+                from magent.workbench import WorkbenchStore
+
+                task = enqueue_task(
+                    WorkbenchStore(self._username),
+                    "ask",
+                    {"task": msg.text, "source": f"{msg.platform}/{msg.channel_id}"},
+                    project=".",
+                )
+                return f"Queued background task {task['id']}"
             session = self._get_session(msg.channel_id)
             response = await session.chat(msg.text)
             return response

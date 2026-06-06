@@ -506,7 +506,20 @@ def review_diff(root: str | Path, base: str = "HEAD") -> list[dict[str, Any]]:
 
 
 def review_summary(root: str | Path, base: str = "HEAD") -> dict[str, Any]:
+    from magent.lsp import lsp_diagnostics
+
     findings = review_diff(root, base)
+    diagnostics = lsp_diagnostics(root)
+    for diagnostic in diagnostics.get("diagnostics", [])[:20]:
+        findings.append(
+            {
+                "priority": "P1",
+                "category": "diagnostics",
+                "line": 0,
+                "message": diagnostic.get("message", "Diagnostic failure"),
+                "evidence": diagnostic.get("path", ""),
+            }
+        )
     categories = Counter(item.get("category", "general") for item in findings)
     files = _run_git(root, ["diff", "--name-only", base, "--"]).splitlines()
     file_groups = {
@@ -523,6 +536,7 @@ def review_summary(root: str | Path, base: str = "HEAD") -> dict[str, Any]:
         "categories": dict(categories),
         "changed_files": files,
         "files": file_groups,
+        "diagnostics": diagnostics,
     }
 
 
@@ -1169,6 +1183,8 @@ def ci_repair_plan(root: str | Path, triage: dict[str, Any] | None = None) -> di
 
 
 def project_diagnostics(root: str | Path, store: WorkbenchStore | None = None) -> list[dict[str, Any]]:
+    from magent.lsp import lsp_diagnostics
+
     root_path = Path(root).resolve()
     checks: list[tuple[str, list[str], bool]] = []
     if (root_path / "pyproject.toml").exists() and shutil.which("ruff"):
@@ -1194,10 +1210,22 @@ def project_diagnostics(root: str | Path, store: WorkbenchStore | None = None) -
     if store is not None:
         for item in results:
             record_command_result(store, root_path, item["name"], item["ok"], source="diagnostics")
+    lsp_result = lsp_diagnostics(root_path)
+    results.append(
+        {
+            "name": "lsp diagnostics",
+            "ok": lsp_result.get("ok", False),
+            "stdout": "",
+            "stderr": "\n".join(item.get("message", "") for item in lsp_result.get("diagnostics", [])[:10]),
+            "diagnostics": lsp_result.get("diagnostics", []),
+        }
+    )
     return results
 
 
 def release_check(store: WorkbenchStore | None = None, root: str | Path = ".") -> dict[str, Any]:
+    from magent.hooks import run_hooks
+
     root_path = Path(root).resolve()
     checks: list[dict[str, Any]] = []
     commands = [
@@ -1218,7 +1246,9 @@ def release_check(store: WorkbenchStore | None = None, root: str | Path = ".") -
         checks.append(item)
         if store is not None:
             record_command_result(store, root_path, item["command"], item["ok"], source="release-check")
-    return {"ok": all(item["ok"] for item in checks), "root": str(root_path), "checks": checks}
+    result = {"ok": all(item["ok"] for item in checks), "root": str(root_path), "checks": checks}
+    result["hooks"] = run_hooks(root_path, "release_check", result)
+    return result
 
 
 def release_notes(root: str | Path = ".", since: str = "HEAD~5") -> dict[str, Any]:

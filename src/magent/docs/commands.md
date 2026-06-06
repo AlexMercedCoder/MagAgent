@@ -54,6 +54,26 @@ Important command paths:
 - `magent docs generate-reference`: generate command reference Markdown from the live CLI.
 - `magent docs generate-providers`: generate provider reference Markdown from the provider catalog.
 - `magent docs generate-config`: generate config reference Markdown from packaged defaults.
+- `magent agent list`: list built-in, project, user, and plugin agent definitions.
+- `magent agent show <name>`: inspect one agent definition.
+- `magent agent create <name>`: create `.magent/agents/<name>.md`.
+- `magent agent run <name> "task"`: preview an agent invocation prompt.
+- `magent hook init`: create `.magent/hooks.toml`.
+- `magent hook list`: show configured hooks.
+- `magent hook run <event>`: manually run hooks for an event.
+- `magent lsp status`: show detected language-server commands.
+- `magent lsp symbols`: list local code symbols.
+- `magent lsp diagnostics`: run local diagnostics.
+- `magent lsp definition <symbol>`: find symbol definitions.
+- `magent lsp references <symbol>`: find local references.
+- `magent daemon enqueue <kind> <value>`: add a durable background task.
+- `magent daemon list`: list background queue items.
+- `magent daemon run-once`: run due queue items once.
+- `magent daemon start`: start a foreground worker pass.
+- `magent plugin list`: list installed extension packs.
+- `magent plugin install <path>`: install a local extension pack.
+- `magent plugin enable <name>`: enable an installed pack.
+- `magent plugin disable <name>`: disable an installed pack.
 - `magent browser snapshot <url>`: capture page title and visible text with Playwright.
 - `magent browser screenshot <url>`: capture a page screenshot with Playwright.
 - `magent eval init`: create a starter local eval suite.
