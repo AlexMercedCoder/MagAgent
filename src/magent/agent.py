@@ -246,8 +246,11 @@ class AgentSession:
                         "role": "tool",
                         "tool_call_id": tc.id,
                         "content": result_str,
+                        "name": tool_name,
                     }
                 )
+                if self.config.prune_stale_tool_results:
+                    self._prune_stale_tool_results(messages, tool_name, result)
 
         return "", messages, total_tool_calls  # unreachable
 
@@ -317,8 +320,11 @@ class AgentSession:
                             "role": "tool",
                             "tool_call_id": tc.id,
                             "content": self._compress_tool_result(tool_name, result),
+                            "name": tool_name,
                         }
                     )
+                    if self.config.prune_stale_tool_results:
+                        self._prune_stale_tool_results(messages, tool_name, result)
 
             # Final streaming pass — text only, no tools
             stream_response = await litellm.acompletion(
@@ -444,6 +450,36 @@ class AgentSession:
         text = json.dumps(compressed, indent=2, default=str)
         return truncate_to_tokens(text, max_tokens + 300, "[...tool result truncated...]")
 
+    def _prune_stale_tool_results(
+        self,
+        messages: list[dict[str, Any]],
+        tool_name: str,
+        result: dict[str, Any],
+    ) -> None:
+        if tool_name not in {"write_file", "edit_file", "delete_file"} or not result.get("path"):
+            return
+        changed_path = str(result["path"])
+        pruned = 0
+        saved = 0
+        for message in messages:
+            if message.get("role") != "tool" or message.get("name") not in {
+                "read_file",
+                "read_file_range",
+                "outline_file",
+            }:
+                continue
+            content = str(message.get("content", ""))
+            if changed_path not in content or content.startswith("[pruned"):
+                continue
+            saved += estimate_tokens(content)
+            message["content"] = (
+                f"[pruned stale {message.get('name')} result — "
+                f"{changed_path} changed via {tool_name}]"
+            )
+            pruned += 1
+        if pruned:
+            self.logger.log_context_pruned("stale_file_tool_result", pruned, saved)
+
     def _tool_definitions(self, user_message: str) -> list[dict[str, Any]]:
         if self.config.selective_tools:
             builtins = self.tools.get_tool_definitions_for_message(user_message)
@@ -458,6 +494,13 @@ class AgentSession:
         prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
         total_tokens = int(getattr(usage, "total_tokens", 0) or prompt_tokens + completion_tokens)
+        cached_tokens = 0
+        details = getattr(usage, "prompt_tokens_details", None)
+        if details:
+            cached_tokens = int(getattr(details, "cached_tokens", 0) or 0)
+        if not cached_tokens and isinstance(usage, dict):
+            details_dict = usage.get("prompt_tokens_details") or {}
+            cached_tokens = int(details_dict.get("cached_tokens") or 0)
         cost = None
         try:
             import litellm
@@ -471,6 +514,7 @@ class AgentSession:
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
+            cached_tokens=cached_tokens,
             cost_usd=cost,
         )
 

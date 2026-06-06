@@ -39,6 +39,8 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Has **31 built-in tools** out of the box — no plugins or configuration required
 - Includes **10 pre-built skill libraries** for docs, spreadsheets, PDFs, images, video, data analysis, REST APIs, databases, desktop automation, and Git
 - Uses token-efficient context management: conversation compaction, repo-map slices, memory/skill budgets, and compressed tool results
+- Ships built-in offline documentation and self-help search through `magent docs`
+- Creates restore checkpoints before agent file writes, edits, and deletes
 - Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, and static dashboards
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
 
@@ -81,6 +83,8 @@ magent
 
 ```bash
 magent ask "Refactor the auth module to use JWTs and add tests"
+magent docs list
+magent doctor
 ```
 
 ---
@@ -245,6 +249,7 @@ MagAgent keeps context lean while preserving useful state:
 - **Selective tool injection** sends a compact relevant tool subset to the model each turn instead of always injecting every built-in tool.
 - **Skill budgets** truncate long skill guidance before it crowds out the task.
 - **Tool result compression** trims large outputs and points the agent to targeted follow-ups.
+- **Stale result pruning** removes old file-read results from live context after files are edited.
 - **Large file reads** return previews; use `outline_file` and `read_file_range` for exact context.
 
 ---
@@ -262,6 +267,8 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Review and planning** — `magent plan --save`, `magent plan-list`, `magent plan-apply`, `magent review`, `magent run`
 - **Repo/test helpers** — `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`
 - **Patch queue** — `magent patch save/list/apply/revert`
+- **Checkpoint undo** — `magent checkpoint list/show/restore`
+- **Built-in docs** — `magent docs list/show/search/doctor`
 - **Data/API/notes** — `magent data inspect`, `magent api save/list`, `magent notes`
 - **Session and usage** — `magent session timeline`, `magent stats`, `magent dashboard`, `magent dashboard --serve`
 

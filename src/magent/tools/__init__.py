@@ -56,6 +56,15 @@ class ToolExecutor:
         self.show_tool_calls = show_tool_calls
         self.username = username
 
+    def _checkpoint(self, abs_path: Path, operation: str) -> str:
+        try:
+            from magent.workbench import create_checkpoint
+
+            item = create_checkpoint(self.username, self.cwd, abs_path, operation)
+            return str(item.get("id", ""))
+        except Exception:
+            return ""
+
     def _resolve_path(self, path: str) -> Path:
         root = Path(self.cwd).resolve()
         raw = Path(path).expanduser()
@@ -189,9 +198,15 @@ class ToolExecutor:
         if not perm.approved:
             return {"ok": False, "error": "Permission denied by user"}
         try:
+            checkpoint_id = self._checkpoint(abs_path, "write_file")
             abs_path.parent.mkdir(parents=True, exist_ok=True)
             abs_path.write_text(content, encoding="utf-8")
-            return {"ok": True, "path": str(abs_path), "bytes": len(content.encode())}
+            return {
+                "ok": True,
+                "path": str(abs_path),
+                "bytes": len(content.encode()),
+                "checkpoint_id": checkpoint_id,
+            }
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -205,8 +220,9 @@ class ToolExecutor:
             content = abs_path.read_text(encoding="utf-8")
             if old_str not in content:
                 return {"ok": False, "error": f"String not found in {path}"}
+            checkpoint_id = self._checkpoint(abs_path, "edit_file")
             abs_path.write_text(content.replace(old_str, new_str, 1), encoding="utf-8")
-            return {"ok": True, "path": str(abs_path)}
+            return {"ok": True, "path": str(abs_path), "checkpoint_id": checkpoint_id}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -217,13 +233,20 @@ class ToolExecutor:
         if not perm.approved:
             return {"ok": False, "error": "Permission denied by user"}
         try:
+            checkpoint_id = self._checkpoint(abs_path, "delete_file")
             if abs_path.is_dir():
                 shutil.rmtree(abs_path)
             else:
                 abs_path.unlink()
-            return {"ok": True, "path": str(abs_path)}
+            return {"ok": True, "path": str(abs_path), "checkpoint_id": checkpoint_id}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    async def magent_docs_search(self, query: str, limit: int = 5) -> ToolResult:
+        """Search MagAgent's built-in documentation."""
+        from magent.docs import search_docs
+
+        return {"ok": True, "query": query, "results": search_docs(query, limit=limit)}
 
     async def list_dir(self, path: str = ".") -> ToolResult:
         abs_path, tier = self._path_tier("read", path)
@@ -1006,6 +1029,14 @@ class ToolExecutor:
                     "args": ("array", "Optional extra args"),
                 },
             ),
+            _def(
+                "magent_docs_search",
+                "Search MagAgent's built-in documentation for command, configuration, and troubleshooting help.",
+                {
+                    "query": ("string", None),
+                    "limit": ("integer", "Number of results (default 5)"),
+                },
+            ),
         ]
 
     def get_tool_definitions_for_message(self, message: str) -> list[dict[str, Any]]:
@@ -1024,6 +1055,7 @@ class ToolExecutor:
             "write_file",
             "git_op",
             "system_info",
+            "magent_docs_search",
         }
         if any(word in text for word in ("delete", "remove", "clean up", "rename")):
             selected.add("delete_file")
@@ -1098,6 +1130,9 @@ class ToolExecutor:
             "db_schema": lambda: self.db_schema(a["table"], a.get("db_name", "default")),
             "db_list_databases": lambda: self.db_list_databases(),
             "git_op": lambda: self.git_op(a["subcommand"], *a.get("args", [])),
+            "magent_docs_search": lambda: self.magent_docs_search(
+                a["query"], a.get("limit", 5)
+            ),
         }
         fn = dispatch_map.get(tool_name)
         if fn is None:

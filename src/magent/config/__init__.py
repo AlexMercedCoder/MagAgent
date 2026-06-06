@@ -58,6 +58,8 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "compact_every_n_turns": 10,
         "keep_recent_turns": 6,
         "max_history_tokens": 6000,
+        "prune_stale_tool_results": True,
+        "prompt_caching": True,
     },
     "skills": {
         "lockfile": str(SKILLS_LOCK),
@@ -183,6 +185,14 @@ class Config:
     @property
     def max_history_tokens(self) -> int:
         return int(self._global.get("context", {}).get("max_history_tokens", 6000))
+
+    @property
+    def prune_stale_tool_results(self) -> bool:
+        return bool(self._global.get("context", {}).get("prune_stale_tool_results", True))
+
+    @property
+    def prompt_caching(self) -> bool:
+        return bool(self._global.get("context", {}).get("prompt_caching", True))
 
     @property
     def recall_body_tokens(self) -> int:

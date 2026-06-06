@@ -53,6 +53,35 @@ def test_apply_saved_patch_reports_missing_patch(tmp_path: Path, monkeypatch) ->
     assert result["ok"] is False
 
 
+def test_checkpoint_restore_file(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
+    target = tmp_path / "project" / "app.py"
+    target.parent.mkdir()
+    target.write_text("old", encoding="utf-8")
+
+    checkpoint = workbench.create_checkpoint("alice", target.parent, target, "edit_file")
+    target.write_text("new", encoding="utf-8")
+    store = workbench.WorkbenchStore("alice")
+    result = workbench.restore_checkpoint(store, checkpoint["id"])
+
+    assert result["ok"] is True
+    assert target.read_text(encoding="utf-8") == "old"
+
+
+def test_checkpoint_restore_created_file_removes_it(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
+    target = tmp_path / "project" / "created.py"
+    target.parent.mkdir()
+
+    checkpoint = workbench.create_checkpoint("alice", target.parent, target, "write_file")
+    target.write_text("created", encoding="utf-8")
+    store = workbench.WorkbenchStore("alice")
+    result = workbench.restore_checkpoint(store, checkpoint["id"])
+
+    assert result["ok"] is True
+    assert not target.exists()
+
+
 def test_repo_graph_and_data_inspect(tmp_path: Path) -> None:
     (tmp_path / "app.py").write_text("import json\nfrom pathlib import Path\n", encoding="utf-8")
     csv_path = tmp_path / "data.csv"

@@ -89,6 +89,7 @@ class SessionLogger:
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
         total_tokens: int | None = None,
+        cached_tokens: int = 0,
         cost_usd: float | None = None,
         estimated: bool = False,
     ) -> None:
@@ -102,8 +103,19 @@ class SessionLogger:
                 "total_tokens": total_tokens
                 if total_tokens is not None
                 else prompt_tokens + completion_tokens,
+                "cached_tokens": cached_tokens,
                 "cost_usd": cost_usd,
                 "estimated": estimated,
+            },
+        )
+
+    def log_context_pruned(self, reason: str, pruned: int, approx_tokens_saved: int = 0) -> None:
+        self._write(
+            "context_pruned",
+            {
+                "reason": reason,
+                "pruned": pruned,
+                "approx_tokens_saved": approx_tokens_saved,
             },
         )
 

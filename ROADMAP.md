@@ -570,6 +570,29 @@ timeout_seconds = 60
 
 ---
 
+### 3.7 · Built-In Documentation and Self-Help
+
+**Status:** MVP shipped in v0.6.0. MagAgent now ships packaged Markdown docs, exposes `magent docs list/show/search/doctor`, includes an internal `magent_docs_search` tool, and has tests around docs packaging/search. Generated command reference pages remain future work.
+
+**Why:** MagAgent should be able to explain itself without requiring the user to leave the terminal, open the README, or guess command syntax. A competitive general-use agent needs robust internal documentation for its own commands, configuration, workflows, memory model, safety model, and troubleshooting paths.
+
+**What to build:**
+- Add a versioned internal documentation bundle shipped inside the package, for example `magent/docs/`.
+- Add `magent docs` commands:
+  - `magent docs list` — list built-in topics
+  - `magent docs show memory` — render a focused topic
+  - `magent docs search "semantic memory"` — search packaged docs locally
+  - `magent docs doctor` — report stale or missing generated docs
+- Add an in-session help tool so the agent can retrieve its own docs before answering questions about MagAgent features.
+- Generate command reference pages from Typer metadata during release so CLI docs stay in sync with the executable.
+- Include troubleshooting docs for providers, permissions, MagGraph memory, semantic indexing, MCP, gateway setup, PyPI/install issues, and common project diagnostics.
+- Add examples and recipes for real workflows: coding task, memory audit, patch queue, CI repair, local dashboard, remote gateway, and productivity workbench.
+- Add tests that fail when documented commands disappear or when new commands ship without docs.
+
+**Implementation:** Keep author-written guides as Markdown, generate command references into Markdown during release, and expose both through a tiny local search index. Reuse the semantic memory sidecar pattern for docs search if useful, but keep keyword search as the always-available baseline.
+
+---
+
 ## Implementation Priority Matrix
 
 | Enhancement | Impact | Effort | Priority |
@@ -586,6 +609,7 @@ timeout_seconds = 60
 | Repo-Map | 🔥🔥🔥🔥 | Medium | **P1** |
 | Context Window Mgmt | 🔥🔥🔥🔥 | Low | **P1** |
 | Cost Tracking | 🔥🔥🔥 | Low | **P1** |
+| Built-In Documentation | 🔥🔥🔥🔥 | Medium | **P1** |
 | Project Profiles | 🔥🔥🔥🔥 | Low | **P2** |
 | Plan Mode | 🔥🔥🔥🔥 | Medium | **P2** |
 | Vector Memory Search | 🔥🔥🔥 | Medium | **P2** |

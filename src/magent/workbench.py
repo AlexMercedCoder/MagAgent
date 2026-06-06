@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import re
 import shutil
@@ -358,6 +359,77 @@ def apply_saved_patch(store: WorkbenchStore, patch_id: str, reverse: bool = Fals
     }
 
 
+def create_checkpoint(
+    username: str,
+    root: str | Path,
+    path: str | Path,
+    operation: str,
+) -> dict[str, Any]:
+    store = WorkbenchStore(username)
+    target = Path(path).expanduser().resolve(strict=False)
+    root_path = Path(root).expanduser().resolve(strict=False)
+    checkpoint_dir = store.root / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    existed = target.exists()
+    content_path = ""
+    size_bytes = 0
+    digest = ""
+    if existed and target.is_file():
+        data = target.read_bytes()
+        size_bytes = len(data)
+        digest = hashlib.sha256(data).hexdigest()
+        content_name = f"{datetime.now(UTC).strftime('%Y%m%d_%H%M%S_%f')}_{target.name}.bak"
+        backup_path = checkpoint_dir / content_name
+        backup_path.write_bytes(data)
+        content_path = str(backup_path)
+    item = store.append(
+        "checkpoints",
+        {
+            "operation": operation,
+            "root": str(root_path),
+            "path": str(target),
+            "existed": existed,
+            "content_path": content_path,
+            "size_bytes": size_bytes,
+            "sha256": digest,
+            "status": "available",
+        },
+    )
+    return item
+
+
+def list_checkpoints(store: WorkbenchStore, limit: int = 20) -> list[dict[str, Any]]:
+    items = store.read("checkpoints", [])
+    return list(reversed(items))[:limit]
+
+
+def show_checkpoint(store: WorkbenchStore, checkpoint_id: str) -> dict[str, Any] | None:
+    return next(
+        (item for item in store.read("checkpoints", []) if item.get("id") == checkpoint_id),
+        None,
+    )
+
+
+def restore_checkpoint(store: WorkbenchStore, checkpoint_id: str) -> dict[str, Any]:
+    item = show_checkpoint(store, checkpoint_id)
+    if not item:
+        return {"ok": False, "error": f"Checkpoint not found: {checkpoint_id}"}
+    target = Path(item.get("path", "")).expanduser().resolve(strict=False)
+    if item.get("existed"):
+        backup = Path(item.get("content_path", ""))
+        if not backup.exists():
+            return {"ok": False, "error": f"Checkpoint content missing: {backup}"}
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(backup.read_bytes())
+    else:
+        if target.exists():
+            if target.is_dir():
+                return {"ok": False, "error": "Refusing to remove directory created after checkpoint"}
+            target.unlink()
+    store.update_item("checkpoints", checkpoint_id, status="restored", restored_at=now_iso())
+    return {"ok": True, "checkpoint": checkpoint_id, "path": str(target)}
+
+
 def env_doctor(root: str | Path) -> list[dict[str, Any]]:
     root_path = Path(root).resolve()
     checks = []
@@ -503,7 +575,10 @@ def usage_stats() -> dict[str, Any]:
     prompt_tokens = 0
     completion_tokens = 0
     total_tokens = 0
+    cached_tokens = 0
     cost_usd = 0.0
+    pruned_results = 0
+    pruned_tokens_saved = 0
     tools = Counter()
     for path in LOGS_DIR.glob("*.jsonl"):
         sessions += 1
@@ -520,7 +595,11 @@ def usage_stats() -> dict[str, Any]:
                 prompt_tokens += int(event.get("prompt_tokens") or 0)
                 completion_tokens += int(event.get("completion_tokens") or 0)
                 total_tokens += int(event.get("total_tokens") or 0)
+                cached_tokens += int(event.get("cached_tokens") or 0)
                 cost_usd += float(event.get("cost_usd") or 0.0)
+            if event.get("event") == "context_pruned":
+                pruned_results += int(event.get("pruned") or 0)
+                pruned_tokens_saved += int(event.get("approx_tokens_saved") or 0)
     return {
         "sessions": sessions,
         "events": events,
@@ -528,7 +607,10 @@ def usage_stats() -> dict[str, Any]:
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": total_tokens,
+        "cached_tokens": cached_tokens,
         "cost_usd": round(cost_usd, 6),
+        "pruned_results": pruned_results,
+        "pruned_tokens_saved": pruned_tokens_saved,
         "top_tools": tools.most_common(10),
     }
 

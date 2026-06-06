@@ -621,6 +621,8 @@ Shipped workbench surfaces include:
 - Planning and review: `magent plan --save`, `magent plan-list`, `magent plan-apply`, `magent run`, `magent review`
 - Repo intelligence: `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`
 - Patch queue: `magent patch save/list/apply/revert`
+- Checkpoint undo: `magent checkpoint list/show/restore`
+- Built-in documentation: `magent docs list/show/search/doctor`
 - Data/API/notes helpers: `magent data inspect`, `magent api save/list`, `magent notes`
 - Session and usage views: `magent session timeline`, `magent stats`, `magent dashboard --serve`
 
@@ -633,7 +635,7 @@ Shipped workbench surfaces include:
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.5.0"
+version = "0.6.0"
 selective_tools = true
 
 [defaults]
@@ -662,6 +664,8 @@ semantic_top_k = 8
 compact_every_n_turns = 10
 keep_recent_turns = 6
 max_history_tokens = 6000
+prune_stale_tool_results = true
+prompt_caching = true
 
 [skills]
 # Skills lockfile — pins skill versions like requirements.txt

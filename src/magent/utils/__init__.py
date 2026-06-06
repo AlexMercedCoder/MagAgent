@@ -84,11 +84,44 @@ def run_doctor() -> None:
         provider_id = cfg.default_provider
         provider_cfg = cfg.provider_config(provider_id)
         checks.append(("Default provider", bool(provider_id), provider_id or "not configured"))
+        checks.append(("Default model", bool(cfg.default_model), cfg.default_model or "not configured"))
         if provider_cfg.get("api_key_env"):
             import os
 
             env = provider_cfg["api_key_env"]
             checks.append((f"{provider_id} API key env", bool(os.environ.get(env)), env))
+        if provider_id == "ollama" or cfg.semantic_memory_provider == "ollama":
+            checks.append(("Ollama CLI", bool(shutil.which("ollama")), shutil.which("ollama") or "not found"))
+
+        try:
+            from magent.semantic_memory import SemanticMemoryIndex
+
+            status = SemanticMemoryIndex(
+                user,
+                memory_dir,
+                provider=cfg.semantic_memory_provider,
+                model=cfg.semantic_memory_model,
+            ).status()
+            checks.append(
+                (
+                    "Semantic memory",
+                    True,
+                    f"{status.get('chunks', 0)} chunks in {status.get('db_path')}",
+                )
+            )
+        except Exception as e:
+            checks.append(("Semantic memory", False, str(e)))
+
+        from magent.config import USERS_DIR
+
+        checkpoint_dir = USERS_DIR / user / "workbench" / "checkpoints"
+        checks.append(
+            (
+                "Checkpoint store",
+                checkpoint_dir.parent.exists() or checkpoint_dir.exists(),
+                str(checkpoint_dir),
+            )
+        )
 
         raw_cfg = cfg.as_dict()
         gateway_cfg = raw_cfg.get("gateway", {})
@@ -113,6 +146,20 @@ def run_doctor() -> None:
         except ImportError:
             checks.append(("MCP SDK", not mcp_cfg, "install with: pip install 'mag-agent[mcp]'"))
 
+    try:
+        from magent.docs import docs_doctor
+
+        doc_status = docs_doctor()
+        checks.append(
+            (
+                "Built-in docs",
+                bool(doc_status.get("ok")),
+                f"{doc_status.get('topics', 0)} topics",
+            )
+        )
+    except Exception as e:
+        checks.append(("Built-in docs", False, str(e)))
+
     # ripgrep (optional)
     rg = shutil.which("rg")
     checks.append(("ripgrep (optional)", bool(rg), rg or "not found — search fallback to grep"))
@@ -123,6 +170,9 @@ def run_doctor() -> None:
 
     maggraph_cli = shutil.which("maggraph")
     checks.append(("MagGraph CLI", bool(maggraph_cli), maggraph_cli or "not found"))
+
+    gh = shutil.which("gh")
+    checks.append(("GitHub CLI", bool(gh), gh or "not found — needed for magent ci --logs"))
 
     # Print results
     t = Table("Check", "Status", "Details")

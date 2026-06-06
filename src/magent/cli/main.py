@@ -57,6 +57,8 @@ patch_app = typer.Typer(help="Patch queue", name="patch")
 session_app = typer.Typer(help="Session timeline and replay", name="session")
 data_app = typer.Typer(help="Data workspace helpers", name="data")
 policy_app = typer.Typer(help="Policy profiles", name="policy")
+docs_app = typer.Typer(help="Built-in MagAgent documentation", name="docs")
+checkpoint_app = typer.Typer(help="File write checkpoints", name="checkpoint")
 for _name, _typer in [
     ("task", task_app),
     ("artifact", artifact_app),
@@ -70,6 +72,8 @@ for _name, _typer in [
     ("session", session_app),
     ("data", data_app),
     ("policy", policy_app),
+    ("docs", docs_app),
+    ("checkpoint", checkpoint_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -116,6 +120,21 @@ def _store():
     from magent.workbench import WorkbenchStore
 
     return WorkbenchStore(_require_user())
+
+
+def _known_command_names() -> list[str]:
+    names = []
+    for command in app.registered_commands:
+        if command.name:
+            names.append(command.name)
+    for group_info in app.registered_groups:
+        if not group_info.name or not group_info.typer_instance:
+            continue
+        names.append(group_info.name)
+        for command in group_info.typer_instance.registered_commands:
+            if command.name:
+                names.append(f"{group_info.name} {command.name}")
+    return names
 
 
 # ─────────────────────────────────────────────
@@ -846,6 +865,92 @@ def dashboard_cmd(
             return
     path = export_dashboard(_store(), out)
     console.print(f"[green]✓ Dashboard written to {path}[/green]")
+
+
+@docs_app.command("list")
+def docs_list_cmd():
+    """List built-in documentation topics."""
+    from magent.docs import list_topics
+
+    table = Table("Topic", "Title")
+    for topic in list_topics():
+        table.add_row(topic.slug, topic.title)
+    console.print(table)
+
+
+@docs_app.command("show")
+def docs_show_cmd(topic: str = typer.Argument(...)):
+    """Show a built-in documentation topic."""
+    from magent.docs import read_topic
+
+    try:
+        console.print(read_topic(topic))
+    except KeyError:
+        console.print(f"[red]Unknown docs topic: {topic}[/red]")
+        raise typer.Exit(1) from None
+
+
+@docs_app.command("search")
+def docs_search_cmd(query: str = typer.Argument(...), limit: int = typer.Option(8, "--limit", "-n")):
+    """Search built-in MagAgent documentation."""
+    from magent.docs import search_docs
+
+    results = search_docs(query, limit=limit)
+    table = Table("Topic", "Score", "Snippet")
+    for item in results:
+        table.add_row(item["slug"], str(item["score"]), item["snippet"])
+    console.print(table)
+
+
+@docs_app.command("doctor")
+def docs_doctor_cmd():
+    """Check built-in docs coverage."""
+    from magent.docs import docs_doctor
+
+    console.print_json(data=docs_doctor(_known_command_names()))
+
+
+@checkpoint_app.command("list")
+def checkpoint_list_cmd(limit: int = typer.Option(20, "--limit", "-n")):
+    """List recent file checkpoints."""
+    from magent.workbench import list_checkpoints
+
+    table = Table("ID", "Operation", "Status", "Path")
+    for item in list_checkpoints(_store(), limit=limit):
+        table.add_row(
+            item.get("id", ""),
+            item.get("operation", ""),
+            item.get("status", ""),
+            item.get("path", "")[:100],
+        )
+    console.print(table)
+
+
+@checkpoint_app.command("show")
+def checkpoint_show_cmd(checkpoint_id: str = typer.Argument(...)):
+    """Show checkpoint metadata."""
+    from magent.workbench import show_checkpoint
+
+    item = show_checkpoint(_store(), checkpoint_id)
+    if not item:
+        console.print(f"[red]Checkpoint not found: {checkpoint_id}[/red]")
+        raise typer.Exit(1)
+    console.print_json(data=item)
+
+
+@checkpoint_app.command("restore")
+def checkpoint_restore_cmd(
+    checkpoint_id: str = typer.Argument(...),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+):
+    """Restore a checkpoint."""
+    from magent.workbench import restore_checkpoint
+
+    if not yes:
+        confirm = Prompt.ask(f"Restore checkpoint '{checkpoint_id}'?", choices=["y", "n"], default="n")
+        if confirm != "y":
+            raise typer.Exit()
+    console.print_json(data=restore_checkpoint(_store(), checkpoint_id))
 
 
 @memory_app.command("review")
