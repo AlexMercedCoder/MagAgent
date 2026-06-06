@@ -24,6 +24,24 @@ def test_ui_state_collects_local_workbench_data(tmp_path: Path, monkeypatch) -> 
     assert state["workspace"]["patches"] == 1
     assert state["memory_quality"]["ok"] is False
     assert any(topic["slug"] == "ui" for topic in state["docs"])
+    assert state["cockpit"]["release_check"]["status"] == "not_run"
+
+
+def test_ui_state_does_not_execute_release_check(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("ui-test")
+
+    def fail_release_check(*args, **kwargs):
+        raise AssertionError("release checks should be explicit, not part of UI state")
+
+    monkeypatch.setattr(workbench, "_run_command_args", fail_release_check)
+
+    state = ui_state(store, project=project, username=None)
+
+    assert state["ok"] is True
+    assert state["cockpit"]["release_check"]["command"] == "magent release check"
 
 
 def test_render_ui_html_contains_local_endpoints() -> None:

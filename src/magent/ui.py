@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 from magent.docs import list_topics, read_topic, search_docs
-from magent.memory import MemoryManager
 from magent.ui_actions import (
     inspect_checkpoint_diff,
     inspect_patch,
@@ -38,16 +37,20 @@ def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | N
     if username:
         try:
             from magent.config import user_memory_dir
+            from magent.memory import MemoryManager
 
             memory_quality = MemoryManager(user_memory_dir(username), username=username).quality_report()
         except Exception as e:
             memory_quality = {"ok": False, "error": str(e)}
+    workspace = workspace_status(store, root)
+    clean_report = workspace_clean_report(store, root, status=workspace)
+    doctor = project_doctor(root, store)
     return {
         "ok": True,
         "project": str(root),
-        "workspace": workspace_status(store, root),
-        "clean_report": workspace_clean_report(store, root),
-        "project_doctor": project_doctor(root, store),
+        "workspace": workspace,
+        "clean_report": clean_report,
+        "project_doctor": doctor,
         "tasks": store.read("tasks", []),
         "plans": list_plans(store),
         "patches": store.read("patches", []),
@@ -56,7 +59,13 @@ def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | N
         "command_history": command_history(store, root)[:20],
         "memory_quality": memory_quality,
         "usage": usage_stats(),
-        "cockpit": cockpit_state(store, root),
+        "cockpit": cockpit_state(
+            store,
+            root,
+            workspace=workspace,
+            clean_report=clean_report,
+            project_doctor_result=doctor,
+        ),
         "docs": [{"slug": topic.slug, "title": topic.title} for topic in list_topics()],
     }
 

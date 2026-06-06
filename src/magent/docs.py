@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 from typing import Any
@@ -21,13 +22,18 @@ def docs_root() -> Path:
 
 
 def list_topics() -> list[DocTopic]:
+    return list(_cached_topics())
+
+
+@lru_cache(maxsize=1)
+def _cached_topics() -> tuple[DocTopic, ...]:
     root = docs_root()
     topics = []
     for path in sorted(root.glob("*.md")):
         text = path.read_text(encoding="utf-8", errors="replace")
         title = _title_from_markdown(text) or path.stem.replace("-", " ").title()
         topics.append(DocTopic(slug=path.stem, title=title, path=str(path)))
-    return topics
+    return tuple(topics)
 
 
 def read_topic(slug: str) -> str:

@@ -9,7 +9,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'0.22.0'`
+- `agent.version` default: `'0.22.1'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 ### `defaults`

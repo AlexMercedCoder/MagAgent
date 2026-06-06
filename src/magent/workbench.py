@@ -27,6 +27,9 @@ from magent.tokens import estimate_tokens
 from magent.workbench_store import now_iso
 
 WORKBENCH_DIRNAME = _workbench_store.WORKBENCH_DIRNAME
+MAX_CODE_INDEX_FILES = 1500
+MAX_TEST_FILES = 500
+MAX_TEST_SOURCE_FILES = 2000
 
 
 class WorkbenchStore(_workbench_store.WorkbenchStore):
@@ -567,9 +570,14 @@ def code_index(root: str | Path) -> dict[str, Any]:
     files = []
     symbols = []
     imports: dict[str, list[str]] = {}
-    for path in root_path.rglob("*.py"):
-        if _ignored(path):
-            continue
+    truncated = False
+    for scanned, path in enumerate(
+        _iter_project_files(root_path, suffixes={".py"}, limit=MAX_CODE_INDEX_FILES + 1),
+        start=1,
+    ):
+        if scanned > MAX_CODE_INDEX_FILES:
+            truncated = True
+            break
         rel = path.relative_to(root_path).as_posix()
         text = path.read_text(encoding="utf-8", errors="replace")
         file_info = {"path": rel, "lines": len(text.splitlines()), "symbols": []}
@@ -602,6 +610,10 @@ def code_index(root: str | Path) -> dict[str, Any]:
         "imports": imports,
         "test_map": test_map(root_path),
         "updated_at": now_iso(),
+        "limits": {
+            "max_files": MAX_CODE_INDEX_FILES,
+            "truncated": truncated,
+        },
     }
 
 
@@ -647,26 +659,28 @@ def related_code(store: WorkbenchStore, root: str | Path, file: str) -> dict[str
 def test_map(root: str | Path) -> dict[str, list[str]]:
     root_path = Path(root).resolve()
     test_patterns = ("test_*.py", "*_test.py", "*.test.js", "*.test.ts", "*_test.go", "*_test.rs")
-    tests = [
-        p
-        for pattern in test_patterns
-        for p in root_path.rglob(pattern)
-        if not _ignored(p)
-    ]
+    tests = []
+    seen_tests = set()
+    for pattern in test_patterns:
+        for path in root_path.rglob(pattern):
+            if _ignored(path) or path in seen_tests:
+                continue
+            tests.append(path)
+            seen_tests.add(path)
+            if len(tests) >= MAX_TEST_FILES:
+                break
+        if len(tests) >= MAX_TEST_FILES:
+            break
+    tests_with_text = [(test, _read_text_safe(test)) for test in tests]
     mapping: dict[str, list[str]] = {}
     source_suffixes = {".py", ".js", ".ts", ".go", ".rs"}
-    for source in root_path.rglob("*"):
-        if (
-            _ignored(source)
-            or not source.is_file()
-            or source.suffix not in source_suffixes
-            or _looks_like_test_file(source)
-        ):
+    for source in _iter_project_files(root_path, suffixes=source_suffixes, limit=MAX_TEST_SOURCE_FILES):
+        if _looks_like_test_file(source):
             continue
         rel = source.relative_to(root_path).as_posix()
         candidates = []
-        for test in tests:
-            if _test_matches_source(root_path, source, test):
+        for test, test_content in tests_with_text:
+            if _test_match_reasons(root_path, source, test, test_content):
                 candidates.append(test.relative_to(root_path).as_posix())
         if candidates:
             mapping[rel] = sorted(set(candidates))
@@ -838,8 +852,13 @@ def workspace_status(store: WorkbenchStore, root: str | Path) -> dict[str, Any]:
     }
 
 
-def workspace_clean_report(store: WorkbenchStore, root: str | Path) -> dict[str, Any]:
-    status = workspace_status(store, root)
+def workspace_clean_report(
+    store: WorkbenchStore,
+    root: str | Path,
+    *,
+    status: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    status = status or workspace_status(store, root)
     suggestions = []
     if status["git_status"]:
         suggestions.append("Review or commit local git changes.")
@@ -1445,7 +1464,7 @@ def _test_matches_source(root: Path, source: Path, test: Path) -> bool:
     return bool(_test_match_reasons(root, source, test))
 
 
-def _test_match_reasons(root: Path, source: Path, test: Path) -> list[str]:
+def _test_match_reasons(root: Path, source: Path, test: Path, test_content: str | None = None) -> list[str]:
     source_stem = source.stem
     source_parent = source.parent.name
     test_name = test.name
@@ -1458,7 +1477,7 @@ def _test_match_reasons(root: Path, source: Path, test: Path) -> list[str]:
     try:
         rel_no_suffix = source.relative_to(root).with_suffix("").as_posix()
         import_name = rel_no_suffix.replace("/", ".")
-        content = test.read_text(encoding="utf-8", errors="replace")
+        content = test_content if test_content is not None else _read_text_safe(test)
         if import_name in content or source_stem in content:
             reasons.append("test imports or references source symbol")
     except Exception:
@@ -1613,6 +1632,24 @@ def _ci_repair_hints(log: str) -> list[str]:
 def _ignored(path: Path) -> bool:
     parts = set(path.parts)
     return bool(parts & {".git", ".venv", "__pycache__", "node_modules", "target"})
+
+
+def _iter_project_files(root: Path, *, suffixes: set[str], limit: int):
+    yielded = 0
+    for path in root.rglob("*"):
+        if yielded >= limit:
+            break
+        if _ignored(path) or not path.is_file() or path.suffix not in suffixes:
+            continue
+        yielded += 1
+        yield path
+
+
+def _read_text_safe(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
 
 
 def memory_pending_summary(username: str, include_diff: bool = False) -> dict[str, Any]:

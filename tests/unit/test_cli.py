@@ -26,7 +26,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.22.0" in version.output
+    assert "MagAgent 0.22.1" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 

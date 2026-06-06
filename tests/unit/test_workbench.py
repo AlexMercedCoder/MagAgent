@@ -78,6 +78,17 @@ def test_project_command_discovery_recognizes_modern_tooling(tmp_path: Path) -> 
     assert roles["lint"]
 
 
+def test_code_index_reports_scan_truncation(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "MAX_CODE_INDEX_FILES", 2)
+    for i in range(4):
+        (tmp_path / f"mod_{i}.py").write_text(f"def fn_{i}():\n    return {i}\n", encoding="utf-8")
+
+    index = workbench.code_index(tmp_path)
+
+    assert len(index["files"]) == 2
+    assert index["limits"]["truncated"] is True
+
+
 def test_project_command_roles_and_doctor_use_config_and_history(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     (tmp_path / ".magent").mkdir()

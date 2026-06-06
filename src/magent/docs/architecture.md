@@ -105,6 +105,11 @@ Future tool modules should split by capability:
 
 `magent.workbench_cockpit` aggregates an action-oriented cockpit state for the UI, including pending plans, memory inbox candidates, recipes, sandbox runs, failed commands, and release checks.
 
+UI state endpoints should stay cheap: dashboard refreshes summarize cached/local
+state and must not run tests, linters, release checks, or other long-running
+commands. Expensive actions belong behind explicit button endpoints such as
+`/api/release/check`.
+
 ### Sandboxes, Evals, Browser, And GitHub
 
 `magent.sandbox` owns isolated plan and recipe execution in worktree, copy, and Docker container modes.
