@@ -1,5 +1,17 @@
 # Recipes
 
+## Use Workflow Recipes
+
+`magent recipe` turns common routines into reusable pending plans.
+
+1. Run `magent recipe list`.
+2. Inspect one with `magent recipe show release-prep`.
+3. Save a project-specific flow with `magent recipe save daily-check --step "Run focused tests" --command "pytest -q"`.
+4. Materialize it with `magent recipe run daily-check`.
+5. Inspect the generated plan with `magent plan-show <id>`.
+
+Built-in recipes include release prep, bug triage, docs audit, dependency upgrade, and test repair. If `.magent/playbook.toml` exists, `magent recipe list` also exposes a `project-playbook` recipe from project routines.
+
 ## Fix failing CI
 
 1. Run `magent ci --logs --repair-plan --save`.
@@ -74,6 +86,7 @@
 2. Run `magent release check`.
 3. Generate notes with `magent release notes`.
 4. Run `magent review --fail-on P1`.
+5. Or create a reusable release plan with `magent recipe run release-prep`.
 
 ## Configure provider roles
 

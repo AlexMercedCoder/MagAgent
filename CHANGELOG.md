@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.15.0
+
+- Added workflow recipes with `magent recipe list/show/save/run`, including built-in release prep, bug triage, docs audit, dependency upgrade, and test repair routines.
+- Added `.magent/playbook.toml` support plus `magent project playbook` for project-specific command routines, release checklists, review rules, and context defaults.
+- Added `magent memory inbox` to review, accept, reject, and edit memory candidates before writing to MagGraph.
+- Added tool capability packs with `magent tools list/explain/enable/disable` and runtime filtering for files, shell, web, data, db, and desktop tools.
+- Added actionable local UI endpoints and controls for memory promotion, release checks, patch previews, and checkpoint diffs.
+- Updated architecture documentation to explain recipes, playbooks, tool packs, memory inbox, and shared UI action handlers.
+
 ## 0.14.3
 
 - Added `magent.cli.command_context` as the shared helper surface for future CLI command modules.

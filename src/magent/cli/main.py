@@ -36,11 +36,13 @@ from magent.cli.app import (
     patch_app,
     policy_app,
     project_app,
+    recipe_app,
     release_app,
     routine_app,
     session_app,
     task_app,
     test_app,
+    tools_app,
     user_app,
     workspace_app,
 )
@@ -536,6 +538,24 @@ def project_doctor_cmd(path: str = typer.Option(".", "--path", "-p")):
     console.print_json(data=project_doctor(path, _store()))
 
 
+@project_app.command("playbook")
+def project_playbook_cmd(
+    path: str = typer.Option(".", "--path", "-p"),
+    init: bool = typer.Option(False, "--init", help="Create a starter .magent/playbook.toml"),
+):
+    """Show or initialize the project playbook."""
+    from magent.playbook import playbook_path, playbook_summary, playbook_template
+
+    target = playbook_path(path)
+    if init:
+        if target.exists():
+            console.print_json(data={"ok": False, "error": f"Playbook already exists: {target}"})
+            raise typer.Exit(1)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(playbook_template(), encoding="utf-8")
+    console.print_json(data=playbook_summary(path))
+
+
 @project_app.command("config")
 def project_config_cmd(path: str = typer.Option(".", "--path", "-p")):
     """Show project-local .magent/config.toml values."""
@@ -1012,6 +1032,102 @@ def context_map_cmd(
     console.print_json(data=context_map(_store(), project=project, memory_manager=mgr, query=query))
 
 
+@recipe_app.command("list")
+def recipe_list_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """List built-in, saved, and playbook-backed workflow recipes."""
+    from magent.recipes import list_recipes
+
+    table = Table("Name", "Source", "Commands", "Description")
+    for item in list_recipes(_store(), project):
+        table.add_row(
+            item.get("name", ""),
+            item.get("source", "builtin"),
+            str(len(item.get("commands", []))),
+            item.get("description", ""),
+        )
+    console.print(table)
+
+
+@recipe_app.command("show")
+def recipe_show_cmd(name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Show a workflow recipe."""
+    from magent.recipes import get_recipe
+
+    recipe = get_recipe(_store(), name, project)
+    if not recipe:
+        console.print_json(data={"ok": False, "error": f"Recipe not found: {name}"})
+        raise typer.Exit(1)
+    console.print_json(data=recipe)
+
+
+@recipe_app.command("save")
+def recipe_save_cmd(
+    name: str = typer.Argument(...),
+    description: str = typer.Option("", "--description", "-d"),
+    step: Annotated[list[str] | None, typer.Option("--step", help="Recipe step; may be repeated")] = None,
+    command: Annotated[
+        list[str] | None,
+        typer.Option("--command", "-c", help="Command; may be repeated"),
+    ] = None,
+):
+    """Save a reusable workflow recipe."""
+    from magent.recipes import save_recipe
+
+    console.print_json(data=save_recipe(_store(), name, description=description, steps=step or [], commands=command or []))
+
+
+@recipe_app.command("run")
+def recipe_run_cmd(name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Create a pending execution plan from a workflow recipe."""
+    from magent.recipes import run_recipe
+
+    result = run_recipe(_store(), name, project)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@tools_app.command("list")
+def tools_list_cmd():
+    """List tool capability packs and enabled state."""
+    from magent.tool_packs import list_packs
+
+    console.print_json(data={"ok": True, "packs": list_packs(_store())})
+
+
+@tools_app.command("explain")
+def tools_explain_cmd(pack: str = typer.Argument(...)):
+    """Explain a tool capability pack."""
+    from magent.tool_packs import explain_pack
+
+    result = explain_pack(pack, _store())
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@tools_app.command("enable")
+def tools_enable_cmd(pack: str = typer.Argument(...)):
+    """Enable a tool capability pack."""
+    from magent.tool_packs import set_pack_enabled
+
+    result = set_pack_enabled(_store(), pack, True)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@tools_app.command("disable")
+def tools_disable_cmd(pack: str = typer.Argument(...)):
+    """Disable a tool capability pack."""
+    from magent.tool_packs import set_pack_enabled
+
+    result = set_pack_enabled(_store(), pack, False)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
 @app.command("env-doctor")
 def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Run project environment checks."""
@@ -1367,6 +1483,44 @@ def memory_promote_cmd(
         console.print_json(data=promote_candidate(store, mgr, source, source_id, project=project))
         return
     console.print_json(data={"ok": True, "candidates": promotion_candidates(store, project, limit=limit)})
+
+
+@memory_app.command("inbox")
+def memory_inbox_cmd(
+    action: str = typer.Argument("list", help="list, accept, reject, or edit"),
+    candidate_id: str | None = typer.Argument(None),
+    project: str = typer.Option(".", "--project", "-p"),
+    limit: int = typer.Option(30, "--limit", "-n"),
+    reason: str = typer.Option("", "--reason"),
+    title: str = typer.Option("", "--title"),
+    body: str = typer.Option("", "--body"),
+):
+    """Review, accept, reject, or edit pending memory candidates."""
+    from magent.memory_inbox import accept_candidate, edit_candidate, memory_inbox, reject_candidate
+
+    store = _store()
+    normalized = action.lower()
+    if normalized == "list":
+        console.print_json(data=memory_inbox(store, project=project, limit=limit))
+        return
+    if not candidate_id:
+        console.print_json(data={"ok": False, "error": "candidate_id is required"})
+        raise typer.Exit(1)
+    if normalized == "accept":
+        mgr, _ = _get_memory_manager()
+        console.print_json(data=accept_candidate(store, mgr, candidate_id, project=project))
+        return
+    if normalized == "reject":
+        console.print_json(data=reject_candidate(store, candidate_id, reason=reason))
+        return
+    if normalized == "edit":
+        if not body:
+            console.print_json(data={"ok": False, "error": "--body is required for edit"})
+            raise typer.Exit(1)
+        console.print_json(data=edit_candidate(store, candidate_id, body=body, title=title))
+        return
+    console.print_json(data={"ok": False, "error": f"Unknown inbox action: {action}"})
+    raise typer.Exit(1)
 
 
 @memory_app.command("quality")

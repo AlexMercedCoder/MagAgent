@@ -32,6 +32,7 @@ from magent.permissions import (
     classify_file_op,
     classify_shell_command,
 )
+from magent.tool_packs import filter_tool_definitions_for_user
 from magent.tools.archive import safe_extract_tar as _safe_extract_tar
 from magent.tools.archive import safe_extract_zip as _safe_extract_zip
 from magent.tools.registry import tool_def as _def
@@ -847,7 +848,7 @@ class ToolExecutor:
     # ─────────────────────────────────────────────
 
     def get_tool_definitions(self) -> list[dict[str, Any]]:
-        return [
+        definitions = [
             _def(
                 "read_file",
                 "Read the contents of a file.",
@@ -1043,6 +1044,7 @@ class ToolExecutor:
                 },
             ),
         ]
+        return filter_tool_definitions_for_user(definitions, self.username)
 
     def get_tool_definitions_for_message(self, message: str) -> list[dict[str, Any]]:
         """Return a compact relevant tool subset for a user turn."""

@@ -12,13 +12,19 @@ from typing import Any
 
 from magent.docs import list_topics, read_topic, search_docs
 from magent.memory import MemoryManager
+from magent.ui_actions import (
+    inspect_checkpoint_diff,
+    inspect_patch,
+    list_memory_inbox,
+    promote_memory_candidate,
+    run_release_check,
+)
 from magent.workbench import (
     WorkbenchStore,
     checkpoint_sessions,
     command_history,
     list_plans,
     project_doctor,
-    release_notes,
     usage_stats,
     workspace_clean_report,
     workspace_status,
@@ -78,10 +84,10 @@ pre{white-space:pre-wrap;word-break:break-word;background:#f1f3f6;border-radius:
 <main>
 <section><h2>Workspace</h2><div class="row"><button onclick="refresh()">Refresh</button><button onclick="loadReleaseCheck()">Release Check</button></div><pre id="workspace">Loading...</pre></section>
 <section><h2>Plans</h2><div class="metric" id="planCount">0</div><pre id="plans"></pre></section>
-<section><h2>Patches</h2><div class="metric" id="patchCount">0</div><pre id="patches"></pre></section>
-<section><h2>Checkpoints</h2><div class="metric" id="checkpointCount">0</div><pre id="checkpoints"></pre></section>
+<section><h2>Patches</h2><div class="metric" id="patchCount">0</div><div class="row"><input id="patchId" placeholder="Patch ID"><button onclick="inspectPatch()">Inspect</button></div><pre id="patches"></pre></section>
+<section><h2>Checkpoints</h2><div class="metric" id="checkpointCount">0</div><div class="row"><input id="checkpointId" placeholder="Checkpoint ID"><button onclick="inspectCheckpoint()">Diff</button></div><pre id="checkpoints"></pre></section>
 <section><h2>Project Doctor</h2><pre id="doctor"></pre></section>
-<section><h2>Memory Quality</h2><pre id="memory"></pre></section>
+<section><h2>Memory Inbox</h2><div class="row"><input id="memoryId" placeholder="Candidate ID"><button onclick="loadMemoryInbox()">Inbox</button><button onclick="promoteMemory()">Promote</button></div><pre id="memory"></pre></section>
 <section><h2>Command History</h2><pre id="commands"></pre></section>
 <section><h2>Docs</h2><div class="row"><input id="docQuery" placeholder="Search docs"><button onclick="searchDocs()">Search</button></div><pre id="docs"></pre></section>
 </main>
@@ -100,6 +106,10 @@ async function refresh(){
 }
 async function searchDocs(){const q=encodeURIComponent(document.getElementById('docQuery').value);show('docs',await getJson('/api/docs/search?q='+q))}
 async function loadReleaseCheck(){show('workspace',await getJson('/api/release/check'))}
+async function loadMemoryInbox(){show('memory',await getJson('/api/memory/inbox'))}
+async function promoteMemory(){const id=encodeURIComponent(document.getElementById('memoryId').value);show('memory',await getJson('/api/memory/promote?id='+id))}
+async function inspectPatch(){const id=encodeURIComponent(document.getElementById('patchId').value);show('patches',await getJson('/api/patch/preview?id='+id))}
+async function inspectCheckpoint(){const id=encodeURIComponent(document.getElementById('checkpointId').value);show('checkpoints',await getJson('/api/checkpoint/diff?id='+id))}
 refresh()
 </script>
 </body>
@@ -143,11 +153,23 @@ def serve_ui(
                 elif parsed.path == "/api/docs/topic":
                     self._json({"ok": True, "topic": query.get("slug", [""])[0], "content": read_topic(query.get("slug", [""])[0])})
                 elif parsed.path == "/api/release/check":
-                    from magent.workbench import release_check
-
-                    self._json(release_check(store, root))
+                    self._json(run_release_check(store, root))
                 elif parsed.path == "/api/release/notes":
+                    from magent.workbench import release_notes
+
                     self._json(release_notes(root))
+                elif parsed.path == "/api/memory/inbox":
+                    self._json(list_memory_inbox(store, root))
+                elif parsed.path == "/api/memory/promote":
+                    candidate_id = query.get("id", [""])[0]
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        self._json(promote_memory_candidate(store, username, candidate_id, root))
+                elif parsed.path == "/api/patch/preview":
+                    self._json(inspect_patch(store, query.get("id", [""])[0]))
+                elif parsed.path == "/api/checkpoint/diff":
+                    self._json(inspect_checkpoint_diff(store, query.get("id", [""])[0]))
                 else:
                     self._json({"ok": False, "error": "not found"}, status=404)
             except Exception as e:

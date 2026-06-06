@@ -172,6 +172,12 @@ def infer_project_commands(root: Path) -> list[str]:
     commands.extend(_makefile_commands(root / "Makefile"))
     commands.extend(_justfile_commands(root / "justfile"))
     commands.extend(_justfile_commands(root / "Justfile"))
+    try:
+        from magent.playbook import playbook_commands
+
+        commands.extend(playbook_commands(root))
+    except Exception:
+        pass
     return sorted(dict.fromkeys(command for command in commands if command.strip()))
 
 

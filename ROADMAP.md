@@ -218,6 +218,8 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/m
 
 **v0.14.3 update:** Added command context helpers, workbench domain modules, tool helper modules, and typed record wrappers to continue compatibility-safe modularization.
 
+**v0.15.0 update:** Added workflow recipes, memory inbox review, tool capability packs, project playbooks, and actionable local UI handlers for release checks, patch previews, checkpoint diffs, and memory promotion.
+
 **Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
 
 **What to build:**

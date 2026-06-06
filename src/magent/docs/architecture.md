@@ -47,6 +47,14 @@ Promotion is intentionally explicit:
 - MagGraph nodes are durable semantic memory
 - `magent memory promote` is the bridge between them
 
+`magent.memory_inbox` adds a review layer before durable writes. It gathers promotion candidates from context, sessions, tasks, reviews, plans, and command failures, then records accept/reject/edit decisions in the local workbench.
+
+### Recipes And Playbooks
+
+`magent.recipes` owns reusable workflow recipes such as release prep, bug triage, docs audit, dependency upgrade, and test repair. Running a recipe materializes a pending execution plan through the plan domain instead of executing shell commands directly.
+
+`magent.playbook` loads `.magent/playbook.toml` and exposes project-specific test sequences, release checklists, review rules, and context briefing defaults. Project command inference reads playbook commands so `magent project commands`, `magent context map`, and recipe generation agree on project routines.
+
 ### Tools
 
 `magent.tools` is the public tool API. The implementation lives in `magent.tools.executor`, and the package initializer re-exports `ToolExecutor` for compatibility.
@@ -64,6 +72,12 @@ Future tool modules should split by capability:
 - web and HTTP tools
 - data and document tools
 - registry/schema helpers
+
+`magent.tool_packs` groups runtime tools into files, shell, web, data, db, and desktop capability packs. The CLI exposes `magent tools list`, `magent tools explain`, `magent tools enable`, and `magent tools disable`; the executor filters advertised tools through that setting.
+
+### Local UI
+
+`magent.ui` serves the local browser dashboard. `magent.ui_actions` owns actionable handlers for release checks, memory promotion, patch preview, and checkpoint diffs so browser endpoints share the same domain helpers as the CLI.
 
 ## Compatibility Rule
 

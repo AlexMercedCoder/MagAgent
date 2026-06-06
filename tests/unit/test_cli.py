@@ -17,7 +17,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.14.3" in version.output
+    assert "MagAgent 0.15.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -102,6 +102,75 @@ def test_cli_context_map_and_memory_promote(tmp_path: Path, monkeypatch) -> None
     assert json.loads(listed.output)["candidates"]
     assert promoted.exit_code == 0
     assert json.loads(promoted.output)["written"] == 1
+
+
+def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    (project / ".magent").mkdir(parents=True)
+    (project / ".magent" / "playbook.toml").write_text(
+        "[commands]\ntest = ['pytest -q']\nrelease = 'python -m build'\n"
+        "[release]\nchecklist = ['Update docs']\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("cli-test")
+    store.append("tasks", {"title": "Remember inbox task", "status": "open"})
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+
+    class FakeMemory:
+        available = True
+
+        def __init__(self):
+            self.written = []
+
+        def write_memories(self, extracted, project_slug=None):
+            self.written.extend(extracted)
+            return len(extracted)
+
+    memory = FakeMemory()
+    monkeypatch.setattr(cli_main, "_get_memory_manager", lambda: (memory, "cli-test"))
+
+    playbook = runner.invoke(cli_main.app, ["project", "playbook", "--path", str(project)])
+    recipes = runner.invoke(cli_main.app, ["recipe", "list", "--project", str(project)])
+    saved = runner.invoke(
+        cli_main.app,
+        [
+            "recipe",
+            "save",
+            "daily-check",
+            "--description",
+            "Daily checks",
+            "--step",
+            "Run tests",
+            "--command",
+            "pytest -q",
+        ],
+    )
+    run = runner.invoke(cli_main.app, ["recipe", "run", "daily-check", "--project", str(project)])
+    tools = runner.invoke(cli_main.app, ["tools", "disable", "web"])
+    explained = runner.invoke(cli_main.app, ["tools", "explain", "web"])
+    inbox = runner.invoke(cli_main.app, ["memory", "inbox", "--project", str(project)])
+    accepted = runner.invoke(
+        cli_main.app,
+        ["memory", "inbox", "accept", "promoted_task_task_0001_remember_inbox_task", "--project", str(project)],
+    )
+
+    assert playbook.exit_code == 0
+    assert json.loads(playbook.output)["commands"]["test"] == ["pytest -q"]
+    assert recipes.exit_code == 0
+    assert "project-playbook" in recipes.output
+    assert saved.exit_code == 0
+    assert json.loads(saved.output)["name"] == "daily-check"
+    assert run.exit_code == 0
+    assert json.loads(run.output)["plan"]["recipe"]["name"] == "daily-check"
+    assert tools.exit_code == 0
+    assert json.loads(tools.output)["enabled"] is False
+    assert explained.exit_code == 0
+    assert json.loads(explained.output)["enabled"] is False
+    assert inbox.exit_code == 0
+    assert json.loads(inbox.output)["candidates"]
+    assert accepted.exit_code == 0
+    assert json.loads(accepted.output)["written"] == 1
 
 
 def test_cli_code_and_test_commands(tmp_path: Path, monkeypatch) -> None:

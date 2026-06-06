@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import magent.tools as tools
+from magent import memory_inbox, playbook, recipes, tool_packs, ui_actions
 from magent.cli import app as cli_app
 from magent.cli import command_context
 from magent.cli import main as cli_main
@@ -30,7 +31,7 @@ def test_cli_app_composition_is_shared_with_main_entrypoint() -> None:
     assert cli_main.memory_app is cli_app.memory_app
     assert cli_main._known_command_names() == command_context.known_command_names(cli_app.app)
     command_names = {group.name for group in cli_app.app.registered_groups}
-    assert {"memory", "task", "context", "release", "docs"} <= command_names
+    assert {"memory", "task", "context", "release", "docs", "recipe", "tools"} <= command_names
 
 
 def test_workbench_domain_modules_expose_compatible_facades() -> None:
@@ -71,3 +72,11 @@ def test_typed_records_wrap_common_payload_shapes() -> None:
     assert task.status == "open"
     assert plan.status == "draft"
     assert candidate.to_memory_item()["links"] == []
+
+
+def test_release_015_feature_modules_are_importable() -> None:
+    assert recipes.BUILTIN_RECIPES["release-prep"]["commands"]
+    assert playbook.PLAYBOOK_PATH.as_posix() == ".magent/playbook.toml"
+    assert "web" in tool_packs.PACKS
+    assert memory_inbox.DECISION_STORE == "memory_inbox_decisions"
+    assert callable(ui_actions.inspect_patch)

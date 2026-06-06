@@ -18,6 +18,10 @@ Important command paths:
 - `magent memory promote`: list workbench facts that can be promoted to memory.
 - `magent memory promote <source> <source-id>`: promote one workbench fact into MagGraph memory.
 - `magent memory promote --all`: promote all current candidates into MagGraph memory.
+- `magent memory inbox`: review pending memory candidates before writing them to MagGraph.
+- `magent memory inbox accept <candidate-id>`: accept one memory candidate.
+- `magent memory inbox reject <candidate-id>`: reject one memory candidate.
+- `magent memory inbox edit <candidate-id> --body "..."`: edit candidate text before accepting it.
 - `magent memory quality`: report duplicate-looking and suppressed memory nodes.
 - `magent memory merge <target-id> <source-id>`: merge one memory node into another.
 - `magent memory suppress <node-id>`: mark a memory node suppressed without deleting it.
@@ -30,6 +34,8 @@ Important command paths:
 - `magent project commands`: show discovered project test/lint/build commands.
 - `magent project roles`: show command roles such as test, lint, build, and release.
 - `magent project doctor`: report missing project command roles and recent outcomes.
+- `magent project playbook`: show `.magent/playbook.toml` routines.
+- `magent project playbook --init`: create a starter project playbook.
 - `magent project config`: show `.magent/config.toml` values.
 - `magent code index`: build and save a lightweight Python symbol/import/test index.
 - `magent code symbols <query>`: search indexed symbols.
@@ -72,5 +78,13 @@ Important command paths:
 - `magent release check`: run release readiness checks.
 - `magent release notes`: generate release notes from recent commits.
 - `magent context map`: show memory, workbench, and project state for the current project.
+- `magent recipe list`: list built-in, saved, and playbook-backed workflows.
+- `magent recipe show <name>`: inspect a workflow recipe.
+- `magent recipe save <name> --step "..." --command "..."`: save a reusable workflow.
+- `magent recipe run <name>`: create a pending execution plan from a workflow recipe.
+- `magent tools list`: list capability packs and enabled state.
+- `magent tools explain <pack>`: explain one capability pack.
+- `magent tools enable <pack>`: enable a capability pack for runtime tool loading.
+- `magent tools disable <pack>`: disable a capability pack for runtime tool loading.
 
 Use `magent <command> --help` for command-specific Typer help.

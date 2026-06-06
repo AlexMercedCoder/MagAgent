@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from magent.memory import NODE_FACT, NODE_PATTERN, NODE_PROJECT
+from magent.playbook import playbook_summary
 from magent.records import PromotionCandidateRecord
 from magent.workbench import (
     WorkbenchStore,
@@ -36,6 +37,7 @@ def context_map(
         "project": str(root),
         "workspace": workspace_status(store, root),
         "project_doctor": project_doctor(root, store),
+        "playbook": playbook_summary(root),
         "command_roles": project_command_roles(root),
         "active_workbench": {
             "tasks": [

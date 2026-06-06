@@ -35,6 +35,8 @@ test_app = typer.Typer(help="Test intelligence helpers", name="test")
 workspace_app = typer.Typer(help="Workspace status and cleanup reports", name="workspace")
 release_app = typer.Typer(help="Release checks and notes", name="release")
 context_app = typer.Typer(help="Current project context map", name="context")
+recipe_app = typer.Typer(help="Reusable workflow recipes", name="recipe")
+tools_app = typer.Typer(help="Tool capability packs", name="tools")
 
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
@@ -62,6 +64,8 @@ for _name, _typer in [
     ("workspace", workspace_app),
     ("release", release_app),
     ("context", context_app),
+    ("recipe", recipe_app),
+    ("tools", tools_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -85,10 +89,12 @@ __all__ = [
     "policy_app",
     "project_app",
     "release_app",
+    "recipe_app",
     "routine_app",
     "session_app",
     "task_app",
     "test_app",
+    "tools_app",
     "user_app",
     "workspace_app",
 ]

@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-166%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-169%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -37,6 +37,8 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Presents a polished Rich terminal UI with a compact session banner, Markdown response panels, and quieter streaming
 - Bridges workbench state into durable MagGraph memory through context maps and explicit memory promotion
 - Documents architecture boundaries for memory, workbench, context, tools, CLI/TUI, and compatibility-safe refactors
+- Saves and runs reusable workflow recipes for release prep, bug triage, docs audits, dependency upgrades, and test repair
+- Reads project playbooks from `.magent/playbook.toml` for command routines, release checklists, review rules, and context defaults
 - Maintains a **persistent memory graph** per user that grows smarter over time
 - Connects to **11+ AI providers** (local and cloud) via a single config
 - Has **31 built-in tools** out of the box — no plugins or configuration required
@@ -44,6 +46,8 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Uses token-efficient context management: conversation compaction, repo-map slices, memory/skill budgets, and compressed tool results
 - Ships built-in offline documentation and self-help search through `magent docs`
 - Creates restore checkpoints before agent file writes, edits, and deletes
+- Reviews memory candidates through `magent memory inbox` before promoting selected facts into MagGraph
+- Groups runtime tools into capability packs that can be enabled or disabled with `magent tools`
 - Discovers project-local test/lint/build commands and reads `.magent/config.toml`
 - Builds a lightweight local code intelligence index for symbols, imports, related files, and targeted tests
 - Supports memory quality controls for duplicate review, node merge, and stale-node suppression
@@ -95,6 +99,8 @@ magent ask "Refactor the auth module to use JWTs and add tests"
 magent docs list
 magent tutorial
 magent doctor
+magent recipe run release-prep
+magent memory inbox
 ```
 
 ---
@@ -125,6 +131,15 @@ Configure multiple providers and switch mid-session: `/model anthropic/claude-3-
 ## Tools
 
 MagAgent ships with **31 built-in tools** the agent can call without any setup.
+
+Tool capability packs make selective loading explicit:
+
+```bash
+magent tools list
+magent tools explain web
+magent tools disable desktop
+magent tools enable desktop
+```
 
 ### File & Code Tools
 

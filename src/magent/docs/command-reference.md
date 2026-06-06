@@ -1,188 +1,237 @@
-# Command Reference
+# Generated Command Reference
 
-This topic exists so MagAgent's built-in docs cover the shipped command tree.
+Generated from the active Typer command tree.
 
-Core commands:
+## api
 
-- `magent ask`
-- `magent plan`
-- `magent plan-exec`
-- `magent plan-preview`
-- `magent plan-run`
-- `magent plan-list`
-- `magent plan-apply`
-- `magent plan-show`
-- `magent plan-discard`
-- `magent run`
-- `magent review`
-- `magent review-show`
-- `magent graph`
-- `magent test-intel`
-- `magent env-doctor`
-- `magent ci`
-- `magent diagnostics`
-- `magent docs-brief`
-- `magent tutorial`
-- `magent notes`
-- `magent stats`
-- `magent dashboard`
-- `magent ui`
-- `magent setup`
-- `magent mode`
-- `magent doctor`
+- `magent api list`
+- `magent api save`
 
-User commands:
+## artifact
 
-- `magent user`
-- `magent user create`
-- `magent user switch`
-- `magent user list`
-- `magent user current`
-- `magent user delete`
+- `magent artifact add`
+- `magent artifact checksum`
+- `magent artifact list`
+- `magent artifact open`
+- `magent artifact show`
 
-Memory commands:
+## checkpoint
 
-- `magent memory`
-- `magent memory stats`
-- `magent memory search`
-- `magent memory index`
-- `magent memory show`
-- `magent memory traverse`
-- `magent memory delete`
-- `magent memory export`
-- `magent memory reset`
-- `magent memory log`
-- `magent memory ui`
-- `magent memory sync`
-- `magent memory review`
-- `magent memory approve`
-- `magent memory promote`
-- `magent memory quality`
-- `magent memory merge`
-- `magent memory suppress`
-- `magent memory unsuppress`
-
-Docs commands:
-
-- `magent docs`
-- `magent docs list`
-- `magent docs show`
-- `magent docs search`
-- `magent docs doctor`
-- `magent docs generate-reference`
-
-Checkpoint commands:
-
-- `magent checkpoint`
-- `magent checkpoint list`
-- `magent checkpoint show`
 - `magent checkpoint diff`
+- `magent checkpoint list`
 - `magent checkpoint restore`
 - `magent checkpoint restore-last`
-- `magent checkpoint session-list`
 - `magent checkpoint session-diff`
+- `magent checkpoint session-list`
 - `magent checkpoint session-restore`
+- `magent checkpoint show`
 
-Code intelligence commands:
+## code
 
-- `magent code`
 - `magent code index`
-- `magent code symbols`
 - `magent code related`
+- `magent code symbols`
 
-Test intelligence commands:
+## context
 
-- `magent test`
-- `magent test map`
-- `magent test related`
-- `magent test explain`
-- `magent test run-related`
+- `magent context map`
 
-Workbench commands:
+## core
 
-- `magent task`
-- `magent task add`
-- `magent task list`
-- `magent task done`
-- `magent task report`
+- `magent api`
 - `magent artifact`
-- `magent artifact add`
-- `magent artifact list`
-- `magent artifact show`
-- `magent artifact open`
-- `magent artifact checksum`
-- `magent project`
-- `magent project profile`
-- `magent project list`
-- `magent project commands`
-- `magent project roles`
-- `magent project doctor`
-- `magent project config`
-- `magent project command-history`
-- `magent project command-promote`
+- `magent ask`
+- `magent checkpoint`
+- `magent ci`
+- `magent code`
+- `magent context`
+- `magent dashboard`
+- `magent data`
+- `magent diagnostics`
+- `magent docs`
+- `magent docs-brief`
+- `magent doctor`
+- `magent env-doctor`
+- `magent followup`
+- `magent gateway`
+- `magent graph`
 - `magent inbox`
+- `magent knowledge`
+- `magent mcp`
+- `magent memory`
+- `magent mode`
+- `magent notes`
+- `magent patch`
+- `magent plan`
+- `magent plan-apply`
+- `magent plan-discard`
+- `magent plan-exec`
+- `magent plan-list`
+- `magent plan-preview`
+- `magent plan-run`
+- `magent plan-show`
+- `magent policy`
+- `magent project`
+- `magent recipe`
+- `magent release`
+- `magent review`
+- `magent review-show`
+- `magent routine`
+- `magent run`
+- `magent session`
+- `magent setup`
+- `magent stats`
+- `magent task`
+- `magent test`
+- `magent test-intel`
+- `magent tools`
+- `magent tutorial`
+- `magent ui`
+- `magent user`
+- `magent workspace`
+
+## data
+
+- `magent data inspect`
+
+## docs
+
+- `magent docs doctor`
+- `magent docs generate-reference`
+- `magent docs list`
+- `magent docs search`
+- `magent docs show`
+
+## followup
+
+- `magent followup add`
+- `magent followup list`
+
+## gateway
+
+- `magent gateway init`
+- `magent gateway logs`
+- `magent gateway start`
+- `magent gateway status`
+- `magent gateway stop`
+
+## inbox
+
 - `magent inbox add`
 - `magent inbox list`
 - `magent inbox triage`
-- `magent routine`
-- `magent routine add`
-- `magent routine list`
-- `magent routine run`
-- `magent followup`
-- `magent followup add`
-- `magent followup list`
-- `magent knowledge`
-- `magent knowledge remember`
-- `magent knowledge recall`
+
+## knowledge
+
 - `magent knowledge forget`
-- `magent api`
-- `magent api save`
-- `magent api list`
-- `magent patch`
-- `magent patch save`
-- `magent patch list`
-- `magent patch preview`
-- `magent patch explain`
-- `magent patch apply`
-- `magent patch revert`
-- `magent session`
-- `magent session timeline`
-- `magent data`
-- `magent data inspect`
-- `magent policy`
-- `magent policy list`
+- `magent knowledge recall`
+- `magent knowledge remember`
 
-Workspace commands:
+## mcp
 
-- `magent workspace`
-- `magent workspace status`
-- `magent workspace clean-report`
-
-Release commands:
-
-- `magent release`
-- `magent release check`
-- `magent release notes`
-
-Context commands:
-
-- `magent context`
-- `magent context map`
-
-Gateway commands:
-
-- `magent gateway`
-- `magent gateway init`
-- `magent gateway start`
-- `magent gateway stop`
-- `magent gateway status`
-- `magent gateway logs`
-
-MCP commands:
-
-- `magent mcp`
 - `magent mcp init`
 - `magent mcp list`
 - `magent mcp test`
 
-Use `magent <command> --help` for live option details.
+## memory
+
+- `magent memory approve`
+- `magent memory delete`
+- `magent memory export`
+- `magent memory inbox`
+- `magent memory index`
+- `magent memory log`
+- `magent memory merge`
+- `magent memory promote`
+- `magent memory quality`
+- `magent memory reset`
+- `magent memory review`
+- `magent memory search`
+- `magent memory show`
+- `magent memory stats`
+- `magent memory suppress`
+- `magent memory sync`
+- `magent memory traverse`
+- `magent memory ui`
+- `magent memory unsuppress`
+
+## patch
+
+- `magent patch apply`
+- `magent patch explain`
+- `magent patch list`
+- `magent patch preview`
+- `magent patch revert`
+- `magent patch save`
+
+## policy
+
+- `magent policy list`
+
+## project
+
+- `magent project command-history`
+- `magent project command-promote`
+- `magent project commands`
+- `magent project config`
+- `magent project doctor`
+- `magent project list`
+- `magent project playbook`
+- `magent project profile`
+- `magent project roles`
+
+## recipe
+
+- `magent recipe list`
+- `magent recipe run`
+- `magent recipe save`
+- `magent recipe show`
+
+## release
+
+- `magent release check`
+- `magent release notes`
+
+## routine
+
+- `magent routine add`
+- `magent routine list`
+- `magent routine run`
+
+## session
+
+- `magent session timeline`
+
+## task
+
+- `magent task add`
+- `magent task done`
+- `magent task list`
+- `magent task report`
+
+## test
+
+- `magent test explain`
+- `magent test map`
+- `magent test related`
+- `magent test run-related`
+
+## tools
+
+- `magent tools disable`
+- `magent tools enable`
+- `magent tools explain`
+- `magent tools list`
+
+## user
+
+- `magent user create`
+- `magent user current`
+- `magent user delete`
+- `magent user list`
+- `magent user switch`
+
+## workspace
+
+- `magent workspace clean-report`
+- `magent workspace status`
