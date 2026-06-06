@@ -19,7 +19,7 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
 
         table = Table("Provider", "Default Model", "Access", "Env", "Ready", "Configured")
         for item in provider_matrix()["providers"]:
-            ready = "yes" if item["local"] or item["env_present"] or item["access_mode"] == "aws" else "no"
+            ready = "yes" if item["ready"] else "no"
             table.add_row(
                 item["id"],
                 item["default_model"],
@@ -78,7 +78,7 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
         config = load_config(username)
         rows = []
         for item in provider_matrix()["providers"]:
-            ready = bool(item["local"] or item["env_present"] or item["access_mode"] == "aws")
+            ready = bool(item["ready"])
             configured = bool(item["configured"] or item["id"] == config.default_provider)
             should_test = configured and (ready or all_providers)
             if not should_test:

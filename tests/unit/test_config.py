@@ -154,6 +154,7 @@ def test_config_ux_helpers_update_toml_without_manual_editing(tmp_path: Path, mo
 
 def test_config_ux_provider_access_modes_and_doctor_actions(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
+    monkeypatch.setenv("OPENCODE_GO_KEY", "secret")
     magent_config.create_user("alice")
     magent_config.set_current_user("alice")
 
@@ -168,6 +169,7 @@ def test_config_ux_provider_access_modes_and_doctor_actions(tmp_path: Path, monk
     fixed = config_ux.fix_doctor_actions("alice")
 
     assert result["access_mode"] == "subscription"
+    assert result["config"]["api_key_env"] == "***"
     assert detected["openai"]["access_modes"][1]["id"] == "codex"
     assert detected["opencode-go"]["api_key_env"] == "OPENCODE_GO_KEY"
     assert detected["mistral"]["api_key_env"] == "MISTRAL_API_KEY"
@@ -181,6 +183,7 @@ def test_config_ux_provider_access_modes_and_doctor_actions(tmp_path: Path, monk
     assert detected["lmstudio"]["local"] is True
     assert detected["bedrock"]["recommended_access"] == "aws"
     assert any(item["key"] == "opencode_go" for item in doctor["actions"])
+    assert next(item for item in doctor["actions"] if item["key"] == "opencode_go")["ok"] is True
     assert fixed["after"]["summary"]["subagents"]["max_subagents"] == 3
 
 
@@ -197,6 +200,7 @@ def test_provider_ux_matrix_recommend_env_and_explain(tmp_path: Path, monkeypatc
 
     assert matrix["mistral"]["configured"] is True
     assert matrix["mistral"]["env_present"] is True
+    assert matrix["mistral"]["ready"] is True
     assert env["mistral"]["present"] is True
     assert explained["commands"][0].startswith("magent provider set mistral")
     assert any(item["id"] == "mistral" for item in recommended["recommendations"])
@@ -210,7 +214,12 @@ def test_config_safety_backup_diff_and_restore(tmp_path: Path, monkeypatch) -> N
     monkeypatch.setattr(config_safety, "BACKUP_DIR", magent_config.CONFIG_DIR / "backups")
     magent_config.create_user("alice")
     magent_config.set_current_user("alice")
-    magent_config.save_global_config({"defaults": {"provider": "ollama", "model": "qwen"}})
+    magent_config.save_global_config(
+        {
+            "defaults": {"provider": "ollama", "model": "qwen"},
+            "providers": {"opencode-go": {"api_key": "do-not-print"}},
+        }
+    )
 
     backup = config_safety.backup_config("alice")
     config_ux.set_default_provider("mistral", "mistral-large-latest", api_key_env="MISTRAL_API_KEY")
@@ -222,7 +231,32 @@ def test_config_safety_backup_diff_and_restore(tmp_path: Path, monkeypatch) -> N
     assert "mistral" in diff["diffs"]["global"]
     assert restored["ok"] is True
     assert shown["files"]["global"]["exists"] is True
+    assert "do-not-print" not in shown["files"]["global"]["text"]
+    assert 'api_key = "***"' in shown["files"]["global"]["text"]
     assert config_safety.list_config_backups()["backups"]
+
+
+def test_provider_readiness_accepts_inline_keys(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("alice")
+    magent_config.set_current_user("alice")
+    result = config_ux.set_default_provider(
+        "opencode-go",
+        "deepseek-v4-flash",
+        api_key="inline-secret",
+        access_mode="subscription",
+    )
+
+    matrix = {item["id"]: item for item in config_ux.provider_matrix()["providers"]}
+    explained = config_ux.provider_explain("opencode-go")
+    doctor = config_ux.doctor_actions("alice")
+
+    assert result["config"]["api_key"] == "***"
+    assert matrix["opencode-go"]["ready"] is True
+    assert matrix["opencode-go"]["credential_configured"] is True
+    assert explained["ready"] is True
+    assert explained["credential_configured"] is True
+    assert next(item for item in doctor["actions"] if item["key"] == "opencode_go")["ok"] is True
 
 
 def test_config_proposals_events_permissions_and_model_health(tmp_path: Path, monkeypatch) -> None:

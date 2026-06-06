@@ -118,22 +118,28 @@ def detect_provider_environment() -> list[dict[str, Any]]:
 def provider_matrix() -> dict[str, Any]:
     """Return catalog-backed provider capability/readiness rows."""
     cfg = load_global_config()
+    providers = cfg.get("providers", {})
     detected = {item["id"]: item for item in detect_provider_environment()}
     rows = []
     for provider_id in PROVIDER_ORDER:
         metadata = PROVIDER_CATALOG[provider_id]
+        provider_cfg = providers.get(provider_id, {})
         env_var = metadata.get("env", "")
+        readiness = provider_readiness(provider_id, provider_cfg)
         rows.append(
             {
                 "id": provider_id,
                 "display": metadata["display"],
                 "default_model": metadata["default_model"],
-                "access_mode": metadata["access_mode"],
+                "access_mode": provider_cfg.get("access_mode") or metadata["access_mode"],
                 "env": env_var,
-                "env_present": bool(env_var and os.environ.get(env_var)),
+                "env_present": readiness["env_present"],
+                "credential_configured": readiness["credential_configured"],
+                "ready": readiness["ready"],
+                "reason": readiness["reason"],
                 "local": bool(metadata.get("local")) or provider_id == "custom",
                 "litellm": metadata["litellm"],
-                "configured": provider_id in cfg.get("providers", {}),
+                "configured": provider_id in providers,
                 "detected": detected.get(provider_id, {}),
             }
         )
@@ -145,13 +151,20 @@ def provider_explain(provider_id: str) -> dict[str, Any]:
     metadata = provider_metadata(provider_id)
     if not metadata:
         return {"ok": False, "error": f"Unknown provider: {provider_id}", "known": PROVIDER_ORDER}
-    env_var = metadata.get("env", "")
+    cfg = load_global_config()
+    provider_cfg = cfg.get("providers", {}).get(provider_id, {})
+    readiness = provider_readiness(provider_id, provider_cfg)
+    env_var = provider_cfg.get("api_key_env") or metadata.get("env", "")
     return {
         "ok": True,
         "provider": provider_id,
         "metadata": metadata,
+        "configured": provider_id in cfg.get("providers", {}),
         "access_modes": provider_access_modes(provider_id),
-        "env_present": bool(env_var and os.environ.get(env_var)),
+        "env_present": readiness["env_present"],
+        "credential_configured": readiness["credential_configured"],
+        "ready": readiness["ready"],
+        "reason": readiness["reason"],
         "commands": [
             f"magent provider set {provider_id} --model {metadata['default_model']}"
             + (f" --api-key-env {env_var}" if env_var else ""),
@@ -232,7 +245,13 @@ def set_default_provider(
     if base_url:
         entry["base_url"] = base_url
     save_global_config(cfg)
-    return {"ok": True, "provider": provider_id, "model": model, "access_mode": access_mode, "config": entry}
+    return {
+        "ok": True,
+        "provider": provider_id,
+        "model": model,
+        "access_mode": access_mode,
+        "config": _redact_provider_entry(entry),
+    }
 
 
 def set_model_role(role: str, value: str) -> dict[str, Any]:
@@ -337,19 +356,18 @@ def _model_value_health(value: str, providers: dict[str, Any]) -> dict[str, Any]
             "model": model,
             "reason": "Unknown provider.",
         }
-    env_var = providers.get(provider_id, {}).get("api_key_env") or metadata.get("env", "")
-    ready = bool(metadata.get("local")) or metadata.get("access_mode") in {"local", "aws"} or bool(env_var and os.environ.get(env_var))
-    access_mode = providers.get(provider_id, {}).get("access_mode") or metadata.get("access_mode", "api")
-    if provider_id == "openai" and access_mode == "codex":
-        ready = shutil.which("codex") is not None
+    provider_cfg = providers.get(provider_id, {})
+    readiness = provider_readiness(provider_id, provider_cfg)
+    env_var = provider_cfg.get("api_key_env") or metadata.get("env", "")
+    access_mode = provider_cfg.get("access_mode") or metadata.get("access_mode", "api")
     return {
-        "ok": ready,
+        "ok": readiness["ready"],
         "value": value,
         "provider": provider_id,
         "model": model,
         "env": env_var,
         "access_mode": access_mode,
-        "reason": "ready" if ready else f"Missing runtime or environment for {provider_id}.",
+        "reason": readiness["reason"],
     }
 
 
@@ -479,11 +497,14 @@ def doctor_actions(username: str | None = None) -> dict[str, Any]:
     elif provider_cfg.get("api_key_env"):
         env = provider_cfg["api_key_env"]
         add(f"{provider}_api_key", bool(os.environ.get(env)), f"Environment variable {env}", f"export {env}=...")
+    elif provider_cfg.get("api_key"):
+        add(f"{provider}_api_key", True, "Inline API key is configured.")
     if provider == "opencode-go":
+        readiness = provider_readiness(provider, provider_cfg)
         add(
             "opencode_go",
-            provider_cfg.get("access_mode") == "subscription",
-            "OpenCode Go should use subscription access mode and the Go endpoint.",
+            access_mode == "subscription" and readiness["credential_configured"],
+            "OpenCode Go subscription credentials are configured.",
             "magent provider set opencode-go --access subscription",
             True,
         )
@@ -535,6 +556,48 @@ def _redact_gateway(gateway: dict[str, Any]) -> dict[str, Any]:
         else:
             redacted[key] = value
     return redacted
+
+
+def _redact_provider_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    return {key: ("***" if "key" in key.lower() and value else value) for key, value in entry.items()}
+
+
+def provider_readiness(provider_id: str, provider_cfg: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return non-secret provider readiness details."""
+    provider_cfg = provider_cfg or {}
+    metadata = PROVIDER_CATALOG.get(provider_id, {})
+    access_mode = provider_cfg.get("access_mode") or metadata.get("access_mode", "api")
+    env_var = provider_cfg.get("api_key_env") or metadata.get("env", "")
+    env_present = bool(env_var and os.environ.get(env_var))
+    inline_key = bool(provider_cfg.get("api_key"))
+    local = bool(metadata.get("local")) or access_mode == "local" or provider_id in {"custom", "ollama", "lmstudio"}
+    aws = access_mode == "aws"
+    codex = provider_id == "openai" and access_mode == "codex"
+    codex_ready = shutil.which("codex") is not None if codex else False
+    credential_configured = env_present or inline_key
+    ready = local or aws or codex_ready or credential_configured
+    if local:
+        reason = "local provider"
+    elif aws:
+        reason = "AWS credential chain"
+    elif codex:
+        reason = "Codex CLI available" if codex_ready else "Codex CLI not found"
+    elif inline_key:
+        reason = "inline API key configured"
+    elif env_present:
+        reason = f"environment variable {env_var} is present"
+    elif env_var:
+        reason = f"environment variable {env_var} is missing"
+    else:
+        reason = "no credential required" if ready else "not configured"
+    return {
+        "ready": ready,
+        "credential_configured": credential_configured,
+        "env": env_var,
+        "env_present": env_present,
+        "access_mode": access_mode,
+        "reason": reason,
+    }
 
 
 def _recommendation_reason(goal: str, provider_id: str) -> str:

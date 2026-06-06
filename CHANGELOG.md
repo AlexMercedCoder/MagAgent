@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.1
+
+- Fixed strict OpenAI-compatible provider loops by stripping SDK/provider-only message fields before sending conversation history back to LiteLLM.
+- Added regression coverage for tool-call history sanitization after OpenCode Go rejected `provider_specific_fields`.
+- Improved provider readiness diagnostics so inline API keys count as configured without printing secret values.
+- Fixed OpenCode Go doctor readiness to reflect subscription credentials instead of reporting a false action item.
+- Redacted API keys, tokens, secrets, and passwords from `magent config show` and provider setup return payloads.
+
 ## 0.26.0
 
 - Bumped the MagGraph dependency to `maggraph>=0.2.0`.

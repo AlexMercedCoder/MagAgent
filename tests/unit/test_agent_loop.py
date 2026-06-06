@@ -65,7 +65,16 @@ def tool_call_message() -> SimpleNamespace:
     return SimpleNamespace(
         content="",
         tool_calls=[tool_call],
-        model_dump=lambda: {"role": "assistant", "tool_calls": [{"id": "call_1"}]},
+        model_dump=lambda: {
+            "role": "assistant",
+            "provider_specific_fields": {"internal": True},
+            "tool_calls": [
+                {
+                    "id": "call_1",
+                    "provider_specific_fields": {"internal": True},
+                }
+            ],
+        },
     )
 
 
@@ -104,6 +113,33 @@ async def test_run_tool_loop_dispatches_tool_and_returns_final_text(monkeypatch)
     assert any(message.get("role") == "tool" for message in messages)
     assert session.scratchpad["files_touched"] == ["/repo/app.py"]
     assert session.logger.tool_calls[0][0] == "write_file"
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_sanitizes_provider_specific_message_fields(monkeypatch) -> None:
+    calls = []
+    responses = [
+        SimpleNamespace(choices=[SimpleNamespace(message=tool_call_message())]),
+        SimpleNamespace(choices=[SimpleNamespace(message=final_message())]),
+    ]
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs["messages"])
+        return responses.pop(0)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+
+    await session._run_tool_loop([{"role": "user", "content": "write file"}], "write file")
+
+    second_request = calls[1]
+    assert all("provider_specific_fields" not in str(message) for message in second_request)
+    assert any(message.get("role") == "assistant" for message in second_request)
+    assert any(message.get("role") == "tool" for message in second_request)
 
 
 @pytest.mark.asyncio

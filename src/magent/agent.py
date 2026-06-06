@@ -26,6 +26,8 @@ from magent.tools import ToolExecutor
 
 console = Console()
 
+STRIP_MESSAGE_KEYS = {"provider_specific_fields"}
+
 AGENT_SYSTEM_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
 
 You have access to tools for reading/writing files, running shell commands, searching the codebase, and fetching information from the web.
@@ -200,7 +202,7 @@ class AgentSession:
                 litellm.suppress_debug_info = True
 
                 response = await litellm.acompletion(
-                    messages=messages,
+                    messages=_sanitize_messages(messages),
                     tools=tool_defs,
                     tool_choice="auto",
                     temperature=0.3,
@@ -219,7 +221,7 @@ class AgentSession:
                 messages.append({"role": "assistant", "content": content})
                 return content, messages, total_tool_calls
 
-            messages.append(message.model_dump())
+            messages.append(_sanitize_message(message.model_dump()))
             total_tool_calls += len(message.tool_calls)
 
             for tc in message.tool_calls:
@@ -298,7 +300,7 @@ class AgentSession:
             # First pass: tool loop
             while True:
                 response = await litellm.acompletion(
-                    messages=messages,
+                    messages=_sanitize_messages(messages),
                     tools=tool_defs,
                     tool_choice="auto",
                     temperature=0.3,
@@ -311,10 +313,10 @@ class AgentSession:
 
                 if not msg.tool_calls:
                     # Got text — now stream it
-                    messages.append(msg.model_dump())
+                    messages.append(_sanitize_message(msg.model_dump()))
                     break
 
-                messages.append(msg.model_dump())
+                messages.append(_sanitize_message(msg.model_dump()))
                 total_tool_calls += len(msg.tool_calls)
 
                 for tc in msg.tool_calls:
@@ -348,7 +350,7 @@ class AgentSession:
 
             # Final streaming pass — text only, no tools
             stream_response = await litellm.acompletion(
-                messages=messages,
+                messages=_sanitize_messages(messages),
                 temperature=0.3,
                 max_tokens=4096,
                 stream=True,
@@ -594,6 +596,23 @@ class AgentSession:
         self.logger.close()
         # Stop all MCP server connections
         await self.mcp.stop_all()
+
+
+def _sanitize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove SDK/provider-only fields before sending conversation history."""
+    return [_sanitize_message(message) for message in messages]
+
+
+def _sanitize_message(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_message(item)
+            for key, item in value.items()
+            if key not in STRIP_MESSAGE_KEYS and item is not None
+        }
+    if isinstance(value, list):
+        return [_sanitize_message(item) for item in value]
+    return value
 
 
 def reflow(text: str) -> str:

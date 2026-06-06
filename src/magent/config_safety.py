@@ -22,17 +22,38 @@ def config_paths(username: str | None = None) -> dict[str, str]:
     return paths
 
 
+SECRET_KEYS = ("api_key", "token", "secret", "password")
+
+
 def show_config(username: str | None = None) -> dict[str, Any]:
     """Return config file paths and text for global/current-user config."""
     result = {"ok": True, "files": {}}
     for key, raw_path in config_paths(username).items():
         path = Path(raw_path)
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
         result["files"][key] = {
             "path": str(path),
             "exists": path.exists(),
-            "text": path.read_text(encoding="utf-8") if path.exists() else "",
+            "text": redact_config_text(text),
         }
     return result
+
+
+def redact_config_text(text: str) -> str:
+    """Redact secret-looking TOML assignment values while preserving structure."""
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if "=" not in stripped or stripped.startswith("#"):
+            lines.append(line)
+            continue
+        key = stripped.split("=", 1)[0].strip().strip('"').strip("'").lower()
+        if any(secret in key for secret in SECRET_KEYS):
+            prefix = line.split("=", 1)[0].rstrip()
+            lines.append(f"{prefix} = \"***\"")
+        else:
+            lines.append(line)
+    return "\n".join(lines) + ("\n" if text.endswith("\n") else "")
 
 
 def backup_config(username: str | None = None) -> dict[str, Any]:
