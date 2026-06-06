@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import difflib
 import hashlib
 import json
 import re
@@ -10,6 +11,7 @@ import shutil
 import sqlite3
 import subprocess
 import threading
+import tomllib
 import webbrowser
 from collections import Counter
 from datetime import UTC, datetime
@@ -142,12 +144,14 @@ def project_profile(root: str | Path) -> dict[str, Any]:
         path = root_path / name
         if path.exists():
             files.append(name)
+    project_cfg = load_project_config(root_path)
     commands = infer_project_commands(root_path)
     return {
         "root": str(root_path),
         "name": root_path.name,
         "detected_files": files,
         "commands": commands,
+        "config": project_cfg,
         "updated_at": now_iso(),
     }
 
@@ -163,15 +167,34 @@ def save_project_profile(store: WorkbenchStore, root: str | Path) -> dict[str, A
 
 def infer_project_commands(root: Path) -> list[str]:
     commands = []
+    project_cfg = load_project_config(root)
+    configured = project_cfg.get("commands", {})
+    if isinstance(configured, dict):
+        for value in configured.values():
+            if isinstance(value, str):
+                commands.append(value)
+            elif isinstance(value, list):
+                commands.extend(str(item) for item in value)
     if (root / "pyproject.toml").exists():
         commands.extend(["pytest -q", "ruff check src tests"])
+        pyproject = _read_toml(root / "pyproject.toml")
+        if pyproject.get("tool", {}).get("pytest"):
+            commands.append("pytest")
     if (root / "package.json").exists():
-        commands.extend(["npm test", "npm run build"])
+        commands.extend(_package_json_commands(root / "package.json"))
     if (root / "Cargo.toml").exists():
         commands.extend(["cargo test", "cargo clippy"])
     if (root / "go.mod").exists():
         commands.extend(["go test ./..."])
-    return commands
+    commands.extend(_makefile_commands(root / "Makefile"))
+    commands.extend(_justfile_commands(root / "justfile"))
+    commands.extend(_justfile_commands(root / "Justfile"))
+    return sorted(dict.fromkeys(command for command in commands if command.strip()))
+
+
+def load_project_config(root: str | Path) -> dict[str, Any]:
+    path = Path(root).resolve() / ".magent" / "config.toml"
+    return _read_toml(path)
 
 
 def build_plan(root: str | Path, goal: str) -> str:
@@ -244,14 +267,44 @@ def apply_plan(store: WorkbenchStore, plan_id: str, run_checks: bool = False) ->
     return {"ok": True, "plan": updated, "checks": check_results}
 
 
+def show_plan(store: WorkbenchStore, plan_id: str) -> dict[str, Any] | None:
+    return next((item for item in store.read("plans", []) if item.get("id") == plan_id), None)
+
+
+def discard_plan(store: WorkbenchStore, plan_id: str) -> dict[str, Any]:
+    item = show_plan(store, plan_id)
+    if not item:
+        return {"ok": False, "error": f"Plan not found: {plan_id}"}
+    updated = store.update_item("plans", plan_id, status="discarded", discarded_at=now_iso())
+    return {"ok": True, "plan": updated}
+
+
+def save_plan_run(store: WorkbenchStore, root: str | Path, goal: str) -> dict[str, Any]:
+    root_path = Path(root).resolve()
+    item = save_plan(store, root_path, goal)
+    diff_stat = _run_git(root_path, ["diff", "--stat"])
+    return store.update_item(
+        "plans",
+        item["id"],
+        status="pending",
+        mode="plan-run",
+        diff_stat=diff_stat,
+        review=review_summary(root_path),
+    ) or item
+
+
 def review_diff(root: str | Path, base: str = "HEAD") -> list[dict[str, Any]]:
     diff = _run_git(root, ["diff", base, "--"])
     findings = []
     patterns = [
-        ("P1", r"api[_-]?key|secret|password|token\s*=", "Possible secret or credential in diff."),
-        ("P2", r"TODO|FIXME", "New TODO/FIXME may need tracking."),
+        (
+            "P1",
+            r"(?:api[_-]?key|secret|password|token)\s*[:=]",
+            "Possible secret or credential in diff.",
+        ),
+        ("P2", r"(?:#|//)\s*(?:TODO|FIXME)\b", "New TODO/FIXME may need tracking."),
         ("P2", r"except Exception\s*:\s*pass", "Broad silent exception can hide failures."),
-        ("P3", r"print\(", "Debug print added; verify it is intentional."),
+        ("P3", r"^\+\s*print\(", "Debug print added; verify it is intentional."),
         ("P2", r"subprocess\.run\([^)]*shell=True", "shell=True can expose command injection risk."),
         ("P2", r"eval\(|exec\(", "Dynamic code execution added; verify input cannot reach it."),
     ]
@@ -263,6 +316,7 @@ def review_diff(root: str | Path, base: str = "HEAD") -> list[dict[str, Any]]:
                 findings.append(
                     {
                         "priority": priority,
+                        "category": _review_category(message),
                         "line": lineno,
                         "message": message,
                         "evidence": line[:160],
@@ -275,12 +329,25 @@ def review_diff(root: str | Path, base: str = "HEAD") -> list[dict[str, Any]]:
         findings.append(
             {
                 "priority": "P2",
+                "category": "tests",
                 "line": 0,
                 "message": "Source changed without matching test changes.",
                 "evidence": ", ".join(src_changed[:5]),
             }
         )
     return findings
+
+
+def review_summary(root: str | Path, base: str = "HEAD") -> dict[str, Any]:
+    findings = review_diff(root, base)
+    categories = Counter(item.get("category", "general") for item in findings)
+    return {
+        "ok": not any(item.get("priority") in {"P0", "P1"} for item in findings),
+        "base": base,
+        "findings": findings,
+        "categories": dict(categories),
+        "changed_files": _run_git(root, ["diff", "--name-only", base, "--"]).splitlines(),
+    }
 
 
 def repo_graph(root: str | Path) -> dict[str, Any]:
@@ -430,6 +497,37 @@ def restore_checkpoint(store: WorkbenchStore, checkpoint_id: str) -> dict[str, A
     return {"ok": True, "checkpoint": checkpoint_id, "path": str(target)}
 
 
+def checkpoint_diff(store: WorkbenchStore, checkpoint_id: str) -> dict[str, Any]:
+    item = show_checkpoint(store, checkpoint_id)
+    if not item:
+        return {"ok": False, "error": f"Checkpoint not found: {checkpoint_id}"}
+    target = Path(item.get("path", "")).expanduser().resolve(strict=False)
+    before = []
+    after = []
+    if item.get("existed") and item.get("content_path"):
+        before = Path(item["content_path"]).read_text(
+            encoding="utf-8", errors="replace"
+        ).splitlines(keepends=True)
+    if target.exists() and target.is_file():
+        after = target.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+    diff = "".join(
+        difflib.unified_diff(
+            before,
+            after,
+            fromfile=f"{target} (checkpoint)",
+            tofile=str(target),
+        )
+    )
+    return {"ok": True, "checkpoint": checkpoint_id, "path": str(target), "diff": diff}
+
+
+def restore_latest_checkpoint(store: WorkbenchStore) -> dict[str, Any]:
+    items = list_checkpoints(store, limit=1)
+    if not items:
+        return {"ok": False, "error": "No checkpoints found"}
+    return restore_checkpoint(store, items[0]["id"])
+
+
 def env_doctor(root: str | Path) -> list[dict[str, Any]]:
     root_path = Path(root).resolve()
     checks = []
@@ -441,7 +539,7 @@ def env_doctor(root: str | Path) -> list[dict[str, Any]]:
     return checks
 
 
-def ci_triage(root: str | Path, logs: bool = False) -> dict[str, Any]:
+def ci_triage(root: str | Path, logs: bool = False, repair_plan: bool = False) -> dict[str, Any]:
     gh = shutil.which("gh")
     if not gh:
         return {"ok": False, "error": "GitHub CLI not found"}
@@ -467,7 +565,7 @@ def ci_triage(root: str | Path, logs: bool = False) -> dict[str, Any]:
         runs = []
     data["runs"] = runs
     failed = next((run for run in runs if run.get("conclusion") == "failure"), None)
-    if logs and failed:
+    if (logs or repair_plan) and failed:
         view = subprocess.run(
             [gh, "run", "view", str(failed["databaseId"]), "--log-failed"],
             cwd=str(root),
@@ -478,7 +576,31 @@ def ci_triage(root: str | Path, logs: bool = False) -> dict[str, Any]:
         data["failed_run"] = failed
         data["failed_log"] = (view.stdout or view.stderr)[-12000:]
         data["repair_hints"] = _ci_repair_hints(data["failed_log"])
+    if repair_plan:
+        data["repair_plan"] = ci_repair_plan(root, data)
     return data
+
+
+def ci_repair_plan(root: str | Path, triage: dict[str, Any] | None = None) -> dict[str, Any]:
+    profile = project_profile(root)
+    failed_log = (triage or {}).get("failed_log", "")
+    hints = _ci_repair_hints(failed_log)
+    commands = profile.get("commands") or infer_project_commands(Path(root).resolve())
+    reproduce = _guess_reproduction_command(failed_log, commands)
+    return {
+        "goal": "Repair latest failing CI run",
+        "root": str(Path(root).resolve()),
+        "failed_run": (triage or {}).get("failed_run"),
+        "reproduce": reproduce,
+        "steps": [
+            "Inspect the failed CI log and identify the first failing command.",
+            f"Run `{reproduce}` locally." if reproduce else "Run the closest local test/lint command.",
+            "Patch the smallest code path that explains the failure.",
+            "Rerun the failing command and then the broader project checks.",
+            "Review the diff before committing.",
+        ],
+        "hints": hints,
+    }
 
 
 def project_diagnostics(root: str | Path) -> list[dict[str, Any]]:
@@ -703,6 +825,82 @@ def _run_command(root: str | Path, command: str, timeout: int = 60) -> dict[str,
 
 def _run_command_args(root: str | Path, cmd: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=timeout)
+
+
+def _read_toml(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        with path.open("rb") as f:
+            return tomllib.load(f)
+    except Exception:
+        return {}
+
+
+def _package_json_commands(path: Path) -> list[str]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return ["npm test", "npm run build"]
+    scripts = data.get("scripts", {}) if isinstance(data, dict) else {}
+    commands = []
+    for name in ("test", "lint", "typecheck", "build"):
+        if name in scripts:
+            commands.append("npm test" if name == "test" else f"npm run {name}")
+    return commands or ["npm test", "npm run build"]
+
+
+def _makefile_commands(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    targets = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = re.match(r"^([A-Za-z0-9_.-]+):(?:\s|$)", line)
+        if match and match.group(1) in {"test", "lint", "check", "build"}:
+            targets.append(f"make {match.group(1)}")
+    return targets
+
+
+def _justfile_commands(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    commands = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = re.match(r"^([A-Za-z0-9_.-]+)(?:\s.*)?:$", line)
+        if match and match.group(1) in {"test", "lint", "check", "build"}:
+            commands.append(f"just {match.group(1)}")
+    return commands
+
+
+def _review_category(message: str) -> str:
+    text = message.lower()
+    if "secret" in text or "credential" in text or "injection" in text:
+        return "security"
+    if "test" in text:
+        return "tests"
+    if "todo" in text:
+        return "maintenance"
+    if "debug" in text:
+        return "debugging"
+    return "correctness"
+
+
+def _guess_reproduction_command(log: str, commands: list[str]) -> str:
+    lower = log.lower()
+    for command in commands:
+        head = command.split()[0] if command.split() else command
+        if command.lower() in lower or head.lower() in lower:
+            return command
+    for needle, fallback in [
+        ("pytest", "pytest -q"),
+        ("ruff", "ruff check ."),
+        ("npm", "npm test"),
+        ("cargo", "cargo test"),
+        ("go test", "go test ./..."),
+    ]:
+        if needle in lower:
+            return fallback
+    return commands[0] if commands else ""
 
 
 def _ci_repair_hints(log: str) -> list[str]:

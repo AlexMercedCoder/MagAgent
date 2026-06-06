@@ -23,3 +23,11 @@ def test_selective_tools_adds_web_and_database_tools(tmp_path):
     assert "web_search" in names
     assert "http_request" in names
     assert "db_query" in names
+
+
+def test_tool_budget_truncates_large_output(tmp_path):
+    executor = ToolExecutor(cwd=str(tmp_path), username="alice", tool_budgets={"read_file": 10})
+    result = executor._budget_result("read_file", {"ok": True, "content": "x" * 50})
+
+    assert result["budgeted"] is True
+    assert "truncated" in result["content"]

@@ -614,15 +614,15 @@ Shipped workbench surfaces include:
 
 - Task ledger: `magent task add/list/done/report`
 - Artifact tracking: `magent artifact add/list`
-- Project profiles: `magent project profile/list`
+- Project profiles: `magent project profile/list/commands/config`
 - Local inbox: `magent inbox add/list/triage`
 - Routines and follow-ups: `magent routine add/list/run`, `magent followup add/list`
 - Personal knowledge: `magent knowledge remember/recall/forget`
-- Planning and review: `magent plan --save`, `magent plan-list`, `magent plan-apply`, `magent run`, `magent review`
-- Repo intelligence: `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`
+- Planning and review: `magent plan --save`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent run`, `magent review --json`
+- Repo intelligence: `magent graph`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan`
 - Patch queue: `magent patch save/list/apply/revert`
-- Checkpoint undo: `magent checkpoint list/show/restore`
-- Built-in documentation: `magent docs list/show/search/doctor`
+- Checkpoint undo: `magent checkpoint list/show/diff/restore/restore-last`
+- Built-in documentation: `magent docs list/show/search/doctor/generate-reference`
 - Data/API/notes helpers: `magent data inspect`, `magent api save/list`, `magent notes`
 - Session and usage views: `magent session timeline`, `magent stats`, `magent dashboard --serve`
 
@@ -635,7 +635,7 @@ Shipped workbench surfaces include:
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.6.0"
+version = "0.7.0"
 selective_tools = true
 
 [defaults]
@@ -666,6 +666,12 @@ keep_recent_turns = 6
 max_history_tokens = 6000
 prune_stale_tool_results = true
 prompt_caching = true
+
+[tool_budgets]
+default = 8000
+read_file = 16000
+run_shell = 10000
+db_query = 8000
 
 [skills]
 # Skills lockfile — pins skill versions like requirements.txt

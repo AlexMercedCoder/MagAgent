@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from magent.docs import docs_doctor, list_topics, read_topic, search_docs
+from magent.docs import docs_doctor, list_topics, read_topic, render_command_reference, search_docs
 
 
 def test_docs_topics_are_packaged():
@@ -23,3 +23,11 @@ def test_docs_doctor_passes_baseline():
 
     assert result["ok"] is True
     assert read_topic("memory").startswith("# Memory")
+
+
+def test_render_command_reference():
+    text = render_command_reference(["ask", "memory search", "docs generate-reference"])
+
+    assert "magent ask" in text
+    assert "magent memory search" in text
+    assert "magent docs generate-reference" in text

@@ -13,7 +13,7 @@ These improvements reduce token spend on every single interaction, regardless of
 
 ### 0.1 · Tool Output Budgets (Token Caps Per Tool)
 
-**Status:** Partially shipped in v0.3.0. Large file reads are previewed, exact range reads are available, and agent-side tool results are compressed before they are appended to model context. Per-tool config remains future work.
+**Status:** Expanded in v0.7.0. Large file reads are previewed, exact range reads are available, agent-side tool results are compressed before context injection, and dispatch-level per-tool output budgets now cap oversized results with `raw=true` as an escape hatch.
 
 **Why:** The biggest single source of token waste is uncapped tool output. A `read_file` on a 2,000-line file burns thousands of tokens even when the agent only needed 10 lines. A `web_fetch` on a documentation page can return 15,000 tokens of boilerplate. These cost money and crowd out useful context.
 
@@ -224,6 +224,8 @@ repo_map_languages = ["python", "typescript", "go"]
 
 ### 1.3 · Checkpoint & Undo System
 
+**Status:** Expanded in v0.7.0. MagAgent snapshots files before writes/edits/deletes, lists and restores checkpoints, shows checkpoint diffs, and can restore the latest checkpoint.
+
 **Why:** Before any file write, edit, or delete, snapshot the affected files. Users can then `/undo` the last N operations and restore exactly. This is the #1 trust-building feature — Cline's human-in-the-loop proved it decisively.
 
 **What to build:**
@@ -310,7 +312,7 @@ Capabilities that significantly expand what MagAgent can do autonomously.
 
 ### 2.2 · Plan Mode (Draft Before Execute)
 
-**Status:** MVP expanded in v0.5.0. `magent plan --save` stores durable plans, `magent plan-list` audits them, and `magent plan-apply` marks approved plans applied with optional suggested checks. Full intercepted tool execution remains future work.
+**Status:** MVP expanded in v0.7.0. `magent plan --save` stores durable plans, `magent plan-run` creates pending plan records with diff/review context, `magent plan-show` inspects them, `magent plan-discard` discards them, and `magent plan-apply` marks approved plans applied with optional suggested checks. Full intercepted tool execution remains future work.
 
 **Why:** For complex multi-file tasks, show the user a complete plan with diff previews before applying any changes. This reduces mistakes on large refactors.
 
@@ -355,6 +357,8 @@ semantic_provider = "ollama"
 ---
 
 ### 2.4 · Workspace / Project Profiles
+
+**Status:** Expanded in v0.7.0. Project profiles now discover commands from package manifests, Makefiles, Justfiles, language manifests, and project-local `.magent/config.toml`; `magent project commands` and `magent project config` expose that information.
 
 **Why:** Different projects have different rules — different linters, different shell commands to trust, different models to use. A per-project `.magent/config.toml` file lets the agent adapt automatically.
 
@@ -572,7 +576,7 @@ timeout_seconds = 60
 
 ### 3.7 · Built-In Documentation and Self-Help
 
-**Status:** MVP shipped in v0.6.0. MagAgent now ships packaged Markdown docs, exposes `magent docs list/show/search/doctor`, includes an internal `magent_docs_search` tool, and has tests around docs packaging/search. Generated command reference pages remain future work.
+**Status:** Expanded in v0.7.0. MagAgent ships packaged Markdown docs, exposes `magent docs list/show/search/doctor/generate-reference`, includes an internal `magent_docs_search` tool, and has tests around docs packaging/search.
 
 **Why:** MagAgent should be able to explain itself without requiring the user to leave the terminal, open the README, or guess command syntax. A competitive general-use agent needs robust internal documentation for its own commands, configuration, workflows, memory model, safety model, and troubleshooting paths.
 

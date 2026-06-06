@@ -29,7 +29,7 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.5.0",
+        "version": "0.7.0",
         "selective_tools": True,
     },
     "defaults": {
@@ -60,6 +60,16 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "max_history_tokens": 6000,
         "prune_stale_tool_results": True,
         "prompt_caching": True,
+    },
+    "tool_budgets": {
+        "default": 8000,
+        "read_file": 16000,
+        "read_file_range": 12000,
+        "web_fetch": 12000,
+        "run_shell": 10000,
+        "run_python": 10000,
+        "search_codebase": 9000,
+        "db_query": 8000,
     },
     "skills": {
         "lockfile": str(SKILLS_LOCK),

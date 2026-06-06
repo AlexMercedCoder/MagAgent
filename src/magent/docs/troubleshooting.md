@@ -14,8 +14,10 @@ Common issues:
 - MagGraph errors: confirm `maggraph` is installed and the memory directory exists.
 - Gateway issues: run `magent gateway status` and inspect `magent gateway logs`.
 - GitHub Actions triage: run `magent ci --logs` in a repository with authenticated `gh`.
+- GitHub Actions repair planning: run `magent ci --repair-plan`.
 - Project checks: run `magent diagnostics`.
+- Project command discovery: run `magent project commands`.
+- Undo an agent file change: run `magent checkpoint restore-last`.
 - Missing command docs: run `magent docs doctor`.
 
 For a clean first setup, run `magent setup`, create or switch to a user, then run `magent doctor`.
-

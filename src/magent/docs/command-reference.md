@@ -6,8 +6,11 @@ Core commands:
 
 - `magent ask`
 - `magent plan`
+- `magent plan-run`
 - `magent plan-list`
 - `magent plan-apply`
+- `magent plan-show`
+- `magent plan-discard`
 - `magent run`
 - `magent review`
 - `magent graph`
@@ -56,13 +59,16 @@ Docs commands:
 - `magent docs show`
 - `magent docs search`
 - `magent docs doctor`
+- `magent docs generate-reference`
 
 Checkpoint commands:
 
 - `magent checkpoint`
 - `magent checkpoint list`
 - `magent checkpoint show`
+- `magent checkpoint diff`
 - `magent checkpoint restore`
+- `magent checkpoint restore-last`
 
 Workbench commands:
 
@@ -77,6 +83,8 @@ Workbench commands:
 - `magent project`
 - `magent project profile`
 - `magent project list`
+- `magent project commands`
+- `magent project config`
 - `magent inbox`
 - `magent inbox add`
 - `magent inbox list`
@@ -124,4 +132,3 @@ MCP commands:
 - `magent mcp test`
 
 Use `magent <command> --help` for live option details.
-

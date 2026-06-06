@@ -88,6 +88,29 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
     }
 
 
+def render_command_reference(command_names: list[str]) -> str:
+    lines = [
+        "# Generated Command Reference",
+        "",
+        "Generated from the active Typer command tree.",
+        "",
+    ]
+    groups: dict[str, list[str]] = {"core": []}
+    for name in sorted(set(command_names)):
+        if " " in name:
+            group, command = name.split(" ", 1)
+            groups.setdefault(group, []).append(command)
+        else:
+            groups["core"].append(name)
+    for group, commands in sorted(groups.items()):
+        lines.extend([f"## {group}", ""])
+        for command in sorted(commands):
+            rendered = f"magent {command}" if group == "core" else f"magent {group} {command}"
+            lines.append(f"- `{rendered}`")
+        lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
 def _resolve_topic_path(slug: str) -> Path | None:
     root = docs_root()
     normalized = slug.strip().lower().replace("_", "-")

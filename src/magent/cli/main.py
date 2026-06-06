@@ -529,6 +529,23 @@ def project_list_cmd():
     console.print(table)
 
 
+@project_app.command("commands")
+def project_commands_cmd(path: str = typer.Option(".", "--path", "-p")):
+    """Show discovered project test/lint/build commands."""
+    from magent.workbench import infer_project_commands
+
+    for command in infer_project_commands(Path(path).resolve()):
+        console.print(command)
+
+
+@project_app.command("config")
+def project_config_cmd(path: str = typer.Option(".", "--path", "-p")):
+    """Show project-local .magent/config.toml values."""
+    from magent.workbench import load_project_config
+
+    console.print_json(data=load_project_config(path))
+
+
 @inbox_app.command("add")
 def inbox_add_cmd(text: str = typer.Argument(...), source: str = typer.Option("cli", "--source")):
     """Add an item to the local inbox."""
@@ -653,6 +670,40 @@ def plan_apply_cmd(
     console.print_json(data=apply_plan(_store(), plan_id, run_checks=run_checks))
 
 
+@app.command("plan-run")
+def plan_run_cmd(goal: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Create a pending plan-run record with checks, review, and diff context."""
+    from magent.workbench import save_plan_run
+
+    item = save_plan_run(_store(), project, goal)
+    console.print(f"[green]✓ Saved pending plan {item['id']}[/green]")
+    console.print(item.get("plan_markdown", ""))
+
+
+@app.command("plan-show")
+def plan_show_cmd(plan_id: str = typer.Argument(...)):
+    """Show a saved plan record."""
+    from magent.workbench import show_plan
+
+    item = show_plan(_store(), plan_id)
+    if not item:
+        console.print(f"[red]Plan not found: {plan_id}[/red]")
+        raise typer.Exit(1)
+    console.print_json(data=item)
+
+
+@app.command("plan-discard")
+def plan_discard_cmd(plan_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")):
+    """Discard a saved plan."""
+    from magent.workbench import discard_plan
+
+    if not yes:
+        confirm = Prompt.ask(f"Discard plan '{plan_id}'?", choices=["y", "n"], default="n")
+        if confirm != "y":
+            raise typer.Exit()
+    console.print_json(data=discard_plan(_store(), plan_id))
+
+
 @app.command("run")
 def run_cmd(
     goal: str = typer.Argument(...),
@@ -667,17 +718,30 @@ def run_cmd(
 
 
 @app.command("review")
-def review_cmd(base: str = typer.Option("HEAD", "--since"), project: str = typer.Option(".", "--project", "-p")):
+def review_cmd(
+    base: str = typer.Option("HEAD", "--since"),
+    project: str = typer.Option(".", "--project", "-p"),
+    json_out: bool = typer.Option(False, "--json", help="Emit structured JSON"),
+):
     """Review the local git diff for common risks."""
-    from magent.workbench import review_diff
+    from magent.workbench import review_diff, review_summary
 
+    if json_out:
+        console.print_json(data=review_summary(project, base))
+        return
     findings = review_diff(project, base)
     if not findings:
         console.print("[green]No heuristic findings.[/green]")
         return
-    table = Table("Priority", "Diff Line", "Finding", "Evidence")
+    table = Table("Priority", "Category", "Diff Line", "Finding", "Evidence")
     for finding in findings:
-        table.add_row(finding["priority"], str(finding["line"]), finding["message"], finding["evidence"])
+        table.add_row(
+            finding["priority"],
+            finding.get("category", "general"),
+            str(finding["line"]),
+            finding["message"],
+            finding["evidence"],
+        )
     console.print(table)
 
 
@@ -755,11 +819,12 @@ def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
 def ci_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     logs: bool = typer.Option(False, "--logs", help="Include failed-run logs and repair hints"),
+    repair_plan: bool = typer.Option(False, "--repair-plan", help="Include a local CI repair plan"),
 ):
     """Triage recent GitHub Actions runs with gh, when available."""
     from magent.workbench import ci_triage
 
-    console.print_json(data=ci_triage(project, logs=logs))
+    console.print_json(data=ci_triage(project, logs=logs, repair_plan=repair_plan))
 
 
 @app.command("diagnostics")
@@ -910,6 +975,19 @@ def docs_doctor_cmd():
     console.print_json(data=docs_doctor(_known_command_names()))
 
 
+@docs_app.command("generate-reference")
+def docs_generate_reference_cmd(out: str | None = typer.Option(None, "--out", "-o")):
+    """Generate command reference Markdown from the live CLI tree."""
+    from magent.docs import render_command_reference
+
+    text = render_command_reference(_known_command_names())
+    if out:
+        Path(out).write_text(text, encoding="utf-8")
+        console.print(f"[green]✓ Wrote {out}[/green]")
+    else:
+        console.print(text)
+
+
 @checkpoint_app.command("list")
 def checkpoint_list_cmd(limit: int = typer.Option(20, "--limit", "-n")):
     """List recent file checkpoints."""
@@ -938,6 +1016,18 @@ def checkpoint_show_cmd(checkpoint_id: str = typer.Argument(...)):
     console.print_json(data=item)
 
 
+@checkpoint_app.command("diff")
+def checkpoint_diff_cmd(checkpoint_id: str = typer.Argument(...)):
+    """Show a diff from checkpoint contents to current file contents."""
+    from magent.workbench import checkpoint_diff
+
+    result = checkpoint_diff(_store(), checkpoint_id)
+    if not result.get("ok"):
+        console.print_json(data=result)
+        raise typer.Exit(1)
+    console.print(result.get("diff") or "[dim]No diff.[/dim]")
+
+
 @checkpoint_app.command("restore")
 def checkpoint_restore_cmd(
     checkpoint_id: str = typer.Argument(...),
@@ -951,6 +1041,18 @@ def checkpoint_restore_cmd(
         if confirm != "y":
             raise typer.Exit()
     console.print_json(data=restore_checkpoint(_store(), checkpoint_id))
+
+
+@checkpoint_app.command("restore-last")
+def checkpoint_restore_last_cmd(yes: bool = typer.Option(False, "--yes", "-y")):
+    """Restore the most recent checkpoint."""
+    from magent.workbench import restore_latest_checkpoint
+
+    if not yes:
+        confirm = Prompt.ask("Restore the latest checkpoint?", choices=["y", "n"], default="n")
+        if confirm != "y":
+            raise typer.Exit()
+    console.print_json(data=restore_latest_checkpoint(_store()))
 
 
 @memory_app.command("review")

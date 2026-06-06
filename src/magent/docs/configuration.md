@@ -17,6 +17,20 @@ Common settings:
 - context compaction budgets
 - MCP server definitions
 - gateway adapter settings
+- per-tool output budgets
+- project-local `.magent/config.toml` commands and preferences
+
+Project-local config:
+
+`<project>/.magent/config.toml`
+
+Example:
+
+```toml
+[commands]
+test = "pytest -q"
+lint = "ruff check src tests"
+build = ["python -m build"]
+```
 
 Run `magent doctor` after changing config. It checks dependencies, providers, MagGraph memory, semantic memory, MCP, gateway settings, and docs coverage.
-

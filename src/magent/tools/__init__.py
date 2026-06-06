@@ -37,6 +37,16 @@ console = Console()
 
 ToolResult = dict[str, Any]
 READ_FILE_PREVIEW_CHARS = 16000
+DEFAULT_TOOL_BUDGETS = {
+    "default": 8000,
+    "read_file": 16000,
+    "read_file_range": 12000,
+    "web_fetch": 12000,
+    "run_shell": 10000,
+    "run_python": 10000,
+    "search_codebase": 9000,
+    "db_query": 8000,
+}
 
 
 class ToolExecutor:
@@ -49,12 +59,14 @@ class ToolExecutor:
         allowed_shell_patterns: list[str] | None = None,
         show_tool_calls: bool = True,
         username: str = "default",
+        tool_budgets: dict[str, int] | None = None,
     ):
         self.cwd = cwd
         self.permission_mode = permission_mode
         self.allowed_shell_patterns = allowed_shell_patterns or []
         self.show_tool_calls = show_tool_calls
         self.username = username
+        self.tool_budgets = {**DEFAULT_TOOL_BUDGETS, **(tool_budgets or {})}
 
     def _checkpoint(self, abs_path: Path, operation: str) -> str:
         try:
@@ -1088,7 +1100,8 @@ class ToolExecutor:
 
     async def dispatch(self, tool_name: str, tool_args: dict[str, Any]) -> ToolResult:
         """Dispatch a tool call by name."""
-        a = tool_args
+        a = dict(tool_args)
+        raw = bool(a.pop("raw", False))
         dispatch_map: dict[str, Any] = {
             "read_file": lambda: self.read_file(a["path"]),
             "read_file_range": lambda: self.read_file_range(
@@ -1137,7 +1150,37 @@ class ToolExecutor:
         fn = dispatch_map.get(tool_name)
         if fn is None:
             return {"ok": False, "error": f"Unknown tool: {tool_name}"}
-        return await fn()
+        result = await fn()
+        return result if raw else self._budget_result(tool_name, result)
+
+    def _budget_result(self, tool_name: str, result: ToolResult) -> ToolResult:
+        budget = int(self.tool_budgets.get(tool_name, self.tool_budgets.get("default", 8000)))
+        if budget <= 0:
+            return result
+        changed = False
+        output = dict(result)
+        for key, value in list(output.items()):
+            if isinstance(value, str) and len(value) > budget:
+                output[key] = value[:budget].rstrip() + (
+                    f"\n\n[...{key} truncated at {budget} chars; pass raw=true for full output...]"
+                )
+                changed = True
+            elif isinstance(value, list) and len(json.dumps(value, default=str)) > budget:
+                kept = []
+                size = 2
+                for item in value:
+                    item_size = len(json.dumps(item, default=str))
+                    if size + item_size > budget:
+                        break
+                    kept.append(item)
+                    size += item_size
+                output[key] = kept
+                output[f"{key}_truncated"] = True
+                changed = True
+        if changed:
+            output["budgeted"] = True
+            output["budget_chars"] = budget
+        return output
 
 
 # ─────────────────────────────────────────────
