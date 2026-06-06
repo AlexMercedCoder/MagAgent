@@ -5,7 +5,7 @@ MagAgent is a terminal-native coding and productivity agent with local-first mem
 Core ideas:
 
 - `magent ask "..."` runs a one-shot task.
-- `magent` starts an interactive session.
+- `magent` starts an interactive Rich terminal session with a compact banner, Markdown response panels, and quiet streaming.
 - `magent docs list` shows built-in documentation topics.
 - `magent doctor` checks your local setup.
 - `magent memory ...` inspects and manages the MagGraph memory graph.

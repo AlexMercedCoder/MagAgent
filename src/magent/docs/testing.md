@@ -19,6 +19,7 @@ High-confidence coverage focuses on:
 - provider routing and config loading
 - SQLite data tools and tool result shaping
 - packaged docs coverage and local UI endpoints
+- terminal UI rendering and streaming behavior
 
 Use `magent test explain <file>` when targeted test selection is surprising. Use
 `magent plan-apply --dry-run <plan-id>` before executing buffered plan operations.

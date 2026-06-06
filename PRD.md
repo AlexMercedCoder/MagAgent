@@ -116,8 +116,10 @@ magent --provider nous-portal --model hermes-4
 ```
 
 The interactive mode presents a polished TUI built with **Rich** (Python) with:
-- Multi-line input with syntax highlighting
-- Streaming token output
+- Compact adaptive session banner
+- Markdown response panels
+- Streaming token output without duplicated final answers
+- Status lines for checkpoint, memory, command, and agent events
 - Slash-command palette (`/help`, `/memory`, `/skills`, `/model`, `/user`, `/mode`)
 - Tool-call audit trail (collapsible)
 - Permission prompts for risky actions (minimally interrupting)
@@ -637,7 +639,7 @@ Shipped workbench surfaces include:
 ```toml
 [agent]
 name = "MagAgent"
-version = "0.12.0"
+version = "0.13.0"
 selective_tools = true
 
 [defaults]

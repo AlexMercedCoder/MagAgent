@@ -14,6 +14,7 @@ def test_docs_topics_are_packaged():
     assert "testing" in topics
     assert "patch-workflow" in topics
     assert "ui" in topics
+    assert "tui" in topics
 
 
 def test_docs_search_finds_semantic_memory():

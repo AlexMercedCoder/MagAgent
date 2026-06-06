@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-149%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-155%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -34,6 +34,7 @@ The name also nods to **[MagGraph](https://github.com/AlexMercedCoder/MagGraph)*
 MagAgent is a **CLI-first AI coding agent** that:
 
 - Runs entirely in your terminal, with an optional local operations UI when you want a browser view
+- Presents a polished Rich terminal UI with a compact session banner, Markdown response panels, and quieter streaming
 - Maintains a **persistent memory graph** per user that grows smarter over time
 - Connects to **11+ AI providers** (local and cloud) via a single config
 - Has **31 built-in tools** out of the box — no plugins or configuration required
@@ -640,12 +641,12 @@ src/magent/
 ├── workbench.py      # Local productivity ledgers and workflow helpers
 ├── logging.py        # JSONL session event logging
 ├── setup.py          # First-run wizard
-└── tui.py            # Rich terminal UI, streaming renderer
+└── tui.py            # Rich terminal UI, theme, status, and streaming renderer
 docs/
 ├── gateway/          # Gateway setup guides
 └── skills/           # Built-in skill SKILL.md files
 tests/
-└── unit/             # 145 unit tests (all mocked, no credentials needed)
+└── unit/             # 155 unit tests (all mocked, no credentials needed)
 ```
 
 ---

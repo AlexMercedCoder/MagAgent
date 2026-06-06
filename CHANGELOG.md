@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.0
+
+- Polished the Rich terminal UI with a compact adaptive startup banner and shared `TuiTheme` styles.
+- Added reusable status and error line renderers for checkpoint, memory, command, and agent events.
+- Updated response rendering to display non-streamed answers in a `MagAgent` Markdown panel.
+- Changed streaming output to avoid duplicating the final answer by default while retaining an opt-in final Markdown render.
+- Added packaged terminal UI documentation and capture-based TUI tests.
+
 ## 0.12.0
 
 - Added `magent ui`, a live local operations dashboard served on `127.0.0.1`.
