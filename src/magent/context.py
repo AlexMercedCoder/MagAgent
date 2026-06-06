@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from magent.memory import NODE_FACT, NODE_PATTERN, NODE_PROJECT
+from magent.records import PromotionCandidateRecord
 from magent.workbench import (
     WorkbenchStore,
     command_history,
@@ -211,11 +212,12 @@ def promote_candidate(
     )
     if not match:
         return {"ok": False, "error": f"Promotion candidate not found: {source}/{source_id}"}
-    written = memory_manager.write_memories([match], project_slug=_slug(Path(project).resolve().name))
+    record = PromotionCandidateRecord.from_mapping(match)
+    written = memory_manager.write_memories([record.to_memory_item()], project_slug=_slug(Path(project).resolve().name))
     return {
         "ok": written > 0,
         "written": written,
-        "candidate": match,
+        "candidate": record.to_memory_item(),
     }
 
 
@@ -228,7 +230,11 @@ def promote_all_candidates(
 ) -> dict[str, Any]:
     """Promote all current candidates into MagGraph memory."""
     candidates = promotion_candidates(store, project, limit=limit)
-    written = memory_manager.write_memories(candidates, project_slug=_slug(Path(project).resolve().name))
+    memory_items = [
+        PromotionCandidateRecord.from_mapping(candidate).to_memory_item()
+        for candidate in candidates
+    ]
+    written = memory_manager.write_memories(memory_items, project_slug=_slug(Path(project).resolve().name))
     return {"ok": written == len(candidates), "written": written, "candidates": candidates}
 
 

@@ -7,7 +7,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-163%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-166%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -629,6 +629,7 @@ src/magent/
 ├── agent.py          # AgentSession — tool loop, streaming, sub-agents
 ├── cli/
 │   ├── app.py        # Typer app and command-group composition
+│   ├── command_context.py # Shared command helper/context functions
 │   └── main.py       # CLI entry point and command implementations
 ├── config/           # TOML config, user profiles
 ├── gateway/          # Remote gateway (Slack, Discord, Telegram)
@@ -637,6 +638,7 @@ src/magent/
 ├── permissions/      # Risk tiers, auto-approve logic
 ├── providers/        # LiteLLM provider registry
 ├── repo_map.py       # Token-efficient repository map cache
+├── records.py        # Typed record helpers for common dict payloads
 ├── skills/           # SKILL.md discovery, matching, lockfile
 ├── subagents/        # Sub-agent runner
 ├── tokens.py         # Lightweight token budgeting helpers
@@ -645,6 +647,7 @@ src/magent/
 │   └── db.py         # SQLite named database tools
 ├── context.py        # Context map and memory promotion bridge
 ├── workbench.py      # Local productivity ledgers and workflow helpers
+├── workbench_domains/ # Domain import modules for future workbench extraction
 ├── workbench_store.py # JSON-backed workbench storage primitive
 ├── logging.py        # JSONL session event logging
 ├── setup.py          # First-run wizard
@@ -653,7 +656,7 @@ docs/
 ├── gateway/          # Gateway setup guides
 └── skills/           # Built-in skill SKILL.md files
 tests/
-└── unit/             # 163 unit tests (all mocked, no credentials needed)
+└── unit/             # 166 unit tests (all mocked, no credentials needed)
 ```
 
 ---

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.14.3
+
+- Added `magent.cli.command_context` as the shared helper surface for future CLI command modules.
+- Added workbench domain modules for plans, patches, checkpoints, project helpers, code/test intelligence, and release/workspace helpers.
+- Added tool helper modules for shared tool result types, budgets, schema building, and archive extraction safety.
+- Added typed record helpers for tasks, plans, and memory-promotion candidates.
+- Updated context promotion to write through the typed promotion candidate record.
+- Expanded architecture and compatibility tests for command context, workbench domains, tool helpers, and typed records.
+
 ## 0.14.2
 
 - Extracted Typer app and command-group composition into `magent.cli.app` while preserving `magent.cli.main:app`.

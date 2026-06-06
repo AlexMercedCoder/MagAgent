@@ -10,6 +10,8 @@ MagAgent is organized around four local layers. Keeping these layers distinct ma
 
 Future command modules should register command groups from `magent.cli.commands.*` while preserving `magent.cli.main:app` as the console entry point.
 
+`magent.cli.command_context` owns reusable command helpers such as current-user lookup, store creation, provider construction, and command-tree introspection. New command modules should depend on this helper layer instead of copying setup code.
+
 ### Agent Runtime
 
 `magent.agent` coordinates provider calls, memory recall, tool dispatch, checkpoints, and memory writes for interactive and one-shot sessions.
@@ -33,6 +35,8 @@ Workbench state is local operational state: tasks, artifacts, project profiles, 
 
 `magent.workbench_store` owns the JSON-backed storage primitive. `magent.workbench` remains the compatibility facade for workbench functions. New workbench domains should move toward focused modules while being re-exported from `magent.workbench`.
 
+`magent.workbench_domains.*` exposes domain-specific import modules for plans, patches, checkpoints, project helpers, code/test intelligence, and release/workspace helpers. These modules currently preserve compatibility while providing stable targets for future extraction.
+
 ### Context
 
 `magent.context` bridges memory and workbench state. It answers "what does MagAgent know right now?" and promotes selected workbench facts into durable MagGraph memory.
@@ -46,6 +50,12 @@ Promotion is intentionally explicit:
 ### Tools
 
 `magent.tools` is the public tool API. The implementation lives in `magent.tools.executor`, and the package initializer re-exports `ToolExecutor` for compatibility.
+
+Shared tool support code lives in:
+
+- `magent.tools.types` for `ToolResult` and tool budgets
+- `magent.tools.registry` for OpenAI-compatible tool schema helpers
+- `magent.tools.archive` for archive extraction safety
 
 Future tool modules should split by capability:
 
@@ -63,6 +73,7 @@ Public imports should remain stable unless a major version explicitly changes th
 from magent.tools import ToolExecutor
 from magent.workbench import WorkbenchStore
 from magent.workbench import task_add
+from magent.workbench_domains.plans import save_plan
 ```
 
 When internals move, add compatibility tests before refactoring. This protects downstream users and keeps releases patch-safe.
@@ -71,7 +82,7 @@ When internals move, add compatibility tests before refactoring. This protects d
 
 The safest future order is:
 
-1. Continue extracting `magent.workbench` domains behind the existing facade.
-2. Move CLI command groups into focused registration modules.
+1. Move CLI command groups into focused registration modules that use `magent.cli.command_context`.
+2. Continue extracting `magent.workbench` domains behind the existing facade and domain modules.
 3. Split `magent.tools.executor` by capability while keeping `ToolExecutor` public.
 4. Add architecture docs whenever module boundaries change.

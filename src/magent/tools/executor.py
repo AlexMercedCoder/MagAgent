@@ -32,21 +32,12 @@ from magent.permissions import (
     classify_file_op,
     classify_shell_command,
 )
+from magent.tools.archive import safe_extract_tar as _safe_extract_tar
+from magent.tools.archive import safe_extract_zip as _safe_extract_zip
+from magent.tools.registry import tool_def as _def
+from magent.tools.types import DEFAULT_TOOL_BUDGETS, READ_FILE_PREVIEW_CHARS, ToolResult
 
 console = Console()
-
-ToolResult = dict[str, Any]
-READ_FILE_PREVIEW_CHARS = 16000
-DEFAULT_TOOL_BUDGETS = {
-    "default": 8000,
-    "read_file": 16000,
-    "read_file_range": 12000,
-    "web_fetch": 12000,
-    "run_shell": 10000,
-    "run_python": 10000,
-    "search_codebase": 9000,
-    "db_query": 8000,
-}
 
 
 class ToolExecutor:
@@ -1183,66 +1174,3 @@ class ToolExecutor:
             output["budgeted"] = True
             output["budget_chars"] = budget
         return output
-
-
-# ─────────────────────────────────────────────
-# Helper: compact tool definition builder
-# ─────────────────────────────────────────────
-
-
-def _def(name: str, description: str, params: dict[str, tuple[str, str | None]]) -> dict[str, Any]:
-    """Build an OpenAI-compatible tool definition."""
-    properties: dict[str, Any] = {}
-    required: list[str] = []
-    for param_name, (param_type, param_desc) in params.items():
-        prop: dict[str, Any] = {"type": param_type}
-        if param_type == "array":
-            prop["items"] = {}
-        if param_desc:
-            prop["description"] = param_desc
-        desc = (param_desc or "").lower()
-        if "optional" not in desc and "default" not in desc:
-            required.append(param_name)
-        properties[param_name] = prop
-
-    return {
-        "type": "function",
-        "function": {
-            "name": name,
-            "description": description,
-            "parameters": {
-                "type": "object",
-                "properties": properties,
-                "required": required,
-            },
-        },
-    }
-
-
-def _is_within(path: Path, root: Path) -> bool:
-    root = root.resolve(strict=False)
-    path = path.resolve(strict=False)
-    return path == root or root in path.parents
-
-
-def _safe_extract_zip(zf: zipfile.ZipFile, output_dir: Path) -> None:
-    root = output_dir.resolve(strict=False)
-    for member in zf.infolist():
-        target = root / member.filename
-        if not _is_within(target, root):
-            raise ValueError(f"Refusing to extract unsafe archive member: {member.filename}")
-    zf.extractall(root)
-
-
-def _safe_extract_tar(tf: Any, output_dir: Path) -> None:
-    root = output_dir.resolve(strict=False)
-    for member in tf.getmembers():
-        target = root / member.name
-        if not _is_within(target, root):
-            raise ValueError(f"Refusing to extract unsafe archive member: {member.name}")
-        linkname = getattr(member, "linkname", "")
-        if linkname:
-            link_target = (target.parent / linkname).resolve(strict=False)
-            if not _is_within(link_target, root):
-                raise ValueError(f"Refusing to extract unsafe archive link: {member.name}")
-    tf.extractall(root)
