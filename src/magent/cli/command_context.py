@@ -56,14 +56,17 @@ def build_extraction_provider(config: Any):
 
 def known_command_names(app) -> list[str]:
     names = []
-    for command in app.registered_commands:
+    _collect_command_names(app, "", names)
+    return names
+
+
+def _collect_command_names(typer_app: Any, prefix: str, names: list[str]) -> None:
+    for command in typer_app.registered_commands:
         if command.name:
-            names.append(command.name)
-    for group_info in app.registered_groups:
+            names.append(f"{prefix} {command.name}".strip())
+    for group_info in typer_app.registered_groups:
         if not group_info.name or not group_info.typer_instance:
             continue
-        names.append(group_info.name)
-        for command in group_info.typer_instance.registered_commands:
-            if command.name:
-                names.append(f"{group_info.name} {command.name}")
-    return names
+        group_name = f"{prefix} {group_info.name}".strip()
+        names.append(group_name)
+        _collect_command_names(group_info.typer_instance, group_name, names)

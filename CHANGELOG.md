@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.25.0
+
+- Added MCP-first plugin imports with `magent plugin mcp import` and safe config application through `magent plugin mcp apply`.
+- Added compatibility importers for OpenCode, Claude, and Codex-style `SKILL.md` packs.
+- Added manifest adapters for native MagAgent manifests, `plugin.json`, `package.json`, `AGENTS.md`, `CLAUDE.md`, `SKILL.md`, and MCP config files.
+- Added normalized plugin registry metadata including source URL, compatibility tags, capabilities, permissions, and trust.
+- Enabled plugin MCP servers to contribute to runtime config at load time with collision-safe names.
+- Updated plugin compatibility docs, generated references, and release coverage.
+
 ## 0.24.0
 
 - Added Markdown agent definitions from `.magent/agents/*.md`, user config agents, built-ins, and enabled plugin agent packs.

@@ -49,6 +49,8 @@ magent hook init
 magent lsp diagnostics
 magent daemon enqueue shell "pytest -q"
 magent plugin list
+magent plugin mcp import ./mcp.toml --name filesystem
+magent plugin import codex-skill ./SKILL.md
 magent project init
 magent config backup
 magent events list

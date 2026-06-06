@@ -13,7 +13,7 @@ MagAgent includes local code-intelligence commands under `magent lsp`.
 
 ## Behavior
 
-The 0.24.0 implementation is LSP-aware and local-first:
+The implementation is LSP-aware and local-first:
 
 - it detects common language-server executables such as `pylsp`, `pyright-langserver`, `typescript-language-server`, `rust-analyzer`, and `gopls`
 - it provides no-server fallbacks for symbols, definitions, references, and diagnostics

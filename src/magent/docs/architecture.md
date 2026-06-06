@@ -136,7 +136,7 @@ commands. Expensive actions belong behind explicit button endpoints such as
 
 `magent.daemon` owns the durable background queue for asks, recipes, plans, shell tasks, scheduled followups, and gateway work. It uses the workbench store so queued work remains inspectable and resumable.
 
-`magent.plugins` owns installable extension pack metadata and enabled state. Plugin packs can carry agents, recipes, skills, tool bundles, and MCP config; currently enabled plugin agent directories participate directly in agent discovery.
+`magent.plugins` owns installable extension pack metadata and enabled state. Plugin packs can carry agents, recipes, skills, tool bundles, and MCP config. Enabled plugin agent directories participate directly in agent discovery, and enabled plugin MCP configs contribute collision-safe runtime MCP servers. Compatibility importers convert OpenCode, Claude, Codex skill, and MCP config shapes into MagAgent-native packs.
 
 ## Compatibility Rule
 

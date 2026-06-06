@@ -29,7 +29,7 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.24.0",
+        "version": "0.25.0",
         "selective_tools": True,
         "max_subagents": 3,
     },
@@ -345,10 +345,23 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 def load_global_config() -> dict[str, Any]:
     if not GLOBAL_CONFIG.exists():
-        return DEFAULT_GLOBAL_CONFIG.copy()
-    with GLOBAL_CONFIG.open("rb") as f:
-        raw = tomllib.load(f)
-    return _deep_merge(DEFAULT_GLOBAL_CONFIG, raw)
+        cfg = DEFAULT_GLOBAL_CONFIG.copy()
+    else:
+        with GLOBAL_CONFIG.open("rb") as f:
+            raw = tomllib.load(f)
+        cfg = _deep_merge(DEFAULT_GLOBAL_CONFIG, raw)
+    try:
+        from magent.plugins import enabled_plugin_mcp_servers
+
+        plugin_servers = enabled_plugin_mcp_servers()
+        if plugin_servers:
+            cfg.setdefault("mcp", {}).setdefault("servers", {})
+            for server_name, server_cfg in plugin_servers.items():
+                target = server_name if server_name not in cfg["mcp"]["servers"] else f"plugin__{server_name}"
+                cfg["mcp"]["servers"][target] = server_cfg
+    except Exception:
+        pass
+    return cfg
 
 
 def load_user_profile(username: str) -> dict[str, Any]:

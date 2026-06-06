@@ -240,6 +240,9 @@ Generated from the active Typer command tree.
 - `magent memory reset`
 - `magent memory review`
 - `magent memory search`
+- `magent memory semantic`
+- `magent memory semantic reset`
+- `magent memory semantic status`
 - `magent memory show`
 - `magent memory stats`
 - `magent memory suppress`
@@ -282,8 +285,16 @@ Generated from the active Typer command tree.
 
 - `magent plugin disable`
 - `magent plugin enable`
+- `magent plugin import`
+- `magent plugin import claude`
+- `magent plugin import codex-skill`
+- `magent plugin import opencode`
 - `magent plugin install`
 - `magent plugin list`
+- `magent plugin mcp`
+- `magent plugin mcp apply`
+- `magent plugin mcp import`
+- `magent plugin metadata`
 
 ## policy
 

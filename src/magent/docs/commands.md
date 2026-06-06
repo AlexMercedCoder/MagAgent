@@ -74,6 +74,12 @@ Important command paths:
 - `magent plugin install <path>`: install a local extension pack.
 - `magent plugin enable <name>`: enable an installed pack.
 - `magent plugin disable <name>`: disable an installed pack.
+- `magent plugin metadata <path>`: normalize plugin metadata from native or foreign manifests.
+- `magent plugin mcp import <file-or-dir>`: import MCP server configs as a plugin pack.
+- `magent plugin mcp apply <name>`: apply an installed plugin's MCP servers into `config.toml`.
+- `magent plugin import opencode <path>`: import OpenCode-style agents, commands, and MCP config.
+- `magent plugin import claude <path>`: import Claude-style project instructions, agents, commands, and MCP config.
+- `magent plugin import codex-skill <path>`: import a Codex-style `SKILL.md` pack.
 - `magent browser snapshot <url>`: capture page title and visible text with Playwright.
 - `magent browser screenshot <url>`: capture a page screenshot with Playwright.
 - `magent eval init`: create a starter local eval suite.

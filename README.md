@@ -9,7 +9,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-201%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-206%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -46,6 +46,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Adds LSP-aware code intelligence commands for symbols, diagnostics, definitions, and references
 - Queues background asks, recipes, plans, shell tasks, followups, and gateway tasks through `magent daemon`
 - Installs local extension packs for agents, recipes, skills, tools, and MCP configuration through `magent plugin`
+- Imports MCP, Claude, OpenCode, and Codex skill packs into MagAgent-native plugins with normalized registry metadata
 - Reads project playbooks from `.magent/playbook.toml` for command routines, release checklists, review rules, and context defaults
 - Runs saved plans and recipes in worktree, copied, or Docker-backed sandboxes
 - Provides local eval suite scaffolding for repeatable repo tasks
