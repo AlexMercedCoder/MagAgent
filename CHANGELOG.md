@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.0
+
+- Added `magent context map` to show memory, workbench, project doctor, command-role, and promotion-candidate state together.
+- Added `magent memory promote` to list or promote workbench facts into durable MagGraph memory.
+- Added promotion candidates for project command profiles, open tasks, pending/failed plans, command failures, and review findings.
+- Added packaged context-map documentation and tests for context aggregation, promotion, and CLI flows.
+
 ## 0.13.0
 
 - Polished the Rich terminal UI with a compact adaptive startup banner and shared `TuiTheme` styles.

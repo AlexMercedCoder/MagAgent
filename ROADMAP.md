@@ -210,6 +210,8 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/m
 
 **v0.13.0 update:** Polished the Rich TUI with a compact adaptive banner, shared theme styles, Markdown response panels, reusable status lines, and quieter non-duplicating streaming output.
 
+**v0.14.0 update:** Added `magent context map` and `magent memory promote` to make the relationship between MagGraph memory and workbench state explicit.
+
 **Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
 
 **What to build:**

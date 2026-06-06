@@ -56,6 +56,7 @@ Memory commands:
 - `magent memory sync`
 - `magent memory review`
 - `magent memory approve`
+- `magent memory promote`
 - `magent memory quality`
 - `magent memory merge`
 - `magent memory suppress`
@@ -162,6 +163,11 @@ Release commands:
 - `magent release`
 - `magent release check`
 - `magent release notes`
+
+Context commands:
+
+- `magent context`
+- `magent context map`
 
 Gateway commands:
 

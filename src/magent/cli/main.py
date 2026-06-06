@@ -63,6 +63,7 @@ code_app = typer.Typer(help="Code intelligence index", name="code")
 test_app = typer.Typer(help="Test intelligence helpers", name="test")
 workspace_app = typer.Typer(help="Workspace status and cleanup reports", name="workspace")
 release_app = typer.Typer(help="Release checks and notes", name="release")
+context_app = typer.Typer(help="Current project context map", name="context")
 for _name, _typer in [
     ("task", task_app),
     ("artifact", artifact_app),
@@ -82,6 +83,7 @@ for _name, _typer in [
     ("test", test_app),
     ("workspace", workspace_app),
     ("release", release_app),
+    ("context", context_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -1054,6 +1056,18 @@ def release_notes_cmd(
     console.print_json(data=release_notes(project, since=since))
 
 
+@context_app.command("map")
+def context_map_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    query: str = typer.Option("", "--query", "-q"),
+):
+    """Show memory, workbench, and project state for the current project."""
+    from magent.context import context_map
+
+    mgr, _ = _get_memory_manager()
+    console.print_json(data=context_map(_store(), project=project, memory_manager=mgr, query=query))
+
+
 @app.command("env-doctor")
 def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Run project environment checks."""
@@ -1387,6 +1401,28 @@ def memory_approve_cmd(message: str = typer.Option("Approve MagAgent memory upda
     from magent.workbench import memory_approve
 
     console.print_json(data=memory_approve(_require_user(), message=message))
+
+
+@memory_app.command("promote")
+def memory_promote_cmd(
+    source: str | None = typer.Argument(None),
+    source_id: str | None = typer.Argument(None),
+    project: str = typer.Option(".", "--project", "-p"),
+    all_candidates: bool = typer.Option(False, "--all"),
+    limit: int = typer.Option(20, "--limit"),
+):
+    """Promote workbench facts into durable MagGraph memory."""
+    from magent.context import promote_all_candidates, promote_candidate, promotion_candidates
+
+    mgr, _ = _get_memory_manager()
+    store = _store()
+    if all_candidates:
+        console.print_json(data=promote_all_candidates(store, mgr, project=project, limit=limit))
+        return
+    if source and source_id:
+        console.print_json(data=promote_candidate(store, mgr, source, source_id, project=project))
+        return
+    console.print_json(data={"ok": True, "candidates": promotion_candidates(store, project, limit=limit)})
 
 
 @memory_app.command("quality")

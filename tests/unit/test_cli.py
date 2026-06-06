@@ -17,7 +17,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.13.0" in version.output
+    assert "MagAgent 0.14.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -63,6 +63,45 @@ def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -
     assert result.exit_code == 0
     assert "http://127.0.0.1:9999/" in result.output
     assert "cli-test" in result.output
+
+
+def test_cli_context_map_and_memory_promote(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("cli-test")
+    store.append("tasks", {"title": "Remember the release checklist", "status": "open"})
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+
+    class FakeMemory:
+        available = True
+
+        def __init__(self):
+            self.written = []
+
+        def stats(self):
+            return {"nodes": 0}
+
+        def recall(self, query):
+            return f"Recall {query}"
+
+        def write_memories(self, extracted, project_slug=None):
+            self.written.extend(extracted)
+            return len(extracted)
+
+    memory = FakeMemory()
+    monkeypatch.setattr(cli_main, "_get_memory_manager", lambda: (memory, "cli-test"))
+
+    mapped = runner.invoke(cli_main.app, ["context", "map", "--project", str(project), "--query", "release"])
+    listed = runner.invoke(cli_main.app, ["memory", "promote", "--project", str(project)])
+    promoted = runner.invoke(cli_main.app, ["memory", "promote", "task", "task_0001", "--project", str(project)])
+
+    assert mapped.exit_code == 0
+    assert json.loads(mapped.output)["memory"]["recall"] == "Recall release"
+    assert listed.exit_code == 0
+    assert json.loads(listed.output)["candidates"]
+    assert promoted.exit_code == 0
+    assert json.loads(promoted.output)["written"] == 1
 
 
 def test_cli_code_and_test_commands(tmp_path: Path, monkeypatch) -> None:

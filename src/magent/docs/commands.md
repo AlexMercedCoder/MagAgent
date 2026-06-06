@@ -15,6 +15,9 @@ Important command paths:
 - `magent memory stats`: show memory graph stats.
 - `magent memory index`: build semantic memory index.
 - `magent memory search <query>`: search memory.
+- `magent memory promote`: list workbench facts that can be promoted to memory.
+- `magent memory promote <source> <source-id>`: promote one workbench fact into MagGraph memory.
+- `magent memory promote --all`: promote all current candidates into MagGraph memory.
 - `magent memory quality`: report duplicate-looking and suppressed memory nodes.
 - `magent memory merge <target-id> <source-id>`: merge one memory node into another.
 - `magent memory suppress <node-id>`: mark a memory node suppressed without deleting it.
@@ -68,5 +71,6 @@ Important command paths:
 - `magent workspace clean-report`: show non-destructive cleanup suggestions.
 - `magent release check`: run release readiness checks.
 - `magent release notes`: generate release notes from recent commits.
+- `magent context map`: show memory, workbench, and project state for the current project.
 
 Use `magent <command> --help` for command-specific Typer help.
