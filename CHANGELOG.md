@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.14.1
+
+- Moved the tool executor implementation into `magent.tools.executor` while preserving `from magent.tools import ToolExecutor`.
+- Extracted JSON-backed workbench storage primitives into `magent.workbench_store` while preserving `from magent.workbench import WorkbenchStore`.
+- Added packaged architecture documentation for memory, workbench, context, tools, CLI/TUI, and compatibility boundaries.
+- Added compatibility tests for public tool and workbench imports.
+
 ## 0.14.0
 
 - Added `magent context map` to show memory, workbench, project doctor, command-role, and promotion-candidate state together.

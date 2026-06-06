@@ -212,6 +212,8 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/m
 
 **v0.14.0 update:** Added `magent context map` and `magent memory promote` to make the relationship between MagGraph memory and workbench state explicit.
 
+**v0.14.1 update:** Added compatibility-safe modular hygiene by extracting tool execution and workbench storage primitives, plus packaged architecture boundary docs.
+
 **Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
 
 **What to build:**

@@ -65,6 +65,7 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
     slugs = {topic.slug for topic in topics}
     required = {
         "overview",
+        "architecture",
         "commands",
         "memory",
         "semantic-memory",

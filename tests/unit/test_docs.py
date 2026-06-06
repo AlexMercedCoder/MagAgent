@@ -7,6 +7,7 @@ def test_docs_topics_are_packaged():
     topics = {topic.slug for topic in list_topics()}
 
     assert "overview" in topics
+    assert "architecture" in topics
     assert "commands" in topics
     assert "checkpoints" in topics
     assert "recipes" in topics
