@@ -35,6 +35,7 @@ test_app = typer.Typer(help="Test intelligence helpers", name="test")
 workspace_app = typer.Typer(help="Workspace status and cleanup reports", name="workspace")
 release_app = typer.Typer(help="Release checks and notes", name="release")
 context_app = typer.Typer(help="Current project context map", name="context")
+config_app = typer.Typer(help="Inspect, backup, diff, and restore MagAgent config", name="config")
 recipe_app = typer.Typer(help="Reusable workflow recipes", name="recipe")
 tools_app = typer.Typer(help="Tool capability packs", name="tools")
 eval_app = typer.Typer(help="Local benchmark/eval suites", name="eval")
@@ -71,6 +72,7 @@ for _name, _typer in [
     ("workspace", workspace_app),
     ("release", release_app),
     ("context", context_app),
+    ("config", config_app),
     ("recipe", recipe_app),
     ("tools", tools_app),
     ("eval", eval_app),
@@ -91,6 +93,7 @@ __all__ = [
     "browser_app",
     "code_app",
     "context_app",
+    "config_app",
     "data_app",
     "docs_app",
     "followup_app",

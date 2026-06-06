@@ -12,6 +12,8 @@ Future command modules should register command groups from `magent.cli.commands.
 
 `magent.cli.command_context` owns reusable command helpers such as current-user lookup, store creation, provider construction, and command-tree introspection. New command modules should depend on this helper layer instead of copying setup code.
 
+`magent.cli.commands.*` contains focused command registration modules. Provider UX and config safety commands use this pattern first; future command groups should migrate there incrementally.
+
 `magent.config_ux` owns CLI-first configuration mutations and readiness summaries for providers, model roles, memory behavior, gateway setup, and sub-agent caps. Command handlers should call this module when they need to update global or user TOML instead of editing config dictionaries inline.
 
 `magent.ux_flows` owns guided onboarding behavior: profile presets, project initialization, safe doctor fixes, and next-action recommendations. It composes config, workbench, memory inbox, and playbook helpers without making those lower-level modules depend on UX prompts.

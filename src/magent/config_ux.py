@@ -13,10 +13,13 @@ from magent.config import (
     save_user_profile,
 )
 from magent.provider_catalog import (
+    PROVIDER_CATALOG,
+    PROVIDER_ORDER,
     default_access_modes,
     default_models,
     provider_env_vars,
     provider_metadata,
+    validate_provider_catalog,
 )
 from magent.provider_catalog import (
     provider_choices as catalog_provider_choices,
@@ -110,6 +113,97 @@ def detect_provider_environment() -> list[dict[str, Any]]:
             }
         )
     return detected
+
+
+def provider_matrix() -> dict[str, Any]:
+    """Return catalog-backed provider capability/readiness rows."""
+    cfg = load_global_config()
+    detected = {item["id"]: item for item in detect_provider_environment()}
+    rows = []
+    for provider_id in PROVIDER_ORDER:
+        metadata = PROVIDER_CATALOG[provider_id]
+        env_var = metadata.get("env", "")
+        rows.append(
+            {
+                "id": provider_id,
+                "display": metadata["display"],
+                "default_model": metadata["default_model"],
+                "access_mode": metadata["access_mode"],
+                "env": env_var,
+                "env_present": bool(env_var and os.environ.get(env_var)),
+                "local": bool(metadata.get("local")) or provider_id == "custom",
+                "litellm": metadata["litellm"],
+                "configured": provider_id in cfg.get("providers", {}),
+                "detected": detected.get(provider_id, {}),
+            }
+        )
+    return {"ok": True, "providers": rows}
+
+
+def provider_explain(provider_id: str) -> dict[str, Any]:
+    """Explain one provider and how to configure it."""
+    metadata = provider_metadata(provider_id)
+    if not metadata:
+        return {"ok": False, "error": f"Unknown provider: {provider_id}", "known": PROVIDER_ORDER}
+    env_var = metadata.get("env", "")
+    return {
+        "ok": True,
+        "provider": provider_id,
+        "metadata": metadata,
+        "access_modes": provider_access_modes(provider_id),
+        "env_present": bool(env_var and os.environ.get(env_var)),
+        "commands": [
+            f"magent provider set {provider_id} --model {metadata['default_model']}"
+            + (f" --api-key-env {env_var}" if env_var else ""),
+            f"magent provider test {provider_id}",
+        ],
+    }
+
+
+def provider_env_status() -> dict[str, Any]:
+    """Return provider env var readiness plus actionable export hints."""
+    rows = []
+    for provider_id in PROVIDER_ORDER:
+        metadata = PROVIDER_CATALOG[provider_id]
+        env_var = metadata.get("env", "")
+        rows.append(
+            {
+                "provider": provider_id,
+                "env": env_var,
+                "present": bool(env_var and os.environ.get(env_var)),
+                "required": bool(env_var),
+                "fix": f"export {env_var}=..." if env_var and not os.environ.get(env_var) else "",
+            }
+        )
+    return {"ok": True, "providers": rows}
+
+
+def provider_recommend(goal: str = "coding") -> dict[str, Any]:
+    """Recommend provider candidates for a usage goal."""
+    goal = goal.strip().lower() or "coding"
+    tiers = {
+        "local": ["ollama", "lmstudio"],
+        "cheap": ["opencode-go", "deepseek", "groq", "deepinfra"],
+        "coding": ["openai", "anthropic", "opencode-go", "deepseek", "mistral"],
+        "review": ["anthropic", "openai", "mistral", "xai"],
+        "memory": ["ollama", "openai", "mistral", "deepseek"],
+        "research": ["perplexity", "openai", "xai", "openrouter"],
+    }
+    matrix = {item["id"]: item for item in provider_matrix()["providers"]}
+    return {
+        "ok": True,
+        "goal": goal,
+        "recommendations": [
+            {**matrix[provider_id], "reason": _recommendation_reason(goal, provider_id)}
+            for provider_id in tiers.get(goal, tiers["coding"])
+            if provider_id in matrix
+        ],
+    }
+
+
+def provider_catalog_doctor() -> dict[str, Any]:
+    """Validate provider metadata and docs-adjacent catalog health."""
+    return validate_provider_catalog()
 
 
 def set_default_provider(
@@ -384,3 +478,19 @@ def _redact_gateway(gateway: dict[str, Any]) -> dict[str, Any]:
         else:
             redacted[key] = value
     return redacted
+
+
+def _recommendation_reason(goal: str, provider_id: str) -> str:
+    reasons = {
+        ("local", "ollama"): "Local, private, and no API key required.",
+        ("local", "lmstudio"): "Local OpenAI-compatible server with GUI-managed models.",
+        ("cheap", "opencode-go"): "Subscription-oriented low-cost coding models.",
+        ("cheap", "deepseek"): "Strong low-cost coding/chat API.",
+        ("cheap", "groq"): "Fast inference for open-weight models.",
+        ("coding", "openai"): "Strong default for broad coding tasks.",
+        ("coding", "anthropic"): "Strong code editing and review model family.",
+        ("review", "anthropic"): "Good fit for careful review and reasoning.",
+        ("research", "perplexity"): "Search/research-oriented Sonar models.",
+        ("memory", "ollama"): "Cheap local extraction and embedding workflows.",
+    }
+    return reasons.get((goal, provider_id), PROVIDER_CATALOG.get(provider_id, {}).get("label", provider_id))

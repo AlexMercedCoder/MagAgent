@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from magent import config as magent_config
-from magent import config_ux
+from magent import config_safety, config_ux
 from magent.config import Config
 
 
@@ -174,3 +174,44 @@ def test_config_ux_provider_access_modes_and_doctor_actions(tmp_path: Path, monk
     assert detected["bedrock"]["recommended_access"] == "aws"
     assert any(item["key"] == "opencode_go" for item in doctor["actions"])
     assert fixed["after"]["summary"]["subagents"]["max_subagents"] == 3
+
+
+def test_provider_ux_matrix_recommend_env_and_explain(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    monkeypatch.setenv("MISTRAL_API_KEY", "secret")
+    config_ux.set_default_provider("mistral", "mistral-large-latest", api_key_env="MISTRAL_API_KEY")
+
+    matrix = {item["id"]: item for item in config_ux.provider_matrix()["providers"]}
+    env = {item["provider"]: item for item in config_ux.provider_env_status()["providers"]}
+    explained = config_ux.provider_explain("mistral")
+    recommended = config_ux.provider_recommend("coding")
+    catalog = config_ux.provider_catalog_doctor()
+
+    assert matrix["mistral"]["configured"] is True
+    assert matrix["mistral"]["env_present"] is True
+    assert env["mistral"]["present"] is True
+    assert explained["commands"][0].startswith("magent provider set mistral")
+    assert any(item["id"] == "mistral" for item in recommended["recommendations"])
+    assert catalog["ok"] is True
+
+
+def test_config_safety_backup_diff_and_restore(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    monkeypatch.setattr(config_safety, "CONFIG_DIR", magent_config.CONFIG_DIR)
+    monkeypatch.setattr(config_safety, "GLOBAL_CONFIG", magent_config.GLOBAL_CONFIG)
+    monkeypatch.setattr(config_safety, "BACKUP_DIR", magent_config.CONFIG_DIR / "backups")
+    magent_config.create_user("alice")
+    magent_config.set_current_user("alice")
+    magent_config.save_global_config({"defaults": {"provider": "ollama", "model": "qwen"}})
+
+    backup = config_safety.backup_config("alice")
+    config_ux.set_default_provider("mistral", "mistral-large-latest", api_key_env="MISTRAL_API_KEY")
+    diff = config_safety.diff_config(backup["backup_id"], "alice")
+    restored = config_safety.restore_config(backup["backup_id"], "alice")
+    shown = config_safety.show_config("alice")
+
+    assert backup["ok"] is True
+    assert "mistral" in diff["diffs"]["global"]
+    assert restored["ok"] is True
+    assert shown["files"]["global"]["exists"] is True
+    assert config_safety.list_config_backups()["backups"]

@@ -163,8 +163,20 @@ def infer_project_commands(root: Path) -> list[str]:
         pyproject = _read_toml(root / "pyproject.toml")
         if pyproject.get("tool", {}).get("pytest"):
             commands.append("pytest")
+        if (root / "uv.lock").exists():
+            commands.extend(["uv run pytest -q", "uv run ruff check src tests"])
+        if (root / "poetry.lock").exists():
+            commands.extend(["poetry run pytest -q", "poetry run ruff check src tests"])
+        if (root / "tox.ini").exists():
+            commands.append("tox")
+        if pyproject.get("tool", {}).get("tox"):
+            commands.append("tox")
+        if "nox" in pyproject.get("tool", {}):
+            commands.append("nox")
     if (root / "package.json").exists():
         commands.extend(_package_json_commands(root / "package.json"))
+    if (root / "deno.json").exists() or (root / "deno.jsonc").exists():
+        commands.extend(["deno test", "deno lint"])
     if (root / "Cargo.toml").exists():
         commands.extend(["cargo test", "cargo clippy"])
     if (root / "go.mod").exists():
@@ -199,9 +211,9 @@ def project_command_roles(root: str | Path) -> dict[str, str]:
     inferred = infer_project_commands(root_path)
     for command in inferred:
         lower = command.lower()
-        if "pytest" in lower or "npm test" in lower or "cargo test" in lower or "go test" in lower:
+        if any(marker in lower for marker in ("pytest", "npm test", "pnpm test", "bun test", "deno test", "cargo test", "go test", "tox", "nox")):
             roles.setdefault("test", command)
-        if "ruff" in lower or "eslint" in lower or "clippy" in lower:
+        if any(marker in lower for marker in ("ruff", "eslint", "deno lint", "clippy")):
             roles.setdefault("lint", command)
         if "tsc" in lower or "typecheck" in lower:
             roles.setdefault("typecheck", command)
@@ -1489,10 +1501,19 @@ def _package_json_commands(path: Path) -> list[str]:
         return ["npm test", "npm run build"]
     scripts = data.get("scripts", {}) if isinstance(data, dict) else {}
     commands = []
+    root = path.parent
+    runner = "npm run"
+    test_runner = "npm test"
+    if (root / "pnpm-lock.yaml").exists():
+        runner = "pnpm"
+        test_runner = "pnpm test"
+    elif (root / "bun.lockb").exists() or (root / "bun.lock").exists():
+        runner = "bun run"
+        test_runner = "bun test"
     for name in ("test", "lint", "typecheck", "build"):
         if name in scripts:
-            commands.append("npm test" if name == "test" else f"npm run {name}")
-    return commands or ["npm test", "npm run build"]
+            commands.append(test_runner if name == "test" else f"{runner} {name}")
+    return commands or [test_runner, f"{runner} build"]
 
 
 def _makefile_commands(path: Path) -> list[str]:

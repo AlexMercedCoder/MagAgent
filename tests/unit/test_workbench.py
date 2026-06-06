@@ -53,6 +53,31 @@ def test_project_command_discovery_reads_local_config_and_manifests(tmp_path: Pa
     assert profile["config"]["commands"]["test"] == "pytest tests/unit"
 
 
+def test_project_command_discovery_recognizes_modern_tooling(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n[tool.nox]\n", encoding="utf-8")
+    (tmp_path / "uv.lock").write_text("", encoding="utf-8")
+    (tmp_path / "poetry.lock").write_text("", encoding="utf-8")
+    (tmp_path / "tox.ini").write_text("[tox]\n", encoding="utf-8")
+    (tmp_path / "package.json").write_text(
+        '{"scripts":{"test":"vitest","lint":"eslint .","typecheck":"tsc","build":"vite build"}}',
+        encoding="utf-8",
+    )
+    (tmp_path / "pnpm-lock.yaml").write_text("", encoding="utf-8")
+    (tmp_path / "deno.json").write_text("{}", encoding="utf-8")
+
+    commands = workbench.infer_project_commands(tmp_path)
+    roles = workbench.project_command_roles(tmp_path)
+
+    assert "uv run pytest -q" in commands
+    assert "poetry run pytest -q" in commands
+    assert "tox" in commands
+    assert "nox" in commands
+    assert "pnpm test" in commands
+    assert "deno test" in commands
+    assert roles["test"]
+    assert roles["lint"]
+
+
 def test_project_command_roles_and_doctor_use_config_and_history(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     (tmp_path / ".magent").mkdir()

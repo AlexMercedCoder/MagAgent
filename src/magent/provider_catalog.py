@@ -238,3 +238,29 @@ def default_access_modes() -> dict[str, str]:
         for provider_id, metadata in PROVIDER_CATALOG.items()
         if metadata.get("access_mode")
     }
+
+
+def validate_provider_catalog() -> dict[str, Any]:
+    """Validate provider catalog metadata for setup/runtime/doc consistency."""
+    required = ("label", "display", "default_model", "access_mode", "litellm")
+    issues: list[dict[str, str]] = []
+    for provider_id in PROVIDER_ORDER:
+        metadata = PROVIDER_CATALOG.get(provider_id)
+        if not metadata:
+            issues.append({"provider": provider_id, "field": "catalog", "error": "missing provider metadata"})
+            continue
+        for field in required:
+            if not metadata.get(field):
+                issues.append({"provider": provider_id, "field": field, "error": "required field is empty"})
+        if (
+            not metadata.get("local")
+            and metadata.get("access_mode") == "api"
+            and provider_id != "custom"
+            and not metadata.get("env")
+            and metadata.get("litellm") != "bedrock"
+        ):
+            issues.append({"provider": provider_id, "field": "env", "error": "API provider should declare an env var"})
+    extra = sorted(set(PROVIDER_CATALOG) - set(PROVIDER_ORDER))
+    for provider_id in extra:
+        issues.append({"provider": provider_id, "field": "order", "error": "provider missing from PROVIDER_ORDER"})
+    return {"ok": not issues, "providers": len(PROVIDER_ORDER), "issues": issues}

@@ -9,7 +9,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-183%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-188%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -150,6 +150,10 @@ CLI-first provider setup:
 ```bash
 magent provider list
 magent provider detect
+magent provider matrix
+magent provider recommend --goal coding
+magent provider explain mistral
+magent provider env
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
 magent provider set openai --model gpt-5 --access codex
 magent provider wizard
@@ -569,8 +573,13 @@ magent onboard         # Apply guided profile + project defaults
 magent next            # Suggest useful next actions
 magent profile list    # Guided configuration presets
 magent profile apply   # Apply provider/memory/subagent preset
+magent config backup   # Back up global/current-user config
+magent config diff     # Diff current config against a backup
+magent config restore  # Restore config from a backup
 magent provider list   # Known providers and default models
 magent provider detect # Provider readiness from local environment
+magent provider matrix # Provider catalog and readiness table
+magent provider recommend # Recommend providers for a goal
 magent provider set    # Set default provider/model
 magent provider wizard # Interactive provider/access/model setup
 magent provider doctor # Provider/config readiness

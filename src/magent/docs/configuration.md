@@ -40,6 +40,10 @@ magent provider doctor
 magent doctor --json
 magent doctor --fix
 magent next
+magent provider matrix
+magent provider recommend --goal coding
+magent provider explain mistral
+magent provider env
 ```
 
 Provider access modes are explicit:
@@ -50,6 +54,16 @@ Provider access modes are explicit:
 - `opencode-go --access subscription` uses the OpenCode Go subscription endpoint and `OPENCODE_GO_KEY`.
 
 The setup/provider UX includes local providers, direct model providers, aggregators, and hosted open-model platforms: Ollama, LM Studio, OpenAI, Anthropic, Google Gemini, Groq, OpenRouter, AWS Bedrock, Nous Portal, OpenCode Zen, OpenCode Go, Mistral AI, DeepSeek, xAI, Perplexity, Cerebras, Together AI, Fireworks AI, DeepInfra, and custom OpenAI-compatible endpoints.
+
+Config safety commands make wizard-driven changes easier to trust:
+
+```bash
+magent config show
+magent config backup
+magent config list-backups
+magent config diff
+magent config restore <backup-id>
+```
 
 Use model roles to route specific work to specialized or cheaper models:
 

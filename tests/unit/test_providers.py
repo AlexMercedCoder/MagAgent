@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from magent.provider_catalog import validate_provider_catalog
 from magent.providers import (
     PROVIDER_BASE_URLS,
     PROVIDER_DISPLAY_NAMES,
@@ -78,6 +79,7 @@ def test_provider_catalog_exposes_new_easy_provider_batch() -> None:
 
     assert expected <= set(PROVIDER_DISPLAY_NAMES)
     assert PROVIDER_BASE_URLS["lmstudio"] == "http://localhost:1234/v1"
+    assert validate_provider_catalog()["ok"] is True
 
 
 @pytest.mark.asyncio

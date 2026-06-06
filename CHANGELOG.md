@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.21.0
+
+- Added provider UX commands: `magent provider matrix`, `explain`, `env`, `recommend`, and `catalog-doctor`.
+- Added generated provider reference docs with `magent docs generate-providers`.
+- Added config safety commands: `magent config show`, `backup`, `list-backups`, `diff`, and `restore`.
+- Improved project command inference for uv, Poetry, tox, nox, pnpm, bun, and Deno projects.
+- Began CLI command extraction with focused provider and config command registration modules.
+- Added provider catalog validation and tests to prevent provider metadata drift.
+
 ## 0.20.0
 
 - Added first-class setup/UX support for LM Studio, AWS Bedrock, Mistral AI, DeepSeek, xAI, Perplexity, Cerebras, Together AI, Fireworks AI, and DeepInfra.

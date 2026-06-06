@@ -228,6 +228,8 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/m
 
 **v0.20.0 update:** Added a shared provider catalog and first-class setup/runtime UX for LM Studio, AWS Bedrock, Mistral AI, DeepSeek, xAI, Perplexity, Cerebras, Together AI, Fireworks AI, and DeepInfra.
 
+**v0.21.0 update:** Added provider matrix/recommend/explain/env UX, config backup/diff/restore commands, generated provider docs, broader project command detection, provider catalog validation, and the first focused CLI command registration modules.
+
 **Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
 
 **What to build:**

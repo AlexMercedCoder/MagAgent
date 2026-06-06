@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from magent.docs import docs_doctor, list_topics, read_topic, render_command_reference, search_docs
+from magent.docs import (
+    docs_doctor,
+    list_topics,
+    read_topic,
+    render_command_reference,
+    render_provider_reference,
+    search_docs,
+)
 
 
 def test_docs_topics_are_packaged():
@@ -39,3 +46,11 @@ def test_render_command_reference():
     assert "magent ask" in text
     assert "magent memory search" in text
     assert "magent docs generate-reference" in text
+
+
+def test_render_provider_reference_uses_provider_catalog():
+    text = render_provider_reference()
+
+    assert "# Provider Reference" in text
+    assert "`mistral`" in text
+    assert "`deepinfra`" in text

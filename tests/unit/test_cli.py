@@ -26,7 +26,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.20.0" in version.output
+    assert "MagAgent 0.21.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -121,6 +121,52 @@ def test_cli_guided_ux_commands(tmp_path: Path, monkeypatch) -> None:
     assert "actions" in json.loads(doctor.output)
     assert fixed.exit_code == 0
     assert "after" in json.loads(fixed.output)
+
+
+def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    from magent import config_safety
+
+    monkeypatch.setattr(config_safety, "CONFIG_DIR", magent_config.CONFIG_DIR)
+    monkeypatch.setattr(config_safety, "GLOBAL_CONFIG", magent_config.GLOBAL_CONFIG)
+    monkeypatch.setattr(config_safety, "BACKUP_DIR", magent_config.CONFIG_DIR / "backups")
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    provider = runner.invoke(
+        cli_main.app,
+        ["provider", "set", "mistral", "--model", "mistral-large-latest", "--api-key-env", "MISTRAL_API_KEY"],
+    )
+    matrix = runner.invoke(cli_main.app, ["provider", "matrix"])
+    explained = runner.invoke(cli_main.app, ["provider", "explain", "mistral"])
+    env = runner.invoke(cli_main.app, ["provider", "env"])
+    recommended = runner.invoke(cli_main.app, ["provider", "recommend", "--goal", "coding"])
+    catalog = runner.invoke(cli_main.app, ["provider", "catalog-doctor"])
+    backup = runner.invoke(cli_main.app, ["config", "backup"])
+    show = runner.invoke(cli_main.app, ["config", "show"])
+    diff = runner.invoke(cli_main.app, ["config", "diff"])
+    generated = runner.invoke(
+        cli_main.app,
+        ["docs", "generate-providers", "--out", str(tmp_path / "providers.md")],
+    )
+
+    assert provider.exit_code == 0
+    assert matrix.exit_code == 0
+    assert "mistral" in matrix.output
+    assert explained.exit_code == 0
+    assert json.loads(explained.output)["provider"] == "mistral"
+    assert env.exit_code == 0
+    assert any(item["provider"] == "mistral" for item in json.loads(env.output)["providers"])
+    assert recommended.exit_code == 0
+    assert any(item["id"] == "mistral" for item in json.loads(recommended.output)["recommendations"])
+    assert catalog.exit_code == 0
+    assert json.loads(catalog.output)["ok"] is True
+    assert backup.exit_code == 0
+    assert json.loads(backup.output)["backup_id"]
+    assert show.exit_code == 0
+    assert json.loads(show.output)["files"]["global"]["exists"] is True
+    assert diff.exit_code == 0
+    assert generated.exit_code == 0
+    assert (tmp_path / "providers.md").exists()
 
 
 def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -> None:

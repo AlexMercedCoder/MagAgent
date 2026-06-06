@@ -1,4 +1,4 @@
 """MagAgent — CLI AI coding agent powered by MagGraph persistent memory."""
 
-__version__ = "0.20.0"
+__version__ = "0.21.0"
 __author__ = "Alex Merced"

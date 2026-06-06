@@ -11,6 +11,11 @@ Important command paths:
 - `magent doctor`: run install, provider, memory, docs, and integration checks.
 - `magent doctor --json`: emit actionable readiness checks.
 - `magent doctor --fix`: apply safe local fixes for missing UX defaults.
+- `magent config show`: show global and current-user config files.
+- `magent config backup`: back up global and current-user config files.
+- `magent config list-backups`: list config backups.
+- `magent config diff`: diff current config against a backup.
+- `magent config restore <backup-id>`: restore config from a backup.
 - `magent profile list`: list guided provider/memory/subagent presets.
 - `magent profile apply <name>`: apply a guided preset.
 - `magent provider list`: list known providers and default models.
@@ -19,6 +24,8 @@ Important command paths:
 - `magent provider wizard`: interactively choose provider, access mode, model, and key source.
 - `magent provider test`: test the configured provider connection.
 - `magent provider doctor`: show provider and configuration readiness.
+- `magent provider recommend`: recommend providers for a goal.
+- `magent provider catalog-doctor`: validate provider catalog metadata.
 - `magent model roles`: show model routing roles.
 - `magent model set-role <role> <model>`: configure a model role.
 - `magent model clear-role <role>`: clear a model role.
@@ -29,6 +36,7 @@ Important command paths:
 - `magent docs search <query>`: search packaged docs.
 - `magent docs doctor`: verify built-in docs coverage.
 - `magent docs generate-reference`: generate command reference Markdown from the live CLI.
+- `magent docs generate-providers`: generate provider reference Markdown from the provider catalog.
 - `magent browser snapshot <url>`: capture page title and visible text with Playwright.
 - `magent browser screenshot <url>`: capture a page screenshot with Playwright.
 - `magent eval init`: create a starter local eval suite.

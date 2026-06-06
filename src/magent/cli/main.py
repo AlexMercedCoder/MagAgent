@@ -24,6 +24,7 @@ from magent.cli.app import (
     browser_app,
     checkpoint_app,
     code_app,
+    config_app,
     context_app,
     data_app,
     docs_app,
@@ -60,6 +61,8 @@ from magent.cli.command_context import (
     require_user,
     store,
 )
+from magent.cli.commands.config import register_config_commands
+from magent.cli.commands.providers import register_provider_ux_commands
 from magent.config import (
     CONFIG_DIR,
     create_user,
@@ -73,6 +76,8 @@ from magent.config import (
 )
 
 console = Console()
+register_provider_ux_commands(provider_app)
+register_config_commands(config_app)
 
 
 # ─────────────────────────────────────────────
@@ -1784,6 +1789,17 @@ def docs_generate_reference_cmd(out: str | None = typer.Option(None, "--out", "-
         console.print(f"[green]✓ Wrote {out}[/green]")
     else:
         console.print(text)
+
+
+@docs_app.command("generate-providers")
+def docs_generate_providers_cmd(out: str | None = typer.Option(None, "--out", "-o")):
+    """Generate provider reference Markdown from the provider catalog."""
+    from magent.docs import render_provider_reference
+
+    text = render_provider_reference()
+    target = out or "src/magent/docs/providers.md"
+    Path(target).write_text(text, encoding="utf-8")
+    console.print(f"[green]✓ Wrote {target}[/green]")
 
 
 @checkpoint_app.command("list")

@@ -87,6 +87,7 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
         "browser",
         "github",
         "comparisons",
+        "providers",
     }
     missing_topics = sorted(required - slugs)
     docs_text = "\n".join(read_topic(topic.slug) for topic in topics)
@@ -123,6 +124,43 @@ def render_command_reference(command_names: list[str]) -> str:
             rendered = f"magent {command}" if group == "core" else f"magent {group} {command}"
             lines.append(f"- `{rendered}`")
         lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
+def render_provider_reference() -> str:
+    """Generate provider reference Markdown from the provider catalog."""
+    from magent.provider_catalog import PROVIDER_CATALOG, PROVIDER_ORDER
+
+    lines = [
+        "# Provider Reference",
+        "",
+        "Generated from `magent.provider_catalog`.",
+        "",
+        "| Provider | ID | Default Model | Access | Env | Runtime |",
+        "|---|---|---|---|---|---|",
+    ]
+    for provider_id in PROVIDER_ORDER:
+        metadata = PROVIDER_CATALOG[provider_id]
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    metadata["display"],
+                    f"`{provider_id}`",
+                    f"`{metadata['default_model']}`",
+                    metadata["access_mode"],
+                    f"`{metadata.get('env', '')}`" if metadata.get("env") else "",
+                    metadata["litellm"],
+                ]
+            )
+            + " |"
+        )
+    lines.extend(
+        [
+            "",
+            "Use `magent provider matrix`, `magent provider explain <provider>`, and `magent provider env` for live readiness details.",
+        ]
+    )
     return "\n".join(lines).strip() + "\n"
 
 

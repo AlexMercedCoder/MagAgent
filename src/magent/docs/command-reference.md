@@ -37,6 +37,14 @@ Generated from the active Typer command tree.
 - `magent code related`
 - `magent code symbols`
 
+## config
+
+- `magent config backup`
+- `magent config diff`
+- `magent config list-backups`
+- `magent config restore`
+- `magent config show`
+
 ## context
 
 - `magent context map`
@@ -50,6 +58,7 @@ Generated from the active Typer command tree.
 - `magent checkpoint`
 - `magent ci`
 - `magent code`
+- `magent config`
 - `magent configure`
 - `magent context`
 - `magent dashboard`
@@ -113,6 +122,7 @@ Generated from the active Typer command tree.
 ## docs
 
 - `magent docs doctor`
+- `magent docs generate-providers`
 - `magent docs generate-reference`
 - `magent docs list`
 - `magent docs search`
@@ -234,9 +244,14 @@ Generated from the active Typer command tree.
 
 ## provider
 
+- `magent provider catalog-doctor`
 - `magent provider detect`
 - `magent provider doctor`
+- `magent provider env`
+- `magent provider explain`
 - `magent provider list`
+- `magent provider matrix`
+- `magent provider recommend`
 - `magent provider set`
 - `magent provider test`
 - `magent provider wizard`
