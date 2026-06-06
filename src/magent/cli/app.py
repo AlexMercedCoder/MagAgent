@@ -40,6 +40,9 @@ tools_app = typer.Typer(help="Tool capability packs", name="tools")
 eval_app = typer.Typer(help="Local benchmark/eval suites", name="eval")
 github_app = typer.Typer(help="GitHub PR and issue workflows", name="github")
 browser_app = typer.Typer(help="Browser automation helpers", name="browser")
+provider_app = typer.Typer(help="Provider setup and diagnostics", name="provider")
+model_app = typer.Typer(help="Model role configuration", name="model")
+subagent_app = typer.Typer(help="Sub-agent configuration and runs", name="subagent")
 
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
@@ -72,6 +75,9 @@ for _name, _typer in [
     ("eval", eval_app),
     ("github", github_app),
     ("browser", browser_app),
+    ("provider", provider_app),
+    ("model", model_app),
+    ("subagent", subagent_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -96,6 +102,7 @@ __all__ = [
     "memory_semantic_app",
     "patch_app",
     "policy_app",
+    "provider_app",
     "project_app",
     "release_app",
     "recipe_app",
@@ -104,6 +111,8 @@ __all__ = [
     "task_app",
     "test_app",
     "tools_app",
+    "model_app",
+    "subagent_app",
     "user_app",
     "workspace_app",
 ]

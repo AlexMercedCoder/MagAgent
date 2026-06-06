@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
@@ -131,3 +132,17 @@ def test_tool_executor_exposes_browser_tools(monkeypatch, tmp_path: Path) -> Non
 
     assert "browser_snapshot" in names
     assert "browser_screenshot" in names
+
+
+def test_subagent_runner_enforces_configured_cap(tmp_path: Path) -> None:
+    import asyncio
+
+    from magent.subagents import SubAgentRunner
+
+    config = SimpleNamespace(max_subagents=0, max_parallel_subagents=1)
+    runner = SubAgentRunner("user", provider=None, extraction_provider=None, cwd=str(tmp_path), config=config)
+
+    result = asyncio.run(runner.spawn("blocked", "inspect a file"))
+
+    assert result.done is True
+    assert "Sub-agent cap reached" in result.error

@@ -222,6 +222,8 @@ args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/m
 
 **v0.16.0 update:** Added sandboxed plan/recipe execution, local eval suites, Playwright browser helpers, GitHub PR/issue commands, a cockpit-oriented UI state, comparison docs, and repo demo assets.
 
+**v0.18.0 update:** Added CLI-first setup commands for providers, model roles, memory behavior, gateway platforms, and sub-agent orchestration caps so most common configuration can happen through guided commands instead of direct TOML edits.
+
 **Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
 
 **What to build:**

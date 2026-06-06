@@ -29,8 +29,9 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.16.0",
+        "version": "0.18.0",
         "selective_tools": True,
+        "max_subagents": 3,
     },
     "defaults": {
         "provider": "ollama",
@@ -87,6 +88,12 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "memory": "",
         "cheap": "",
         "fallback": [],
+    },
+    "subagents": {
+        "max_subagents": 3,
+        "max_parallel_subagents": 2,
+        "model_role": "coding",
+        "sandbox_mode": "",
     },
     "mcp": {},
 }
@@ -237,6 +244,27 @@ class Config:
     @property
     def selective_tools(self) -> bool:
         return bool(self._global.get("agent", {}).get("selective_tools", True))
+
+    @property
+    def max_subagents(self) -> int:
+        return int(
+            self._global.get("subagents", {}).get(
+                "max_subagents",
+                self._global.get("agent", {}).get("max_subagents", 3),
+            )
+        )
+
+    @property
+    def max_parallel_subagents(self) -> int:
+        return int(self._global.get("subagents", {}).get("max_parallel_subagents", 2))
+
+    @property
+    def subagent_model_role(self) -> str:
+        return self._global.get("subagents", {}).get("model_role", "coding")
+
+    @property
+    def subagent_sandbox_mode(self) -> str:
+        return self._global.get("subagents", {}).get("sandbox_mode", "")
 
     @property
     def write_every_n_turns(self) -> int:

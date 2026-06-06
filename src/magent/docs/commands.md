@@ -5,7 +5,17 @@ Important command paths:
 - `magent ask "task"`: run a non-interactive task.
 - `magent --task "task"`: alternate one-shot task form.
 - `magent setup`: run first-time setup.
+- `magent configure`: run the friendly setup/configuration wizard.
 - `magent doctor`: run install, provider, memory, docs, and integration checks.
+- `magent provider list`: list known providers and default models.
+- `magent provider detect`: detect provider readiness from environment variables.
+- `magent provider set <provider>`: set the default provider/model.
+- `magent provider test`: test the configured provider connection.
+- `magent provider doctor`: show provider and configuration readiness.
+- `magent model roles`: show model routing roles.
+- `magent model set-role <role> <model>`: configure a model role.
+- `magent model clear-role <role>`: clear a model role.
+- `magent model doctor`: show model role readiness.
 - `magent docs list`: list built-in documentation topics.
 - `magent docs show <topic>`: render a built-in documentation topic.
 - `magent docs search <query>`: search packaged docs.
@@ -34,6 +44,7 @@ Important command paths:
 - `magent memory inbox accept <candidate-id>`: accept one memory candidate.
 - `magent memory inbox reject <candidate-id>`: reject one memory candidate.
 - `magent memory inbox edit <candidate-id> --body "..."`: edit candidate text before accepting it.
+- `magent memory configure`: configure memory write mode, semantic search, and extraction model settings.
 - `magent memory quality`: report duplicate-looking and suppressed memory nodes.
 - `magent memory merge <target-id> <source-id>`: merge one memory node into another.
 - `magent memory suppress <node-id>`: mark a memory node suppressed without deleting it.
@@ -101,5 +112,11 @@ Important command paths:
 - `magent tools explain <pack>`: explain one capability pack.
 - `magent tools enable <pack>`: enable a capability pack for runtime tool loading.
 - `magent tools disable <pack>`: disable a capability pack for runtime tool loading.
+- `magent subagent configure`: configure sub-agent caps and defaults.
+- `magent subagent status`: show sub-agent configuration.
+- `magent subagent run <task>`: run a focused sub-agent task from the CLI.
+- `magent gateway configure <platform>`: configure Slack, Discord, or Telegram tokens and allowlists.
+- `magent gateway wizard <platform>`: prompt for gateway token fields.
+- `magent gateway doctor`: show gateway readiness.
 
 Use `magent <command> --help` for command-specific Typer help.

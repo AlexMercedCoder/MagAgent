@@ -50,9 +50,13 @@ class SubAgentRunner:
         Spawn a sub-agent to complete a focused task.
         Returns a SubAgentTask that gets populated as the agent runs.
         """
-        from magent.agent import AgentSession
-
         task = SubAgentTask(task_id=task_id, description=description)
+        max_subagents = int(getattr(self.config, "max_subagents", 3))
+        if max_subagents <= 0 or len(self._tasks) >= max_subagents:
+            task.done = True
+            task.error = f"Sub-agent cap reached ({max_subagents}). Run `magent subagent configure --max <n>` to change it."
+            console.print(f"[dim red]✗ {task.error}[/dim red]")
+            return task
         self._tasks[task_id] = task
 
         console.print(
@@ -64,6 +68,8 @@ class SubAgentRunner:
         )
 
         try:
+            from magent.agent import AgentSession
+
             session = AgentSession(
                 username=self.username,
                 config=self.config,
@@ -91,7 +97,8 @@ class SubAgentRunner:
 
     async def spawn_parallel(self, tasks: list[tuple[str, str]]) -> list[SubAgentTask]:
         """Spawn multiple sub-agents in parallel. Returns results in order."""
-        coros = [self.spawn(tid, desc) for tid, desc in tasks]
+        max_parallel = max(1, int(getattr(self.config, "max_parallel_subagents", 2)))
+        coros = [self.spawn(tid, desc) for tid, desc in tasks[:max_parallel]]
         return list(await asyncio.gather(*coros, return_exceptions=False))
 
     def get_task(self, task_id: str) -> SubAgentTask | None:

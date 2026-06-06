@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from magent import config as magent_config
+from magent import config_ux
 from magent.config import Config
 
 
@@ -44,6 +45,12 @@ def test_config_properties_prefer_user_overrides(monkeypatch) -> None:
                 "max_history_tokens": 700,
             },
             "agent": {"selective_tools": True},
+            "subagents": {
+                "max_subagents": 4,
+                "max_parallel_subagents": 2,
+                "model_role": "coding",
+                "sandbox_mode": "copy",
+            },
             "providers": {"custom": {"api_key_env": "MAGENT_TEST_KEY"}},
             "models": {"coding": "coder"},
             "mcp": {"servers": {}},
@@ -77,6 +84,10 @@ def test_config_properties_prefer_user_overrides(monkeypatch) -> None:
     assert cfg.auto_write is False
     assert cfg.resolve_api_key("custom") == "secret"
     assert cfg.model_roles == {"coding": "coder"}
+    assert cfg.max_subagents == 4
+    assert cfg.max_parallel_subagents == 2
+    assert cfg.subagent_model_role == "coding"
+    assert cfg.subagent_sandbox_mode == "copy"
 
 
 def test_user_lifecycle_and_config_loading(tmp_path: Path, monkeypatch) -> None:
@@ -106,3 +117,25 @@ def test_user_lifecycle_and_config_loading(tmp_path: Path, monkeypatch) -> None:
 
     assert magent_config.user_exists("alice") is False
     assert magent_config.get_current_user() is None
+
+
+def test_config_ux_helpers_update_toml_without_manual_editing(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("alice")
+    magent_config.set_current_user("alice")
+
+    provider = config_ux.set_default_provider("openai", "gpt-5", api_key_env="OPENAI_API_KEY")
+    role = config_ux.set_model_role("review", "anthropic/claude-sonnet-4-5")
+    memory = config_ux.configure_memory("alice", mode="inbox-first", semantic=False, write_every=3)
+    subagents = config_ux.configure_subagents(max_subagents=5, max_parallel=2, model_role="cheap")
+    gateway = config_ux.configure_gateway("telegram", bot_token="secret", allowed_user_ids=["123"])
+    summary = config_ux.ux_doctor("alice")
+
+    assert provider["provider"] == "openai"
+    assert role["value"] == "anthropic/claude-sonnet-4-5"
+    assert memory["memory"]["inbox_first"] is True
+    assert subagents["subagents"]["max_subagents"] == 5
+    assert gateway["gateway"]["telegram"]["bot_token"] == "***"
+    assert summary["provider"]["provider"] == "openai"
+    assert summary["model_roles"]["review"] is True
+    assert summary["gateways"]["telegram"] is True

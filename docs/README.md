@@ -20,6 +20,16 @@ magent docs doctor
 - [Configuration](../src/magent/docs/configuration.md)
 - [Troubleshooting](../src/magent/docs/troubleshooting.md)
 
+Common setup tasks now have CLI-first flows:
+
+```bash
+magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
+magent model set-role review anthropic/claude-sonnet-4-5
+magent memory configure --mode inbox-first
+magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN"
+magent subagent configure --max 3 --parallel 2
+```
+
 ## Architecture And Workflow
 
 - [Architecture](../src/magent/docs/architecture.md)

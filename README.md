@@ -9,7 +9,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-176%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-179%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
 
@@ -36,6 +36,7 @@ The name also nods to **[MagGraph](https://github.com/AlexMercedCoder/MagGraph)*
 MagAgent is a **CLI-first AI coding agent** that:
 
 - Runs entirely in your terminal, with an optional local operations UI when you want a browser view
+- Configures providers, model roles, memory, gateways, and sub-agent caps through CLI commands before you ever need to open a TOML file
 - Presents a polished Rich terminal UI with a compact session banner, Markdown response panels, and quieter streaming
 - Bridges workbench state into durable MagGraph memory through context maps and explicit memory promotion
 - Documents architecture boundaries for memory, workbench, context, tools, CLI/TUI, and compatibility-safe refactors
@@ -84,6 +85,7 @@ pipx install mag-agent
 
 ```bash
 magent setup
+magent configure
 ```
 
 The wizard will:
@@ -132,6 +134,27 @@ MagAgent uses [LiteLLM](https://github.com/BerriAI/litellm) under the hood, supp
 | **Custom** | `custom` | Any OpenAI-compatible endpoint |
 
 Configure multiple providers and switch mid-session: `/model anthropic/claude-3-5-sonnet`
+
+CLI-first provider setup:
+
+```bash
+magent provider list
+magent provider detect
+magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
+magent provider test
+magent provider doctor
+```
+
+Route different work to different models:
+
+```bash
+magent model roles
+magent model set-role coding openai/gpt-5
+magent model set-role review anthropic/claude-sonnet-4-5
+magent model set-role memory ollama/qwen2.5:7b
+magent model set-role cheap openrouter/deepseek/deepseek-chat
+magent model set-role fallback "ollama/qwen2.5-coder:32b,openrouter/deepseek/deepseek-chat"
+```
 
 ---
 
@@ -406,6 +429,16 @@ Spawn a parallel agent to work on a focused sub-task while you continue the main
 
 The sub-agent runs an isolated session sharing your memory graph, completes the task, and returns a summary. Use this for long-running tasks that shouldn't interrupt the main flow.
 
+The main agent can orchestrate sub-agents, and the cap is configurable:
+
+```bash
+magent subagent configure --max 3 --parallel 2 --model-role coding
+magent subagent status
+magent subagent run "Audit the auth tests"
+```
+
+Set `--max 0` to disable sub-agent spawning.
+
 ---
 
 ## Remote Gateway
@@ -418,6 +451,12 @@ pip install "mag-agent[gateway]"
 
 # Generate config template
 magent gateway init
+
+# Configure from the CLI
+magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN" --allowed-user 12345
+magent gateway configure slack --bot-token "$SLACK_BOT_TOKEN" --app-token "$SLACK_APP_TOKEN"
+magent gateway wizard discord
+magent gateway doctor
 
 # Start (background daemon)
 magent gateway start
@@ -484,12 +523,16 @@ magent memory ui                         # Open embedded MagGraph UI
 magent memory sync status                # Git sync status via MagGraph
 magent memory sync pull                  # Pull memory graph updates
 magent memory sync push -m "message"     # Commit/push memory graph updates
+magent memory configure --mode inbox-first --write-every 3
 ```
 
 ### Gateway
 
 ```bash
 magent gateway init              # Print example config
+magent gateway configure telegram # Save platform tokens and allowlists
+magent gateway wizard slack      # Prompt for platform token fields
+magent gateway doctor            # Show gateway readiness
 magent gateway start             # Start all configured platforms (daemon)
 magent gateway start slack -f    # Single platform, foreground mode
 magent gateway stop              # Stop daemon (SIGTERM)
@@ -501,6 +544,15 @@ magent gateway logs [-n N] [-f]  # View / follow gateway log
 
 ```bash
 magent setup           # First-run setup wizard
+magent configure       # Friendly setup/configuration wizard
+magent provider list   # Known providers and default models
+magent provider detect # Provider readiness from local environment
+magent provider set    # Set default provider/model
+magent provider doctor # Provider/config readiness
+magent model roles     # Show role-specific model routing
+magent model set-role  # Set coding/review/memory/cheap/fallback role
+magent subagent status # Show sub-agent caps/defaults
+magent subagent run    # Run one focused sub-agent task
 magent mode <mode>     # Set permission mode globally
 magent doctor          # Health check: providers, memory, deps
 magent plan "goal"     # Generate a local implementation plan
@@ -543,6 +595,16 @@ magent --version       # Show version
 ---
 
 ## Configuration
+
+Prefer the CLI for common changes:
+
+```bash
+magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
+magent model set-role review anthropic/claude-sonnet-4-5
+magent memory configure --mode inbox-first --semantic --write-every 3
+magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN"
+magent subagent configure --max 3 --parallel 2
+```
 
 Full config at `~/.config/magent/config.toml`:
 

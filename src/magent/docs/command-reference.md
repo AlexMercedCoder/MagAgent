@@ -50,6 +50,7 @@ Generated from the active Typer command tree.
 - `magent checkpoint`
 - `magent ci`
 - `magent code`
+- `magent configure`
 - `magent context`
 - `magent dashboard`
 - `magent data`
@@ -68,6 +69,7 @@ Generated from the active Typer command tree.
 - `magent mcp`
 - `magent memory`
 - `magent mode`
+- `magent model`
 - `magent notes`
 - `magent patch`
 - `magent plan`
@@ -81,6 +83,7 @@ Generated from the active Typer command tree.
 - `magent plan-show`
 - `magent policy`
 - `magent project`
+- `magent provider`
 - `magent recipe`
 - `magent release`
 - `magent review`
@@ -90,6 +93,7 @@ Generated from the active Typer command tree.
 - `magent session`
 - `magent setup`
 - `magent stats`
+- `magent subagent`
 - `magent task`
 - `magent test`
 - `magent test-intel`
@@ -125,11 +129,14 @@ Generated from the active Typer command tree.
 
 ## gateway
 
+- `magent gateway configure`
+- `magent gateway doctor`
 - `magent gateway init`
 - `magent gateway logs`
 - `magent gateway start`
 - `magent gateway status`
 - `magent gateway stop`
+- `magent gateway wizard`
 
 ## github
 
@@ -161,6 +168,7 @@ Generated from the active Typer command tree.
 ## memory
 
 - `magent memory approve`
+- `magent memory configure`
 - `magent memory delete`
 - `magent memory export`
 - `magent memory inbox`
@@ -179,6 +187,13 @@ Generated from the active Typer command tree.
 - `magent memory traverse`
 - `magent memory ui`
 - `magent memory unsuppress`
+
+## model
+
+- `magent model clear-role`
+- `magent model doctor`
+- `magent model roles`
+- `magent model set-role`
 
 ## patch
 
@@ -205,6 +220,14 @@ Generated from the active Typer command tree.
 - `magent project profile`
 - `magent project roles`
 
+## provider
+
+- `magent provider detect`
+- `magent provider doctor`
+- `magent provider list`
+- `magent provider set`
+- `magent provider test`
+
 ## recipe
 
 - `magent recipe list`
@@ -227,6 +250,12 @@ Generated from the active Typer command tree.
 ## session
 
 - `magent session timeline`
+
+## subagent
+
+- `magent subagent configure`
+- `magent subagent run`
+- `magent subagent status`
 
 ## task
 

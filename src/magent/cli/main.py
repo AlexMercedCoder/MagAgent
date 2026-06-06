@@ -36,13 +36,16 @@ from magent.cli.app import (
     mcp_app,
     memory_app,
     memory_semantic_app,
+    model_app,
     patch_app,
     policy_app,
     project_app,
+    provider_app,
     recipe_app,
     release_app,
     routine_app,
     session_app,
+    subagent_app,
     task_app,
     test_app,
     tools_app,
@@ -1201,6 +1204,173 @@ def tools_disable_cmd(pack: str = typer.Argument(...)):
         raise typer.Exit(1)
 
 
+@provider_app.command("list")
+def provider_list_cmd():
+    """List known providers and default models."""
+    from magent.config_ux import provider_choices
+
+    table = Table("Provider", "Default Model", "Description")
+    for item in provider_choices():
+        table.add_row(item["id"], item["default_model"], item["label"])
+    console.print(table)
+
+
+@provider_app.command("detect")
+def provider_detect_cmd():
+    """Detect likely provider readiness from local defaults and env vars."""
+    from magent.config_ux import detect_provider_environment
+
+    console.print_json(data={"ok": True, "providers": detect_provider_environment()})
+
+
+@provider_app.command("set")
+def provider_set_cmd(
+    provider_id: str = typer.Argument(...),
+    model: str | None = typer.Option(None, "--model", "-m"),
+    api_key_env: str = typer.Option("", "--api-key-env"),
+    api_key: str = typer.Option("", "--api-key"),
+    base_url: str = typer.Option("", "--base-url"),
+):
+    """Set the default provider and model without editing config.toml."""
+    from magent.config_ux import set_default_provider
+
+    console.print_json(
+        data=set_default_provider(
+            provider_id,
+            model,
+            api_key_env=api_key_env,
+            api_key=api_key,
+            base_url=base_url,
+        )
+    )
+
+
+@provider_app.command("test")
+def provider_test_cmd(
+    provider_id: str | None = typer.Argument(None),
+    model: str | None = typer.Option(None, "--model", "-m"),
+):
+    """Test a provider/model connection."""
+    from magent.providers import test_provider
+
+    username = get_current_user()
+    config = load_config(username)
+    provider_obj = _build_provider(config, provider_id, model)
+
+    async def _run():
+        return await test_provider(provider_obj)
+
+    ok = asyncio.run(_run())
+    console.print_json(
+        data={
+            "ok": ok,
+            "provider": provider_obj.provider_id,
+            "model": provider_obj.model,
+        }
+    )
+    if not ok:
+        raise typer.Exit(1)
+
+
+@provider_app.command("doctor")
+def provider_doctor_cmd():
+    """Show provider, model-role, memory, gateway, and subagent readiness."""
+    from magent.config_ux import ux_doctor
+
+    console.print_json(data=ux_doctor(get_current_user()))
+
+
+@model_app.command("roles")
+def model_roles_cmd():
+    """Show configured model roles."""
+    from magent.config_ux import model_role_summary
+
+    console.print_json(data=model_role_summary())
+
+
+@model_app.command("set-role")
+def model_set_role_cmd(role: str = typer.Argument(...), value: str = typer.Argument(...)):
+    """Set a model role, e.g. coding openai/gpt-5."""
+    from magent.config_ux import set_model_role
+
+    result = set_model_role(role, value)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@model_app.command("clear-role")
+def model_clear_role_cmd(role: str = typer.Argument(...)):
+    """Clear a configured model role."""
+    from magent.config_ux import clear_model_role
+
+    result = clear_model_role(role)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@model_app.command("doctor")
+def model_doctor_cmd():
+    """Show model role readiness."""
+    from magent.config_ux import ux_doctor
+
+    console.print_json(data={"ok": True, "model_roles": ux_doctor(get_current_user())["model_roles"]})
+
+
+@subagent_app.command("configure")
+def subagent_configure_cmd(
+    max_subagents: int | None = typer.Option(None, "--max"),
+    max_parallel: int | None = typer.Option(None, "--parallel"),
+    model_role: str = typer.Option("", "--model-role"),
+    sandbox_mode: str = typer.Option("", "--sandbox-mode"),
+):
+    """Configure sub-agent caps and defaults."""
+    from magent.config_ux import configure_subagents
+
+    console.print_json(
+        data=configure_subagents(
+            max_subagents=max_subagents,
+            max_parallel=max_parallel,
+            model_role=model_role,
+            sandbox_mode=sandbox_mode,
+        )
+    )
+
+
+@subagent_app.command("status")
+def subagent_status_cmd():
+    """Show sub-agent configuration."""
+    from magent.config_ux import ux_doctor
+
+    console.print_json(data={"ok": True, "subagents": ux_doctor(get_current_user())["subagents"]})
+
+
+@subagent_app.command("run")
+def subagent_run_cmd(
+    task: str = typer.Argument(...),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    model: str | None = typer.Option(None, "--model", "-m"),
+    project: str | None = typer.Option(None, "--project"),
+):
+    """Run one focused sub-agent task from the CLI."""
+    username = _require_user()
+    config = load_config(username)
+    cwd = project or os.getcwd()
+    main_provider = _build_provider(config, provider, model)
+    extract_provider = _build_extraction_provider(config)
+
+    async def _run():
+        from magent.subagents import SubAgentRunner
+
+        runner = SubAgentRunner(username, main_provider, extract_provider, cwd, config)
+        result = await runner.spawn("cli_subagent", task)
+        return result
+
+    result = asyncio.run(_run())
+    console.print_json(data=result.__dict__)
+
+
 @eval_app.command("init")
 def eval_init_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Create a starter local eval suite."""
@@ -2120,6 +2290,29 @@ def memory_sync(
     raise typer.Exit(subprocess.run(cmd).returncode)
 
 
+@memory_app.command("configure")
+def memory_configure_cmd(
+    mode: str = typer.Option("", "--mode", help="auto, inbox-first, or manual"),
+    semantic: bool | None = typer.Option(None, "--semantic/--no-semantic"),
+    write_every: int | None = typer.Option(None, "--write-every"),
+    extraction_provider: str = typer.Option("", "--extraction-provider"),
+    extraction_model: str = typer.Option("", "--extraction-model"),
+):
+    """Configure memory behavior without editing profile.toml."""
+    from magent.config_ux import configure_memory
+
+    console.print_json(
+        data=configure_memory(
+            _require_user(),
+            mode=mode,
+            semantic=semantic,
+            write_every=write_every,
+            extraction_provider=extraction_provider,
+            extraction_model=extraction_model,
+        )
+    )
+
+
 # ─────────────────────────────────────────────
 # Top-level commands
 # ─────────────────────────────────────────────
@@ -2128,6 +2321,14 @@ def memory_sync(
 @app.command("setup")
 def setup():
     """First-time setup wizard."""
+    from magent.setup import run_setup
+
+    run_setup()
+
+
+@app.command("configure")
+def configure_cmd():
+    """Run the friendly configuration wizard."""
     from magent.setup import run_setup
 
     run_setup()
@@ -2154,9 +2355,11 @@ def set_mode(
 @app.command("doctor")
 def doctor():
     """Run health checks: providers, maggraph, config."""
+    from magent.config_ux import ux_doctor
     from magent.utils import run_doctor
 
     run_doctor()
+    console.print_json(data={"ux": ux_doctor(get_current_user())})
 
 
 # ─────────────────────────────────────────────
@@ -2290,6 +2493,57 @@ def gateway_init():
             subtitle=f"Add to {config_path}",
         )
     )
+
+
+@gateway_app.command("configure")
+def gateway_configure_cmd(
+    platform: str = typer.Argument(..., help="slack, discord, or telegram"),
+    bot_token: str = typer.Option("", "--bot-token"),
+    app_token: str = typer.Option("", "--app-token", help="Slack Socket Mode app token"),
+    allowed_user: Annotated[list[str] | None, typer.Option("--allowed-user")] = None,
+    allowed_channel: Annotated[list[str] | None, typer.Option("--allowed-channel")] = None,
+    rate_limit: int | None = typer.Option(None, "--rate-limit"),
+    timeout: int | None = typer.Option(None, "--timeout"),
+):
+    """Configure a gateway platform without hand-editing config.toml."""
+    from magent.config_ux import configure_gateway
+
+    result = configure_gateway(
+        platform,
+        bot_token=bot_token,
+        app_token=app_token,
+        allowed_user_ids=allowed_user,
+        allowed_channel_ids=allowed_channel,
+        rate_limit=rate_limit,
+        timeout_seconds=timeout,
+    )
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@gateway_app.command("wizard")
+def gateway_wizard_cmd(platform: str = typer.Argument(..., help="slack, discord, or telegram")):
+    """Prompt for gateway token fields and save them."""
+    from magent.config_ux import configure_gateway
+
+    platform = platform.lower()
+    bot_token = Prompt.ask(f"{platform} bot token", password=True, default="")
+    app_token = ""
+    if platform == "slack":
+        app_token = Prompt.ask("Slack app token (xapp-...)", password=True, default="")
+    result = configure_gateway(platform, bot_token=bot_token, app_token=app_token)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@gateway_app.command("doctor")
+def gateway_doctor_cmd():
+    """Show gateway configuration readiness."""
+    from magent.config_ux import ux_doctor
+
+    console.print_json(data={"ok": True, "gateways": ux_doctor(get_current_user())["gateways"]})
 
 
 @gateway_app.command("logs")

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.18.0
+
+- Added CLI-first configuration commands for providers, model roles, memory behavior, gateway tokens, and sub-agent caps.
+- Added `magent configure` as a friendlier alias for the first-run setup wizard.
+- Added provider/model/gateway/subagent doctor surfaces so users can inspect readiness without hand-editing TOML.
+- Made sub-agent orchestration limits configurable and enforced by the sub-agent runner.
+- Updated packaged and repository docs for provider, memory, gateway, model-role, and sub-agent setup flows.
+
 ## 0.16.0
 
 - Added sandboxed plan and recipe execution with worktree, copy, and Docker container modes.

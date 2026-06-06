@@ -5,6 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from magent import config as magent_config
 from magent import workbench
 from magent.cli import main as cli_main
 from magent.workbench import WorkbenchStore
@@ -12,12 +13,20 @@ from magent.workbench import WorkbenchStore
 runner = CliRunner()
 
 
+def redirect_config(monkeypatch, root: Path) -> None:
+    cfg_dir = root / ".config" / "magent"
+    monkeypatch.setattr(magent_config, "CONFIG_DIR", cfg_dir)
+    monkeypatch.setattr(magent_config, "GLOBAL_CONFIG", cfg_dir / "config.toml")
+    monkeypatch.setattr(magent_config, "USERS_DIR", cfg_dir / "users")
+    monkeypatch.setattr(magent_config, "CURRENT_USER_FILE", cfg_dir / "users" / "current")
+
+
 def test_cli_version_and_tutorial() -> None:
     version = runner.invoke(cli_main.app, ["--version"])
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.16.0" in version.output
+    assert "MagAgent 0.18.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -30,6 +39,49 @@ def test_cli_docs_doctor() -> None:
     assert payload["ok"] is True
     assert payload["missing_topics"] == []
     assert payload["missing_commands"] == []
+
+
+def test_cli_first_configuration_commands(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+
+    provider = runner.invoke(
+        cli_main.app,
+        ["provider", "set", "openai", "--model", "gpt-5", "--api-key-env", "OPENAI_API_KEY"],
+    )
+    detected = runner.invoke(cli_main.app, ["provider", "detect"])
+    roles = runner.invoke(cli_main.app, ["model", "set-role", "review", "anthropic/claude-sonnet-4-5"])
+    memory = runner.invoke(
+        cli_main.app,
+        ["memory", "configure", "--mode", "inbox-first", "--no-semantic", "--write-every", "2"],
+    )
+    subagents = runner.invoke(
+        cli_main.app,
+        ["subagent", "configure", "--max", "2", "--parallel", "1", "--model-role", "cheap"],
+    )
+    gateway = runner.invoke(
+        cli_main.app,
+        ["gateway", "configure", "telegram", "--bot-token", "secret", "--allowed-user", "123"],
+    )
+    doctor = runner.invoke(cli_main.app, ["provider", "doctor"])
+
+    assert provider.exit_code == 0
+    assert json.loads(provider.output)["provider"] == "openai"
+    assert detected.exit_code == 0
+    assert any(item["id"] == "openai" for item in json.loads(detected.output)["providers"])
+    assert roles.exit_code == 0
+    assert json.loads(roles.output)["role"] == "review"
+    assert memory.exit_code == 0
+    assert json.loads(memory.output)["memory"]["inbox_first"] is True
+    assert subagents.exit_code == 0
+    assert json.loads(subagents.output)["subagents"]["max_subagents"] == 2
+    assert gateway.exit_code == 0
+    assert json.loads(gateway.output)["gateway"]["telegram"]["bot_token"] == "***"
+    assert doctor.exit_code == 0
+    payload = json.loads(doctor.output)
+    assert payload["provider"]["provider"] == "openai"
+    assert payload["gateways"]["telegram"] is True
 
 
 def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -> None:
