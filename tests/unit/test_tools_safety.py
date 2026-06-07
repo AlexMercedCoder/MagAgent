@@ -65,6 +65,7 @@ def test_tool_definitions_have_required_arguments(tmp_path: Path) -> None:
     assert {"path", "content"} <= set(write_file_required)
     assert "outline_file" in defs
     assert "read_file_range" in defs
+    assert "deep_research" in defs
 
 
 @pytest.mark.asyncio
@@ -85,6 +86,43 @@ async def test_file_tools_read_write_edit_list_diff_and_range(tmp_path: Path) ->
     assert edited["ok"] is True
     assert diff["changed"] is True
     assert {entry["name"] for entry in listed["entries"]} == {"a.txt", "b.txt"}
+
+
+@pytest.mark.asyncio
+async def test_deep_research_collects_sources(monkeypatch, tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    async def fake_search(query: str, max_results: int = 8):
+        return {
+            "ok": True,
+            "query": query,
+            "results": [
+                {
+                    "title": "Example research",
+                    "snippet": "Useful source snippet",
+                    "url": "https://example.com/research",
+                }
+            ],
+        }
+
+    async def fake_fetch(url: str, extract_article: bool = True):
+        return {
+            "ok": True,
+            "url": url,
+            "status": 200,
+            "content": "Long article text about the research topic.",
+            "extractor": "test",
+        }
+
+    monkeypatch.setattr(tools, "web_search", fake_search)
+    monkeypatch.setattr(tools, "web_fetch", fake_fetch)
+
+    result = await tools.deep_research("agent UX", questions=["desktop apps"], max_sources=2)
+
+    assert result["ok"] is True
+    assert result["source_count"] == 1
+    assert result["sources"][0]["url"] == "https://example.com/research"
+    assert "Research summary" in result["summary"]
 
 
 @pytest.mark.asyncio

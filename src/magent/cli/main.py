@@ -223,6 +223,11 @@ def ask_cmd(
         "--json",
         help="Emit machine-readable response, audit, and tool summary.",
     ),
+    events: bool = typer.Option(
+        False,
+        "--events",
+        help="Include structured desktop event records in JSON output.",
+    ),
 ):
     """Run a one-shot MagAgent task."""
     username = _require_user()
@@ -244,6 +249,7 @@ def ask_cmd(
         repair_attempts=repair_attempts,
         strict_audit=strict_audit,
         json_output=json_output,
+        events_output=events,
     )
 
 
@@ -258,6 +264,7 @@ def _run_one_shot(
     repair_attempts: int = 0,
     strict_audit: bool = False,
     json_output: bool = False,
+    events_output: bool = False,
 ):
     """Run a single non-interactive agent task."""
     from magent.agent import AgentSession
@@ -311,12 +318,28 @@ def _run_one_shot(
             },
             "session_id": session.session_id,
         }
+        if events_output:
+            payload["events"] = _one_shot_events(task, response, final_audit, session)
         console.print_json(data=payload)
     else:
         response += render_audit_note(final_audit)
         print_response(response)
     if strict_audit and final_audit and not final_audit.get("ok"):
         raise typer.Exit(1)
+
+
+def _one_shot_events(task: str, response: str, audit: dict, session) -> list[dict]:
+    """Return coarse structured events for desktop timelines."""
+    events = [{"type": "user_message", "content": task}]
+    for command in session.scratchpad.get("commands_run", []):
+        events.append({"type": "command", "command": command})
+    for path in session.scratchpad.get("files_touched", []):
+        events.append({"type": "file_touched", "path": path})
+    for failure in session.scratchpad.get("permission_failures", []):
+        events.append({"type": "permission_failure", "detail": failure})
+    events.append({"type": "audit", "ok": bool(audit.get("ok", True)), "audit": audit})
+    events.append({"type": "assistant_message", "content": response})
+    return events
 
 
 def _run_repl(username, config, main_provider, extract_provider, cwd):
@@ -2187,6 +2210,7 @@ def memory_inbox_cmd(
     reason: str = typer.Option("", "--reason"),
     title: str = typer.Option("", "--title"),
     body: str = typer.Option("", "--body"),
+    json_output: bool = typer.Option(True, "--json/--no-json", help="Emit JSON output."),
 ):
     """Review, accept, reject, or edit pending memory candidates."""
     from magent.memory_inbox import accept_candidate, edit_candidate, memory_inbox, reject_candidate
@@ -2194,7 +2218,12 @@ def memory_inbox_cmd(
     store = _store()
     normalized = action.lower()
     if normalized == "list":
-        console.print_json(data=memory_inbox(store, project=project, limit=limit))
+        data = memory_inbox(store, project=project, limit=limit)
+        if json_output:
+            console.print_json(data=data)
+        else:
+            for item in data.get("candidates", []):
+                console.print(f"{item.get('id', '')}\t{item.get('status', 'pending')}\t{item.get('title', '')}")
         return
     if not candidate_id:
         console.print_json(data={"ok": False, "error": "candidate_id is required"})
@@ -2413,6 +2442,32 @@ def memory_node_cmd(
     from magent.desktop_api import memory_node
 
     result = memory_node(user or _require_user(), node_id)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@memory_app.command("update-node")
+def memory_update_node_cmd(
+    node_id: str = typer.Argument(...),
+    body: str = typer.Option("", "--body", help="Replacement Markdown body."),
+    body_file: str = typer.Option("", "--body-file", help="Read replacement Markdown body from a file."),
+    links_json: str = typer.Option("", "--links-json", help="Optional JSON array of links to preserve/add."),
+    user: str | None = typer.Option(None, "--user", "-u"),
+):
+    """Update a memory node body for desktop integrations."""
+    from pathlib import Path
+
+    from magent.desktop_api import memory_update_node, parse_json_value
+
+    resolved_body: str | None = body if body else None
+    if body_file:
+        resolved_body = Path(body_file).read_text(encoding="utf-8")
+    links = parse_json_value(links_json) if links_json else None
+    if links is not None and not isinstance(links, list):
+        console.print_json(data={"ok": False, "error": "--links-json must be a JSON array"})
+        raise typer.Exit(1)
+    result = memory_update_node(user or _require_user(), node_id, body=resolved_body, links=links)
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)

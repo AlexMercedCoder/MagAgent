@@ -17,6 +17,8 @@ Useful commands:
 - `magent memory stats`
 - `magent memory search "query"`
 - `magent memory show <node-id>`
+- `magent memory node <node-id>`
+- `magent memory update-node <node-id> --body-file node.md`
 - `magent memory traverse <node-id>`
 - `magent memory inbox`
 - `magent memory inbox accept <candidate-id>`

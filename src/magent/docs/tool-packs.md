@@ -13,9 +13,15 @@ Built-in packs:
 
 - `files`: file reads, writes, diffs, archives, image reads, and docs search
 - `shell`: shell, Python subprocess, package install, search, git, and system info
-- `web`: web search, fetch, HTTP requests, browser snapshots, and browser screenshots
+- `web`: web search, fetch, deep research, HTTP requests, browser snapshots, and browser screenshots
 - `data`: JSON query helpers
 - `db`: named SQLite database helpers
 - `desktop`: notifications, clipboard, and open-file helpers
 
 Disabled packs are stored in the local workbench and used by the tool executor when it advertises callable tools for a turn.
+
+## Deep Research
+
+The `deep_research` tool runs several web searches, deduplicates source URLs, optionally fetches source pages, and returns cited evidence packets plus a compact summary. It is intended for current-state research, comparisons, ecosystem surveys, and documentation discovery where the agent needs more than one search result.
+
+The result includes the topic, generated queries, search metadata, source URLs, snippets, fetched excerpts when available, and fetch failures. It does not hide provenance behind a synthesized answer.

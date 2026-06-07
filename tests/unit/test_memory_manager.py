@@ -319,3 +319,13 @@ def test_changed_since_delegates_to_maggraph_change_feed() -> None:
     changes = mgr.changed_since(100)
 
     assert changes == [{"id": "pref", "relative_path": "pref.md", "modified_unix": 101}]
+
+
+def test_update_node_replaces_body_and_preserves_links() -> None:
+    mgr = fake_memory_manager({"pref": FakeNode("pref", "preference", "Old body", [], "pref.md")})
+
+    result = mgr.update_node("pref", body="# New body", links=["project_demo"])
+
+    assert result["ok"] is True
+    assert "[[project_demo]]" in mgr._index.nodes["pref"].body
+    assert mgr._index.updated_files

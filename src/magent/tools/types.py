@@ -13,6 +13,7 @@ DEFAULT_TOOL_BUDGETS = {
     "read_file": 16000,
     "read_file_range": 12000,
     "web_fetch": 12000,
+    "deep_research": 18000,
     "run_shell": 10000,
     "run_python": 10000,
     "search_codebase": 9000,

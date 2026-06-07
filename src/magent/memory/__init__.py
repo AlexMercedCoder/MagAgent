@@ -654,6 +654,35 @@ class MemoryManager:
         except Exception:
             return None
 
+    def update_node(
+        self,
+        node_id: str,
+        *,
+        body: str | None = None,
+        links: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Update a node body, preserving existing content when body is omitted."""
+        node = self.read_node(node_id)
+        if not node or not self.available:
+            return {"ok": False, "error": f"Node not found: {node_id}"}
+        next_body = node.get("body", "") if body is None else body
+        if links is not None:
+            missing = [
+                link
+                for link in links
+                if f"[[{link}]]" not in next_body and f"[[{link}|" not in next_body
+            ]
+            if missing:
+                next_body = next_body.rstrip() + "\n\nRelated: " + ", ".join(
+                    f"[[{link}]]" for link in missing
+                ) + "\n"
+        try:
+            self._index.update_node(node_id, next_body)
+            self._refresh_changed_file(node_id)
+            return {"ok": True, "id": node_id, "links": links if links is not None else node.get("links", [])}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def traverse_node(self, node_id: str, depth: int = 2) -> str:
         if not self.available:
             return ""

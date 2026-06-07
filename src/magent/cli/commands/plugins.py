@@ -15,11 +15,17 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     plugin_app.add_typer(mcp_app, name="mcp")
 
     @plugin_app.command("list")
-    def plugin_list_cmd() -> None:
+    def plugin_list_cmd(json_output: bool = typer.Option(True, "--json/--no-json")) -> None:
         """List installed extension packs."""
         from magent.plugins import list_plugins
 
-        console.print_json(data=list_plugins())
+        data = list_plugins()
+        if json_output:
+            console.print_json(data=data)
+            return
+        for item in data.get("plugins", []):
+            state = "enabled" if item.get("enabled") else "disabled"
+            console.print(f"{item.get('name', '')}\t{state}")
 
     @plugin_app.command("install")
     def plugin_install_cmd(

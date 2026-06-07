@@ -19,6 +19,13 @@ def register_config_commands(config_app: typer.Typer) -> None:
 
         console.print_json(data=config_get(user, include_raw=raw))
 
+    @config_app.command("schema")
+    def config_schema_cmd(user: str | None = typer.Option(None, "--user", "-u")) -> None:
+        """Return guided config field metadata for desktop integrations."""
+        from magent.desktop_api import config_schema
+
+        console.print_json(data=config_schema(user))
+
     @config_app.command("set")
     def config_set_cmd(
         path: str = typer.Argument(..., help="Dot-path config key to set."),

@@ -247,6 +247,7 @@ magent browser screenshot https://example.com --out example.png
 |---|---|---|
 | `web_search` | DuckDuckGo search (real results, no API key) | Auto |
 | `web_fetch` | Fetch URL, clean article extraction via trafilatura | Auto |
+| `deep_research` | Multi-query web research with source fetches and cited evidence packets | Auto |
 | `http_request` | Full HTTP client: GET/POST/PUT/PATCH/DELETE | Auto |
 | `browser_snapshot` | Capture title and visible text with Playwright | Auto |
 | `browser_screenshot` | Capture a page screenshot with Playwright | Auto |

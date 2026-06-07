@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -123,7 +124,10 @@ def test_cli_plugin_compatibility_commands(tmp_path: Path, monkeypatch) -> None:
     mcp_import = runner.invoke(cli_main.app, ["plugin", "mcp", "import", str(mcp_file), "--name", "cli-mcp"])
     metadata = runner.invoke(cli_main.app, ["plugin", "metadata", str(skill)])
     skill_import = runner.invoke(cli_main.app, ["plugin", "import", "codex-skill", str(skill), "--name", "cli-skill"])
+    listed_json = runner.invoke(cli_main.app, ["plugin", "list", "--json"])
 
     assert mcp_import.exit_code == 0
     assert metadata.exit_code == 0
     assert skill_import.exit_code == 0
+    assert listed_json.exit_code == 0
+    assert json.loads(listed_json.output)["plugins"]

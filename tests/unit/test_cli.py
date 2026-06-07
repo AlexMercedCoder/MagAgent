@@ -270,6 +270,7 @@ def test_cli_desktop_integration_commands(tmp_path: Path, monkeypatch) -> None:
         cli_main.app,
         ["config", "set", "defaults.model", '"desktop-model"'],
     )
+    config_schema = runner.invoke(cli_main.app, ["config", "schema"])
     data_list = runner.invoke(cli_main.app, ["data", "sqlite-list"])
     memory_graph = runner.invoke(cli_main.app, ["memory", "graph", "--limit", "5"])
 
@@ -279,6 +280,8 @@ def test_cli_desktop_integration_commands(tmp_path: Path, monkeypatch) -> None:
     assert json.loads(config_get.output)["ok"] is True
     assert config_set.exit_code == 0
     assert json.loads(config_set.output)["value"] == "desktop-model"
+    assert config_schema.exit_code == 0
+    assert any(item["path"] == "defaults.model" for item in json.loads(config_schema.output)["fields"])
     assert data_list.exit_code == 0
     assert memory_graph.exit_code == 0
 
@@ -308,7 +311,7 @@ def test_cli_ask_json_outputs_audit_payload(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr(magent_agent, "AgentSession", FakeSession)
     result = runner.invoke(
         cli_main.app,
-        ["ask", "--project", str(tmp_path), "--json", "Create hello.txt"],
+        ["ask", "--project", str(tmp_path), "--json", "--events", "Create hello.txt"],
     )
 
     assert result.exit_code == 0
@@ -316,6 +319,7 @@ def test_cli_ask_json_outputs_audit_payload(tmp_path: Path, monkeypatch) -> None
     assert payload["ok"] is True
     assert payload["audit"]["missing_requested_files"] == []
     assert payload["session_id"] == "session-json"
+    assert [item["type"] for item in payload["events"]][-1] == "assistant_message"
 
 
 async def _fake_test_provider(provider) -> bool:
@@ -440,6 +444,7 @@ def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch
     tools = runner.invoke(cli_main.app, ["tools", "disable", "web"])
     explained = runner.invoke(cli_main.app, ["tools", "explain", "web"])
     inbox = runner.invoke(cli_main.app, ["memory", "inbox", "--project", str(project)])
+    inbox_json = runner.invoke(cli_main.app, ["memory", "inbox", "--json", "--project", str(project)])
     accepted = runner.invoke(
         cli_main.app,
         ["memory", "inbox", "accept", "promoted_task_task_0001_remember_inbox_task", "--project", str(project)],
@@ -459,6 +464,8 @@ def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch
     assert json.loads(explained.output)["enabled"] is False
     assert inbox.exit_code == 0
     assert json.loads(inbox.output)["candidates"]
+    assert inbox_json.exit_code == 0
+    assert json.loads(inbox_json.output)["candidates"]
     assert accepted.exit_code == 0
     assert json.loads(accepted.output)["written"] == 1
 

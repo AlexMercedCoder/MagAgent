@@ -614,6 +614,74 @@ class ToolExecutor:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    async def deep_research(
+        self,
+        topic: str,
+        questions: list[str] | None = None,
+        max_sources: int = 6,
+        fetch_sources: bool = True,
+    ) -> ToolResult:
+        """Run a multi-query web research pass with cited evidence packets."""
+        tier = RiskTier.AUTO
+        self._log_tool("deep_research", topic, tier)
+        perm = self._check_permission(f"Deep web research: {topic}", tier)
+        if not perm.approved:
+            return self._permission_denied(perm)
+
+        research_questions = [q.strip() for q in (questions or []) if str(q).strip()]
+        queries = [topic]
+        queries.extend(f"{topic} {question}" for question in research_questions[:4])
+
+        seen_urls: set[str] = set()
+        sources: list[dict[str, Any]] = []
+        search_packets: list[dict[str, Any]] = []
+        for query in queries[:5]:
+            search = await self.web_search(query, max_results=max(3, min(max_sources, 8)))
+            search_packets.append({"query": query, "ok": search.get("ok"), "source": search.get("source")})
+            for result in search.get("results", []) if search.get("ok") else []:
+                url = str(result.get("url") or "")
+                if not url or url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                sources.append(
+                    {
+                        "title": result.get("title", ""),
+                        "url": url,
+                        "snippet": result.get("snippet", ""),
+                        "query": query,
+                    }
+                )
+                if len(sources) >= max_sources:
+                    break
+            if len(sources) >= max_sources:
+                break
+
+        evidence: list[dict[str, Any]] = []
+        for source in sources:
+            packet = dict(source)
+            if fetch_sources:
+                fetched = await self.web_fetch(source["url"], extract_article=True)
+                packet["fetch_ok"] = fetched.get("ok", False)
+                packet["status"] = fetched.get("status")
+                if fetched.get("ok"):
+                    content = str(fetched.get("content", ""))
+                    packet["excerpt"] = content[:1600].strip()
+                    packet["extractor"] = fetched.get("extractor")
+                else:
+                    packet["fetch_error"] = fetched.get("error", "")
+            evidence.append(packet)
+
+        return {
+            "ok": True,
+            "topic": topic,
+            "questions": research_questions,
+            "queries": queries[:5],
+            "searches": search_packets,
+            "source_count": len(evidence),
+            "sources": evidence,
+            "summary": _research_summary(topic, evidence),
+        }
+
     async def http_request(
         self,
         method: str,
@@ -993,6 +1061,16 @@ class ToolExecutor:
                 },
             ),
             _def(
+                "deep_research",
+                "Run multi-query web research, fetch source pages, and return cited evidence packets.",
+                {
+                    "topic": ("string", "Research topic or question"),
+                    "questions": ("array", "Optional follow-up questions"),
+                    "max_sources": ("integer", "Maximum sources to collect (default 6)"),
+                    "fetch_sources": ("boolean", "Fetch and excerpt sources (default true)"),
+                },
+            ),
+            _def(
                 "http_request",
                 "Make any HTTP request (GET/POST/PUT/PATCH/DELETE) with custom headers and body.",
                 {
@@ -1122,6 +1200,8 @@ class ToolExecutor:
             selected.add("delete_file")
         if any(word in text for word in ("web", "url", "http", "api", "docs", "latest", "search online")):
             selected.update({"web_search", "web_fetch", "http_request"})
+        if any(word in text for word in ("research", "compare", "survey", "investigate", "market")):
+            selected.update({"web_search", "web_fetch", "deep_research", "http_request"})
         if any(word in text for word in ("browser", "screenshot", "page", "playwright")):
             selected.update({"browser_snapshot", "browser_screenshot"})
         if any(word in text for word in ("json", "csv", "sqlite", "database", "sql", "dataframe", "query")):
@@ -1174,6 +1254,12 @@ class ToolExecutor:
             "search_codebase": lambda: self.search_codebase(a["pattern"], a.get("path", ".")),
             "web_search": lambda: self.web_search(a["query"], a.get("max_results", 8)),
             "web_fetch": lambda: self.web_fetch(a["url"], a.get("extract_article", True)),
+            "deep_research": lambda: self.deep_research(
+                a["topic"],
+                a.get("questions"),
+                a.get("max_sources", 6),
+                a.get("fetch_sources", True),
+            ),
             "http_request": lambda: self.http_request(
                 a["method"], a["url"], a.get("headers"), a.get("body"), a.get("timeout", 30)
             ),
@@ -1236,3 +1322,26 @@ class ToolExecutor:
             output["budgeted"] = True
             output["budget_chars"] = budget
         return output
+
+
+def _research_summary(topic: str, evidence: list[dict[str, Any]]) -> str:
+    """Build a compact non-LLM research summary from source metadata."""
+    if not evidence:
+        return f"No sources were found for: {topic}"
+    lines = [f"Research summary for: {topic}", "", "Sources reviewed:"]
+    for index, item in enumerate(evidence, start=1):
+        title = item.get("title") or item.get("url") or f"Source {index}"
+        url = item.get("url", "")
+        snippet = str(item.get("snippet") or item.get("excerpt") or "").replace("\n", " ").strip()
+        if len(snippet) > 220:
+            snippet = snippet[:220].rstrip() + "..."
+        lines.append(f"{index}. {title} - {url}")
+        if snippet:
+            lines.append(f"   Evidence: {snippet}")
+    lines.extend(
+        [
+            "",
+            "Use the source excerpts above for grounded analysis; verify dates and claims before high-stakes decisions.",
+        ]
+    )
+    return "\n".join(lines)

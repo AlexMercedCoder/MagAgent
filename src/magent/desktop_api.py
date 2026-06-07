@@ -26,6 +26,77 @@ from magent.config_safety import redact_config_text
 from magent.memory import MemoryManager
 from magent.tools.db import db_list_tables, db_query, db_schema, list_databases
 
+CONFIG_SCHEMA: list[dict[str, Any]] = [
+    {
+        "path": "defaults.provider",
+        "label": "Default provider",
+        "type": "string",
+        "scope": "global",
+        "category": "provider",
+        "description": "Provider ID used when no provider is supplied.",
+    },
+    {
+        "path": "defaults.model",
+        "label": "Default model",
+        "type": "string",
+        "scope": "global",
+        "category": "provider",
+        "description": "Model name used for the main agent by default.",
+    },
+    {
+        "path": "defaults.permission_mode",
+        "label": "Permission mode",
+        "type": "enum",
+        "scope": "global",
+        "category": "permissions",
+        "choices": ["balanced", "ask", "strict", "paranoid", "permissive", "silent", "yolo"],
+        "description": "Default tool permission posture.",
+    },
+    {
+        "path": "memory.auto_write",
+        "label": "Memory auto-write",
+        "type": "boolean",
+        "scope": "global",
+        "category": "memory",
+        "description": "Allow MagAgent to write durable memories automatically.",
+    },
+    {
+        "path": "memory.semantic_enabled",
+        "label": "Semantic memory",
+        "type": "boolean",
+        "scope": "global",
+        "category": "memory",
+        "description": "Enable semantic sidecar recall when configured.",
+    },
+    {
+        "path": "subagents.max_subagents",
+        "label": "Max subagents",
+        "type": "integer",
+        "scope": "global",
+        "category": "subagents",
+        "min": 0,
+        "description": "Maximum number of subagents a primary agent may orchestrate.",
+    },
+    {
+        "path": "subagents.max_parallel_subagents",
+        "label": "Max parallel subagents",
+        "type": "integer",
+        "scope": "global",
+        "category": "subagents",
+        "min": 0,
+        "description": "Maximum concurrent subagents.",
+    },
+    {
+        "path": "ui.theme",
+        "label": "CLI/TUI theme",
+        "type": "enum",
+        "scope": "global",
+        "category": "ui",
+        "choices": ["light", "dark", "system"],
+        "description": "Preferred MagAgent interface theme.",
+    },
+]
+
 
 def system_info() -> dict[str, Any]:
     """Return desktop-friendly local MagAgent installation info."""
@@ -106,6 +177,24 @@ def config_set(
     return {"ok": True, "scope": scope, "user": username, "path": path, "value": _redact_obj(value)}
 
 
+def config_schema(username: str | None = None) -> dict[str, Any]:
+    """Return desktop-friendly metadata for common guided config controls."""
+    cfg = config_get(username)
+    merged = cfg.get("merged", {})
+    fields = []
+    for item in CONFIG_SCHEMA:
+        field = dict(item)
+        field["value"] = _lookup_path(merged, item["path"])
+        fields.append(field)
+    return {
+        "ok": True,
+        "user": cfg.get("user"),
+        "paths": cfg.get("paths", {}),
+        "fields": fields,
+        "raw_edit_supported": True,
+    }
+
+
 def memory_graph(username: str, *, query: str = "", limit: int = 100) -> dict[str, Any]:
     """Return a compact graph view suitable for desktop browsing."""
     mgr = MemoryManager(user_memory_dir(username), username=username)
@@ -132,6 +221,21 @@ def memory_node(username: str, node_id: str) -> dict[str, Any]:
         "node": node,
         "traversal": mgr.traverse_node(node_id, depth=1),
     }
+
+
+def memory_update_node(
+    username: str,
+    node_id: str,
+    *,
+    body: str | None = None,
+    links: list[str] | None = None,
+) -> dict[str, Any]:
+    """Update a memory node body and optional links for desktop editors."""
+    mgr = MemoryManager(user_memory_dir(username), username=username)
+    result = mgr.update_node(node_id, body=body, links=links)
+    if result.get("ok"):
+        result["node"] = mgr.read_node(node_id)
+    return result
 
 
 def sqlite_list(username: str) -> dict[str, Any]:
@@ -169,3 +273,12 @@ def _redact_obj(value: Any) -> Any:
     if isinstance(value, list):
         return [_redact_obj(item) for item in value]
     return value
+
+
+def _lookup_path(data: dict[str, Any], path: str) -> Any:
+    node: Any = data
+    for part in path.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node

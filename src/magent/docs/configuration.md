@@ -60,12 +60,17 @@ The setup/provider UX includes local providers, direct model providers, aggregat
 Config safety commands make wizard-driven changes easier to trust:
 
 ```bash
+magent config get
+magent config schema
+magent config set defaults.provider openai
 magent config show
 magent config backup
 magent config list-backups
 magent config diff
 magent config restore <backup-id>
 ```
+
+`magent config schema` returns machine-readable metadata for common guided settings so desktop apps and other clients can render forms without hand-maintaining TOML knowledge.
 
 Natural-language config proposals cover a limited, schema-safe set of common edits. They
 show a diff, write an event log entry, and create a backup before applying:

@@ -8,6 +8,7 @@ Important command paths:
 - `magent ask --repair-attempts 1 "task"`: retry obvious missing-file task audit failures once.
 - `magent ask --strict-audit "task"`: exit nonzero when the final task audit is incomplete.
 - `magent ask --json "task"`: emit a machine-readable response, audit, and tool summary.
+- `magent ask --json --events "task"`: include coarse structured desktop timeline events.
 - `magent --task "task"`: alternate one-shot task form.
 - `magent setup`: run first-time setup.
 - `magent configure`: run the friendly setup/configuration wizard.
@@ -24,6 +25,7 @@ Important command paths:
 - `magent workbench compact`: rewrite JSON workbench stores and report bytes reclaimed.
 - `magent config show`: show global and current-user config files.
 - `magent config get`: return redacted machine-readable global/user/merged config.
+- `magent config schema`: return guided config field metadata for desktop apps.
 - `magent config set <path> <value>`: update a dot-path config value for desktop integrations.
 - `magent config backup`: back up global and current-user config files.
 - `magent config list-backups`: list config backups.
@@ -117,6 +119,7 @@ Important command paths:
 - `magent memory stats`: show memory graph stats.
 - `magent memory graph`: return a compact JSON graph view for desktop browsing.
 - `magent memory node <id>`: return one memory node and nearby traversal context as JSON.
+- `magent memory update-node <id> --body-file node.md`: update one memory node body.
 - `magent memory index`: build semantic memory index.
 - `magent memory search <query>`: search memory.
 - `magent memory promote`: list workbench facts that can be promoted to memory.

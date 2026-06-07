@@ -45,6 +45,26 @@ The dashboard exposes local JSON endpoints for tooling:
 
 These endpoints intentionally reuse MagAgent's existing workbench, docs, memory, and release helpers so the browser view stays aligned with CLI behavior.
 
+## Desktop Integration APIs
+
+Desktop clients such as Mag Command Center should prefer the machine-readable CLI surface:
+
+- `magent system info`
+- `magent ask --json --events`
+- `magent config get`
+- `magent config schema`
+- `magent config set <path> <json-or-string>`
+- `magent memory graph`
+- `magent memory node <id>`
+- `magent memory update-node <id> --body-file <file>`
+- `magent memory inbox --json`
+- `magent data sqlite-list`
+- `magent data sqlite-tables <db>`
+- `magent data sqlite-query <db> <sql>`
+- `magent plugin list --json`
+- `magent plugin enable <name>`
+- `magent plugin disable <name>`
+
 ## Relationship To `magent dashboard`
 
 `magent dashboard` exports a static HTML workbench snapshot. `magent dashboard --serve` serves that snapshot on localhost.

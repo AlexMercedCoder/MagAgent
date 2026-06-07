@@ -34,6 +34,20 @@ def test_system_info_and_config_get_set_are_redacted(tmp_path: Path, monkeypatch
     assert config["global"]["providers"]["openai"]["api_key"] == "***"
 
 
+def test_config_schema_reports_guided_fields(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("alice")
+    magent_config.set_current_user("alice")
+    desktop_api.config_set("defaults.provider", "openai", scope="global")
+
+    schema = desktop_api.config_schema("alice")
+
+    provider = next(item for item in schema["fields"] if item["path"] == "defaults.provider")
+    assert schema["ok"] is True
+    assert provider["value"] == "openai"
+    assert provider["category"] == "provider"
+
+
 def test_sqlite_desktop_helpers_list_query_and_schema(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
     magent_config.create_user("alice")
