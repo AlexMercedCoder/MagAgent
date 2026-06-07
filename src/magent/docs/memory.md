@@ -18,6 +18,7 @@ Useful commands:
 - `magent memory search "query"`
 - `magent memory show <node-id>`
 - `magent memory node <node-id>`
+- `magent memory update-node <node-id> --preview --body-file node.md`
 - `magent memory update-node <node-id> --body-file node.md`
 - `magent memory traverse <node-id>`
 - `magent memory inbox`
@@ -49,3 +50,5 @@ For token efficiency, MagAgent asks MagGraph for recall bundles instead of expan
 Use `magent memory inbox accept <candidate-id>` to write one candidate to MagGraph. Use `magent memory inbox reject <candidate-id>` to suppress it, or `magent memory inbox edit <candidate-id> --body "..."` to polish the text before accepting.
 
 Accepted inbox items are written through MagGraph's memory-node helpers. MagAgent refreshes the changed node with `update_file` and returns `changed_since` entries so UI and CLI callers can update cheaply.
+
+Desktop editors should use `magent memory update-node --preview` before applying edits. Preview mode reports old/new body hashes, character counts, and links without writing to the graph.

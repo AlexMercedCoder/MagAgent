@@ -328,6 +328,38 @@ def _run_one_shot(
         raise typer.Exit(1)
 
 
+@app.command("research")
+def research_cmd(
+    topic: str = typer.Argument(..., help="Research topic or question."),
+    question: Annotated[
+        list[str] | None,
+        typer.Option("--question", "-q", help="Optional focused research question."),
+    ] = None,
+    max_sources: int = typer.Option(6, "--max-sources", "-n", min=1, max=20),
+    fetch_sources: bool = typer.Option(True, "--fetch/--no-fetch", help="Fetch and excerpt source pages."),
+    json_output: bool = typer.Option(True, "--json/--no-json"),
+):
+    """Run deep web research without starting a full agent session."""
+    from magent.tools import ToolExecutor
+
+    async def _run() -> dict:
+        tools = ToolExecutor(os.getcwd(), permission_mode="silent", interactive_permissions=False)
+        return await tools.deep_research(
+            topic,
+            questions=question or [],
+            max_sources=max_sources,
+            fetch_sources=fetch_sources,
+        )
+
+    result = asyncio.run(_run())
+    if json_output:
+        console.print_json(data=result)
+    else:
+        console.print(result.get("summary", ""))
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
 def _one_shot_events(task: str, response: str, audit: dict, session) -> list[dict]:
     """Return coarse structured events for desktop timelines."""
     events = [{"type": "user_message", "content": task}]
@@ -2453,6 +2485,7 @@ def memory_update_node_cmd(
     body: str = typer.Option("", "--body", help="Replacement Markdown body."),
     body_file: str = typer.Option("", "--body-file", help="Read replacement Markdown body from a file."),
     links_json: str = typer.Option("", "--links-json", help="Optional JSON array of links to preserve/add."),
+    preview: bool = typer.Option(False, "--preview", help="Preview hashes and size changes without writing."),
     user: str | None = typer.Option(None, "--user", "-u"),
 ):
     """Update a memory node body for desktop integrations."""
@@ -2467,7 +2500,13 @@ def memory_update_node_cmd(
     if links is not None and not isinstance(links, list):
         console.print_json(data={"ok": False, "error": "--links-json must be a JSON array"})
         raise typer.Exit(1)
-    result = memory_update_node(user or _require_user(), node_id, body=resolved_body, links=links)
+    result = memory_update_node(
+        user or _require_user(),
+        node_id,
+        body=resolved_body,
+        links=links,
+        preview=preview,
+    )
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)

@@ -6,6 +6,7 @@ import json
 import platform
 import shutil
 import sys
+from hashlib import sha256
 from typing import Any
 
 from magent import __version__
@@ -229,12 +230,32 @@ def memory_update_node(
     *,
     body: str | None = None,
     links: list[str] | None = None,
+    preview: bool = False,
 ) -> dict[str, Any]:
     """Update a memory node body and optional links for desktop editors."""
     mgr = MemoryManager(user_memory_dir(username), username=username)
+    before = mgr.read_node(node_id)
+    if not before:
+        return {"ok": False, "error": f"Node not found: {node_id}"}
+    next_body = before.get("body", "") if body is None else body
+    before_hash = _body_hash(before.get("body", ""))
+    after_hash = _body_hash(next_body)
+    if preview:
+        return {
+            "ok": True,
+            "preview": True,
+            "id": node_id,
+            "before_hash": before_hash,
+            "after_hash": after_hash,
+            "old_chars": len(before.get("body", "")),
+            "new_chars": len(next_body),
+            "links": links if links is not None else before.get("links", []),
+        }
     result = mgr.update_node(node_id, body=body, links=links)
     if result.get("ok"):
         result["node"] = mgr.read_node(node_id)
+        result["before_hash"] = before_hash
+        result["after_hash"] = after_hash
     return result
 
 
@@ -282,3 +303,7 @@ def _lookup_path(data: dict[str, Any], path: str) -> Any:
             return None
         node = node[part]
     return node
+
+
+def _body_hash(body: str) -> str:
+    return sha256(body.encode("utf-8")).hexdigest()[:16]

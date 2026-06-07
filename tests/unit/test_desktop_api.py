@@ -65,3 +65,29 @@ def test_sqlite_desktop_helpers_list_query_and_schema(tmp_path: Path, monkeypatc
     assert tables["tables"][0]["table"] == "items"
     assert schema["columns"][1]["name"] == "name"
     assert query["rows"] == [{"name": "one"}]
+
+
+def test_memory_update_node_preview_reports_hashes(monkeypatch, tmp_path: Path) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("alice")
+
+    class FakeManager:
+        def __init__(self, *args, **kwargs):
+            self.body = "old"
+
+        def read_node(self, node_id):
+            return {"id": node_id, "body": self.body, "links": []}
+
+        def update_node(self, node_id, *, body=None, links=None):
+            self.body = body or self.body
+            return {"ok": True, "id": node_id, "links": links or []}
+
+    monkeypatch.setattr(desktop_api, "MemoryManager", FakeManager)
+
+    preview = desktop_api.memory_update_node("alice", "pref", body="new", preview=True)
+    updated = desktop_api.memory_update_node("alice", "pref", body="new")
+
+    assert preview["ok"] is True
+    assert preview["preview"] is True
+    assert preview["before_hash"] != preview["after_hash"]
+    assert updated["before_hash"] != updated["after_hash"]

@@ -127,6 +127,8 @@ def test_cli_plugin_compatibility_commands(tmp_path: Path, monkeypatch) -> None:
     listed_json = runner.invoke(cli_main.app, ["plugin", "list", "--json"])
 
     assert mcp_import.exit_code == 0
+    assert json.loads(mcp_import.output)["name"] == "cli-mcp"
+    assert json.loads(mcp_import.output)["enabled"] is False
     assert metadata.exit_code == 0
     assert skill_import.exit_code == 0
     assert listed_json.exit_code == 0

@@ -29,7 +29,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.29.0" in version.output
+    assert "MagAgent 0.30.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -275,7 +275,7 @@ def test_cli_desktop_integration_commands(tmp_path: Path, monkeypatch) -> None:
     memory_graph = runner.invoke(cli_main.app, ["memory", "graph", "--limit", "5"])
 
     assert system.exit_code == 0
-    assert json.loads(system.output)["magent_version"] == "0.29.0"
+    assert json.loads(system.output)["magent_version"] == "0.30.0"
     assert config_get.exit_code == 0
     assert json.loads(config_get.output)["ok"] is True
     assert config_set.exit_code == 0
@@ -320,6 +320,35 @@ def test_cli_ask_json_outputs_audit_payload(tmp_path: Path, monkeypatch) -> None
     assert payload["audit"]["missing_requested_files"] == []
     assert payload["session_id"] == "session-json"
     assert [item["type"] for item in payload["events"]][-1] == "assistant_message"
+
+
+def test_cli_research_command_uses_deep_research(monkeypatch) -> None:
+    from magent.tools import ToolExecutor
+
+    async def fake_deep_research(self, topic, questions=None, max_sources=6, fetch_sources=True):
+        return {
+            "ok": True,
+            "topic": topic,
+            "questions": questions or [],
+            "max_sources": max_sources,
+            "fetch_sources": fetch_sources,
+            "sources": [{"url": "https://example.com"}],
+            "summary": "Research summary",
+        }
+
+    monkeypatch.setattr(ToolExecutor, "deep_research", fake_deep_research)
+
+    result = runner.invoke(
+        cli_main.app,
+        ["research", "desktop agents", "--question", "memory UX", "--max-sources", "3", "--no-fetch"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["topic"] == "desktop agents"
+    assert payload["questions"] == ["memory UX"]
+    assert payload["max_sources"] == 3
+    assert payload["fetch_sources"] is False
 
 
 async def _fake_test_provider(provider) -> bool:

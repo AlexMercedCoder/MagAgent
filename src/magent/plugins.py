@@ -50,6 +50,8 @@ def install_plugin(source: str | Path, *, name: str = "", force: bool = False) -
     return {
         "ok": True,
         "plugin": plugin_name,
+        "name": plugin_name,
+        "enabled": False,
         "path": str(target),
         "packs": _pack_paths(target),
         "metadata": normalize_plugin_metadata(target),
@@ -57,10 +59,13 @@ def install_plugin(source: str | Path, *, name: str = "", force: bool = False) -
 
 
 def set_plugin_enabled(name: str, enabled: bool) -> dict[str, Any]:
+    exists = (PLUGIN_DIR / name).exists()
+    if not exists:
+        return {"ok": False, "plugin": name, "name": name, "enabled": enabled, "error": f"Plugin not installed: {name}"}
     state = _state()
     state.setdefault(name, {})["enabled"] = enabled
     _write_state(state)
-    return {"ok": True, "plugin": name, "enabled": enabled}
+    return {"ok": True, "plugin": name, "name": name, "enabled": enabled}
 
 
 def enabled_plugin_paths() -> list[Path]:
@@ -116,6 +121,8 @@ def import_mcp_plugin(
     result: dict[str, Any] = {
         "ok": True,
         "plugin": plugin_name,
+        "name": plugin_name,
+        "enabled": False,
         "path": str(target),
         "servers": sorted(servers),
         "packs": _pack_paths(target),
@@ -197,6 +204,8 @@ def import_compat_plugin(
     return {
         "ok": True,
         "plugin": plugin_name,
+        "name": plugin_name,
+        "enabled": False,
         "path": str(target),
         "ecosystem": ecosystem,
         "converted": converted,

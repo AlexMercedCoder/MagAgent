@@ -9,6 +9,8 @@ Important command paths:
 - `magent ask --strict-audit "task"`: exit nonzero when the final task audit is incomplete.
 - `magent ask --json "task"`: emit a machine-readable response, audit, and tool summary.
 - `magent ask --json --events "task"`: include coarse structured desktop timeline events.
+- `magent research "topic"`: run direct deep web research with cited sources.
+- `magent research "topic" --question "focus" --max-sources 8`: add focused questions and source limits.
 - `magent --task "task"`: alternate one-shot task form.
 - `magent setup`: run first-time setup.
 - `magent configure`: run the friendly setup/configuration wizard.
@@ -119,6 +121,7 @@ Important command paths:
 - `magent memory stats`: show memory graph stats.
 - `magent memory graph`: return a compact JSON graph view for desktop browsing.
 - `magent memory node <id>`: return one memory node and nearby traversal context as JSON.
+- `magent memory update-node <id> --preview --body-file node.md`: preview old/new body hashes and size changes.
 - `magent memory update-node <id> --body-file node.md`: update one memory node body.
 - `magent memory index`: build semantic memory index.
 - `magent memory search <query>`: search memory.
