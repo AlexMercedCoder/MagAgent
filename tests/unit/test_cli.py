@@ -5,6 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from magent import agent as magent_agent
 from magent import config as magent_config
 from magent import workbench
 from magent.cli import main as cli_main
@@ -26,7 +27,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.26.1" in version.output
+    assert "MagAgent 0.27.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -211,6 +212,35 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     assert json.loads(workbench_prune.output)["dry_run"] is True
     assert workbench_compact.exit_code == 0
     assert json.loads(workbench_compact.output)["ok"] is True
+
+
+def test_cli_provider_tool_smoke_uses_agent_session(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+
+    class FakeSession:
+        def __init__(self, **kwargs):
+            self.cwd = kwargs["cwd"]
+            self.scratchpad = {"files_touched": [str(Path(self.cwd) / "smoke.txt")]}
+
+        async def chat(self, prompt: str) -> str:
+            Path(self.cwd, "smoke.txt").write_text("OK", encoding="utf-8")
+            return "done"
+
+        async def end_session(self) -> None:
+            return None
+
+    monkeypatch.setattr(magent_agent, "AgentSession", FakeSession)
+    result = runner.invoke(
+        cli_main.app,
+        ["provider", "tool-smoke", "openai", "--project", str(tmp_path / "smoke")],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["artifact_ok"] is True
 
 
 async def _fake_test_provider(provider) -> bool:

@@ -9,7 +9,7 @@ Generated from `magent.provider_catalog`.
 | LM Studio (local) | `lmstudio` | `local-model` | local |  | openai-compatible |
 | OpenAI | `openai` | `gpt-5` | api | `OPENAI_API_KEY` | openai |
 | Anthropic | `anthropic` | `claude-sonnet-4-5` | api | `ANTHROPIC_API_KEY` | anthropic |
-| Nous Portal | `nous-portal` | `nous-hermes-4` | api | `NOUS_API_KEY` | openai-compatible |
+| Nous Portal | `nous-portal` | `deepseek/deepseek-v4-flash` | api | `NOUS_API_KEY` | openai-compatible |
 | OpenCode Zen | `opencode-zen` | `deepseek-v4-flash` | payg | `OPENCODE_ZEN_KEY` | openai-compatible |
 | Google Gemini | `google` | `gemini-2.0-flash` | api | `GEMINI_API_KEY` | gemini |
 | Groq | `groq` | `llama-3.3-70b-versatile` | api | `GROQ_API_KEY` | groq |

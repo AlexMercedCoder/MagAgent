@@ -332,6 +332,7 @@ Generated from the active Typer command tree.
 - `magent provider set`
 - `magent provider test`
 - `magent provider test-matrix`
+- `magent provider tool-smoke`
 - `magent provider wizard`
 
 ## recipe

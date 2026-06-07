@@ -27,6 +27,7 @@ import httpx
 from rich.console import Console
 
 from magent.permissions import (
+    PermissionResult,
     RiskTier,
     check_permission,
     classify_file_op,
@@ -53,6 +54,7 @@ class ToolExecutor:
         username: str = "default",
         tool_budgets: dict[str, int] | None = None,
         session_id: str = "manual",
+        interactive_permissions: bool = True,
     ):
         self.cwd = cwd
         self.permission_mode = permission_mode
@@ -61,6 +63,7 @@ class ToolExecutor:
         self.username = username
         self.tool_budgets = {**DEFAULT_TOOL_BUDGETS, **(tool_budgets or {})}
         self.session_id = session_id
+        self.interactive_permissions = interactive_permissions
 
     def _checkpoint(self, abs_path: Path, operation: str) -> str:
         try:
@@ -88,6 +91,24 @@ class ToolExecutor:
                 f"  [dim]🔧 {name}[/dim] [dim cyan][{tier_label}][/dim cyan] [dim]{desc[:80]}[/dim]"
             )
 
+    def _check_permission(self, action_description: str, tier: RiskTier) -> PermissionResult:
+        return check_permission(
+            action_description,
+            tier,
+            self.permission_mode,
+            interactive=self.interactive_permissions,
+        )
+
+    def _permission_denied(self, perm: PermissionResult) -> ToolResult:
+        error = "Permission required" if perm.reason == "permission-required" else "Permission denied by user"
+        return {
+            "ok": False,
+            "error": error,
+            "permission_required": perm.reason == "permission-required",
+            "permission_tier": int(perm.tier),
+            "permission_reason": perm.reason,
+        }
+
     # ─────────────────────────────────────────────
     # FILE TOOLS
     # ─────────────────────────────────────────────
@@ -95,9 +116,9 @@ class ToolExecutor:
     async def read_file(self, path: str) -> ToolResult:
         abs_path, tier = self._path_tier("read", path)
         self._log_tool("read_file", str(abs_path), tier)
-        perm = check_permission(f"Read {abs_path}", tier, self.permission_mode)
+        perm = self._check_permission(f"Read {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             content = abs_path.read_text(encoding="utf-8", errors="replace")
             total_lines = len(content.splitlines())
@@ -126,9 +147,9 @@ class ToolExecutor:
         """Read a 1-based inclusive line range from a file."""
         abs_path, tier = self._path_tier("read", path)
         self._log_tool("read_file_range", f"{abs_path}:{start_line}-{end_line or ''}", tier)
-        perm = check_permission(f"Read {abs_path}", tier, self.permission_mode)
+        perm = self._check_permission(f"Read {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             lines = abs_path.read_text(encoding="utf-8", errors="replace").splitlines()
             start = max(start_line, 1)
@@ -151,9 +172,9 @@ class ToolExecutor:
         """Return a compact structural outline for a source file."""
         abs_path, tier = self._path_tier("read", path)
         self._log_tool("outline_file", str(abs_path), tier)
-        perm = check_permission(f"Outline {abs_path}", tier, self.permission_mode)
+        perm = self._check_permission(f"Outline {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             content = abs_path.read_text(encoding="utf-8", errors="replace")
             lines = content.splitlines()
@@ -198,11 +219,9 @@ class ToolExecutor:
     async def write_file(self, path: str, content: str) -> ToolResult:
         abs_path, tier = self._path_tier("write", path)
         self._log_tool("write_file", str(abs_path), tier)
-        perm = check_permission(
-            f"Write {len(content)} chars to {abs_path}", tier, self.permission_mode
-        )
+        perm = self._check_permission(f"Write {len(content)} chars to {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             checkpoint_id = self._checkpoint(abs_path, "write_file")
             abs_path.parent.mkdir(parents=True, exist_ok=True)
@@ -219,9 +238,9 @@ class ToolExecutor:
     async def edit_file(self, path: str, old_str: str, new_str: str) -> ToolResult:
         abs_path, tier = self._path_tier("edit", path)
         self._log_tool("edit_file", str(abs_path), tier)
-        perm = check_permission(f"Edit {abs_path}", tier, self.permission_mode)
+        perm = self._check_permission(f"Edit {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             content = abs_path.read_text(encoding="utf-8")
             if old_str not in content:
@@ -235,9 +254,9 @@ class ToolExecutor:
     async def delete_file(self, path: str) -> ToolResult:
         abs_path, tier = self._path_tier("delete", path)
         self._log_tool("delete_file", str(abs_path), tier)
-        perm = check_permission(f"Delete {abs_path}", tier, self.permission_mode)
+        perm = self._check_permission(f"Delete {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             checkpoint_id = self._checkpoint(abs_path, "delete_file")
             if abs_path.is_dir():
@@ -257,9 +276,9 @@ class ToolExecutor:
     async def list_dir(self, path: str = ".") -> ToolResult:
         abs_path, tier = self._path_tier("read", path)
         self._log_tool("list_dir", str(abs_path), tier)
-        perm = check_permission(f"List {abs_path}", tier, self.permission_mode)
+        perm = self._check_permission(f"List {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             entries = []
             for item in sorted(abs_path.iterdir()):
@@ -280,9 +299,9 @@ class ToolExecutor:
         abs_b, tier_b = self._path_tier("read", path_b)
         tier = max(tier_a, tier_b)
         self._log_tool("diff_files", f"{abs_a} vs {abs_b}", tier)
-        perm = check_permission(f"Diff {abs_a} and {abs_b}", tier, self.permission_mode)
+        perm = self._check_permission(f"Diff {abs_a} and {abs_b}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             a = abs_a.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
             b = abs_b.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
@@ -297,11 +316,9 @@ class ToolExecutor:
         out, out_tier = self._path_tier("write", output_path)
         tier = max(RiskTier.AUTO, src_tier, out_tier)
         self._log_tool("compress", f"{source_path} → {output_path}", tier)
-        perm = check_permission(
-            f"Compress {src} → {out}", tier, self.permission_mode
-        )
+        perm = self._check_permission(f"Compress {src} → {out}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
         try:
             if format == "zip":
                 with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -327,9 +344,9 @@ class ToolExecutor:
         out, out_tier = self._path_tier("write", output_dir)
         tier = max(RiskTier.AUTO, src_tier, out_tier)
         self._log_tool("extract", archive_path, tier)
-        perm = check_permission(f"Extract {src} to {out}", tier, self.permission_mode)
+        perm = self._check_permission(f"Extract {src} to {out}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
         try:
             out.mkdir(parents=True, exist_ok=True)
             if archive_path.endswith(".zip"):
@@ -358,9 +375,9 @@ class ToolExecutor:
     async def run_shell(self, command: str, timeout: int = 60) -> ToolResult:
         tier = classify_shell_command(command, self.allowed_shell_patterns)
         self._log_tool("run_shell", command, tier)
-        perm = check_permission(f"Run: `{command}`", tier, self.permission_mode)
+        perm = self._check_permission(f"Run: `{command}`", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             try:
                 argv = shlex.split(command)
@@ -392,9 +409,9 @@ class ToolExecutor:
         """Execute Python code in an isolated subprocess and capture output."""
         tier = RiskTier.CONFIRM
         self._log_tool("run_python", f"{len(code)} chars of Python", tier)
-        perm = check_permission("Execute Python code snippet", tier, self.permission_mode)
+        perm = self._check_permission("Execute Python code snippet", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
         try:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
                 f.write(code)
@@ -435,13 +452,11 @@ class ToolExecutor:
         if importlib.util.find_spec(package.replace("-", "_").split("[")[0]) is not None:
             return {"ok": True, "already_installed": True, "package": pkg_spec}
 
-        perm = check_permission(
-            f"pip install {pkg_spec}  (required for this task)",
-            tier,
-            self.permission_mode,
-        )
+        perm = self._check_permission(f"pip install {pkg_spec}  (required for this task)", tier)
         if not perm.approved:
-            return {"ok": False, "error": f"User declined to install {pkg_spec}"}
+            denied = self._permission_denied(perm)
+            denied["package"] = pkg_spec
+            return denied
 
         result = await self.run_shell(
             f"{sys.executable} -m pip install {pkg_spec} --quiet",
@@ -458,9 +473,9 @@ class ToolExecutor:
     async def search_codebase(self, pattern: str, path: str = ".") -> ToolResult:
         abs_path, tier = self._path_tier("read", path)
         self._log_tool("search_codebase", f"{pattern!r} in {abs_path}", tier)
-        perm = check_permission(f"Search {abs_path}", tier, self.permission_mode)
+        perm = self._check_permission(f"Search {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         rg = shutil.which("rg") or shutil.which("grep")
         if not rg:
             return {"ok": False, "error": "No search tool found (rg or grep)"}
@@ -490,9 +505,9 @@ class ToolExecutor:
         """Search the web using DuckDuckGo (no API key required, real results)."""
         tier = RiskTier.AUTO
         self._log_tool("web_search", query, tier)
-        perm = check_permission(f"Web search: {query}", tier, self.permission_mode)
+        perm = self._check_permission(f"Web search: {query}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
 
         # Try duckduckgo-search first (real results)
         try:
@@ -549,9 +564,9 @@ class ToolExecutor:
         """
         tier = RiskTier.AUTO
         self._log_tool("web_fetch", url, tier)
-        perm = check_permission(f"Fetch URL: {url}", tier, self.permission_mode)
+        perm = self._check_permission(f"Fetch URL: {url}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
 
         try:
             async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
@@ -610,9 +625,9 @@ class ToolExecutor:
         """Full HTTP client: GET/POST/PUT/PATCH/DELETE with custom headers and body."""
         tier = RiskTier.AUTO
         self._log_tool("http_request", f"{method.upper()} {url}", tier)
-        perm = check_permission(f"HTTP {method.upper()} {url}", tier, self.permission_mode)
+        perm = self._check_permission(f"HTTP {method.upper()} {url}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
         try:
             kwargs: dict[str, Any] = {
                 "headers": headers or {},
@@ -645,9 +660,9 @@ class ToolExecutor:
         """Capture title and body text from a page with Playwright."""
         tier = RiskTier.AUTO
         self._log_tool("browser_snapshot", url, tier)
-        perm = check_permission(f"Browser snapshot: {url}", tier, self.permission_mode)
+        perm = self._check_permission(f"Browser snapshot: {url}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
         from magent.browser import browser_snapshot
 
         return await browser_snapshot(url, wait_ms=wait_ms)
@@ -656,9 +671,9 @@ class ToolExecutor:
         """Capture a page screenshot with Playwright."""
         abs_path, tier = self._path_tier("write", path)
         self._log_tool("browser_screenshot", f"{url} -> {abs_path}", tier)
-        perm = check_permission(f"Browser screenshot: {url}", tier, self.permission_mode)
+        perm = self._check_permission(f"Browser screenshot: {url}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
         from magent.browser import browser_screenshot
 
         return await browser_screenshot(url, str(abs_path), wait_ms=wait_ms)
@@ -680,9 +695,9 @@ class ToolExecutor:
             candidate = Path(self.cwd) / path_or_json
             if candidate.exists():
                 abs_path, tier = self._path_tier("read", path_or_json)
-                perm = check_permission(f"Read JSON {abs_path}", tier, self.permission_mode)
+                perm = self._check_permission(f"Read JSON {abs_path}", tier)
                 if not perm.approved:
-                    return {"ok": False, "error": "Permission denied by user"}
+                    return self._permission_denied(perm)
                 data = json.loads(abs_path.read_text())
             else:
                 data = json.loads(path_or_json)
@@ -755,9 +770,9 @@ class ToolExecutor:
         """Write text to the system clipboard."""
         tier = RiskTier.AUTO
         self._log_tool("clipboard_write", f"{len(text)} chars", tier)
-        perm = check_permission(f"Write {len(text)} chars to clipboard", tier, self.permission_mode)
+        perm = self._check_permission(f"Write {len(text)} chars to clipboard", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
         try:
             import pyperclip
 
@@ -771,9 +786,9 @@ class ToolExecutor:
         abs_path, file_tier = self._path_tier("read", path)
         tier = max(RiskTier.AUTO, file_tier)
         self._log_tool("open_file", str(abs_path), tier)
-        perm = check_permission(f"Open file: {abs_path}", tier, self.permission_mode)
+        perm = self._check_permission(f"Open file: {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
         opener = shutil.which("xdg-open") or shutil.which("open")
         if not opener:
             return {"ok": False, "error": "No file opener found (xdg-open / open)"}
@@ -784,9 +799,9 @@ class ToolExecutor:
         """Read image metadata and return base64-encoded content for vision models."""
         abs_path, tier = self._path_tier("read", path)
         self._log_tool("read_image", str(abs_path), tier)
-        perm = check_permission(f"Read image {abs_path}", tier, self.permission_mode)
+        perm = self._check_permission(f"Read image {abs_path}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied by user"}
+            return self._permission_denied(perm)
         try:
             from PIL import Image
 
@@ -829,9 +844,9 @@ class ToolExecutor:
         """INSERT/UPDATE/DELETE/CREATE TABLE in a named user database."""
         tier = RiskTier.AUTO
         self._log_tool("db_execute", f"[{db_name}] {sql[:60]}", tier)
-        perm = check_permission(f"DB write [{db_name}]: {sql[:60]}", tier, self.permission_mode)
+        perm = self._check_permission(f"DB write [{db_name}]: {sql[:60]}", tier)
         if not perm.approved:
-            return {"ok": False, "error": "Permission denied"}
+            return self._permission_denied(perm)
         from magent.tools.db import db_execute
 
         return db_execute(self.username, sql, params, db_name)

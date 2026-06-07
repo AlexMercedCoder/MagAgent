@@ -242,13 +242,14 @@ def check_permission(
     action_description: str,
     tier: RiskTier,
     mode: str = "balanced",
+    interactive: bool = True,
 ) -> PermissionResult:
     """
     Evaluate whether an action should proceed based on its tier and the active mode.
 
     Returns PermissionResult(approved, tier, reason).
     """
-    # Determine effective approval threshold by mode
+    # Determine effective approval threshold by mode.
     auto_threshold = {
         "silent": RiskTier.BLOCK,  # 0-2 auto, only 3 prompts
         "balanced": RiskTier.CONFIRM,  # 0-1 auto, 2 confirms, 3 blocks
@@ -258,7 +259,7 @@ def check_permission(
 
     # YOLO: always approve
     if mode == "yolo":
-        if tier == RiskTier.BLOCK:
+        if tier == RiskTier.BLOCK and interactive:
             # Still show the action but use a one-key confirm
             console.print(
                 Panel(
@@ -273,6 +274,9 @@ def check_permission(
     # Auto-approve below threshold
     if tier < auto_threshold:
         return PermissionResult(True, tier, "auto")
+
+    if not interactive:
+        return PermissionResult(False, tier, "permission-required")
 
     # CONFIRM tier — show action, press Enter
     if tier == RiskTier.CONFIRM:

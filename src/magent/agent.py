@@ -62,6 +62,8 @@ class AgentSession:
         extraction_provider: Provider,
         cwd: str,
         project_slug: str | None = None,
+        interactive_permissions: bool = True,
+        permission_mode_override: str | None = None,
     ):
         self.username = username
         self.config = config
@@ -69,6 +71,7 @@ class AgentSession:
         self.extraction_provider = extraction_provider
         self.cwd = cwd
         self.project_slug = project_slug or self._detect_project_slug(cwd)
+        permission_mode = permission_mode_override or config.permission_mode
 
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
         self.turn_count = 0
@@ -79,6 +82,7 @@ class AgentSession:
             "files_touched": [],
             "commands_run": [],
             "decisions": [],
+            "permission_failures": [],
         }
 
         # Initialize subsystems
@@ -95,12 +99,13 @@ class AgentSession:
         self.repo_map = RepoMapCache(cwd)
         self.tools = ToolExecutor(
             cwd=cwd,
-            permission_mode=config.permission_mode,
+            permission_mode=permission_mode,
             allowed_shell_patterns=config.allowed_shell_patterns,
             show_tool_calls=config.get("ui", "show_tool_calls", default=True),
             username=username,
             tool_budgets=config.get("tool_budgets", default={}),
             session_id=self.session_id,
+            interactive_permissions=interactive_permissions,
         )
 
         # MCP servers (optional — connect only if configured)
@@ -451,6 +456,11 @@ class AgentSession:
             command = str(tool_args.get("command", ""))
             if command:
                 self._remember_scratchpad("commands_run", command)
+        if result.get("permission_required"):
+            self._remember_scratchpad(
+                "permission_failures",
+                f"{tool_name}: {result.get('error', 'permission required')}",
+            )
 
     def _remember_scratchpad(self, key: str, value: str, limit: int = 40) -> None:
         values = list(self.scratchpad.get(key) or [])

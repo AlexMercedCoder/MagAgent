@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -106,3 +108,76 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
                 }
             )
         console.print_json(data={"ok": all(row["ok"] is not False for row in rows), "providers": rows})
+
+    @provider_app.command("tool-smoke")
+    def provider_tool_smoke_cmd(
+        provider_id: str = typer.Argument(..., help="Provider ID to test."),
+        model: str | None = typer.Option(None, "--model", "-m", help="Model override."),
+        project: str | None = typer.Option(
+            None,
+            "--project",
+            "-p",
+            help="Project directory for the smoke artifact. Defaults to a temporary directory.",
+        ),
+    ) -> None:
+        """Run a tiny live tool-use smoke test against one provider."""
+        from magent.agent import AgentSession
+        from magent.ask_audit import audit_one_shot_task
+        from magent.cli.command_context import build_extraction_provider, build_provider
+        from magent.config import get_current_user, load_config
+
+        username = get_current_user()
+        config = load_config(username)
+        root_ctx = (
+            tempfile.TemporaryDirectory(prefix="magent-provider-smoke-")
+            if project is None
+            else None
+        )
+        root = Path(project or root_ctx.name).resolve()  # type: ignore[union-attr]
+        root.mkdir(parents=True, exist_ok=True)
+        prompt = "Use write_file to create smoke.txt containing exactly OK. Do not run shell commands."
+        session = AgentSession(
+            username=username,
+            config=config,
+            provider=build_provider(config, provider_id, model),
+            extraction_provider=build_extraction_provider(config),
+            cwd=str(root),
+            interactive_permissions=False,
+            permission_mode_override="yolo",
+        )
+
+        async def _run() -> str:
+            try:
+                return await session.chat(prompt)
+            finally:
+                await session.end_session()
+
+        try:
+            response = asyncio.run(_run())
+            smoke_path = root / "smoke.txt"
+            content = smoke_path.read_text(encoding="utf-8").strip() if smoke_path.exists() else ""
+            audit = audit_one_shot_task(prompt, root, session.scratchpad)
+            ok = content == "OK" and audit["ok"]
+            provider_config = config.provider_config(provider_id)
+            configured_model = (
+                provider_config.get("model")
+                if isinstance(provider_config, dict)
+                else provider_config.model
+            )
+            console.print_json(
+                data={
+                    "ok": ok,
+                    "provider": provider_id,
+                    "model": model or configured_model or config.default_model,
+                    "project": str(root),
+                    "artifact": str(smoke_path),
+                    "artifact_ok": content == "OK",
+                    "audit": audit,
+                    "response_preview": response[:500],
+                }
+            )
+            if not ok:
+                raise typer.Exit(1)
+        finally:
+            if root_ctx is not None:
+                root_ctx.cleanup()

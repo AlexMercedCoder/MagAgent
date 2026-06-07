@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.0
+
+- Made one-shot `magent ask` runs permission-safe by returning structured `permission_required` tool results instead of prompting in non-interactive contexts.
+- Added per-run `magent ask --permission-mode` and `magent ask --yes` overrides without persisting config changes.
+- Added lightweight one-shot task audits that flag missing requested files and permission-required tool calls after a run.
+- Added `magent provider tool-smoke` to run a tiny live provider tool-use smoke test against `write_file`.
+- Updated the Nous Portal default model to `deepseek/deepseek-v4-flash` after live smokes showed Hermes aliases need explicit model selection and are less suitable for cheap tool-use checks.
+- Added regression coverage for ask audits, non-interactive permission denials, and provider tool-smoke CLI plumbing.
+- Updated reliability docs for provider pings, tool smokes, and one-shot audit warnings.
+
 ## 0.26.1
 
 - Fixed strict OpenAI-compatible provider loops by stripping SDK/provider-only message fields before sending conversation history back to LiteLLM.

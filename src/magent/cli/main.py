@@ -176,17 +176,47 @@ def ask_cmd(
     provider: str | None = typer.Option(None, "--provider", "-p", help="Provider ID"),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
     project: str | None = typer.Option(None, "--project", help="Project directory"),
+    permission_mode: str | None = typer.Option(
+        None,
+        "--permission-mode",
+        help="Override permission mode for this run: silent, balanced, paranoid, or yolo.",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Approve eligible tool actions non-interactively by using yolo permission mode.",
+    ),
 ):
     """Run a one-shot MagAgent task."""
     username = _require_user()
     config = load_config(username)
+    permission_override = permission_mode
+    if yes:
+        permission_override = "yolo"
     cwd = project or os.getcwd()
     main_provider = _build_provider(config, provider, model)
     extract_provider = _build_extraction_provider(config)
-    _run_one_shot(username, config, main_provider, extract_provider, cwd, task)
+    _run_one_shot(
+        username,
+        config,
+        main_provider,
+        extract_provider,
+        cwd,
+        task,
+        permission_mode_override=permission_override,
+    )
 
 
-def _run_one_shot(username, config, main_provider, extract_provider, cwd, task):
+def _run_one_shot(
+    username,
+    config,
+    main_provider,
+    extract_provider,
+    cwd,
+    task,
+    permission_mode_override: str | None = None,
+):
     """Run a single non-interactive agent task."""
     from magent.agent import AgentSession
     from magent.tui import print_response
@@ -197,6 +227,8 @@ def _run_one_shot(username, config, main_provider, extract_provider, cwd, task):
         provider=main_provider,
         extraction_provider=extract_provider,
         cwd=cwd,
+        interactive_permissions=False,
+        permission_mode_override=permission_mode_override,
     )
 
     async def _run() -> str:
@@ -206,6 +238,9 @@ def _run_one_shot(username, config, main_provider, extract_provider, cwd, task):
             await session.end_session()
 
     response = asyncio.run(_run())
+    from magent.ask_audit import audit_one_shot_task, render_audit_note
+
+    response += render_audit_note(audit_one_shot_task(task, cwd, session.scratchpad))
     print_response(response)
 
 

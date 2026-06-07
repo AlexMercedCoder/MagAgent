@@ -2,7 +2,9 @@
 
 Important command paths:
 
-- `magent ask "task"`: run a non-interactive task.
+- `magent ask "task"`: run a non-interactive task with completion audit warnings.
+- `magent ask --permission-mode paranoid "task"`: override permissions for one run.
+- `magent ask --yes "task"`: run one task with YOLO-style non-interactive approvals.
 - `magent --task "task"`: alternate one-shot task form.
 - `magent setup`: run first-time setup.
 - `magent configure`: run the friendly setup/configuration wizard.
@@ -38,6 +40,7 @@ Important command paths:
 - `magent provider wizard`: interactively choose provider, access mode, model, and key source.
 - `magent provider test`: test the configured provider connection.
 - `magent provider test-matrix`: test configured/ready providers and report skipped providers.
+- `magent provider tool-smoke <provider>`: run a tiny live `write_file` smoke test.
 - `magent provider doctor`: show provider and configuration readiness.
 - `magent provider recommend`: recommend providers for a goal.
 - `magent provider catalog-doctor`: validate provider catalog metadata.

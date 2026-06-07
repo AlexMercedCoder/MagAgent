@@ -39,6 +39,21 @@ def test_shell_control_is_blocked_even_if_allowlisted() -> None:
     assert classify_shell_command("git status; echo unsafe", ["git *"]) == RiskTier.BLOCK
 
 
+@pytest.mark.asyncio
+async def test_noninteractive_permissions_return_structured_denial(tmp_path: Path) -> None:
+    tools = ToolExecutor(
+        str(tmp_path),
+        permission_mode="balanced",
+        interactive_permissions=False,
+    )
+
+    result = await tools.run_shell("git status; echo unsafe")
+
+    assert result["ok"] is False
+    assert result["permission_required"] is True
+    assert result["permission_reason"] == "permission-required"
+
+
 def test_tool_definitions_have_required_arguments(tmp_path: Path) -> None:
     tools = ToolExecutor(str(tmp_path))
     defs = {d["function"]["name"]: d for d in tools.get_tool_definitions()}

@@ -51,7 +51,7 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
     "nous-portal": {
         "label": "Nous Portal (Hermes 4 + 200+ models)",
         "display": "Nous Portal",
-        "default_model": "nous-hermes-4",
+        "default_model": "deepseek/deepseek-v4-flash",
         "env": "NOUS_API_KEY",
         "access_mode": "api",
         "base_url": "https://inference-api.nousresearch.com/v1",
