@@ -4,6 +4,7 @@ from pathlib import Path
 
 from magent import config as magent_config
 from magent import config_safety, config_ux, workbench_store
+from magent.cli.command_context import ProviderCredentialError, build_provider
 from magent.config import Config
 from magent.config_proposals import (
     apply_config_proposal,
@@ -257,6 +258,24 @@ def test_provider_readiness_accepts_inline_keys(tmp_path: Path, monkeypatch) -> 
     assert explained["ready"] is True
     assert explained["credential_configured"] is True
     assert next(item for item in doctor["actions"] if item["key"] == "opencode_go")["ok"] is True
+
+
+def test_cli_provider_builder_requires_missing_api_key() -> None:
+    cfg = Config(
+        {
+            "defaults": {"provider": "opencode-zen", "model": "deepseek-v4-flash"},
+            "providers": {"opencode-zen": {"api_key_env": "OPENCODE_ZEN_KEY"}},
+        }
+    )
+
+    try:
+        build_provider(cfg, None, None)
+    except ProviderCredentialError as exc:
+        assert exc.provider_id == "opencode-zen"
+        assert exc.env_var == "OPENCODE_ZEN_KEY"
+        assert "magent configure" in str(exc)
+    else:
+        raise AssertionError("expected missing credential error")
 
 
 def test_config_proposals_events_permissions_and_model_health(tmp_path: Path, monkeypatch) -> None:

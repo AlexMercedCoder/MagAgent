@@ -223,6 +223,8 @@ class AgentSession:
 
             if not message.tool_calls:
                 content = message.content or ""
+                if not content.strip() and total_tool_calls:
+                    content = self._fallback_tool_summary()
                 messages.append({"role": "assistant", "content": content})
                 return content, messages, total_tool_calls
 
@@ -303,6 +305,7 @@ class AgentSession:
             litellm.suppress_debug_info = True
 
             # First pass: tool loop
+            console.print("[dim]thinking...[/dim]")
             while True:
                 response = await litellm.acompletion(
                     messages=_sanitize_messages(messages),
@@ -318,6 +321,16 @@ class AgentSession:
 
                 if not msg.tool_calls:
                     # Got text — now stream it
+                    if not (msg.content or "").strip() and total_tool_calls:
+                        fallback = self._fallback_tool_summary()
+                        messages.append({"role": "assistant", "content": fallback})
+                        self.conversation.append({"role": "assistant", "content": fallback})
+                        self.logger.log_assistant_turn(self.turn_count, fallback, total_tool_calls)
+                        yield fallback
+                        if self.turn_count % self.config.write_every_n_turns == 0:
+                            await self._maybe_write_memories()
+                        self._maybe_compact_conversation()
+                        return
                     messages.append(_sanitize_message(msg.model_dump()))
                     break
 
@@ -354,6 +367,8 @@ class AgentSession:
                         self._prune_stale_tool_results(messages, tool_name, result)
 
             # Final streaming pass — text only, no tools
+            if total_tool_calls:
+                console.print("[dim]finalizing response...[/dim]")
             stream_response = await litellm.acompletion(
                 messages=_sanitize_messages(messages),
                 temperature=0.3,
@@ -368,6 +383,10 @@ class AgentSession:
                 if delta and delta.content:
                     full_response += delta.content
                     yield delta.content
+
+            if not full_response.strip() and total_tool_calls:
+                full_response = self._fallback_tool_summary()
+                yield full_response
 
             self.conversation.append({"role": "assistant", "content": full_response})
             self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
@@ -418,6 +437,17 @@ class AgentSession:
             self.scratchpad["active_agent"] = agent.get("name")
             return invocation["message"]
         return user_message
+
+    def _fallback_tool_summary(self) -> str:
+        """Return a useful completion message when a provider returns empty text."""
+        files = self.scratchpad.get("files_touched") or []
+        commands = self.scratchpad.get("commands_run") or []
+        parts = ["Done."]
+        if files:
+            parts.append("Files touched: " + ", ".join(str(path) for path in files[-5:]) + ".")
+        if commands:
+            parts.append("Commands run: " + "; ".join(str(cmd) for cmd in commands[-3:]) + ".")
+        return " ".join(parts)
 
     def _maybe_compact_conversation(self) -> None:
         keep = self.config.keep_recent_turns

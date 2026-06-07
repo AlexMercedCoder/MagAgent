@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.30.1
+
+- Raised the MagGraph dependency floor to `maggraph>=0.2.5`, which ships Python 3.14-compatible PyO3 bindings, abi3 wheels, and a fixed Intel macOS wheel publish path.
+- Added Python 3.13 and 3.14 package classifiers so supported interpreter versions are clearer on PyPI.
+
 ## 0.29.0
 
 - Added desktop integration APIs for Mag Command Center and other local app wrappers.

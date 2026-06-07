@@ -48,6 +48,16 @@ magent provider env
 magent provider test-matrix
 ```
 
+During `magent configure`, cloud providers offer three credential paths:
+
+- paste an API key and let MagAgent save it in local config
+- reference an environment variable such as `OPENCODE_ZEN_KEY`
+- skip credentials and configure them later
+
+Saved keys are redacted by config display commands. If a session starts with a
+cloud provider whose key is missing, MagAgent stops before the first prompt and
+prints the exact setup command or `export ...` hint to fix it.
+
 Provider access modes are explicit:
 
 - `openai --access api` uses MagAgent's in-process LiteLLM provider and `OPENAI_API_KEY`.

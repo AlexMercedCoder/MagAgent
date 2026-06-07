@@ -97,7 +97,12 @@ magent configure
 The wizard will:
 1. Create a named user profile with an isolated memory graph
 2. Walk you through selecting an AI provider and model
-3. Test the connection live
+3. Let you paste an API key into local config, use an environment variable, or skip credentials for later
+4. Test the connection live
+
+If a configured cloud provider is missing credentials, `magent` stops before the
+session starts and prints the exact `magent configure`, `magent provider set`,
+or `export ...` command to fix it.
 
 ### Start a session
 
@@ -125,6 +130,10 @@ magent next
 ## Providers
 
 MagAgent uses [LiteLLM](https://github.com/BerriAI/litellm) under the hood, supporting any OpenAI-compatible endpoint.
+
+Cloud provider credentials can be stored by the setup wizard or referenced via
+environment variables such as `OPENCODE_ZEN_KEY`, `NOUS_API_KEY`, and
+`OPENAI_API_KEY`. Config display commands redact saved keys.
 
 | Provider | Config ID | Notes |
 |---|---|---|

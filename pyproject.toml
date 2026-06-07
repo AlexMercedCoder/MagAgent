@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mag-agent"
-version = "0.30.0"
+version = "0.30.1"
 description = "MagAgent — CLI AI coding agent with persistent MagGraph memory. Like the Magpie: intelligent, tool-using, and never forgets."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -24,6 +24,8 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
     "Topic :: Utilities",
@@ -36,7 +38,7 @@ dependencies = [
     # LLM providers
     "litellm>=1.40.0",
     # Memory graph
-    "maggraph>=0.2.0",
+    "maggraph>=0.2.5",
     # Config
     "tomli>=2.0.0; python_version < '3.11'",
     "tomli-w>=1.0.0",

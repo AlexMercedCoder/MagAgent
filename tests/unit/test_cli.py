@@ -29,7 +29,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.30.0" in version.output
+    assert "MagAgent 0.30.1" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -46,6 +46,7 @@ def test_cli_docs_doctor() -> None:
 
 def test_cli_first_configuration_commands(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     magent_config.create_user("cli-user")
     magent_config.set_current_user("cli-user")
 
@@ -229,6 +230,7 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
 
 def test_cli_provider_tool_smoke_uses_agent_session(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     magent_config.create_user("cli-user")
     magent_config.set_current_user("cli-user")
 
@@ -275,7 +277,7 @@ def test_cli_desktop_integration_commands(tmp_path: Path, monkeypatch) -> None:
     memory_graph = runner.invoke(cli_main.app, ["memory", "graph", "--limit", "5"])
 
     assert system.exit_code == 0
-    assert json.loads(system.output)["magent_version"] == "0.30.0"
+    assert json.loads(system.output)["magent_version"] == "0.30.1"
     assert config_get.exit_code == 0
     assert json.loads(config_get.output)["ok"] is True
     assert config_set.exit_code == 0
@@ -290,6 +292,13 @@ def test_cli_ask_json_outputs_audit_payload(tmp_path: Path, monkeypatch) -> None
     redirect_config(monkeypatch, tmp_path)
     magent_config.create_user("cli-user")
     magent_config.set_current_user("cli-user")
+    magent_config.save_global_config(
+        {
+            "defaults": {"provider": "ollama", "model": "qwen2.5-coder:32b"},
+            "memory": {"extraction_provider": "ollama", "extraction_model": "qwen2.5:7b"},
+            "providers": {},
+        }
+    )
 
     class FakeSession:
         session_id = "session-json"

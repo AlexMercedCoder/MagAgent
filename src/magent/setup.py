@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
@@ -71,7 +73,7 @@ def run_setup() -> None:
     model = Prompt.ask("Default model", default=default_model)
 
     # Get API key
-    api_key_env = _get_api_key(provider_id)
+    api_key_env, inline_api_key = _get_api_key(provider_id)
 
     # Custom base URL for custom provider
     base_url = None
@@ -101,7 +103,9 @@ def run_setup() -> None:
     cfg["memory"]["extraction_model"] = extract_model
 
     provider_entry: dict = {}
-    if api_key_env:
+    if inline_api_key:
+        provider_entry["api_key"] = inline_api_key
+    elif api_key_env:
         provider_entry["api_key_env"] = api_key_env
     if base_url:
         provider_entry["base_url"] = base_url
@@ -109,11 +113,12 @@ def run_setup() -> None:
 
     cfg.setdefault("providers", {})[provider_id] = provider_entry
     save_global_config(cfg)
+    _tighten_config_permissions()
     console.print("[dim]✓ Config saved[/dim]")
 
     # Smoke test
     console.print("\n[bold]Step 4: Testing provider connection...[/bold]")
-    _smoke_test(provider_id, model, api_key_env, base_url)
+    _smoke_test(provider_id, model, api_key_env, base_url, inline_api_key)
 
     console.print(
         Panel(
@@ -143,39 +148,71 @@ def _prompt_create_user() -> str:
         return name
 
 
-def _get_api_key(provider_id: str) -> str | None:
-    """Prompt for API key env var name for non-local providers."""
+def _get_api_key(provider_id: str) -> tuple[str | None, str | None]:
+    """Prompt for API key handling for non-local providers."""
     local = {"ollama", "lmstudio", "custom"}
     if provider_id in local:
-        return None
+        return None, None
 
     env_var_map = provider_env_vars()
     default_env = env_var_map.get(provider_id, f"{provider_id.upper().replace('-', '_')}_API_KEY")
 
-    import os
-
     if os.environ.get(default_env):
         console.print(f"[dim]✓ Found {default_env} in environment[/dim]")
-        return default_env
+        return default_env, None
 
     console.print(
-        f"\n[dim]Set your API key in the environment variable: [bold]{default_env}[/bold][/dim]"
+        f"\n[bold]API key for {provider_id}[/bold]\n"
+        f"[dim]No [bold]{default_env}[/bold] environment variable was found.[/dim]"
     )
-    console.print(f"[dim]  export {default_env}=your-key-here[/dim]")
-    return default_env
+    console.print("[dim]Choose how MagAgent should find this credential.[/dim]")
+    console.print("  [cyan]1[/cyan]. Paste key now and save it in MagAgent config")
+    console.print(f"  [cyan]2[/cyan]. Use environment variable [bold]{default_env}[/bold]")
+    console.print("  [cyan]3[/cyan]. Skip for now")
+    choice = Prompt.ask("Credential option", choices=["1", "2", "3"], default="1")
+    if choice == "1":
+        key = Prompt.ask("API key", password=True, default="")
+        if key.strip():
+            console.print("[dim]✓ API key saved locally; config display commands redact it.[/dim]")
+            return None, key.strip()
+        console.print("[yellow]No key entered; falling back to environment variable setup.[/yellow]")
+    if choice == "2":
+        env_name = Prompt.ask("Environment variable name", default=default_env)
+        console.print(f"[dim]Set it with: export {env_name}=your-key-here[/dim]")
+        return env_name, None
+    console.print(
+        f"[yellow]Skipping credential. Run [bold]magent configure[/bold] again or "
+        f"[bold]magent provider set {provider_id} --model <model> --api-key-env {default_env}[/bold].[/yellow]"
+    )
+    return default_env, None
 
 
-def _smoke_test(provider_id: str, model: str, api_key_env: str | None, base_url: str | None):
-    import os
+def _tighten_config_permissions() -> None:
+    """Best-effort protection for config files that may contain inline keys."""
+    try:
+        from magent.config import GLOBAL_CONFIG
 
+        if Path(GLOBAL_CONFIG).exists():
+            Path(GLOBAL_CONFIG).chmod(0o600)
+    except OSError:
+        pass
+
+
+def _smoke_test(
+    provider_id: str,
+    model: str,
+    api_key_env: str | None,
+    base_url: str | None,
+    api_key: str | None = None,
+):
     from magent.providers import build_provider, test_provider
 
-    api_key = os.environ.get(api_key_env) if api_key_env else None
+    resolved_api_key = api_key or (os.environ.get(api_key_env) if api_key_env else None)
     p_cfg = {}
     if base_url:
         p_cfg["base_url"] = base_url
 
-    provider = build_provider(provider_id, model, api_key, p_cfg)
+    provider = build_provider(provider_id, model, resolved_api_key, p_cfg)
 
     async def _run():
         return await test_provider(provider)

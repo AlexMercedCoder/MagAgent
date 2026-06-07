@@ -26,3 +26,9 @@ Generated from `magent.provider_catalog`.
 | Custom Endpoint | `custom` | `your-model-name` | api |  | openai-compatible |
 
 Use `magent provider matrix`, `magent provider explain <provider>`, and `magent provider env` for live readiness details.
+
+`magent configure` can save a cloud provider key in local MagAgent config,
+reference an environment variable, or skip credentials for later. Saved keys are
+redacted in config output. Interactive sessions preflight credential readiness
+before opening the prompt so missing keys produce an actionable setup hint
+instead of a provider authentication traceback.

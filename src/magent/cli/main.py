@@ -66,6 +66,7 @@ from magent.cli.app import (
     workspace_app,
 )
 from magent.cli.command_context import (
+    ProviderCredentialError,
     build_extraction_provider,
     build_provider,
     known_command_names,
@@ -119,11 +120,19 @@ def _require_user() -> str:
 
 
 def _build_provider(config, provider_id: str | None, model: str | None):
-    return build_provider(config, provider_id, model)
+    try:
+        return build_provider(config, provider_id, model)
+    except ProviderCredentialError as exc:
+        console.print(f"[red]Provider not ready:[/red] {exc}")
+        raise typer.Exit(1) from exc
 
 
 def _build_extraction_provider(config):
-    return build_extraction_provider(config)
+    try:
+        return build_extraction_provider(config)
+    except ProviderCredentialError as exc:
+        console.print(f"[red]Memory extraction provider not ready:[/red] {exc}")
+        raise typer.Exit(1) from exc
 
 
 def _store():

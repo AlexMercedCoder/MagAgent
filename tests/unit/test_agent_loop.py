@@ -86,6 +86,14 @@ def final_message() -> SimpleNamespace:
     )
 
 
+def empty_final_message() -> SimpleNamespace:
+    return SimpleNamespace(
+        content="",
+        tool_calls=[],
+        model_dump=lambda: {"role": "assistant", "content": ""},
+    )
+
+
 @pytest.mark.asyncio
 async def test_run_tool_loop_dispatches_tool_and_returns_final_text(monkeypatch) -> None:
     responses = [
@@ -113,6 +121,33 @@ async def test_run_tool_loop_dispatches_tool_and_returns_final_text(monkeypatch)
     assert any(message.get("role") == "tool" for message in messages)
     assert session.scratchpad["files_touched"] == ["/repo/app.py"]
     assert session.logger.tool_calls[0][0] == "write_file"
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_summarizes_successful_tools_when_provider_is_silent(monkeypatch) -> None:
+    responses = [
+        SimpleNamespace(choices=[SimpleNamespace(message=tool_call_message())]),
+        SimpleNamespace(choices=[SimpleNamespace(message=empty_final_message())]),
+    ]
+
+    async def fake_acompletion(**kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+
+    text, _messages, tool_count = await session._run_tool_loop(
+        [{"role": "user", "content": "write file"}],
+        "write file",
+    )
+
+    assert tool_count == 1
+    assert text.startswith("Done.")
+    assert "/repo/app.py" in text
 
 
 @pytest.mark.asyncio
