@@ -116,6 +116,7 @@ Generated from the active Typer command tree.
 - `magent project`
 - `magent provider`
 - `magent recipe`
+- `magent readiness`
 - `magent release`
 - `magent review`
 - `magent review-show`
@@ -257,6 +258,7 @@ Generated from the active Typer command tree.
 - `magent model clear-role`
 - `magent model doctor`
 - `magent model health`
+- `magent model recommend`
 - `magent model roles`
 - `magent model set-role`
 - `magent model wizard`
@@ -328,8 +330,11 @@ Generated from the active Typer command tree.
 - `magent provider explain`
 - `magent provider list`
 - `magent provider matrix`
+- `magent provider models`
 - `magent provider recommend`
+- `magent provider recommend-model`
 - `magent provider set`
+- `magent provider smoke-all`
 - `magent provider test`
 - `magent provider test-matrix`
 - `magent provider tool-smoke`

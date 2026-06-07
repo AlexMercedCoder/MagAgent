@@ -5,6 +5,8 @@ Important command paths:
 - `magent ask "task"`: run a non-interactive task with completion audit warnings.
 - `magent ask --permission-mode paranoid "task"`: override permissions for one run.
 - `magent ask --yes "task"`: run one task with YOLO-style non-interactive approvals.
+- `magent ask --repair-attempts 1 "task"`: retry obvious missing-file task audit failures once.
+- `magent ask --strict-audit "task"`: exit nonzero when the final task audit is incomplete.
 - `magent --task "task"`: alternate one-shot task form.
 - `magent setup`: run first-time setup.
 - `magent configure`: run the friendly setup/configuration wizard.
@@ -13,6 +15,8 @@ Important command paths:
 - `magent doctor`: run install, provider, memory, docs, and integration checks.
 - `magent doctor --json`: emit actionable readiness checks.
 - `magent doctor --fix`: apply safe local fixes for missing UX defaults.
+- `magent readiness`: show setup, docs, project, provider, and model readiness.
+- `magent readiness --smoke`: include a tiny live provider tool-use smoke.
 - `magent performance doctor`: inspect startup, repo, workbench, memory, and config performance.
 - `magent workbench stats`: show local workbench store sizes and maintenance recommendations.
 - `magent workbench prune`: prune old high-volume workbench records.
@@ -40,7 +44,12 @@ Important command paths:
 - `magent provider wizard`: interactively choose provider, access mode, model, and key source.
 - `magent provider test`: test the configured provider connection.
 - `magent provider test-matrix`: test configured/ready providers and report skipped providers.
+- `magent provider models <provider>`: list cached or discovered provider models.
+- `magent provider models <provider> --refresh`: refresh models from a live provider API when supported.
+- `magent provider recommend-model <provider>`: recommend a provider model for a goal.
 - `magent provider tool-smoke <provider>`: run a tiny live `write_file` smoke test.
+- `magent provider tool-smoke <provider> --timeout 60`: cap live smoke runtime.
+- `magent provider smoke-all`: run tiny tool-use smokes for configured ready providers.
 - `magent provider doctor`: show provider and configuration readiness.
 - `magent provider recommend`: recommend providers for a goal.
 - `magent provider catalog-doctor`: validate provider catalog metadata.
@@ -49,6 +58,7 @@ Important command paths:
 - `magent model clear-role <role>`: clear a model role.
 - `magent model doctor`: show model role readiness.
 - `magent model health`: show model role provider/runtime health.
+- `magent model recommend`: recommend a model from successful local health observations.
 - `magent model wizard`: interactively set common model roles.
 - `magent docs list`: list built-in documentation topics.
 - `magent docs show <topic>`: render a built-in documentation topic.

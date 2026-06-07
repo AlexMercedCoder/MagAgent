@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from magent.docs import list_topics, read_topic, search_docs
+from magent.model_health import model_health_report
+from magent.readiness import readiness_report
 from magent.ui_actions import (
     inspect_checkpoint_diff,
     inspect_patch,
@@ -45,6 +47,15 @@ def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | N
     workspace = workspace_status(store, root)
     clean_report = workspace_clean_report(store, root, status=workspace)
     doctor = project_doctor(root, store)
+    readiness = None
+    model_health = model_health_report(store)
+    if username:
+        try:
+            from magent.config import load_config
+
+            readiness = readiness_report(username, load_config(username), store, project=root)
+        except Exception as e:
+            readiness = {"ok": False, "error": str(e)}
     return {
         "ok": True,
         "project": str(root),
@@ -58,6 +69,8 @@ def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | N
         "checkpoints": checkpoint_sessions(store),
         "command_history": command_history(store, root)[:20],
         "memory_quality": memory_quality,
+        "model_health": model_health,
+        "readiness": readiness,
         "usage": usage_stats(),
         "cockpit": cockpit_state(
             store,
@@ -93,8 +106,9 @@ pre{white-space:pre-wrap;word-break:break-word;background:#f1f3f6;border-radius:
 <body>
 <header><h1>MagAgent UI</h1><div id="project" class="muted"></div></header>
 <main>
-<section><h2>Workspace</h2><div class="row"><button onclick="refresh()">Refresh</button><button onclick="loadReleaseCheck()">Release Check</button></div><pre id="workspace">Loading...</pre></section>
+<section><h2>Workspace</h2><div class="row"><button onclick="refresh()">Refresh</button><button onclick="loadReleaseCheck()">Release Check</button><button onclick="loadReadiness()">Readiness</button></div><pre id="workspace">Loading...</pre></section>
 <section><h2>Cockpit</h2><div class="row"><button onclick="loadCockpit()">Refresh Cockpit</button></div><pre id="cockpit">Loading...</pre></section>
+<section><h2>Model Health</h2><div class="row"><input id="smokeProvider" placeholder="Provider"><input id="smokeModel" placeholder="Model"><button onclick="loadModelHealth()">Health</button><button onclick="runProviderSmoke()">Smoke</button></div><pre id="modelHealth">Loading...</pre></section>
 <section><h2>Plans</h2><div class="metric" id="planCount">0</div><pre id="plans"></pre></section>
 <section><h2>Patches</h2><div class="metric" id="patchCount">0</div><div class="row"><input id="patchId" placeholder="Patch ID"><button onclick="inspectPatch()">Inspect</button></div><pre id="patches"></pre></section>
 <section><h2>Checkpoints</h2><div class="metric" id="checkpointCount">0</div><div class="row"><input id="checkpointId" placeholder="Checkpoint ID"><button onclick="inspectCheckpoint()">Diff</button></div><pre id="checkpoints"></pre></section>
@@ -111,6 +125,7 @@ async function refresh(){
  document.getElementById('project').textContent=data.project;
  show('workspace',data.workspace); show('plans',data.plans); show('patches',data.patches);
  show('cockpit',data.cockpit);
+ show('modelHealth',data.model_health);
  show('checkpoints',data.checkpoints); show('doctor',data.project_doctor); show('memory',data.memory_quality);
  show('commands',data.command_history); show('docs',data.docs);
  document.getElementById('planCount').textContent=data.plans.length;
@@ -119,7 +134,10 @@ async function refresh(){
 }
 async function searchDocs(){const q=encodeURIComponent(document.getElementById('docQuery').value);show('docs',await getJson('/api/docs/search?q='+q))}
 async function loadReleaseCheck(){show('workspace',await getJson('/api/release/check'))}
+async function loadReadiness(){show('workspace',await getJson('/api/readiness'))}
 async function loadCockpit(){show('cockpit',await getJson('/api/cockpit'))}
+async function loadModelHealth(){show('modelHealth',await getJson('/api/model/health'))}
+async function runProviderSmoke(){const p=encodeURIComponent(document.getElementById('smokeProvider').value);const m=encodeURIComponent(document.getElementById('smokeModel').value);show('modelHealth',await getJson('/api/provider/smoke?provider='+p+'&model='+m))}
 async function loadMemoryInbox(){show('memory',await getJson('/api/memory/inbox'))}
 async function promoteMemory(){const id=encodeURIComponent(document.getElementById('memoryId').value);show('memory',await getJson('/api/memory/promote?id='+id))}
 async function inspectPatch(){const id=encodeURIComponent(document.getElementById('patchId').value);show('patches',await getJson('/api/patch/preview?id='+id))}
@@ -170,6 +188,38 @@ def serve_ui(
                     self._json({"ok": True, "topic": query.get("slug", [""])[0], "content": read_topic(query.get("slug", [""])[0])})
                 elif parsed.path == "/api/release/check":
                     self._json(run_release_check(store, root))
+                elif parsed.path == "/api/readiness":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        from magent.config import load_config
+
+                        self._json(readiness_report(username, load_config(username), store, project=root))
+                elif parsed.path == "/api/model/health":
+                    self._json(model_health_report(store))
+                elif parsed.path == "/api/provider/smoke":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        from magent.config import load_config
+                        from magent.provider_smoke import run_provider_tool_smoke
+
+                        provider_id = query.get("provider", [""])[0]
+                        model = query.get("model", [""])[0] or None
+                        if not provider_id:
+                            self._json({"ok": False, "error": "provider is required"}, status=400)
+                        else:
+                            self._json(
+                                run_provider_tool_smoke(
+                                    username,
+                                    load_config(username),
+                                    store,
+                                    provider_id,
+                                    model=model,
+                                    project=root / ".magent" / "ui-smoke",
+                                    timeout_seconds=90,
+                                )
+                            )
                 elif parsed.path == "/api/release/notes":
                     from magent.workbench import release_notes
 

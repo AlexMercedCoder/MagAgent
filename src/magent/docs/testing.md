@@ -9,6 +9,7 @@ python -m pytest -q
 python -m ruff check src tests
 python -m pytest --cov=src/magent --cov-report=term-missing -q
 magent docs doctor
+magent readiness
 magent provider test-matrix
 magent provider tool-smoke <provider> --model <cheap-model>
 ```
@@ -36,6 +37,8 @@ YOLO-style approval is acceptable.
 Use `magent provider test-matrix` to verify lightweight provider pings, then
 `magent provider tool-smoke` for the more realistic check that a configured
 provider can perform a minimal tool call and create `smoke.txt`.
+Use `magent provider models <provider> --refresh` when a provider changes model
+IDs, and `magent model health` to review recent smoke outcomes.
 
 For release readiness, run `magent release check`. For scriptable reviews, use
 `magent review --fail-on P1`.

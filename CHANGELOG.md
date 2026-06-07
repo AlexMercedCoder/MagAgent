@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.28.0
+
+- Added provider model discovery and caching with `magent provider models <provider> --refresh` for OpenAI-compatible `/models` endpoints.
+- Added model recommendations from live health observations and catalog hints with `magent provider recommend-model` and `magent model recommend`.
+- Added durable model health records for provider/model/task outcomes, including latency and tool-use smoke results.
+- Extracted provider tool smokes into reusable domain logic and added `magent provider smoke-all`.
+- Added explicit provider smoke timeouts so slow or stuck model/tool loops fail cleanly.
+- Added `magent readiness` for one concise setup, docs, project, provider, and model readiness report, with optional live smoke.
+- Added `magent ask --repair-attempts` and `--strict-audit` so one-shot runs can retry obvious incomplete file tasks and fail CI when audits remain bad.
+- Expanded the local UI with readiness, model health, and provider smoke action endpoints.
+- Updated tests and docs for provider discovery, model health, readiness, ask repair, and UI cockpit actions.
+
 ## 0.27.0
 
 - Made one-shot `magent ask` runs permission-safe by returning structured `permission_required` tool results instead of prompting in non-interactive contexts.

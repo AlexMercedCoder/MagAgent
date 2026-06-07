@@ -7,7 +7,7 @@ from typer.testing import CliRunner
 
 from magent import agent as magent_agent
 from magent import config as magent_config
-from magent import workbench
+from magent import workbench, workbench_store
 from magent.cli import main as cli_main
 from magent.workbench import WorkbenchStore
 
@@ -20,6 +20,8 @@ def redirect_config(monkeypatch, root: Path) -> None:
     monkeypatch.setattr(magent_config, "GLOBAL_CONFIG", cfg_dir / "config.toml")
     monkeypatch.setattr(magent_config, "USERS_DIR", cfg_dir / "users")
     monkeypatch.setattr(magent_config, "CURRENT_USER_FILE", cfg_dir / "users" / "current")
+    monkeypatch.setattr(workbench, "USERS_DIR", cfg_dir / "users")
+    monkeypatch.setattr(workbench_store, "USERS_DIR", cfg_dir / "users")
 
 
 def test_cli_version_and_tutorial() -> None:
@@ -27,7 +29,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.27.0" in version.output
+    assert "MagAgent 0.28.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -147,9 +149,15 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     explained = runner.invoke(cli_main.app, ["provider", "explain", "mistral"])
     env = runner.invoke(cli_main.app, ["provider", "env"])
     recommended = runner.invoke(cli_main.app, ["provider", "recommend", "--goal", "coding"])
+    provider_models = runner.invoke(cli_main.app, ["provider", "models", "mistral"])
+    provider_model_recommend = runner.invoke(
+        cli_main.app,
+        ["provider", "recommend-model", "mistral", "--goal", "cheap"],
+    )
     catalog = runner.invoke(cli_main.app, ["provider", "catalog-doctor"])
     test_matrix = runner.invoke(cli_main.app, ["provider", "test-matrix"])
     model_health = runner.invoke(cli_main.app, ["model", "health"])
+    readiness = runner.invoke(cli_main.app, ["readiness", "--project", str(tmp_path)])
     permission = runner.invoke(cli_main.app, ["permission", "set", "paranoid"])
     permission_status = runner.invoke(cli_main.app, ["permission", "status"])
     proposed = runner.invoke(cli_main.app, ["config", "propose", "use manual memory and paranoid permissions"])
@@ -180,11 +188,16 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     assert any(item["provider"] == "mistral" for item in json.loads(env.output)["providers"])
     assert recommended.exit_code == 0
     assert any(item["id"] == "mistral" for item in json.loads(recommended.output)["recommendations"])
+    assert provider_models.exit_code == 0
+    assert "mistral-large-latest" in json.loads(provider_models.output)["models"]
+    assert provider_model_recommend.exit_code == 0
+    assert json.loads(provider_model_recommend.output)["ok"] is True
     assert catalog.exit_code == 0
     assert json.loads(catalog.output)["ok"] is True
     assert test_matrix.exit_code == 0
     assert any(item["provider"] == "mistral" for item in json.loads(test_matrix.output)["providers"])
     assert model_health.exit_code == 0
+    assert readiness.exit_code == 0
     assert permission.exit_code == 0
     assert json.loads(permission.output)["mode"] == "paranoid"
     assert permission_status.exit_code == 0
@@ -232,6 +245,9 @@ def test_cli_provider_tool_smoke_uses_agent_session(tmp_path: Path, monkeypatch)
             return None
 
     monkeypatch.setattr(magent_agent, "AgentSession", FakeSession)
+    import magent.provider_smoke
+
+    monkeypatch.setattr(magent.provider_smoke, "AgentSession", FakeSession)
     result = runner.invoke(
         cli_main.app,
         ["provider", "tool-smoke", "openai", "--project", str(tmp_path / "smoke")],

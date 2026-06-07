@@ -23,6 +23,7 @@ The UI combines the same local data used by the CLI:
 - recent command history and approximate usage stats
 - built-in documentation topics and search results
 - release readiness checks and release notes endpoints
+- setup readiness, model health, and provider tool-smoke actions
 - memory inbox candidates with a promote action
 - saved patch previews and checkpoint diffs
 - cockpit state for pending plans, recipes, sandbox runs, failed commands, and release checks
@@ -48,4 +49,4 @@ These endpoints intentionally reuse MagAgent's existing workbench, docs, memory,
 
 `magent dashboard` exports a static HTML workbench snapshot. `magent dashboard --serve` serves that snapshot on localhost.
 
-`magent ui` is the interactive local operations view. Use it when you want a live dashboard that can refresh state, run release checks, inspect saved patches, inspect checkpoint diffs, and promote reviewed memory candidates without regenerating a file.
+`magent ui` is the interactive local operations view. Use it when you want a live dashboard that can refresh state, run release checks, inspect saved patches, inspect checkpoint diffs, promote reviewed memory candidates, review model health, and run a tiny provider smoke without regenerating a file.

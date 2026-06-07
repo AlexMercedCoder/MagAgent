@@ -23,6 +23,8 @@ def test_ui_state_collects_local_workbench_data(tmp_path: Path, monkeypatch) -> 
     assert len(state["tasks"]) == 1
     assert state["workspace"]["patches"] == 1
     assert state["memory_quality"]["ok"] is False
+    assert state["model_health"]["ok"] is True
+    assert state["readiness"] is None
     assert any(topic["slug"] == "ui" for topic in state["docs"])
     assert state["cockpit"]["release_check"]["status"] == "not_run"
 
@@ -51,6 +53,9 @@ def test_render_ui_html_contains_local_endpoints() -> None:
     assert "/api/state" in html
     assert "/api/docs/search" in html
     assert "/api/release/check" in html
+    assert "/api/readiness" in html
+    assert "/api/model/health" in html
+    assert "/api/provider/smoke" in html
     assert "/api/memory/inbox" in html
     assert "/api/memory/promote" in html
     assert "/api/patch/preview" in html

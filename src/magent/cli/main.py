@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import os
 import signal
 import sys
@@ -187,6 +188,18 @@ def ask_cmd(
         "-y",
         help="Approve eligible tool actions non-interactively by using yolo permission mode.",
     ),
+    repair_attempts: int = typer.Option(
+        0,
+        "--repair-attempts",
+        min=0,
+        max=3,
+        help="Retry obvious incomplete file tasks after audit warnings.",
+    ),
+    strict_audit: bool = typer.Option(
+        False,
+        "--strict-audit",
+        help="Exit nonzero when the one-shot task audit reports missing files or blocked tools.",
+    ),
 ):
     """Run a one-shot MagAgent task."""
     username = _require_user()
@@ -205,6 +218,8 @@ def ask_cmd(
         cwd,
         task,
         permission_mode_override=permission_override,
+        repair_attempts=repair_attempts,
+        strict_audit=strict_audit,
     )
 
 
@@ -216,6 +231,8 @@ def _run_one_shot(
     cwd,
     task,
     permission_mode_override: str | None = None,
+    repair_attempts: int = 0,
+    strict_audit: bool = False,
 ):
     """Run a single non-interactive agent task."""
     from magent.agent import AgentSession
@@ -231,17 +248,36 @@ def _run_one_shot(
         permission_mode_override=permission_mode_override,
     )
 
+    from magent.ask_audit import audit_one_shot_task, render_audit_note
+
+    final_audit = {}
+
     async def _run() -> str:
+        nonlocal final_audit
         try:
-            return await session.chat(task)
+            response = await session.chat(task)
+            final_audit = audit_one_shot_task(task, cwd, session.scratchpad)
+            attempts = 0
+            while attempts < repair_attempts and not final_audit["ok"]:
+                attempts += 1
+                repair_prompt = (
+                    "The previous one-shot run appears incomplete. "
+                    f"Audit: {json.dumps(final_audit, default=str)}\n"
+                    "Use available tools to finish only the missing or blocked parts. "
+                    "If a permission-required tool was blocked, choose a safer available tool or explain the blocker."
+                )
+                repair_response = await session.chat(repair_prompt)
+                response += "\n\nRepair attempt " + str(attempts) + ":\n" + repair_response
+                final_audit = audit_one_shot_task(task, cwd, session.scratchpad)
+            return response
         finally:
             await session.end_session()
 
     response = asyncio.run(_run())
-    from magent.ask_audit import audit_one_shot_task, render_audit_note
-
-    response += render_audit_note(audit_one_shot_task(task, cwd, session.scratchpad))
+    response += render_audit_note(final_audit)
     print_response(response)
+    if strict_audit and final_audit and not final_audit.get("ok"):
+        raise typer.Exit(1)
 
 
 def _run_repl(username, config, main_provider, extract_provider, cwd):
@@ -1447,10 +1483,26 @@ def model_doctor_cmd():
 
 @model_app.command("health")
 def model_health_cmd():
-    """Show model role provider/runtime health."""
+    """Show model role provider/runtime health and recent live smoke observations."""
     from magent.config_ux import model_role_health
+    from magent.model_health import model_health_report
 
     result = model_role_health()
+    result["observations"] = model_health_report(_store())
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@model_app.command("recommend")
+def model_recommend_cmd(
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    task_type: str = typer.Option("tool-use", "--task-type", "-t"),
+):
+    """Recommend a model from successful local health observations."""
+    from magent.model_health import recommend_model_from_health
+
+    result = recommend_model_from_health(_store(), provider=provider, task_type=task_type)
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)
@@ -2649,6 +2701,32 @@ def doctor(
             item.get("command", ""),
         )
     console.print(table)
+
+
+@app.command("readiness")
+def readiness_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    smoke: bool = typer.Option(False, "--smoke", help="Run a tiny live provider tool-use smoke."),
+    provider: str | None = typer.Option(None, "--provider"),
+    model: str | None = typer.Option(None, "--model"),
+    timeout: int = typer.Option(90, "--timeout", help="Maximum smoke runtime in seconds."),
+):
+    """Show one concise setup, docs, project, provider, and model readiness report."""
+    from magent.readiness import readiness_report
+
+    username = _require_user()
+    config = load_config(username)
+    result = readiness_report(
+        username,
+        config,
+        _store(),
+        project=project,
+        smoke=smoke,
+        provider_id=provider,
+        model=model,
+        smoke_timeout=timeout,
+    )
+    console.print_json(data=result)
 
 
 # ─────────────────────────────────────────────

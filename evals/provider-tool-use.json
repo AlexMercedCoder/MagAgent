@@ -1,0 +1,12 @@
+{
+  "name": "provider-tool-use",
+  "description": "Minimal verification that a configured provider can complete a write_file task.",
+  "tasks": [
+    {
+      "id": "provider-smoke",
+      "prompt": "Run a provider tool smoke for your configured cheap model.",
+      "commands": ["magent provider tool-smoke opencode-go --model deepseek-v4-flash"],
+      "success": ["command:0"]
+    }
+  ]
+}

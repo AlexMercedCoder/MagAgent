@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import tempfile
-from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -109,6 +107,36 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
             )
         console.print_json(data={"ok": all(row["ok"] is not False for row in rows), "providers": rows})
 
+    @provider_app.command("models")
+    def provider_models_cmd(
+        provider_id: str = typer.Argument(..., help="Provider ID to inspect."),
+        refresh: bool = typer.Option(False, "--refresh", help="Refresh from the live provider API."),
+    ) -> None:
+        """List cached or discovered models for a provider."""
+        from magent.cli.command_context import require_user, store
+        from magent.config import load_config
+        from magent.provider_models import discover_provider_models
+
+        username = require_user()
+        console.print_json(
+            data=discover_provider_models(load_config(username), store(), provider_id, refresh=refresh)
+        )
+
+    @provider_app.command("recommend-model")
+    def provider_recommend_model_cmd(
+        provider_id: str = typer.Argument(..., help="Provider ID to inspect."),
+        goal: str = typer.Option("tool-use", "--goal", "-g"),
+    ) -> None:
+        """Recommend a model for a provider and goal."""
+        from magent.cli.command_context import require_user, store
+        from magent.config import load_config
+        from magent.provider_models import recommend_provider_model
+
+        username = require_user()
+        console.print_json(
+            data=recommend_provider_model(load_config(username), store(), provider_id, goal=goal)
+        )
+
     @provider_app.command("tool-smoke")
     def provider_tool_smoke_cmd(
         provider_id: str = typer.Argument(..., help="Provider ID to test."),
@@ -119,65 +147,56 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
             "-p",
             help="Project directory for the smoke artifact. Defaults to a temporary directory.",
         ),
+        timeout: int = typer.Option(90, "--timeout", help="Maximum smoke runtime in seconds."),
     ) -> None:
         """Run a tiny live tool-use smoke test against one provider."""
-        from magent.agent import AgentSession
-        from magent.ask_audit import audit_one_shot_task
-        from magent.cli.command_context import build_extraction_provider, build_provider
-        from magent.config import get_current_user, load_config
+        from magent.cli.command_context import require_user, store
+        from magent.config import load_config
+        from magent.provider_smoke import run_provider_tool_smoke
 
-        username = get_current_user()
+        username = require_user()
         config = load_config(username)
-        root_ctx = (
-            tempfile.TemporaryDirectory(prefix="magent-provider-smoke-")
-            if project is None
-            else None
-        )
-        root = Path(project or root_ctx.name).resolve()  # type: ignore[union-attr]
-        root.mkdir(parents=True, exist_ok=True)
-        prompt = "Use write_file to create smoke.txt containing exactly OK. Do not run shell commands."
-        session = AgentSession(
+        result = run_provider_tool_smoke(
             username=username,
             config=config,
-            provider=build_provider(config, provider_id, model),
-            extraction_provider=build_extraction_provider(config),
-            cwd=str(root),
-            interactive_permissions=False,
-            permission_mode_override="yolo",
+            store=store(),
+            provider_id=provider_id,
+            model=model,
+            project=project,
+            timeout_seconds=timeout,
         )
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
 
-        async def _run() -> str:
-            try:
-                return await session.chat(prompt)
-            finally:
-                await session.end_session()
+    @provider_app.command("smoke-all")
+    def provider_smoke_all_cmd(
+        cheap: bool = typer.Option(True, "--cheap/--all-models", help="Use catalog cheap defaults."),
+        timeout: int = typer.Option(90, "--timeout", help="Maximum smoke runtime per provider."),
+    ) -> None:
+        """Run tiny live tool-use smokes for configured ready providers."""
+        from magent.cli.command_context import require_user, store
+        from magent.config import load_config
+        from magent.config_ux import provider_matrix
+        from magent.provider_models import recommend_provider_model
+        from magent.provider_smoke import run_provider_tool_smoke
 
-        try:
-            response = asyncio.run(_run())
-            smoke_path = root / "smoke.txt"
-            content = smoke_path.read_text(encoding="utf-8").strip() if smoke_path.exists() else ""
-            audit = audit_one_shot_task(prompt, root, session.scratchpad)
-            ok = content == "OK" and audit["ok"]
-            provider_config = config.provider_config(provider_id)
-            configured_model = (
-                provider_config.get("model")
-                if isinstance(provider_config, dict)
-                else provider_config.model
+        username = require_user()
+        config = load_config(username)
+        rows = []
+        for item in provider_matrix()["providers"]:
+            if not item["ready"] or not (item["configured"] or item["id"] == config.default_provider):
+                continue
+            recommendation = recommend_provider_model(config, store(), item["id"], goal="cheap")
+            model = recommendation.get("model") if cheap and recommendation.get("ok") else item["default_model"]
+            rows.append(
+                run_provider_tool_smoke(
+                    username,
+                    config,
+                    store(),
+                    item["id"],
+                    model=model,
+                    timeout_seconds=timeout,
+                )
             )
-            console.print_json(
-                data={
-                    "ok": ok,
-                    "provider": provider_id,
-                    "model": model or configured_model or config.default_model,
-                    "project": str(root),
-                    "artifact": str(smoke_path),
-                    "artifact_ok": content == "OK",
-                    "audit": audit,
-                    "response_preview": response[:500],
-                }
-            )
-            if not ok:
-                raise typer.Exit(1)
-        finally:
-            if root_ctx is not None:
-                root_ctx.cleanup()
+        console.print_json(data={"ok": all(row["ok"] for row in rows), "providers": rows})

@@ -1,0 +1,12 @@
+{
+  "name": "focus-garden-app",
+  "description": "Small static-app task inspired by the 0.26 smoke test.",
+  "tasks": [
+    {
+      "id": "static-focus-app",
+      "prompt": "Create index.html, styles.css, app.js, and README.md for a small Focus Garden timer app.",
+      "commands": ["test -f index.html", "test -f styles.css", "test -f app.js", "test -f README.md"],
+      "success": ["command:0"]
+    }
+  ]
+}
