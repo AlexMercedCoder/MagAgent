@@ -7,6 +7,7 @@ Important command paths:
 - `magent ask --yes "task"`: run one task with YOLO-style non-interactive approvals.
 - `magent ask --repair-attempts 1 "task"`: retry obvious missing-file task audit failures once.
 - `magent ask --strict-audit "task"`: exit nonzero when the final task audit is incomplete.
+- `magent ask --json "task"`: emit a machine-readable response, audit, and tool summary.
 - `magent --task "task"`: alternate one-shot task form.
 - `magent setup`: run first-time setup.
 - `magent configure`: run the friendly setup/configuration wizard.
@@ -22,6 +23,8 @@ Important command paths:
 - `magent workbench prune`: prune old high-volume workbench records.
 - `magent workbench compact`: rewrite JSON workbench stores and report bytes reclaimed.
 - `magent config show`: show global and current-user config files.
+- `magent config get`: return redacted machine-readable global/user/merged config.
+- `magent config set <path> <value>`: update a dot-path config value for desktop integrations.
 - `magent config backup`: back up global and current-user config files.
 - `magent config list-backups`: list config backups.
 - `magent config diff`: diff current config against a backup.
@@ -60,6 +63,7 @@ Important command paths:
 - `magent model health`: show model role provider/runtime health.
 - `magent model recommend`: recommend a model from successful local health observations.
 - `magent model wizard`: interactively set common model roles.
+- `magent system info`: return machine-readable install, path, platform, and user info.
 - `magent docs list`: list built-in documentation topics.
 - `magent docs show <topic>`: render a built-in documentation topic.
 - `magent docs search <query>`: search packaged docs.
@@ -67,6 +71,10 @@ Important command paths:
 - `magent docs generate-reference`: generate command reference Markdown from the live CLI.
 - `magent docs generate-providers`: generate provider reference Markdown from the provider catalog.
 - `magent docs generate-config`: generate config reference Markdown from packaged defaults.
+- `magent data sqlite-list`: list MagAgent SQLite databases for the current user.
+- `magent data sqlite-tables --db <name>`: list tables and row counts.
+- `magent data sqlite-schema <table> --db <name>`: show a table schema.
+- `magent data sqlite-query "SELECT ..."`: run a read-only SQLite query.
 - `magent agent list`: list built-in, project, user, and plugin agent definitions.
 - `magent agent show <name>`: inspect one agent definition.
 - `magent agent create <name>`: create `.magent/agents/<name>.md`.
@@ -107,6 +115,8 @@ Important command paths:
 - `magent github checks`: show pull request checks.
 - `magent tutorial`: show the built-in getting-started tutorial.
 - `magent memory stats`: show memory graph stats.
+- `magent memory graph`: return a compact JSON graph view for desktop browsing.
+- `magent memory node <id>`: return one memory node and nearby traversal context as JSON.
 - `magent memory index`: build semantic memory index.
 - `magent memory search <query>`: search memory.
 - `magent memory promote`: list workbench facts that can be promoted to memory.

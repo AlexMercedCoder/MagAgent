@@ -50,10 +50,12 @@ Generated from the active Typer command tree.
 - `magent config backup`
 - `magent config diff`
 - `magent config discard`
+- `magent config get`
 - `magent config list-backups`
 - `magent config proposals`
 - `magent config propose`
 - `magent config restore`
+- `magent config set`
 - `magent config show`
 
 ## context
@@ -146,6 +148,10 @@ Generated from the active Typer command tree.
 ## data
 
 - `magent data inspect`
+- `magent data sqlite-list`
+- `magent data sqlite-query`
+- `magent data sqlite-schema`
+- `magent data sqlite-tables`
 
 ## docs
 
@@ -236,6 +242,8 @@ Generated from the active Typer command tree.
 - `magent memory index`
 - `magent memory log`
 - `magent memory merge`
+- `magent memory graph`
+- `magent memory node`
 - `magent memory promote`
 - `magent memory quality`
 - `magent memory reset`
@@ -376,6 +384,10 @@ Generated from the active Typer command tree.
 - `magent task done`
 - `magent task list`
 - `magent task report`
+
+## system
+
+- `magent system info`
 
 ## test
 

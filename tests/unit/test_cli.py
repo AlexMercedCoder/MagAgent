@@ -29,7 +29,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.28.0" in version.output
+    assert "MagAgent 0.29.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -257,6 +257,65 @@ def test_cli_provider_tool_smoke_uses_agent_session(tmp_path: Path, monkeypatch)
     payload = json.loads(result.output)
     assert payload["ok"] is True
     assert payload["artifact_ok"] is True
+
+
+def test_cli_desktop_integration_commands(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+
+    system = runner.invoke(cli_main.app, ["system", "info"])
+    config_get = runner.invoke(cli_main.app, ["config", "get"])
+    config_set = runner.invoke(
+        cli_main.app,
+        ["config", "set", "defaults.model", '"desktop-model"'],
+    )
+    data_list = runner.invoke(cli_main.app, ["data", "sqlite-list"])
+    memory_graph = runner.invoke(cli_main.app, ["memory", "graph", "--limit", "5"])
+
+    assert system.exit_code == 0
+    assert json.loads(system.output)["magent_version"] == "0.29.0"
+    assert config_get.exit_code == 0
+    assert json.loads(config_get.output)["ok"] is True
+    assert config_set.exit_code == 0
+    assert json.loads(config_set.output)["value"] == "desktop-model"
+    assert data_list.exit_code == 0
+    assert memory_graph.exit_code == 0
+
+
+def test_cli_ask_json_outputs_audit_payload(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+
+    class FakeSession:
+        session_id = "session-json"
+
+        def __init__(self, **kwargs):
+            self.scratchpad = {
+                "files_touched": [str(tmp_path / "hello.txt")],
+                "commands_run": [],
+                "permission_failures": [],
+            }
+
+        async def chat(self, prompt: str) -> str:
+            (tmp_path / "hello.txt").write_text("hello", encoding="utf-8")
+            return "done"
+
+        async def end_session(self) -> None:
+            return None
+
+    monkeypatch.setattr(magent_agent, "AgentSession", FakeSession)
+    result = runner.invoke(
+        cli_main.app,
+        ["ask", "--project", str(tmp_path), "--json", "Create hello.txt"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["audit"]["missing_requested_files"] == []
+    assert payload["session_id"] == "session-json"
 
 
 async def _fake_test_provider(provider) -> bool:

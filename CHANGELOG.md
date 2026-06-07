@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.29.0
+
+- Added desktop integration APIs for Mag Command Center and other local app wrappers.
+- Added `magent system info` for machine-readable installation, platform, config path, executable, and user status.
+- Added `magent ask --json` with response, session ID, audit, files touched, commands run, and permission failures.
+- Added `magent config get` and `magent config set` for redacted machine-readable config inspection and safe dot-path updates.
+- Added `magent memory graph` and `magent memory node` for compact JSON memory graph browsing.
+- Added `magent data sqlite-list`, `sqlite-tables`, `sqlite-schema`, and `sqlite-query` for safe SQLite database exploration.
+- Added tests for desktop API helpers and CLI integration command payloads.
+
 ## 0.28.0
 
 - Added provider model discovery and caching with `magent provider models <provider> --refresh` for OpenAI-compatible `/models` endpoints.

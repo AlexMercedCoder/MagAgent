@@ -54,6 +54,7 @@ profile_app = typer.Typer(help="Guided UX configuration profiles", name="profile
 permission_app = typer.Typer(help="Permission profile UX", name="permission")
 performance_app = typer.Typer(help="Local performance diagnostics", name="performance")
 workbench_app = typer.Typer(help="Workbench storage maintenance", name="workbench")
+system_app = typer.Typer(help="Machine-readable system and desktop integration info", name="system")
 
 app.add_typer(user_app, name="user")
 app.add_typer(memory_app, name="memory")
@@ -100,6 +101,7 @@ for _name, _typer in [
     ("permission", permission_app),
     ("performance", performance_app),
     ("workbench", workbench_app),
+    ("system", system_app),
 ]:
     app.add_typer(_typer, name=_name)
 
@@ -148,4 +150,5 @@ __all__ = [
     "user_app",
     "workspace_app",
     "workbench_app",
+    "system_app",
 ]

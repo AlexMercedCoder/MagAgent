@@ -9,6 +9,31 @@ console = Console()
 
 
 def register_config_commands(config_app: typer.Typer) -> None:
+    @config_app.command("get")
+    def config_get_cmd(
+        user: str | None = typer.Option(None, "--user", "-u"),
+        raw: bool = typer.Option(False, "--raw", help="Include redacted raw TOML text."),
+    ) -> None:
+        """Return machine-readable redacted config for desktop integrations."""
+        from magent.desktop_api import config_get
+
+        console.print_json(data=config_get(user, include_raw=raw))
+
+    @config_app.command("set")
+    def config_set_cmd(
+        path: str = typer.Argument(..., help="Dot-path config key to set."),
+        value: str = typer.Argument(..., help="JSON value or string value."),
+        scope: str = typer.Option("global", "--scope", help="global or user"),
+        user: str | None = typer.Option(None, "--user", "-u"),
+    ) -> None:
+        """Set a machine-readable config value without hand-editing TOML."""
+        from magent.desktop_api import config_set, parse_json_value
+
+        result = config_set(path, parse_json_value(value), username=user, scope=scope)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
     @config_app.command("show")
     def config_show_cmd() -> None:
         """Show global/current-user config file paths and text."""

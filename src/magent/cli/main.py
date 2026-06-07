@@ -57,6 +57,7 @@ from magent.cli.app import (
     routine_app,
     session_app,
     subagent_app,
+    system_app,
     task_app,
     test_app,
     tools_app,
@@ -138,6 +139,23 @@ def _known_command_names() -> list[str]:
 # ─────────────────────────────────────────────
 
 
+@system_app.command("info")
+def system_info_cmd(json_output: bool = typer.Option(True, "--json/--no-json")):
+    """Return machine-readable MagAgent installation and path info."""
+    from magent.desktop_api import system_info
+
+    data = system_info()
+    if json_output:
+        console.print_json(data=data)
+        return
+    table = Table("Key", "Value")
+    table.add_row("MagAgent", data["magent_version"])
+    table.add_row("Python", data["python"])
+    table.add_row("User", str(data["current_user"]))
+    table.add_row("Config", data["paths"]["config_dir"])
+    console.print(table)
+
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -200,6 +218,11 @@ def ask_cmd(
         "--strict-audit",
         help="Exit nonzero when the one-shot task audit reports missing files or blocked tools.",
     ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit machine-readable response, audit, and tool summary.",
+    ),
 ):
     """Run a one-shot MagAgent task."""
     username = _require_user()
@@ -220,6 +243,7 @@ def ask_cmd(
         permission_mode_override=permission_override,
         repair_attempts=repair_attempts,
         strict_audit=strict_audit,
+        json_output=json_output,
     )
 
 
@@ -233,6 +257,7 @@ def _run_one_shot(
     permission_mode_override: str | None = None,
     repair_attempts: int = 0,
     strict_audit: bool = False,
+    json_output: bool = False,
 ):
     """Run a single non-interactive agent task."""
     from magent.agent import AgentSession
@@ -274,8 +299,22 @@ def _run_one_shot(
             await session.end_session()
 
     response = asyncio.run(_run())
-    response += render_audit_note(final_audit)
-    print_response(response)
+    if json_output:
+        payload = {
+            "ok": bool(final_audit.get("ok", True)),
+            "response": response,
+            "audit": final_audit,
+            "scratchpad": {
+                "files_touched": session.scratchpad.get("files_touched", []),
+                "commands_run": session.scratchpad.get("commands_run", []),
+                "permission_failures": session.scratchpad.get("permission_failures", []),
+            },
+            "session_id": session.session_id,
+        }
+        console.print_json(data=payload)
+    else:
+        response += render_audit_note(final_audit)
+        print_response(response)
     if strict_audit and final_audit and not final_audit.get("ok"):
         raise typer.Exit(1)
 
@@ -1770,6 +1809,57 @@ def data_inspect_cmd(path: str = typer.Argument(...)):
     console.print_json(data=inspect_data(path))
 
 
+@data_app.command("sqlite-list")
+def data_sqlite_list_cmd(user: str | None = typer.Option(None, "--user", "-u")):
+    """List MagAgent SQLite databases for desktop browsing."""
+    from magent.desktop_api import sqlite_list
+
+    console.print_json(data=sqlite_list(user or _require_user()))
+
+
+@data_app.command("sqlite-tables")
+def data_sqlite_tables_cmd(
+    db_name: str = typer.Option("default", "--db", help="Database name."),
+    user: str | None = typer.Option(None, "--user", "-u"),
+):
+    """List tables and row counts in a MagAgent SQLite database."""
+    from magent.desktop_api import sqlite_tables
+
+    console.print_json(data=sqlite_tables(user or _require_user(), db_name))
+
+
+@data_app.command("sqlite-schema")
+def data_sqlite_schema_cmd(
+    table: str = typer.Argument(...),
+    db_name: str = typer.Option("default", "--db", help="Database name."),
+    user: str | None = typer.Option(None, "--user", "-u"),
+):
+    """Show SQLite table schema for desktop browsing."""
+    from magent.desktop_api import sqlite_table_schema
+
+    result = sqlite_table_schema(user or _require_user(), table, db_name)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@data_app.command("sqlite-query")
+def data_sqlite_query_cmd(
+    sql: str = typer.Argument(...),
+    db_name: str = typer.Option("default", "--db", help="Database name."),
+    params: str = typer.Option("[]", "--params", help="JSON array of query params."),
+    user: str | None = typer.Option(None, "--user", "-u"),
+):
+    """Run a read-only SELECT/WITH query against a MagAgent SQLite database."""
+    from magent.desktop_api import parse_json_value, sqlite_query
+
+    parsed = parse_json_value(params)
+    result = sqlite_query(user or _require_user(), sql, db_name, parsed if isinstance(parsed, list) else [])
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
 @api_app.command("save")
 def api_save_cmd(name: str = typer.Argument(...), method: str = typer.Argument(...), url: str = typer.Argument(...)):
     """Save an API endpoint bookmark."""
@@ -2300,6 +2390,32 @@ def _print_memory_stats(stats: dict, username: str):
     t.add_row("Last modified", str(stats.get("last_modified", "n/a")))
 
     console.print(Panel(t, title=f"[bold cyan]Memory Graph — {username}[/bold cyan]"))
+
+
+@memory_app.command("graph")
+def memory_graph_cmd(
+    query: str = typer.Option("", "--query", "-q", help="Optional graph search query."),
+    limit: int = typer.Option(100, "--limit", "-n"),
+    user: str | None = typer.Option(None, "--user", "-u"),
+):
+    """Return a compact JSON memory graph view for desktop integrations."""
+    from magent.desktop_api import memory_graph
+
+    console.print_json(data=memory_graph(user or _require_user(), query=query, limit=limit))
+
+
+@memory_app.command("node")
+def memory_node_cmd(
+    node_id: str = typer.Argument(...),
+    user: str | None = typer.Option(None, "--user", "-u"),
+):
+    """Return one memory node as JSON with nearby traversal context."""
+    from magent.desktop_api import memory_node
+
+    result = memory_node(user or _require_user(), node_id)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
 
 
 @memory_app.command("search")
