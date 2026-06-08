@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.31.0
+
+- Added provider-aware prompt caching support with stable prompt prefixes, cache request hints, cache telemetry normalization, and `magent cache doctor/status`.
+- Added reliable multiline prompt composition with `/compose` plus prompt-toolkit support for newline bindings when terminals support them.
+- Improved tool-call robustness by normalizing common argument aliases such as `file_path`/`contents`, preventing raw `KeyError('path')` failures.
+- Removed the extra finalizing model call that could emit pseudo tool-call markup without actually writing files.
+- Improved shell permission UX with scoped approvals, read-only shell pipeline classification, trusted exact-command patterns, and stop-after-denial behavior.
+- Made `magent ask` show progress in human-readable mode while keeping `--json` clean for scripts.
+- Made `magent research` render readable terminal output by default, with `--json` for scripts and `--write/--out` for Markdown reports.
+- Made `magent plan` project-aware, less generic, and directly saveable into draft or executable plan workflows.
+- Organized `magent --help` into useful Rich help panels with prominent Start Here commands.
+- Made `magent context map` render a readable terminal briefing by default, with `--json` for the full structured payload, and filtered low-value draft plans from memory promotion candidates.
+- Updated README, built-in docs, and regression coverage for the new CLI UX.
+
 ## 0.30.2
 
 - Fixed `magent configure` provider smoke tests on Python 3.14 by using `asyncio.run()` instead of looking up a non-existent default event loop.
