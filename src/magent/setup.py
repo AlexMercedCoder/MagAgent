@@ -218,7 +218,7 @@ def _smoke_test(
         return await test_provider(provider)
 
     try:
-        ok = asyncio.get_event_loop().run_until_complete(_run())
+        ok = asyncio.run(_run())
         if ok:
             console.print("[green]✓ Provider responded successfully[/green]")
         else:

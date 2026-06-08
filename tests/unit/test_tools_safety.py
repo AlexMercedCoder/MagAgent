@@ -1,7 +1,9 @@
 """Tests for built-in tool safety and schemas."""
 
+import sys
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -52,6 +54,45 @@ async def test_noninteractive_permissions_return_structured_denial(tmp_path: Pat
     assert result["ok"] is False
     assert result["permission_required"] is True
     assert result["permission_reason"] == "permission-required"
+
+
+@pytest.mark.asyncio
+async def test_web_search_prefers_relevant_ddgs_results(monkeypatch, tmp_path: Path) -> None:
+    class FakeDDGS:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def text(self, query: str, max_results: int = 8):
+            return [
+                {
+                    "title": "complete - German translation",
+                    "body": "Dictionary entry for complete.",
+                    "href": "https://dict.example/complete",
+                },
+                {
+                    "title": "A History of Cheese",
+                    "body": "Cheese making has ancient origins and a long timeline.",
+                    "href": "https://example.com/history-of-cheese",
+                },
+                {
+                    "title": "The History of Cheese: From Ancient Origins to Modern Day",
+                    "body": "Short social video caption.",
+                    "href": "https://www.tiktok.com/@example/video/123",
+                },
+            ]
+
+    monkeypatch.setitem(sys.modules, "ddgs", SimpleNamespace(DDGS=FakeDDGS))
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    result = await tools.web_search("Complete history of cheese from ancient origins", max_results=8)
+
+    assert result["ok"] is True
+    assert result["source"] == "ddgs"
+    assert result["filtered_count"] == 2
+    assert [item["url"] for item in result["results"]] == ["https://example.com/history-of-cheese"]
 
 
 def test_tool_definitions_have_required_arguments(tmp_path: Path) -> None:

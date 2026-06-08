@@ -15,13 +15,16 @@ import difflib
 import importlib.util
 import io
 import json
+import re
 import shlex
 import shutil
 import sys
 import tempfile
+import warnings
 import zipfile
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from rich.console import Console
@@ -40,6 +43,87 @@ from magent.tools.registry import tool_def as _def
 from magent.tools.types import DEFAULT_TOOL_BUDGETS, READ_FILE_PREVIEW_CHARS, ToolResult
 
 console = Console()
+
+_SEARCH_STOP_WORDS = {
+    "about",
+    "after",
+    "again",
+    "also",
+    "ancient",
+    "based",
+    "before",
+    "complete",
+    "create",
+    "current",
+    "design",
+    "from",
+    "history",
+    "into",
+    "modern",
+    "please",
+    "research",
+    "system",
+    "that",
+    "the",
+    "this",
+    "timeline",
+    "using",
+    "with",
+}
+
+_LOW_VALUE_SEARCH_DOMAINS = {
+    "facebook.com",
+    "instagram.com",
+    "pinterest.com",
+    "tiktok.com",
+    "x.com",
+}
+
+
+def _search_terms(query: str) -> list[str]:
+    words = re.findall(r"[a-z0-9][a-z0-9-]{2,}", query.lower())
+    terms = [word.strip("-") for word in words if word not in _SEARCH_STOP_WORDS]
+    return list(dict.fromkeys(term for term in terms if term))
+
+
+def _clean_search_result(item: dict[str, Any]) -> dict[str, str]:
+    return {
+        "title": str(item.get("title") or ""),
+        "snippet": str(item.get("body") or item.get("snippet") or ""),
+        "url": str(item.get("href") or item.get("url") or ""),
+    }
+
+
+def _is_low_value_search_url(url: str) -> bool:
+    host = urlparse(url).netloc.lower().removeprefix("www.")
+    return any(host == domain or host.endswith(f".{domain}") for domain in _LOW_VALUE_SEARCH_DOMAINS)
+
+
+def _rank_search_results(query: str, raw: list[dict[str, Any]], max_results: int) -> list[dict[str, str]]:
+    terms = _search_terms(query)
+    cleaned = [
+        result
+        for result in (_clean_search_result(item) for item in raw)
+        if result["url"] and not _is_low_value_search_url(result["url"])
+    ]
+    if not terms:
+        return cleaned[:max_results]
+
+    scored: list[tuple[int, int, dict[str, str]]] = []
+    for index, result in enumerate(cleaned):
+        text = f"{result['title']} {result['snippet']} {result['url']}".lower()
+        matched = {term for term in terms if term in text}
+        required = 1 if len(terms) == 1 else min(2, len(terms))
+        if len(matched) < required:
+            continue
+        score = len(matched) * 10
+        if any(term in result["title"].lower() for term in matched):
+            score += 4
+        if any(term in result["url"].lower() for term in matched):
+            score += 2
+        scored.append((score, -index, result))
+    scored.sort(reverse=True)
+    return [result for _score, _index, result in scored[:max_results]]
 
 
 class ToolExecutor:
@@ -502,30 +586,44 @@ class ToolExecutor:
             return {"ok": False, "error": str(e)}
 
     async def web_search(self, query: str, max_results: int = 8) -> ToolResult:
-        """Search the web using DuckDuckGo (no API key required, real results)."""
+        """Search the web using DuckDuckGo/DDGS (no API key required, real results)."""
         tier = RiskTier.AUTO
         self._log_tool("web_search", query, tier)
         perm = self._check_permission(f"Web search: {query}", tier)
         if not perm.approved:
             return self._permission_denied(perm)
 
-        # Try duckduckgo-search first (real results)
+        search_errors: list[str] = []
+        max_results = max(1, min(int(max_results), 20))
+
+        # Try ddgs first. Fall back to duckduckgo-search for older installs without
+        # leaking the upstream rename warning into user sessions.
         try:
-            from duckduckgo_search import DDGS
+            try:
+                from ddgs import DDGS  # type: ignore[import-not-found]
+
+                source = "ddgs"
+            except ImportError:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", message=".*duckduckgo_search.*ddgs.*")
+                    from duckduckgo_search import DDGS  # type: ignore[import-not-found]
+
+                source = "duckduckgo-search"
 
             with DDGS() as ddgs:
                 raw = list(ddgs.text(query, max_results=max_results))
-            results = [
-                {
-                    "title": r.get("title", ""),
-                    "snippet": r.get("body", ""),
-                    "url": r.get("href", ""),
-                }
-                for r in raw
-            ]
-            return {"ok": True, "query": query, "results": results, "source": "duckduckgo-search"}
-        except Exception:
-            pass
+            results = _rank_search_results(query, raw, max_results)
+            return {
+                "ok": True,
+                "query": query,
+                "results": results,
+                "source": source,
+                "raw_count": len(raw),
+                "filtered_count": max(0, len(raw) - len(results)),
+                "warning": "" if results else "Search returned no relevant results.",
+            }
+        except Exception as e:
+            search_errors.append(str(e))
 
         # Fallback: DDG instant answer API
         try:
@@ -553,9 +651,20 @@ class ToolExecutor:
                                 "url": r.get("FirstURL"),
                             }
                         )
-                return {"ok": True, "query": query, "results": results, "source": "ddg-instant"}
+                ranked = _rank_search_results(query, results, max_results)
+                return {
+                    "ok": True,
+                    "query": query,
+                    "results": ranked,
+                    "source": "ddg-instant",
+                    "raw_count": len(results),
+                    "filtered_count": max(0, len(results) - len(ranked)),
+                    "warning": "" if ranked else "Search returned no relevant results.",
+                    "fallback_errors": search_errors,
+                }
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            search_errors.append(str(e))
+            return {"ok": False, "error": "; ".join(error for error in search_errors if error)}
 
     async def web_fetch(self, url: str, extract_article: bool = True) -> ToolResult:
         """

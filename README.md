@@ -254,7 +254,7 @@ magent browser screenshot https://example.com --out example.png
 
 | Tool | Description | Permission |
 |---|---|---|
-| `web_search` | DuckDuckGo search (real results, no API key) | Auto |
+| `web_search` | DDGS/DuckDuckGo search with relevance filtering (real results, no API key) | Auto |
 | `web_fetch` | Fetch URL, clean article extraction via trafilatura | Auto |
 | `deep_research` | Multi-query web research with source fetches and cited evidence packets | Auto |
 | `http_request` | Full HTTP client: GET/POST/PUT/PATCH/DELETE | Auto |

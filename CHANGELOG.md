@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.30.2
+
+- Fixed `magent configure` provider smoke tests on Python 3.14 by using `asyncio.run()` instead of looking up a non-existent default event loop.
+- Updated web search to prefer the modern `ddgs` package, suppress the old `duckduckgo_search` rename warning when falling back, and filter low-relevance search results before the agent fetches pages.
+- Made interactive Ctrl-C shutdown avoid re-entering an already-running event loop.
+
 ## 0.30.1
 
 - Raised the MagGraph dependency floor to `maggraph>=0.2.5`, which ships Python 3.14-compatible PyO3 bindings, abi3 wheels, and a fixed Intel macOS wheel publish path.

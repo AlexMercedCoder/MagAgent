@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mag-agent"
-version = "0.30.1"
+version = "0.30.2"
 description = "MagAgent — CLI AI coding agent with persistent MagGraph memory. Like the Magpie: intelligent, tool-using, and never forgets."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -51,7 +51,7 @@ dependencies = [
     # Async file I/O
     "aiofiles>=23.0.0",
     # Web search (real results, no API key)
-    "duckduckgo-search>=6.0",
+    "ddgs>=9.0.0",
     # Clean article text extraction from URLs
     "trafilatura>=1.12",
     # HTML parsing

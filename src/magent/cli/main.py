@@ -400,16 +400,21 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    ended = False
 
     def _shutdown():
+        nonlocal ended
+        if ended:
+            return
         console.print("\n[dim]Ending session...[/dim]")
+        ended = True
+        if loop.is_running():
+            loop.create_task(session.end_session())
+            return
         loop.run_until_complete(session.end_session())
-        loop.close()
 
     def _signal_handler(sig, frame):
-        _shutdown()
-        raise SystemExit(0)
-
+        raise KeyboardInterrupt
 
     signal.signal(signal.SIGINT, _signal_handler)
 
@@ -446,10 +451,13 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
 
-    console.print("\n[dim]Writing session memories...[/dim]")
-    loop.run_until_complete(session.end_session())
-    console.print("[dim green]Session ended. Goodbye![/dim green]")
-    loop.close()
+    try:
+        console.print("\n[dim]Writing session memories...[/dim]")
+        _shutdown()
+        console.print("[dim green]Session ended. Goodbye![/dim green]")
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
 
 
 def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> bool:
