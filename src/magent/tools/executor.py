@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import difflib
+import fnmatch
 import importlib.util
 import io
 import json
@@ -28,6 +29,8 @@ from urllib.parse import urlparse
 
 import httpx
 from rich.console import Console
+from rich.panel import Panel
+from rich.prompt import Prompt
 
 from magent.permissions import (
     PermissionResult,
@@ -126,6 +129,39 @@ def _rank_search_results(query: str, raw: list[dict[str, Any]], max_results: int
     return [result for _score, _index, result in scored[:max_results]]
 
 
+def _normalize_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Normalize common provider/model argument aliases before dispatch."""
+    normalized = dict(args)
+    path_alias_tools = {
+        "read_file",
+        "read_file_range",
+        "outline_file",
+        "write_file",
+        "edit_file",
+        "delete_file",
+        "list_dir",
+        "open_file",
+        "read_image",
+        "browser_screenshot",
+    }
+    if tool_name in path_alias_tools and "path" not in normalized:
+        for alias in ("file_path", "filepath", "filename", "file", "target_path", "output_file"):
+            if alias in normalized:
+                normalized["path"] = normalized[alias]
+                break
+    if tool_name == "write_file" and "content" not in normalized:
+        for alias in ("contents", "text", "body", "data"):
+            if alias in normalized:
+                normalized["content"] = normalized[alias]
+                break
+    if tool_name == "edit_file":
+        if "old_str" not in normalized and "old_string" in normalized:
+            normalized["old_str"] = normalized["old_string"]
+        if "new_str" not in normalized and "new_string" in normalized:
+            normalized["new_str"] = normalized["new_string"]
+    return normalized
+
+
 class ToolExecutor:
     """Executes agent tools with integrated permission checking."""
 
@@ -134,6 +170,7 @@ class ToolExecutor:
         cwd: str,
         permission_mode: str = "balanced",
         allowed_shell_patterns: list[str] | None = None,
+        trusted_shell_patterns: list[str] | None = None,
         show_tool_calls: bool = True,
         username: str = "default",
         tool_budgets: dict[str, int] | None = None,
@@ -143,6 +180,8 @@ class ToolExecutor:
         self.cwd = cwd
         self.permission_mode = permission_mode
         self.allowed_shell_patterns = allowed_shell_patterns or []
+        self.trusted_shell_patterns = trusted_shell_patterns or []
+        self.session_shell_patterns: list[str] = []
         self.show_tool_calls = show_tool_calls
         self.username = username
         self.tool_budgets = {**DEFAULT_TOOL_BUDGETS, **(tool_budgets or {})}
@@ -182,6 +221,59 @@ class ToolExecutor:
             self.permission_mode,
             interactive=self.interactive_permissions,
         )
+
+    def _trusted_shell_match(self, command: str) -> bool:
+        patterns = [*self.trusted_shell_patterns, *self.session_shell_patterns]
+        return any(fnmatch.fnmatch(command.strip(), pattern) for pattern in patterns)
+
+    def _remember_trusted_shell_pattern(self, command: str) -> None:
+        try:
+            from magent.config import load_user_profile, save_user_profile
+
+            profile = load_user_profile(self.username)
+            permissions = profile.setdefault("permissions", {})
+            patterns = list(permissions.get("trusted_shell_patterns") or [])
+            if command not in patterns:
+                patterns.append(command)
+            permissions["trusted_shell_patterns"] = patterns
+            save_user_profile(self.username, profile)
+            self.trusted_shell_patterns = patterns
+        except Exception:
+            self.session_shell_patterns.append(command)
+
+    def _check_shell_permission(self, command: str, tier: RiskTier) -> PermissionResult:
+        if self._trusted_shell_match(command):
+            return PermissionResult(True, RiskTier.AUTO, "trusted-shell")
+        if not self.interactive_permissions or self.permission_mode == "yolo":
+            return self._check_permission(f"Run: `{command}`", tier)
+        if tier < RiskTier.CONFIRM:
+            return PermissionResult(True, tier, "auto")
+        title = "[red]⚠ Permission Required[/red]" if tier == RiskTier.BLOCK else "[yellow]Permission[/yellow]"
+        border = "red" if tier == RiskTier.BLOCK else "yellow"
+        console.print(
+            Panel(
+                f"[bold]{'High risk shell action' if tier == RiskTier.BLOCK else 'Shell action requires confirmation'}[/bold]\n\n"
+                f"Run: `{command}`\n\n"
+                "[dim]Choose whether this approval should last once, for this session, or be saved for future sessions.[/dim]",
+                title=title,
+                border_style=border,
+            )
+        )
+        choice = Prompt.ask(
+            "Approve",
+            choices=["once", "session", "always", "no", "o", "s", "a", "n"],
+            default="once" if tier == RiskTier.CONFIRM else "no",
+        ).lower()
+        if choice in {"no", "n"}:
+            return PermissionResult(False, tier, "user-denied")
+        if choice in {"session", "s"}:
+            if command not in self.session_shell_patterns:
+                self.session_shell_patterns.append(command)
+            return PermissionResult(True, tier, "user-session-allow")
+        if choice in {"always", "a"}:
+            self._remember_trusted_shell_pattern(command)
+            return PermissionResult(True, tier, "user-persistent-allow")
+        return PermissionResult(True, tier, "user-confirmed")
 
     def _permission_denied(self, perm: PermissionResult) -> ToolResult:
         error = "Permission required" if perm.reason == "permission-required" else "Permission denied by user"
@@ -457,9 +549,9 @@ class ToolExecutor:
     # ─────────────────────────────────────────────
 
     async def run_shell(self, command: str, timeout: int = 60) -> ToolResult:
-        tier = classify_shell_command(command, self.allowed_shell_patterns)
+        tier = RiskTier.AUTO if self._trusted_shell_match(command) else classify_shell_command(command, self.allowed_shell_patterns)
         self._log_tool("run_shell", command, tier)
-        perm = self._check_permission(f"Run: `{command}`", tier)
+        perm = self._check_shell_permission(command, tier)
         if not perm.approved:
             return self._permission_denied(perm)
         try:
@@ -469,12 +561,21 @@ class ToolExecutor:
                 return {"ok": False, "error": f"Invalid shell syntax: {e}"}
             if not argv:
                 return {"ok": False, "error": "Empty command"}
-            proc = await asyncio.create_subprocess_exec(
-                *argv,
-                cwd=self.cwd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            uses_shell_control = bool(re.search(r"(\|\||&&|[;\n|<>]|\$\()", command))
+            if uses_shell_control:
+                proc = await asyncio.create_subprocess_shell(
+                    command,
+                    cwd=self.cwd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+            else:
+                proc = await asyncio.create_subprocess_exec(
+                    *argv,
+                    cwd=self.cwd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             except TimeoutError:
@@ -1340,7 +1441,7 @@ class ToolExecutor:
 
     async def dispatch(self, tool_name: str, tool_args: dict[str, Any]) -> ToolResult:
         """Dispatch a tool call by name."""
-        a = dict(tool_args)
+        a = _normalize_tool_args(tool_name, tool_args)
         raw = bool(a.pop("raw", False))
         dispatch_map: dict[str, Any] = {
             "read_file": lambda: self.read_file(a["path"]),
@@ -1400,7 +1501,16 @@ class ToolExecutor:
         fn = dispatch_map.get(tool_name)
         if fn is None:
             return {"ok": False, "error": f"Unknown tool: {tool_name}"}
-        result = await fn()
+        try:
+            result = await fn()
+        except KeyError as e:
+            missing = str(e).strip("'")
+            return {
+                "ok": False,
+                "error": f"Missing required argument '{missing}' for tool {tool_name}",
+                "tool": tool_name,
+                "args": a,
+            }
         return result if raw else self._budget_result(tool_name, result)
 
     def _budget_result(self, tool_name: str, result: ToolResult) -> ToolResult:

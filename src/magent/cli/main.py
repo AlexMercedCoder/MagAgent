@@ -8,6 +8,7 @@ import json
 import os
 import signal
 import sys
+import time
 from pathlib import Path
 from typing import Annotated
 
@@ -24,6 +25,7 @@ from magent.cli.app import (
     app,
     artifact_app,
     browser_app,
+    cache_app,
     checkpoint_app,
     code_app,
     config_app,
@@ -95,6 +97,7 @@ from magent.config import (
     user_exists,
     user_memory_dir,
 )
+from magent.prompt_input import read_multiline_prompt, read_user_prompt
 
 console = Console()
 register_agent_commands(agent_app)
@@ -165,6 +168,66 @@ def system_info_cmd(json_output: bool = typer.Option(True, "--json/--no-json")):
     console.print(table)
 
 
+@cache_app.command("doctor")
+def cache_doctor_cmd(
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    model: str | None = typer.Option(None, "--model", "-m"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show prompt-cache readiness for the current provider/model."""
+    from magent.agent import AGENT_STATIC_PROMPT
+    from magent.cache import cache_doctor_data
+
+    username = get_current_user()
+    config = load_config(username)
+    provider_id = provider or config.default_provider
+    model_name = model or config.default_model
+    data = cache_doctor_data(provider_id, model_name, AGENT_STATIC_PROMPT, "", config)
+    if json_output:
+        console.print_json(data=data)
+        return
+    table = Table("Field", "Value")
+    table.add_row("Provider", provider_id)
+    table.add_row("Model", model_name)
+    table.add_row("Enabled", str(data["enabled"]))
+    table.add_row("Stable prefix tokens", str(data["stable_prefix_tokens"]))
+    table.add_row("Request hints", ", ".join(sorted(data["request_hints"])) or "none")
+    table.add_row("Known usage fields", ", ".join(data["capabilities"]["usage_fields"]) or "none")
+    console.print(table)
+    recommendations = data.get("recommendations") or []
+    if recommendations:
+        console.print("[bold]Recommendations[/bold]")
+        for item in recommendations:
+            console.print(f"- {item}")
+    else:
+        console.print("[green]Prompt cache setup looks reasonable.[/green]")
+
+
+@cache_app.command("status")
+def cache_status_cmd(json_output: bool = typer.Option(False, "--json")):
+    """Summarize recorded prompt-cache usage from local session logs."""
+    from magent.workbench import usage_stats
+
+    stats = usage_stats()
+    prompt_tokens = int(stats.get("prompt_tokens") or 0)
+    cached_tokens = int(stats.get("cached_tokens") or 0)
+    data = {
+        "prompt_tokens": prompt_tokens,
+        "cached_tokens": cached_tokens,
+        "cache_hit_rate": round(cached_tokens / prompt_tokens, 4) if prompt_tokens else 0.0,
+        "cache_write_tokens": int(stats.get("cache_write_tokens") or 0),
+        "cache_miss_tokens": int(stats.get("cache_miss_tokens") or 0),
+        "sessions": int(stats.get("sessions") or 0),
+    }
+    if json_output:
+        console.print_json(data=data)
+        return
+    table = Table("Metric", "Value")
+    for key, value in data.items():
+        table.add_row(key, str(value))
+    console.print(table)
+
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -198,7 +261,7 @@ def main(
         _run_repl(username, config, main_provider, extract_provider, cwd)
 
 
-@app.command("ask")
+@app.command("ask", rich_help_panel="Everyday Agent Work")
 def ask_cmd(
     task: str = typer.Argument(..., help="One-shot task to run non-interactively"),
     provider: str | None = typer.Option(None, "--provider", "-p", help="Provider ID"),
@@ -296,7 +359,11 @@ def _run_one_shot(
     async def _run() -> str:
         nonlocal final_audit
         try:
-            response = await session.chat(task)
+            response = await _await_with_progress(
+                session.chat(task),
+                "MagAgent is working on your task",
+                enabled=not json_output,
+            )
             final_audit = audit_one_shot_task(task, cwd, session.scratchpad)
             attempts = 0
             while attempts < repair_attempts and not final_audit["ok"]:
@@ -307,7 +374,11 @@ def _run_one_shot(
                     "Use available tools to finish only the missing or blocked parts. "
                     "If a permission-required tool was blocked, choose a safer available tool or explain the blocker."
                 )
-                repair_response = await session.chat(repair_prompt)
+                repair_response = await _await_with_progress(
+                    session.chat(repair_prompt),
+                    f"Repair attempt {attempts} is running",
+                    enabled=not json_output,
+                )
                 response += "\n\nRepair attempt " + str(attempts) + ":\n" + repair_response
                 final_audit = audit_one_shot_task(task, cwd, session.scratchpad)
             return response
@@ -337,7 +408,26 @@ def _run_one_shot(
         raise typer.Exit(1)
 
 
-@app.command("research")
+async def _await_with_progress(coro, message: str, *, enabled: bool = True):
+    """Await a coroutine while periodically showing one-shot CLI progress."""
+    if not enabled:
+        return await coro
+    task = asyncio.create_task(coro)
+    started = time.monotonic()
+    next_update = 0.0
+    while not task.done():
+        elapsed = time.monotonic() - started
+        if elapsed >= next_update:
+            if elapsed < 1:
+                console.print(f"[dim]{message}...[/dim]")
+            else:
+                console.print(f"[dim]{message}... {int(elapsed)}s elapsed[/dim]")
+            next_update = elapsed + 8
+        await asyncio.sleep(0.25)
+    return await task
+
+
+@app.command("research", rich_help_panel="Everyday Agent Work")
 def research_cmd(
     topic: str = typer.Argument(..., help="Research topic or question."),
     question: Annotated[
@@ -346,7 +436,13 @@ def research_cmd(
     ] = None,
     max_sources: int = typer.Option(6, "--max-sources", "-n", min=1, max=20),
     fetch_sources: bool = typer.Option(True, "--fetch/--no-fetch", help="Fetch and excerpt source pages."),
-    json_output: bool = typer.Option(True, "--json/--no-json"),
+    json_output: bool = typer.Option(False, "--json/--no-json"),
+    write: bool | None = typer.Option(
+        None,
+        "--write/--no-write",
+        help="Write a Markdown research report in the active directory.",
+    ),
+    out: str | None = typer.Option(None, "--out", "-o", help="Output path for --write."),
 ):
     """Run deep web research without starting a full agent session."""
     from magent.tools import ToolExecutor
@@ -364,9 +460,77 @@ def research_cmd(
     if json_output:
         console.print_json(data=result)
     else:
-        console.print(result.get("summary", ""))
+        _print_research_result(result)
+        should_write = write
+        if should_write is None and sys.stdin.isatty() and result.get("ok"):
+            should_write = Confirm.ask("Write this research report to the active directory?", default=False)
+        if should_write:
+            path = _write_research_report(result, out=out)
+            console.print(f"[green]✓ Wrote research report:[/green] {path}")
     if not result.get("ok"):
         raise typer.Exit(1)
+
+
+def _print_research_result(result: dict) -> None:
+    if not result.get("ok"):
+        console.print(f"[red]Research failed:[/red] {result.get('error', 'unknown error')}")
+        return
+    from rich.markdown import Markdown
+
+    console.print(Panel.fit(f"[bold]{result.get('topic', 'Research')}[/bold]", title="Research"))
+    summary = str(result.get("summary") or "").strip()
+    if summary:
+        console.print(Markdown(summary))
+    sources = result.get("sources") or []
+    if sources:
+        table = Table("Source", "Title", "URL")
+        for index, source in enumerate(sources, start=1):
+            table.add_row(
+                str(index),
+                str(source.get("title") or "Untitled")[:80],
+                str(source.get("url") or "")[:100],
+            )
+        console.print(table)
+
+
+def _write_research_report(result: dict, *, out: str | None = None) -> Path:
+    path = Path(out).expanduser() if out else Path.cwd() / f"{_slugify_filename(str(result.get('topic') or 'research'))}.md"
+    path = path.resolve(strict=False)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(_research_report_markdown(result), encoding="utf-8")
+    return path
+
+
+def _research_report_markdown(result: dict) -> str:
+    lines = [f"# Research: {result.get('topic', 'Untitled')}", ""]
+    questions = result.get("questions") or []
+    if questions:
+        lines.extend(["## Focus Questions", ""])
+        lines.extend(f"- {question}" for question in questions)
+        lines.append("")
+    lines.extend(["## Summary", "", str(result.get("summary") or "No summary returned."), ""])
+    sources = result.get("sources") or []
+    if sources:
+        lines.extend(["## Sources", ""])
+        for index, source in enumerate(sources, start=1):
+            lines.append(f"### {index}. {source.get('title') or source.get('url') or 'Untitled'}")
+            lines.append("")
+            lines.append(f"- URL: {source.get('url', '')}")
+            if source.get("query"):
+                lines.append(f"- Query: {source.get('query')}")
+            if source.get("snippet"):
+                lines.extend(["", str(source.get("snippet"))])
+            if source.get("excerpt"):
+                lines.extend(["", "Excerpt:", "", str(source.get("excerpt"))])
+            lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _slugify_filename(value: str) -> str:
+    import re
+
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return f"research-{slug or 'report'}"
 
 
 def _one_shot_events(task: str, response: str, audit: dict, session) -> list[dict]:
@@ -420,12 +584,16 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
 
     console.print(
         "[dim]Type your message, [bold]/help[/bold] for commands, or "
-        "[bold]exit[/bold] / [bold]quit[/bold] to end session.[/dim]\n"
+        "[bold]exit[/bold] / [bold]quit[/bold] to end session.[/dim]"
+    )
+    console.print(
+        "[dim]Use [bold]/compose[/bold] for formatted multiline prompts. "
+        "Shift+Enter inserts a newline when your terminal supports it.[/dim]\n"
     )
 
     while True:
         try:
-            user_input = Prompt.ask(f"[bold cyan]({username})[/bold cyan] [bold]>[/bold]")
+            user_input = read_user_prompt(username)
         except (EOFError, KeyboardInterrupt):
             break
 
@@ -435,9 +603,13 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
         if user_input.strip().lower() in ("exit", "quit", "/exit", "/quit"):
             break
 
-        if user_input.startswith("/") and _handle_slash_command(
-            user_input, session, config, main_provider, loop
-        ):
+        if user_input.startswith("/"):
+            if _handle_slash_command(user_input, session, config, main_provider, loop):
+                continue
+            console.print(
+                f"[yellow]Unknown slash command:[/yellow] {user_input.split()[0]} "
+                "[dim](try /help)[/dim]"
+            )
             continue
 
         # Stream the agent response
@@ -475,6 +647,7 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
             Panel(
                 "[bold]Available commands:[/bold]\n\n"
                 "  [cyan]/help[/cyan]            — Show this help\n"
+                "  [cyan]/compose[/cyan]         — Write a formatted multiline prompt\n"
                 "  [cyan]/memory[/cyan]          — Show memory stats\n"
                 "  [cyan]/skills[/cyan]          — List active skills\n"
                 "  [cyan]/model[/cyan]           — Show current model\n"
@@ -486,6 +659,14 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 title="[bold cyan]MagAgent Help[/bold cyan]",
             )
         )
+        return True
+
+    if command == "/compose":
+        prompt = read_multiline_prompt(get_current_user() or "user")
+        if prompt.strip():
+            from magent.tui import print_streaming_response
+
+            print_streaming_response(session.stream_chat(prompt), _loop)
         return True
 
     if command == "/memory":
@@ -913,23 +1094,53 @@ def followup_list_cmd():
     console.print(table)
 
 
-@app.command("plan")
+@app.command("plan", rich_help_panel="Planning, Review & Release")
 def plan_cmd(
     goal: str = typer.Argument(...),
     project: str = typer.Option(".", "--project", "-p"),
     save: bool = typer.Option(False, "--save", help="Save the plan in the local workbench"),
+    executable: bool = typer.Option(
+        False,
+        "--executable",
+        help="When saving, create an executable plan compatible with plan-preview/apply.",
+    ),
+    command: Annotated[list[str] | None, typer.Option("--command", "-c")] = None,
+    no_diff: bool = typer.Option(False, "--no-diff", help="Do not capture the current diff for executable plans."),
+    json_output: bool = typer.Option(False, "--json", help="Emit machine-readable plan data."),
 ):
     """Generate a local plan without modifying files."""
-    from magent.workbench import build_plan, save_plan
+    from magent.workbench import build_plan, save_execution_plan, save_plan
 
     text = build_plan(project, goal)
-    console.print(text)
+    item = None
     if save:
-        item = save_plan(_store(), project, goal)
-        console.print(f"[green]✓ Saved plan {item['id']}[/green]")
+        if executable:
+            item = save_execution_plan(
+                _store(),
+                project,
+                goal,
+                commands=command or [],
+                include_diff=not no_diff,
+            )
+        else:
+            item = save_plan(_store(), project, goal)
+    if json_output:
+        console.print_json(data={"ok": True, "plan_markdown": text, "saved": item})
+        return
+    console.print(text)
+    if item:
+        mode = item.get("mode") or "draft"
+        console.print(f"\n[green]✓ Saved {mode} plan {item['id']}[/green]")
+        console.print("[dim]Next commands:[/dim]")
+        console.print(f"  magent plan-show {item['id']}")
+        if executable:
+            console.print(f"  magent plan-preview {item['id']}")
+            console.print(f"  magent plan-apply {item['id']} --dry-run")
+        else:
+            console.print(f"  magent plan-apply {item['id']} --dry-run")
 
 
-@app.command("plan-list")
+@app.command("plan-list", rich_help_panel="Planning, Review & Release")
 def plan_list_cmd(status: str | None = typer.Option(None, "--status")):
     """List saved plans."""
     from magent.workbench import list_plans
@@ -940,7 +1151,7 @@ def plan_list_cmd(status: str | None = typer.Option(None, "--status")):
     console.print(table)
 
 
-@app.command("plan-apply")
+@app.command("plan-apply", rich_help_panel="Planning, Review & Release")
 def plan_apply_cmd(
     plan_id: str = typer.Argument(...),
     run_checks: bool = typer.Option(False, "--run-checks"),
@@ -981,7 +1192,7 @@ def plan_apply_cmd(
     console.print_json(data=apply_plan(_store(), plan_id, run_checks=run_checks, dry_run=dry_run))
 
 
-@app.command("plan-sandbox")
+@app.command("plan-sandbox", rich_help_panel="Planning, Review & Release")
 def plan_sandbox_cmd(
     plan_id: str = typer.Argument(...),
     mode: str = typer.Option("worktree", "--mode"),
@@ -999,7 +1210,7 @@ def plan_sandbox_cmd(
     console.print_json(data=execute_plan_sandbox(_store(), plan_id, mode=mode, run_checks=run_checks, keep=keep, image=image))
 
 
-@app.command("plan-exec")
+@app.command("plan-exec", rich_help_panel="Planning, Review & Release")
 def plan_exec_cmd(
     goal: str = typer.Argument(...),
     project: str = typer.Option(".", "--project", "-p"),
@@ -1020,7 +1231,7 @@ def plan_exec_cmd(
     console.print(item.get("preview", ""))
 
 
-@app.command("plan-preview")
+@app.command("plan-preview", rich_help_panel="Planning, Review & Release")
 def plan_preview_cmd(plan_id: str = typer.Argument(...)):
     """Preview executable operations for a saved plan."""
     from magent.workbench import preview_plan, show_plan
@@ -1032,7 +1243,7 @@ def plan_preview_cmd(plan_id: str = typer.Argument(...)):
     console.print(item.get("preview") or preview_plan(item))
 
 
-@app.command("plan-run")
+@app.command("plan-run", rich_help_panel="Planning, Review & Release")
 def plan_run_cmd(goal: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
     """Create a pending plan-run record with checks, review, and diff context."""
     from magent.workbench import save_plan_run
@@ -1042,7 +1253,7 @@ def plan_run_cmd(goal: str = typer.Argument(...), project: str = typer.Option(".
     console.print(item.get("plan_markdown", ""))
 
 
-@app.command("plan-show")
+@app.command("plan-show", rich_help_panel="Planning, Review & Release")
 def plan_show_cmd(plan_id: str = typer.Argument(...)):
     """Show a saved plan record."""
     from magent.workbench import show_plan
@@ -1054,7 +1265,7 @@ def plan_show_cmd(plan_id: str = typer.Argument(...)):
     console.print_json(data=item)
 
 
-@app.command("plan-discard")
+@app.command("plan-discard", rich_help_panel="Planning, Review & Release")
 def plan_discard_cmd(plan_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")):
     """Discard a saved plan."""
     from magent.workbench import discard_plan
@@ -1066,7 +1277,7 @@ def plan_discard_cmd(plan_id: str = typer.Argument(...), yes: bool = typer.Optio
     console.print_json(data=discard_plan(_store(), plan_id))
 
 
-@app.command("run")
+@app.command("run", rich_help_panel="Everyday Agent Work")
 def run_cmd(
     goal: str = typer.Argument(...),
     budget: str = typer.Option("", "--budget", help="Human budget note, e.g. 30m"),
@@ -1079,7 +1290,7 @@ def run_cmd(
     plan_cmd(goal, project or os.getcwd())
 
 
-@app.command("review")
+@app.command("review", rich_help_panel="Planning, Review & Release")
 def review_cmd(
     base: str = typer.Option("HEAD", "--since"),
     project: str = typer.Option(".", "--project", "-p"),
@@ -1120,7 +1331,7 @@ def review_cmd(
         raise typer.Exit(1)
 
 
-@app.command("review-show")
+@app.command("review-show", rich_help_panel="Planning, Review & Release")
 def review_show_cmd(review_id: str = typer.Argument(...)):
     """Show a saved review."""
     from magent.workbench import review_show
@@ -1132,7 +1343,7 @@ def review_show_cmd(review_id: str = typer.Argument(...)):
     console.print_json(data=item)
 
 
-@app.command("graph")
+@app.command("graph", rich_help_panel="Memory & Context")
 def graph_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Show a lightweight repository import graph."""
     from magent.workbench import repo_graph
@@ -1140,7 +1351,7 @@ def graph_cmd(project: str = typer.Option(".", "--project", "-p")):
     console.print_json(data=repo_graph(project))
 
 
-@app.command("test-intel")
+@app.command("test-intel", rich_help_panel="Code Intelligence & Testing")
 def test_intel_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Suggest tests related to current git changes."""
     from magent.workbench import suggest_tests
@@ -1312,12 +1523,63 @@ def release_notes_cmd(
 def context_map_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     query: str = typer.Option("", "--query", "-q"),
+    json_output: bool = typer.Option(False, "--json", help="Emit the full machine-readable context payload."),
 ):
     """Show memory, workbench, and project state for the current project."""
     from magent.context import context_map
 
     mgr, _ = _get_memory_manager()
-    console.print_json(data=context_map(_store(), project=project, memory_manager=mgr, query=query))
+    data = context_map(_store(), project=project, memory_manager=mgr, query=query)
+    if json_output:
+        console.print_json(data=data)
+        return
+    _print_context_map(data)
+
+
+def _print_context_map(data: dict) -> None:
+    console.print(Panel.fit(f"[bold]{data.get('project', '')}[/bold]", title="Context Map"))
+    workspace = data.get("workspace") or {}
+    doctor = data.get("project_doctor") or {}
+    memory = data.get("memory") or {}
+    table = Table("Area", "Signal")
+    table.add_row("Git", f"{len(workspace.get('git_status') or [])} status entries")
+    table.add_row("Plans", str(workspace.get("pending_plans", 0)))
+    table.add_row("Patches", str(workspace.get("patches", 0)))
+    table.add_row("Checkpoints", str(workspace.get("checkpoint_sessions", 0)))
+    missing = doctor.get("missing") or []
+    table.add_row("Project doctor", "ok" if doctor.get("ok") else f"missing: {', '.join(missing[:4]) or 'none'}")
+    stats = memory.get("stats") or {}
+    table.add_row("Memory", f"{stats.get('nodes', 0)} nodes" if memory.get("available") else "unavailable")
+    console.print(table)
+
+    plans = (data.get("active_workbench") or {}).get("plans") or []
+    if plans:
+        plan_table = Table("ID", "Status", "Mode", "Goal")
+        for plan in plans[:5]:
+            plan_table.add_row(
+                plan.get("id", ""),
+                plan.get("status", ""),
+                plan.get("mode", "draft"),
+                str(plan.get("goal", ""))[:80],
+            )
+        console.print(plan_table)
+
+    candidates = data.get("promotion_candidates") or []
+    if candidates:
+        cand_table = Table("Memory Candidate", "Source", "Title")
+        for item in candidates[:8]:
+            cand_table.add_row(
+                item.get("id", ""),
+                item.get("source", ""),
+                str(item.get("title", ""))[:80],
+            )
+        console.print(cand_table)
+    else:
+        console.print("[dim]No high-value memory promotion candidates right now.[/dim]")
+
+    recall = (memory.get("recall") or "").strip()
+    if recall:
+        console.print(Panel(recall, title="Memory Recall"))
 
 
 @recipe_app.command("list")
@@ -1820,7 +2082,7 @@ def github_checks_cmd(
     console.print_json(data=pr_checks(project, number))
 
 
-@app.command("env-doctor")
+@app.command("env-doctor", rich_help_panel="Performance & Diagnostics")
 def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Run project environment checks."""
     from magent.workbench import env_doctor
@@ -1831,7 +2093,7 @@ def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
     console.print(table)
 
 
-@app.command("ci")
+@app.command("ci", rich_help_panel="Integrations")
 def ci_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     logs: bool = typer.Option(False, "--logs", help="Include failed-run logs and repair hints"),
@@ -1844,7 +2106,7 @@ def ci_cmd(
     console.print_json(data=ci_triage(project, logs=logs, repair_plan=repair_plan, store=_store(), save=save))
 
 
-@app.command("diagnostics")
+@app.command("diagnostics", rich_help_panel="Performance & Diagnostics")
 def diagnostics_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Run available local diagnostics for the current project."""
     from magent.workbench import project_diagnostics
@@ -1852,7 +2114,7 @@ def diagnostics_cmd(project: str = typer.Option(".", "--project", "-p")):
     console.print_json(data=project_diagnostics(project, store=_store()))
 
 
-@app.command("docs-brief")
+@app.command("docs-brief", rich_help_panel="Help & Learning")
 def docs_brief_cmd(project: str = typer.Option(".", "--project", "-p"), out: str | None = typer.Option(None, "--out")):
     """Generate a compact project documentation brief."""
     from magent.workbench import docs_brief
@@ -1865,7 +2127,7 @@ def docs_brief_cmd(project: str = typer.Option(".", "--project", "-p"), out: str
         console.print(text)
 
 
-@app.command("tutorial")
+@app.command("tutorial", rich_help_panel="Start Here")
 def tutorial_cmd():
     """Show the built-in getting-started tutorial."""
     from magent.docs import read_topic
@@ -1948,7 +2210,7 @@ def api_list_cmd():
     console.print(table)
 
 
-@app.command("notes")
+@app.command("notes", rich_help_panel="Workbench & Productivity")
 def notes_cmd(path: str = typer.Argument(...)):
     """Ingest meeting/working notes and extract tasks/decisions."""
     from magent.workbench import ingest_notes
@@ -1970,7 +2232,7 @@ def session_timeline_cmd(session_id: str | None = typer.Argument(None)):
     console.print(table)
 
 
-@app.command("stats")
+@app.command("stats", rich_help_panel="Performance & Diagnostics")
 def stats_cmd():
     """Show approximate local usage and token stats."""
     from magent.workbench import usage_stats
@@ -1986,7 +2248,7 @@ def policy_list_cmd():
     console.print_json(data=policy_profiles())
 
 
-@app.command("dashboard")
+@app.command("dashboard", rich_help_panel="Data & Local UI")
 def dashboard_cmd(
     out: str = typer.Option("magent-dashboard.html", "--out"),
     serve: bool = typer.Option(False, "--serve"),
@@ -2008,7 +2270,7 @@ def dashboard_cmd(
     console.print(f"[green]✓ Dashboard written to {path}[/green]")
 
 
-@app.command("ui")
+@app.command("ui", rich_help_panel="Data & Local UI")
 def ui_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     port: int = typer.Option(7830, "--port"),
@@ -2815,7 +3077,7 @@ def memory_wizard_cmd():
 # ─────────────────────────────────────────────
 
 
-@app.command("setup")
+@app.command("setup", rich_help_panel="Start Here")
 def setup():
     """First-time setup wizard."""
     from magent.setup import run_setup
@@ -2823,7 +3085,7 @@ def setup():
     run_setup()
 
 
-@app.command("configure")
+@app.command("configure", rich_help_panel="Start Here")
 def configure_cmd():
     """Run the friendly configuration wizard."""
     from magent.setup import run_setup
@@ -2831,7 +3093,7 @@ def configure_cmd():
     run_setup()
 
 
-@app.command("onboard")
+@app.command("onboard", rich_help_panel="Start Here")
 def onboard_cmd(
     profile: str = typer.Option("coding-local", "--profile"),
     project: str = typer.Option(".", "--project", "-p"),
@@ -2856,7 +3118,7 @@ def onboard_cmd(
     )
 
 
-@app.command("next")
+@app.command("next", rich_help_panel="Start Here")
 def next_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Suggest useful next actions for the current repo and MagAgent setup."""
     from magent.ux_flows import next_actions
@@ -2883,7 +3145,7 @@ def profile_apply_cmd(name: str = typer.Argument(...)):
         raise typer.Exit(1)
 
 
-@app.command("mode")
+@app.command("mode", rich_help_panel="Setup & Configuration")
 def set_mode(
     mode: str = typer.Argument(..., help="Permission mode: silent|balanced|paranoid|yolo"),
 ):
@@ -2901,7 +3163,7 @@ def set_mode(
     console.print(f"[green]✓ Permission mode set to [bold]{mode}[/bold][/green]")
 
 
-@app.command("doctor")
+@app.command("doctor", rich_help_panel="Start Here")
 def doctor(
     fix: bool = typer.Option(False, "--fix", help="Apply safe local fixes for missing UX defaults"),
     json_output: bool = typer.Option(False, "--json", help="Emit structured doctor actions only"),
@@ -2930,7 +3192,7 @@ def doctor(
     console.print(table)
 
 
-@app.command("readiness")
+@app.command("readiness", rich_help_panel="Start Here")
 def readiness_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     smoke: bool = typer.Option(False, "--smoke", help="Run a tiny live provider tool-use smoke."),

@@ -10,6 +10,7 @@ from typing import Any
 
 from rich.console import Console
 
+from magent.cache import build_cache_request_kwargs
 from magent.provider_catalog import (
     OPENAI_COMPATIBLE_PROVIDERS,
     provider_base_urls,
@@ -117,6 +118,7 @@ class Provider:
         messages: list[dict[str, str]],
         temperature: float = 0.3,
         max_tokens: int = 4096,
+        request_kwargs: dict[str, Any] | None = None,
     ) -> str:
         """Non-streaming completion. Returns full response string."""
         try:
@@ -128,7 +130,7 @@ class Provider:
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                **self._base_kwargs,
+                **(request_kwargs or self._base_kwargs),
             )
             return response.choices[0].message.content or ""
         except Exception as e:
@@ -139,6 +141,7 @@ class Provider:
         messages: list[dict[str, str]],
         temperature: float = 0.3,
         max_tokens: int = 4096,
+        request_kwargs: dict[str, Any] | None = None,
     ) -> AsyncIterator[str]:
         """Streaming completion. Yields token chunks."""
         try:
@@ -151,7 +154,7 @@ class Provider:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 stream=True,
-                **self._base_kwargs,
+                **(request_kwargs or self._base_kwargs),
             )
             async for chunk in response:
                 delta = chunk.choices[0].delta
@@ -167,6 +170,31 @@ class Provider:
             return await self.complete(messages, temperature=0.1, max_tokens=2048)
 
         return _fn
+
+    def request_kwargs(
+        self,
+        config: Any | None = None,
+        *,
+        username: str = "",
+        project_slug: str | None = None,
+        session_id: str | None = None,
+        cwd: str = ".",
+    ) -> dict[str, Any]:
+        """Return LiteLLM kwargs plus safe provider cache hints for one request."""
+        kwargs = dict(self._base_kwargs)
+        if config is not None:
+            kwargs.update(
+                build_cache_request_kwargs(
+                    self.provider_id,
+                    self.model,
+                    config,
+                    username=username,
+                    project_slug=project_slug,
+                    session_id=session_id,
+                    cwd=cwd,
+                )
+            )
+        return kwargs
 
 
 class ProviderError(Exception):

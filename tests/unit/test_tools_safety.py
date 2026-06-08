@@ -37,8 +37,15 @@ async def test_outline_file_reports_python_symbols(tmp_path: Path) -> None:
     assert {"Demo", "method", "run"} <= names
 
 
-def test_shell_control_is_blocked_even_if_allowlisted() -> None:
-    assert classify_shell_command("git status; echo unsafe", ["git *"]) == RiskTier.BLOCK
+def test_shell_control_read_only_chains_do_not_prompt_spam() -> None:
+    assert classify_shell_command("cat file.html 2>&1 | wc -l") == RiskTier.SILENT
+    assert classify_shell_command("wc -l file.html 2>/dev/null; echo ---; tail -5 file.html") == RiskTier.SILENT
+    assert classify_shell_command("pip list 2>/dev/null | grep -iE 'docx|pptx|python'") == RiskTier.SILENT
+    assert classify_shell_command('cd /tmp && python3 -c "import docx; print(docx.__version__)"') == RiskTier.SILENT
+
+
+def test_shell_control_blocks_dangerous_segment_even_if_allowlisted() -> None:
+    assert classify_shell_command("git status; rm -rf build", ["git *"]) == RiskTier.BLOCK
 
 
 @pytest.mark.asyncio
@@ -49,7 +56,7 @@ async def test_noninteractive_permissions_return_structured_denial(tmp_path: Pat
         interactive_permissions=False,
     )
 
-    result = await tools.run_shell("git status; echo unsafe")
+    result = await tools.run_shell("git status; rm -rf build")
 
     assert result["ok"] is False
     assert result["permission_required"] is True
@@ -127,6 +134,34 @@ async def test_file_tools_read_write_edit_list_diff_and_range(tmp_path: Path) ->
     assert edited["ok"] is True
     assert diff["changed"] is True
     assert {entry["name"] for entry in listed["entries"]} == {"a.txt", "b.txt"}
+
+
+@pytest.mark.asyncio
+async def test_dispatch_normalizes_common_write_file_aliases(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    result = await tools.dispatch(
+        "write_file",
+        {"file_path": "notes/alias.txt", "contents": "alias worked"},
+    )
+
+    assert result["ok"] is True
+    assert (tmp_path / "notes" / "alias.txt").read_text(encoding="utf-8") == "alias worked"
+
+
+@pytest.mark.asyncio
+async def test_shell_control_can_be_session_allowed(tmp_path: Path) -> None:
+    tools = ToolExecutor(
+        str(tmp_path),
+        permission_mode="balanced",
+        trusted_shell_patterns=["cat a.txt | wc -l"],
+    )
+    (tmp_path / "a.txt").write_text("one\ntwo\n", encoding="utf-8")
+
+    result = await tools.run_shell("cat a.txt | wc -l")
+
+    assert result["ok"] is True
+    assert result["stdout"].strip() == "2"
 
 
 @pytest.mark.asyncio

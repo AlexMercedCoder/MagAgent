@@ -13,6 +13,7 @@ from typing import Any
 from rich.console import Console
 
 from magent.agent_defs import resolve_invocation
+from magent.cache import extract_cache_usage
 from magent.config import Config, user_memory_dir
 from magent.hooks import run_hooks
 from magent.logging import SessionLogger
@@ -28,13 +29,13 @@ console = Console()
 
 STRIP_MESSAGE_KEYS = {"provider_specific_fields"}
 
-AGENT_SYSTEM_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
+AGENT_STATIC_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
 
 You have access to tools for reading/writing files, running shell commands, searching the codebase, and fetching information from the web.
 You also have access to MCP (Model Context Protocol) tools from connected servers — these appear as mcp__<server>__<tool_name>.
 
 Key behaviors:
-1. Always look at the user's memory context (provided below) — it tells you what you know about this user, their projects, and their preferences.
+1. Always look at the user's memory context when provided — it tells you what you know about this user, their projects, and their preferences.
 2. Use tools proactively — don't ask the user for information you can discover yourself.
 3. When writing code, follow the user's established patterns and preferences from memory.
 4. If you find a useful URL during research, note it explicitly so it can be bookmarked.
@@ -43,12 +44,19 @@ Key behaviors:
 7. For file reads over 100 lines, prefer outline_file first, then read only the relevant range.
 8. Prefer narrow edit_file changes over whole-file rewrites whenever possible.
 9. Tool outputs may be compressed; use targeted follow-up tools for exact ranges or full details.
+10. Prefer native tools over shell probes: use read_file/list_dir for file checks, write_file/edit_file for file changes, and install_package for Python packages.
+11. If the user denies a permission request, stop trying equivalent commands and explain the blocked action briefly.
+"""
+
+AGENT_CONTEXT_PROMPT = """The following context changes by project and turn. Use it as relevant, but do not repeat it unless needed.
 
 {memory_context}
 {repo_context}
 {session_context}
 {skill_context}
 """
+
+AGENT_SYSTEM_PROMPT = AGENT_STATIC_PROMPT + "\n\n" + AGENT_CONTEXT_PROMPT
 
 
 class AgentSession:
@@ -101,6 +109,7 @@ class AgentSession:
             cwd=cwd,
             permission_mode=permission_mode,
             allowed_shell_patterns=config.allowed_shell_patterns,
+            trusted_shell_patterns=config.trusted_shell_patterns,
             show_tool_calls=config.get("ui", "show_tool_calls", default=True),
             username=username,
             tool_budgets=config.get("tool_budgets", default={}),
@@ -145,6 +154,12 @@ class AgentSession:
         return str(getattr(self, "cwd", "."))
 
     def _build_system_prompt(self, user_message: str) -> str:
+        return self._build_stable_prompt() + "\n\n" + self._build_context_prompt(user_message)
+
+    def _build_stable_prompt(self) -> str:
+        return AGENT_STATIC_PROMPT
+
+    def _build_context_prompt(self, user_message: str) -> str:
         memory_context = ""
         if self.memory.available:
             recalled = self.memory.recall(user_message)
@@ -159,12 +174,32 @@ class AgentSession:
             user_message,
             budget_tokens=self.config.skill_budget_tokens,
         )
-        return AGENT_SYSTEM_PROMPT.format(
+        return AGENT_CONTEXT_PROMPT.format(
             memory_context=memory_context,
             repo_context=repo_context,
             session_context=session_context,
             skill_context=skill_context,
         )
+
+    def _build_prompt_messages(self, user_message: str) -> list[dict[str, Any]]:
+        context_prompt = self._build_context_prompt(user_message)
+        messages: list[dict[str, Any]] = [{"role": "system", "content": self._build_stable_prompt()}]
+        if context_prompt.strip():
+            messages.append({"role": "system", "content": context_prompt})
+        messages.extend(self._conversation_messages_for_prompt())
+        messages.append({"role": "user", "content": user_message})
+        return messages
+
+    def _provider_request_kwargs(self) -> dict[str, Any]:
+        if hasattr(self.provider, "request_kwargs"):
+            return self.provider.request_kwargs(
+                self.config,
+                username=self.username,
+                project_slug=self.project_slug,
+                session_id=self.session_id,
+                cwd=self.cwd,
+            )
+        return dict(getattr(self.provider, "_base_kwargs", {}))
 
     def _build_session_context(self) -> str:
         parts = ["## Session State", ""]
@@ -212,7 +247,7 @@ class AgentSession:
                     tool_choice="auto",
                     temperature=0.3,
                     max_tokens=4096,
-                    **self.provider._base_kwargs,
+                    **self._provider_request_kwargs(),
                 )
                 self._log_llm_usage(response)
             except Exception as e:
@@ -271,6 +306,10 @@ class AgentSession:
                         "name": tool_name,
                     }
                 )
+                if self._permission_denied_by_user(result):
+                    content = self._permission_denial_summary(tool_name, tool_args)
+                    messages.append({"role": "assistant", "content": content})
+                    return content, messages, total_tool_calls
                 if self.config.prune_stale_tool_results:
                     self._prune_stale_tool_results(messages, tool_name, result)
 
@@ -283,12 +322,7 @@ class AgentSession:
         self.logger.log_user_turn(self.turn_count, user_message)
         self.conversation.append({"role": "user", "content": user_message})
 
-        system_prompt = self._build_system_prompt(user_message)
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt},
-            *self._conversation_messages_for_prompt(),
-        ]
-        messages.append({"role": "user", "content": user_message})
+        messages = self._build_prompt_messages(user_message)
 
         # Run tool loop first (tools don't stream)
         # Wait for MCP servers to finish connecting (if still starting)
@@ -313,14 +347,16 @@ class AgentSession:
                     tool_choice="auto",
                     temperature=0.3,
                     max_tokens=4096,
-                    **self.provider._base_kwargs,
+                    **self._provider_request_kwargs(),
                 )
                 self._log_llm_usage(response)
                 choice = response.choices[0]
                 msg = choice.message
 
                 if not msg.tool_calls:
-                    # Got text — now stream it
+                    # Got final text. Do not make a second "finalizing" model call:
+                    # some OpenAI-compatible models emit pseudo tool-call markup when
+                    # tools are removed, which can claim work happened without running it.
                     if not (msg.content or "").strip() and total_tool_calls:
                         fallback = self._fallback_tool_summary()
                         messages.append({"role": "assistant", "content": fallback})
@@ -331,8 +367,15 @@ class AgentSession:
                             await self._maybe_write_memories()
                         self._maybe_compact_conversation()
                         return
+                    full_response = msg.content or ""
                     messages.append(_sanitize_message(msg.model_dump()))
-                    break
+                    self.conversation.append({"role": "assistant", "content": full_response})
+                    self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
+                    yield full_response
+                    if self.turn_count % self.config.write_every_n_turns == 0:
+                        await self._maybe_write_memories()
+                    self._maybe_compact_conversation()
+                    return
 
                 messages.append(_sanitize_message(msg.model_dump()))
                 total_tool_calls += len(msg.tool_calls)
@@ -363,44 +406,20 @@ class AgentSession:
                             "name": tool_name,
                         }
                     )
+                    if self._permission_denied_by_user(result):
+                        full_response = self._permission_denial_summary(tool_name, tool_args)
+                        messages.append({"role": "assistant", "content": full_response})
+                        self.conversation.append({"role": "assistant", "content": full_response})
+                        self.logger.log_assistant_turn(
+                            self.turn_count,
+                            full_response,
+                            total_tool_calls,
+                        )
+                        yield full_response
+                        self._maybe_compact_conversation()
+                        return
                     if self.config.prune_stale_tool_results:
                         self._prune_stale_tool_results(messages, tool_name, result)
-
-            # Final streaming pass — text only, no tools
-            if total_tool_calls:
-                console.print("[dim]finalizing response...[/dim]")
-            stream_response = await litellm.acompletion(
-                messages=_sanitize_messages(messages),
-                temperature=0.3,
-                max_tokens=4096,
-                stream=True,
-                **self.provider._base_kwargs,
-            )
-
-            full_response = ""
-            async for chunk in stream_response:
-                delta = chunk.choices[0].delta
-                if delta and delta.content:
-                    full_response += delta.content
-                    yield delta.content
-
-            if not full_response.strip() and total_tool_calls:
-                full_response = self._fallback_tool_summary()
-                yield full_response
-
-            self.conversation.append({"role": "assistant", "content": full_response})
-            self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
-            self.logger.log_token_usage(
-                provider=self.provider.provider_id,
-                model=self.provider.model,
-                prompt_tokens=estimate_tokens(json.dumps(messages, default=str)),
-                completion_tokens=estimate_tokens(full_response),
-                estimated=True,
-            )
-
-            if self.turn_count % self.config.write_every_n_turns == 0:
-                await self._maybe_write_memories()
-            self._maybe_compact_conversation()
 
         except Exception as e:
             err = f"\n[Error: {e}]"
@@ -413,12 +432,7 @@ class AgentSession:
         self.logger.log_user_turn(self.turn_count, user_message)
         self.conversation.append({"role": "user", "content": user_message})
 
-        system_prompt = self._build_system_prompt(user_message)
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt},
-            *self._conversation_messages_for_prompt(),
-        ]
-        messages.append({"role": "user", "content": user_message})
+        messages = self._build_prompt_messages(user_message)
 
         response, _, tool_call_count = await self._run_tool_loop(messages, user_message)
         self.conversation.append({"role": "assistant", "content": response})
@@ -448,6 +462,25 @@ class AgentSession:
         if commands:
             parts.append("Commands run: " + "; ".join(str(cmd) for cmd in commands[-3:]) + ".")
         return " ".join(parts)
+
+    def _permission_denied_by_user(self, result: dict[str, Any]) -> bool:
+        return (
+            result.get("ok") is False
+            and result.get("permission_reason") == "user-denied"
+        )
+
+    def _permission_denial_summary(self, tool_name: str, tool_args: dict[str, Any]) -> str:
+        if tool_name == "run_shell":
+            command = str(tool_args.get("command", "")).strip()
+            return (
+                "Stopped because you denied the shell command"
+                + (f": `{command}`." if command else ".")
+                + " I will not retry equivalent shell probes unless you ask me to."
+            )
+        return (
+            f"Stopped because you denied permission for `{tool_name}`. "
+            "I will not retry equivalent actions unless you ask me to."
+        )
 
     def _maybe_compact_conversation(self) -> None:
         keep = self.config.keep_recent_turns
@@ -565,13 +598,8 @@ class AgentSession:
         prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
         total_tokens = int(getattr(usage, "total_tokens", 0) or prompt_tokens + completion_tokens)
-        cached_tokens = 0
-        details = getattr(usage, "prompt_tokens_details", None)
-        if details:
-            cached_tokens = int(getattr(details, "cached_tokens", 0) or 0)
-        if not cached_tokens and isinstance(usage, dict):
-            details_dict = usage.get("prompt_tokens_details") or {}
-            cached_tokens = int(details_dict.get("cached_tokens") or 0)
+        cache_usage = extract_cache_usage(usage)
+        cached_tokens = int(cache_usage["cached_tokens"] or 0)
         cost = None
         try:
             import litellm
@@ -586,6 +614,10 @@ class AgentSession:
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
             cached_tokens=cached_tokens,
+            cache_hit_tokens=int(cache_usage["cache_hit_tokens"] or 0),
+            cache_miss_tokens=int(cache_usage["cache_miss_tokens"] or 0),
+            cache_write_tokens=int(cache_usage["cache_write_tokens"] or 0),
+            cache_source=str(cache_usage["cache_source"] or ""),
             cost_usd=cost,
         )
 

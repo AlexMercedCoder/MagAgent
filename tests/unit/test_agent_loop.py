@@ -22,6 +22,12 @@ class FakeLogger:
     def log_token_usage(self, *args, **kwargs):
         return None
 
+    def log_user_turn(self, *args, **kwargs):
+        return None
+
+    def log_assistant_turn(self, *args, **kwargs):
+        return None
+
 
 class FakeTools:
     def get_tool_definitions(self):
@@ -29,6 +35,20 @@ class FakeTools:
 
     async def dispatch(self, name, args):
         return {"ok": True, "path": "/repo/app.py", "content": "done"}
+
+
+class FakeDeniedTools(FakeTools):
+    def get_tool_definitions(self):
+        return [{"function": {"name": "run_shell"}}]
+
+    async def dispatch(self, name, args):
+        return {
+            "ok": False,
+            "error": "Permission denied by user",
+            "permission_required": False,
+            "permission_tier": 3,
+            "permission_reason": "user-denied",
+        }
 
 
 class FakeMCP:
@@ -43,6 +63,11 @@ class FakeConfig:
     selective_tools = False
     allowed_shell_patterns = []
     prune_stale_tool_results = True
+    prompt_caching = True
+    prompt_cache_key_scope = "project"
+    prompt_cache_retention = ""
+    repo_map_budget_tokens = 1200
+    skill_budget_tokens = 2000
 
 
 def make_session() -> AgentSession:
@@ -78,11 +103,34 @@ def tool_call_message() -> SimpleNamespace:
     )
 
 
+def shell_tool_call_message() -> SimpleNamespace:
+    tool_call = SimpleNamespace(
+        id="call_shell",
+        function=SimpleNamespace(name="run_shell", arguments='{"command": "pip install package"}'),
+    )
+    return SimpleNamespace(
+        content="",
+        tool_calls=[tool_call],
+        model_dump=lambda: {
+            "role": "assistant",
+            "tool_calls": [{"id": "call_shell"}],
+        },
+    )
+
+
 def final_message() -> SimpleNamespace:
     return SimpleNamespace(
         content="finished",
         tool_calls=[],
         model_dump=lambda: {"role": "assistant", "content": "finished"},
+    )
+
+
+def final_message_with_content(text: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        content=text,
+        tool_calls=[],
+        model_dump=lambda: {"role": "assistant", "content": text},
     )
 
 
@@ -212,3 +260,84 @@ def test_prune_stale_tool_results_replaces_old_reads() -> None:
     assert messages[0]["content"].startswith("[pruned stale read_file")
     assert messages[1]["content"] == "/repo/app.py:old"
     assert session.logger.pruned
+
+
+def test_build_prompt_messages_separates_stable_and_volatile_context() -> None:
+    session = make_session()
+    session.memory = SimpleNamespace(available=False)
+    session.repo_map = SimpleNamespace(relevant_slice=lambda *_args: "## Repo Map\n- app.py")
+    session.skill_registry = SimpleNamespace(build_skill_context=lambda *_args, **_kwargs: "")
+    session.compacted_summary = ""
+    session.conversation = [{"role": "user", "content": "previous"}]
+
+    messages = session._build_prompt_messages("current task")
+
+    assert messages[0]["role"] == "system"
+    assert "You are MagAgent" in messages[0]["content"]
+    assert "Repo Map" not in messages[0]["content"]
+    assert messages[1]["role"] == "system"
+    assert "Repo Map" in messages[1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_stream_chat_does_not_make_second_finalizing_model_call(monkeypatch) -> None:
+    calls = []
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=final_message_with_content("final answer"))]
+        )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+    session.username = "user"
+    session.cwd = "/repo"
+    session.project_slug = "repo"
+    session.session_id = "session"
+    session.turn_count = 0
+    session.conversation = []
+    session.memory = SimpleNamespace(available=False)
+    session.repo_map = SimpleNamespace(relevant_slice=lambda *_args: "")
+    session.skill_registry = SimpleNamespace(build_skill_context=lambda *_args, **_kwargs: "")
+    session.compacted_summary = ""
+    session.config.write_every_n_turns = 999
+    session.config.keep_recent_turns = 6
+    session.config.compact_every_n_turns = 10
+    session.config.max_history_tokens = 6000
+
+    chunks = [chunk async for chunk in session.stream_chat("hello")]
+
+    assert chunks == ["final answer"]
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_stops_after_user_denies_permission(monkeypatch) -> None:
+    calls = []
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=shell_tool_call_message())])
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+    session.tools = FakeDeniedTools()
+
+    text, messages, tool_count = await session._run_tool_loop(
+        [{"role": "user", "content": "install package"}],
+        "install package",
+    )
+
+    assert tool_count == 1
+    assert len(calls) == 1
+    assert text.startswith("Stopped because you denied")
+    assert messages[-1]["role"] == "assistant"

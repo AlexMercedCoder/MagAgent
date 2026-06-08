@@ -90,6 +90,10 @@ class SessionLogger:
         completion_tokens: int = 0,
         total_tokens: int | None = None,
         cached_tokens: int = 0,
+        cache_hit_tokens: int = 0,
+        cache_miss_tokens: int = 0,
+        cache_write_tokens: int = 0,
+        cache_source: str = "",
         cost_usd: float | None = None,
         estimated: bool = False,
     ) -> None:
@@ -104,6 +108,10 @@ class SessionLogger:
                 if total_tokens is not None
                 else prompt_tokens + completion_tokens,
                 "cached_tokens": cached_tokens,
+                "cache_hit_tokens": cache_hit_tokens,
+                "cache_miss_tokens": cache_miss_tokens,
+                "cache_write_tokens": cache_write_tokens,
+                "cache_source": cache_source,
                 "cost_usd": cost_usd,
                 "estimated": estimated,
             },

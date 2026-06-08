@@ -35,6 +35,7 @@ dependencies = [
     # Core CLI & UI
     "typer>=0.12.0",
     "rich>=13.7.0",
+    "prompt-toolkit>=3.0.0",
     # LLM providers
     "litellm>=1.40.0",
     # Memory graph

@@ -59,6 +59,38 @@ def test_promotion_candidates_include_project_tasks_plans_and_failures(tmp_path:
     assert any("PromotedFrom:" in item["body"] for item in candidates)
 
 
+def test_promotion_candidates_skip_trivial_draft_plans(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    project = tmp_path / "project"
+    project.mkdir()
+    store = WorkbenchStore("context-test")
+    store.append(
+        "plans",
+        {
+            "id": "plan_math",
+            "goal": "What is 2 + 2",
+            "status": "draft",
+            "project": "project",
+            "plan_markdown": "# Plan\n\n- generic",
+        },
+    )
+    store.append(
+        "plans",
+        {
+            "id": "plan_real",
+            "goal": "Improve release workflow reliability",
+            "status": "pending",
+            "project": "project",
+            "plan_markdown": "# Plan\n\n- useful",
+        },
+    )
+
+    candidates = promotion_candidates(store, project)
+
+    assert not any(item["source_id"] == "plan_math" for item in candidates)
+    assert any(item["source_id"] == "plan_real" for item in candidates)
+
+
 def test_promote_candidate_writes_one_memory(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("context-test")

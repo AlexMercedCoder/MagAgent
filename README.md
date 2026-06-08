@@ -114,11 +114,15 @@ magent
 
 ```bash
 magent ask "Refactor the auth module to use JWTs and add tests"
+magent research "topic"
+magent research "topic" --write
 magent docs list
 magent tutorial
 magent doctor
 magent recipe run release-prep
 magent memory inbox
+magent plan "Ship the UX fixes"
+magent plan --save --executable "Ship the UX fixes" -c "pytest -q"
 magent plan-sandbox <plan-id> --dry-run
 magent eval init
 magent onboard --profile coding-cloud
@@ -654,6 +658,7 @@ magent --version       # Show version
 | Command | Description |
 |---|---|
 | `/help` | All slash commands |
+| `/compose` | Write a formatted multiline prompt |
 | `/memory` | Memory graph stats |
 | `/skills` | Loaded skills list |
 | `/model` | Current model / change model |
@@ -663,6 +668,20 @@ magent --version       # Show version
 | `/db` | List your SQLite databases |
 | `/clear` | Clear conversation history |
 | `/exit` | End session |
+
+---
+
+### Prompt Caching
+
+MagAgent keeps stable agent instructions ahead of changing memory/repo/session
+context so provider prefix caches have something repeatable to reuse. Inspect
+the current setup with `magent cache doctor` and review local cache telemetry
+with `magent cache status`.
+
+In interactive sessions, use `/compose` for reliable multiline prompts.
+Shift+Enter inserts a newline when your terminal reports it distinctly.
+Shell permission prompts can be approved once, for the current session, or saved
+as an exact trusted command for future sessions.
 
 ---
 

@@ -149,6 +149,20 @@ def test_plan_show_and_discard(tmp_path: Path, monkeypatch) -> None:
     assert result["plan"]["status"] == "discarded"
 
 
+def test_build_plan_uses_project_and_goal_context(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("# Demo\n", encoding="utf-8")
+
+    docs_plan = workbench.build_plan(tmp_path, "Update docs and README")
+    test_plan = workbench.build_plan(tmp_path, "Repair failing tests")
+
+    assert "## Project Signals" in docs_plan
+    assert "pyproject.toml" in docs_plan
+    assert "Check README and packaged docs" in docs_plan
+    assert "Reproduce the issue" in test_plan
+    assert docs_plan != test_plan
+
+
 def test_save_execution_plan_with_command(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path)
     store = workbench.WorkbenchStore("alice")

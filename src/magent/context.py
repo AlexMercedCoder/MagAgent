@@ -122,6 +122,8 @@ def promotion_candidates(
     for item in list_plans(store):
         if item.get("status") not in {"draft", "pending", "failed"}:
             continue
+        if not _plan_candidate_worth_promoting(item):
+            continue
         candidates.append(
             _candidate(
                 source="plan",
@@ -194,6 +196,24 @@ def promotion_candidates(
         seen.add(key)
         deduped.append(candidate)
     return deduped[:limit]
+
+
+def _plan_candidate_worth_promoting(item: dict[str, Any]) -> bool:
+    """Avoid promoting throwaway draft plans into durable memory."""
+    status = item.get("status", "")
+    mode = item.get("mode", "")
+    goal = str(item.get("goal", "")).strip()
+    if status in {"pending", "failed"} or mode in {"execution", "plan-run"}:
+        return True
+    if status == "draft":
+        if len(goal.split()) < 4:
+            return False
+        if re.fullmatch(r"(what is|calculate|compute)?\s*[\d\s+\-*/().=?]+", goal.lower()):
+            return False
+        details = str(item.get("preview") or item.get("plan_markdown") or "")
+        if details.count("\n") < 8:
+            return False
+    return True
 
 
 def promote_candidate(

@@ -257,23 +257,42 @@ def load_project_config(root: str | Path) -> dict[str, Any]:
 
 def build_plan(root: str | Path, goal: str) -> str:
     profile = project_profile(root)
+    root_path = Path(profile["root"])
+    commands = profile.get("commands") or infer_project_commands(root_path) or ["git diff --stat"]
+    diff_stat = _run_git(root_path, ["diff", "--stat"])
+    focus = _plan_focus(goal, root_path)
     lines = [
         f"# Plan: {goal}",
         "",
         f"Project: `{profile['name']}`",
         f"Root: `{profile['root']}`",
         "",
+        "## Project Signals",
+        f"- Key files: {', '.join(profile.get('detected_files') or ['none detected'])}",
+        f"- Configured commands: {len(commands)}",
+        f"- Current diff: {'present' if diff_stat.strip() else 'none detected'}",
+        "",
+        "## Focus",
+        *[f"- {item}" for item in focus],
+        "",
         "## Suggested Steps",
-        "1. Inspect relevant files with `outline_file` and targeted range reads.",
-        "2. Make small patch-oriented edits.",
-        "3. Run the narrowest relevant checks.",
-        "4. Review the diff and update docs/tests if behavior changed.",
-        "5. Record decisions/tasks/artifacts in the workbench.",
+        *_numbered_steps(goal),
         "",
         "## Likely Checks",
     ]
-    commands = profile.get("commands") or ["git diff --stat"]
     lines.extend(f"- `{command}`" for command in commands)
+    if diff_stat.strip():
+        lines.extend(["", "## Current Diff Stat", "```", diff_stat.strip(), "```"])
+    lines.extend(
+        [
+            "",
+            "## Save / Run",
+            "- Save this draft: `magent plan --save \"<goal>\"`",
+            "- Save executable operations: `magent plan --save --executable \"<goal>\"`",
+            "- Show saved plans: `magent plan-list`",
+            "- Preview executable plan: `magent plan-preview <plan-id>`",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -297,6 +316,44 @@ def save_plan(store: WorkbenchStore, root: str | Path, goal: str) -> dict[str, A
             "plan_markdown": build_plan(root, goal),
         },
     )
+
+
+def _plan_focus(goal: str, root: Path) -> list[str]:
+    text = goal.lower()
+    focus = []
+    if any(word in text for word in ("test", "coverage", "failing", "pytest", "repair")):
+        focus.append("Prioritize reproducing failures and running the narrowest related tests first.")
+    if any(word in text for word in ("docs", "readme", "documentation")):
+        focus.append("Check README and packaged docs so user-facing instructions stay current.")
+    if any(word in text for word in ("release", "publish", "version")):
+        focus.append("Run release readiness checks and verify version/changelog surfaces before publishing.")
+    if any(word in text for word in ("ui", "ux", "cli", "prompt")):
+        focus.append("Exercise the user-facing command path, not only lower-level helpers.")
+    if any((root / name).exists() for name in ("pyproject.toml", "setup.py")):
+        focus.append("Use Python project conventions and prefer existing pytest/ruff commands.")
+    return focus or ["Inspect the current project shape, then choose the smallest safe implementation path."]
+
+
+def _numbered_steps(goal: str) -> list[str]:
+    text = goal.lower()
+    steps = [
+        "1. Inspect relevant files with `outline_file` and targeted range reads.",
+        "2. Identify the narrowest code/docs/test surface that satisfies the goal.",
+        "3. Make small patch-oriented edits.",
+    ]
+    if any(word in text for word in ("test", "coverage", "repair", "bug")):
+        steps.append("4. Reproduce the issue or run focused related tests before broad validation.")
+    elif any(word in text for word in ("docs", "readme", "documentation")):
+        steps.append("4. Update repo-facing and packaged docs together.")
+    else:
+        steps.append("4. Run the narrowest relevant checks.")
+    steps.extend(
+        [
+            "5. Review the diff for unintended changes.",
+            "6. Record follow-ups, decisions, or artifacts in the workbench if useful.",
+        ]
+    )
+    return steps
 
 
 def list_plans(store: WorkbenchStore, status: str | None = None) -> list[dict[str, Any]]:
@@ -1333,6 +1390,8 @@ def usage_stats() -> dict[str, Any]:
     completion_tokens = 0
     total_tokens = 0
     cached_tokens = 0
+    cache_write_tokens = 0
+    cache_miss_tokens = 0
     cost_usd = 0.0
     pruned_results = 0
     pruned_tokens_saved = 0
@@ -1353,6 +1412,8 @@ def usage_stats() -> dict[str, Any]:
                 completion_tokens += int(event.get("completion_tokens") or 0)
                 total_tokens += int(event.get("total_tokens") or 0)
                 cached_tokens += int(event.get("cached_tokens") or 0)
+                cache_write_tokens += int(event.get("cache_write_tokens") or 0)
+                cache_miss_tokens += int(event.get("cache_miss_tokens") or 0)
                 cost_usd += float(event.get("cost_usd") or 0.0)
             if event.get("event") == "context_pruned":
                 pruned_results += int(event.get("pruned") or 0)
@@ -1365,6 +1426,8 @@ def usage_stats() -> dict[str, Any]:
         "completion_tokens": completion_tokens,
         "total_tokens": total_tokens,
         "cached_tokens": cached_tokens,
+        "cache_write_tokens": cache_write_tokens,
+        "cache_miss_tokens": cache_miss_tokens,
         "cost_usd": round(cost_usd, 6),
         "pruned_results": pruned_results,
         "pruned_tokens_saved": pruned_tokens_saved,

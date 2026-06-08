@@ -34,6 +34,22 @@ def test_cli_version_and_tutorial() -> None:
     assert "First Project Pass" in tutorial.output
 
 
+def test_cli_help_is_grouped_for_new_users() -> None:
+    result = runner.invoke(cli_main.app, ["--help"])
+
+    assert result.exit_code == 0
+    for heading in [
+        "Start Here",
+        "Everyday Agent Work",
+        "Planning, Review & Release",
+        "Setup & Configuration",
+        "Help & Learning",
+    ]:
+        assert heading in result.output
+    for command in ["configure", "tutorial", "doctor", "ask", "next"]:
+        assert command in result.output
+
+
 def test_cli_docs_doctor() -> None:
     result = runner.invoke(cli_main.app, ["docs", "doctor"])
 
@@ -42,6 +58,45 @@ def test_cli_docs_doctor() -> None:
     assert payload["ok"] is True
     assert payload["missing_topics"] == []
     assert payload["missing_commands"] == []
+
+
+def test_cli_cache_commands_and_compose_slash(monkeypatch) -> None:
+    doctor = runner.invoke(cli_main.app, ["cache", "doctor", "--provider", "openai", "--model", "gpt-5", "--json"])
+    assert doctor.exit_code == 0
+    assert json.loads(doctor.output)["request_hints"]["prompt_cache_key"].startswith("magent-project-")
+
+    calls = []
+
+    class FakeSession:
+        async def stream_chat(self, prompt: str):
+            calls.append(prompt)
+            yield "ok"
+
+    from magent import tui
+
+    monkeypatch.setattr(cli_main, "read_multiline_prompt", lambda _username: "line 1\nline 2")
+    monkeypatch.setattr(tui, "print_streaming_response", lambda stream, loop: loop.run_until_complete(_drain(stream)))
+
+    import asyncio
+
+    loop = asyncio.new_event_loop()
+    try:
+        handled = cli_main._handle_slash_command(
+            "/compose",
+            FakeSession(),
+            config=None,
+            provider=None,
+            loop=loop,
+        )
+    finally:
+        loop.close()
+    assert handled is True
+    assert calls == ["line 1\nline 2"]
+
+
+async def _drain(stream):
+    async for _chunk in stream:
+        pass
 
 
 def test_cli_first_configuration_commands(tmp_path: Path, monkeypatch) -> None:
@@ -331,7 +386,7 @@ def test_cli_ask_json_outputs_audit_payload(tmp_path: Path, monkeypatch) -> None
     assert [item["type"] for item in payload["events"]][-1] == "assistant_message"
 
 
-def test_cli_research_command_uses_deep_research(monkeypatch) -> None:
+def test_cli_research_command_defaults_to_readable_output_and_can_write(monkeypatch, tmp_path: Path) -> None:
     from magent.tools import ToolExecutor
 
     async def fake_deep_research(self, topic, questions=None, max_sources=6, fetch_sources=True):
@@ -341,19 +396,41 @@ def test_cli_research_command_uses_deep_research(monkeypatch) -> None:
             "questions": questions or [],
             "max_sources": max_sources,
             "fetch_sources": fetch_sources,
-            "sources": [{"url": "https://example.com"}],
+            "source_count": 1,
+            "sources": [{"title": "Example", "url": "https://example.com", "snippet": "Evidence"}],
             "summary": "Research summary",
         }
 
     monkeypatch.setattr(ToolExecutor, "deep_research", fake_deep_research)
+    monkeypatch.chdir(tmp_path)
 
     result = runner.invoke(
         cli_main.app,
-        ["research", "desktop agents", "--question", "memory UX", "--max-sources", "3", "--no-fetch"],
+        [
+            "research",
+            "desktop agents",
+            "--question",
+            "memory UX",
+            "--max-sources",
+            "3",
+            "--no-fetch",
+            "--write",
+        ],
     )
 
     assert result.exit_code == 0
-    payload = json.loads(result.output)
+    assert "Research summary" in result.output
+    assert "https://example.com" in result.output
+    report = tmp_path / "research-desktop-agents.md"
+    assert report.exists()
+    assert "Research summary" in report.read_text(encoding="utf-8")
+
+    json_result = runner.invoke(
+        cli_main.app,
+        ["research", "desktop agents", "--question", "memory UX", "--max-sources", "3", "--no-fetch", "--json"],
+    )
+    assert json_result.exit_code == 0
+    payload = json.loads(json_result.output)
     assert payload["topic"] == "desktop agents"
     assert payload["questions"] == ["memory UX"]
     assert payload["max_sources"] == 3
@@ -425,11 +502,15 @@ def test_cli_context_map_and_memory_promote(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr(cli_main, "_get_memory_manager", lambda: (memory, "cli-test"))
 
     mapped = runner.invoke(cli_main.app, ["context", "map", "--project", str(project), "--query", "release"])
+    mapped_json = runner.invoke(cli_main.app, ["context", "map", "--project", str(project), "--query", "release", "--json"])
     listed = runner.invoke(cli_main.app, ["memory", "promote", "--project", str(project)])
     promoted = runner.invoke(cli_main.app, ["memory", "promote", "task", "task_0001", "--project", str(project)])
 
     assert mapped.exit_code == 0
-    assert json.loads(mapped.output)["memory"]["recall"] == "Recall release"
+    assert "Context Map" in mapped.output
+    assert "Recall release" in mapped.output
+    assert mapped_json.exit_code == 0
+    assert json.loads(mapped_json.output)["memory"]["recall"] == "Recall release"
     assert listed.exit_code == 0
     assert json.loads(listed.output)["candidates"]
     assert promoted.exit_code == 0
@@ -606,6 +687,40 @@ def test_cli_project_patch_workspace_and_release_commands(tmp_path: Path, monkey
     assert json.loads(release_check.output)["ok"] is True
     assert release_notes.exit_code == 0
     assert json.loads(release_notes.output)["markdown"] == "# Notes"
+
+
+def test_cli_plan_save_executable_outputs_next_commands(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("cli-test")
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+
+    result = runner.invoke(
+        cli_main.app,
+        [
+            "plan",
+            "Repair failing tests",
+            "--project",
+            str(project),
+            "--save",
+            "--executable",
+            "--command",
+            "pytest -q",
+            "--no-diff",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Saved execution plan" in result.output
+    assert "magent plan-preview" in result.output
+    plans = store.read("plans", [])
+    assert len(plans) == 1
+    assert plans[0]["mode"] == "execution"
+    preview = runner.invoke(cli_main.app, ["plan-preview", plans[0]["id"]])
+    assert preview.exit_code == 0
+    assert "pytest -q" in preview.output
 
 
 def test_cli_memory_quality(monkeypatch) -> None:

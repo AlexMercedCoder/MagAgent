@@ -160,6 +160,23 @@ _BLOCK_PATTERNS: list[str] = [
 ]
 
 _SHELL_CONTROL_PATTERN = re.compile(r"(\|\||&&|[;\n`|<>]|\$\(|\${)")
+_READ_ONLY_COMMANDS = {
+    "bat",
+    "cat",
+    "cd",
+    "echo",
+    "fd",
+    "find",
+    "grep",
+    "head",
+    "ls",
+    "pwd",
+    "rg",
+    "tail",
+    "type",
+    "wc",
+    "which",
+}
 
 
 def _matches_any(cmd: str, patterns: list[str]) -> bool:
@@ -174,10 +191,8 @@ def classify_shell_command(
     """Return the risk tier for a shell command string."""
     cmd_stripped = cmd.strip()
 
-    # Shell control syntax can turn an otherwise-safe allowlisted command into
-    # multiple actions. Treat it as high risk before applying user allowlists.
     if _SHELL_CONTROL_PATTERN.search(cmd_stripped):
-        return RiskTier.BLOCK
+        return _classify_shell_control_command(cmd_stripped)
 
     if _matches_any(cmd, _BLOCK_PATTERNS):
         return RiskTier.BLOCK
@@ -200,6 +215,100 @@ def classify_shell_command(
         return RiskTier.BLOCK
     # Unknown commands default to CONFIRM
     return RiskTier.CONFIRM
+
+
+def _classify_shell_control_command(cmd: str) -> RiskTier:
+    """Classify shell-control commands by the tier of each top-level segment."""
+    segments = _shell_segments(cmd)
+    if not segments:
+        return RiskTier.CONFIRM
+    tiers = [_classify_shell_segment(segment) for segment in segments]
+    return max(tiers) if tiers else RiskTier.CONFIRM
+
+
+def _shell_segments(cmd: str) -> list[list[str]]:
+    try:
+        lexer = shlex.shlex(cmd, posix=True, punctuation_chars="|&;<>")
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        return []
+    segments: list[list[str]] = []
+    current: list[str] = []
+    skip_redirect_target = False
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if skip_redirect_target:
+            skip_redirect_target = False
+            index += 1
+            continue
+        if (
+            token in {"1", "2"}
+            and index + 2 < len(tokens)
+            and tokens[index + 1] in {">", ">&", ">>"}
+        ):
+            target = tokens[index + 2]
+            if target in {"/dev/null", "1", "2"}:
+                index += 3
+                continue
+            return [["__redirect_write__"]]
+        if token in {"|", "||", "&&", ";", "\n"}:
+            if current:
+                segments.append(current)
+                current = []
+            index += 1
+            continue
+        if token in {">", ">>", "<", "2>", "2>>"}:
+            skip_redirect_target = True
+            index += 1
+            continue
+        if token in {"2>&1", "1>&2"} or token.endswith(">/dev/null"):
+            index += 1
+            continue
+        if ">" in token and not token.endswith(">/dev/null"):
+            return [["__redirect_write__"]]
+        current.append(token)
+        index += 1
+    if current:
+        segments.append(current)
+    return segments
+
+
+def _classify_shell_segment(tokens: list[str]) -> RiskTier:
+    if not tokens:
+        return RiskTier.SILENT
+    command = " ".join(tokens)
+    if tokens[0] == "__redirect_write__":
+        return RiskTier.BLOCK
+    if _matches_any(command, _BLOCK_PATTERNS):
+        return RiskTier.BLOCK
+    if _matches_any(command, _CONFIRM_PATTERNS):
+        return RiskTier.CONFIRM
+    head = Path(tokens[0]).name.lower()
+    if head in _READ_ONLY_COMMANDS:
+        return RiskTier.SILENT
+    if head in {"pip", "pip3"}:
+        return RiskTier.AUTO if "install" in tokens or "uninstall" in tokens else RiskTier.SILENT
+    if head in {"python", "python3"}:
+        if tokens[1:3] == ["-m", "pip"]:
+            return RiskTier.AUTO if "install" in tokens or "uninstall" in tokens else RiskTier.SILENT
+        if len(tokens) >= 3 and tokens[1] == "-c" and _is_python_import_probe(tokens[2]):
+            return RiskTier.SILENT
+        return RiskTier.CONFIRM
+    if _matches_any(command, _AUTO_PATTERNS):
+        return RiskTier.AUTO
+    if _matches_any(command, _SILENT_PATTERNS):
+        return RiskTier.SILENT
+    return RiskTier.CONFIRM
+
+
+def _is_python_import_probe(code: str) -> bool:
+    stripped = code.strip()
+    if not stripped.startswith(("import ", "from ")):
+        return False
+    blocked = ("open(", "exec(", "eval(", "subprocess", "os.system", "shutil", "pathlib")
+    return not any(term in stripped for term in blocked)
 
 
 # ─────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 Important command paths:
 
+- `magent --help`: show grouped command categories with a Start Here section.
 - `magent ask "task"`: run a non-interactive task with completion audit warnings.
 - `magent ask --permission-mode paranoid "task"`: override permissions for one run.
 - `magent ask --yes "task"`: run one task with YOLO-style non-interactive approvals.
@@ -9,8 +10,10 @@ Important command paths:
 - `magent ask --strict-audit "task"`: exit nonzero when the final task audit is incomplete.
 - `magent ask --json "task"`: emit a machine-readable response, audit, and tool summary.
 - `magent ask --json --events "task"`: include coarse structured desktop timeline events.
-- `magent research "topic"`: run direct deep web research with cited sources.
+- `magent research "topic"`: run direct deep web research with cited sources and readable terminal output.
 - `magent research "topic" --question "focus" --max-sources 8`: add focused questions and source limits.
+- `magent research "topic" --write`: write a Markdown research report in the active directory.
+- `magent research "topic" --json`: emit machine-readable research output.
 - `magent --task "task"`: alternate one-shot task form.
 - `magent setup`: run first-time setup.
 - `magent configure`: run the friendly setup/configuration wizard.
@@ -22,6 +25,8 @@ Important command paths:
 - `magent readiness`: show setup, docs, project, provider, and model readiness.
 - `magent readiness --smoke`: include a tiny live provider tool-use smoke.
 - `magent performance doctor`: inspect startup, repo, workbench, memory, and config performance.
+- `magent cache doctor`: inspect prompt-cache readiness for the current provider/model.
+- `magent cache status`: summarize cached token telemetry from local session logs.
 - `magent workbench stats`: show local workbench store sizes and maintenance recommendations.
 - `magent workbench prune`: prune old high-volume workbench records.
 - `magent workbench compact`: rewrite JSON workbench stores and report bytes reclaimed.
@@ -159,6 +164,9 @@ Important command paths:
 - `magent test explain <file>`: explain why tests were selected.
 - `magent test run-related <file>`: run likely tests for a file.
 - `magent plan-run "goal"`: create a pending plan with diff/review context.
+- `magent plan "goal"`: render a project-aware local plan without changing files.
+- `magent plan --save "goal"`: save the rendered plan so `plan-list`, `plan-show`, and `plan-apply` can use it.
+- `magent plan --save --executable "goal" -c "pytest -q"`: save executable operations for `plan-preview`, sandboxing, and apply flows.
 - `magent plan-exec "goal"`: create an executable plan from current diff and optional commands.
 - `magent plan-preview <id>`: preview executable plan operations.
 - `magent plan-apply --dry-run <id>`: preview plan apply without executing operations.
@@ -194,6 +202,7 @@ Important command paths:
 - `magent release check`: run release readiness checks.
 - `magent release notes`: generate release notes from recent commits.
 - `magent context map`: show memory, workbench, and project state for the current project.
+- `magent context map --json`: emit the full machine-readable context payload.
 - `magent recipe list`: list built-in, saved, and playbook-backed workflows.
 - `magent recipe show <name>`: inspect a workflow recipe.
 - `magent recipe save <name> --step "..." --command "..."`: save a reusable workflow.

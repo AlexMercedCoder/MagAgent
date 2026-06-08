@@ -22,6 +22,7 @@ magent docs doctor
 - [Configuration](../src/magent/docs/configuration.md)
 - [Troubleshooting](../src/magent/docs/troubleshooting.md)
 - [Performance](../src/magent/docs/performance.md)
+- [Prompt Caching](../src/magent/docs/prompt-caching.md)
 - [Agent Definitions](../src/magent/docs/agents.md)
 - [Hooks](../src/magent/docs/hooks.md)
 - [Code Intelligence](../src/magent/docs/lsp.md)

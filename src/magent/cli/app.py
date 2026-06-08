@@ -6,7 +6,20 @@ import typer
 
 app = typer.Typer(
     name="magent",
-    help="MagAgent — CLI AI coding agent powered by MagGraph persistent memory",
+    help=(
+        "MagAgent — CLI AI coding agent powered by MagGraph persistent memory.\n\n"
+        "[bold]Start here:[/bold] `magent configure`, `magent tutorial`, `magent doctor`, "
+        "`magent ask \"task\"`, or just run `magent` for an interactive session."
+    ),
+    epilog=(
+        "Common first moves:\n"
+        "  magent configure                  Set up user, provider, model, and memory\n"
+        "  magent tutorial                   Learn the workflow\n"
+        "  magent doctor                     Check setup health\n"
+        "  magent ask \"fix the failing test\"  Run one task\n"
+        "  magent plan --save \"ship fix\"     Save a reusable plan\n"
+        "  magent next                       Get context-aware next actions"
+    ),
     no_args_is_help=False,
     rich_markup_mode="rich",
 )
@@ -43,6 +56,7 @@ tools_app = typer.Typer(help="Tool capability packs", name="tools")
 eval_app = typer.Typer(help="Local benchmark/eval suites", name="eval")
 github_app = typer.Typer(help="GitHub PR and issue workflows", name="github")
 browser_app = typer.Typer(help="Browser automation helpers", name="browser")
+cache_app = typer.Typer(help="Prompt cache diagnostics", name="cache")
 hook_app = typer.Typer(help="Project workflow hooks", name="hook")
 lsp_app = typer.Typer(help="LSP-backed code intelligence", name="lsp")
 daemon_app = typer.Typer(help="Background worker queue", name="daemon")
@@ -56,11 +70,54 @@ performance_app = typer.Typer(help="Local performance diagnostics", name="perfor
 workbench_app = typer.Typer(help="Workbench storage maintenance", name="workbench")
 system_app = typer.Typer(help="Machine-readable system and desktop integration info", name="system")
 
-app.add_typer(user_app, name="user")
-app.add_typer(memory_app, name="memory")
+app.add_typer(user_app, name="user", rich_help_panel="Setup & Configuration")
+app.add_typer(memory_app, name="memory", rich_help_panel="Memory & Context")
 memory_app.add_typer(memory_semantic_app, name="semantic")
-app.add_typer(gateway_app, name="gateway")
-app.add_typer(mcp_app, name="mcp")
+app.add_typer(gateway_app, name="gateway", rich_help_panel="Integrations")
+app.add_typer(mcp_app, name="mcp", rich_help_panel="Integrations")
+
+_HELP_PANELS = {
+    "task": "Workbench & Productivity",
+    "artifact": "Workbench & Productivity",
+    "agent": "Agents & Automation",
+    "project": "Project Workflow",
+    "inbox": "Workbench & Productivity",
+    "routine": "Workbench & Productivity",
+    "followup": "Workbench & Productivity",
+    "knowledge": "Memory & Context",
+    "api": "Workbench & Productivity",
+    "patch": "Planning, Review & Release",
+    "session": "Memory & Context",
+    "data": "Data & Local UI",
+    "policy": "Setup & Configuration",
+    "docs": "Help & Learning",
+    "events": "Workbench & Productivity",
+    "checkpoint": "Project Workflow",
+    "code": "Code Intelligence & Testing",
+    "test": "Code Intelligence & Testing",
+    "workspace": "Project Workflow",
+    "release": "Planning, Review & Release",
+    "context": "Memory & Context",
+    "config": "Setup & Configuration",
+    "recipe": "Agents & Automation",
+    "tools": "Setup & Configuration",
+    "eval": "Code Intelligence & Testing",
+    "github": "Integrations",
+    "browser": "Integrations",
+    "cache": "Performance & Diagnostics",
+    "hook": "Agents & Automation",
+    "lsp": "Code Intelligence & Testing",
+    "daemon": "Agents & Automation",
+    "plugin": "Agents & Automation",
+    "provider": "Setup & Configuration",
+    "model": "Setup & Configuration",
+    "subagent": "Agents & Automation",
+    "profile": "Setup & Configuration",
+    "permission": "Setup & Configuration",
+    "performance": "Performance & Diagnostics",
+    "workbench": "Workbench & Productivity",
+    "system": "Performance & Diagnostics",
+}
 
 for _name, _typer in [
     ("task", task_app),
@@ -90,6 +147,7 @@ for _name, _typer in [
     ("eval", eval_app),
     ("github", github_app),
     ("browser", browser_app),
+    ("cache", cache_app),
     ("hook", hook_app),
     ("lsp", lsp_app),
     ("daemon", daemon_app),
@@ -103,7 +161,7 @@ for _name, _typer in [
     ("workbench", workbench_app),
     ("system", system_app),
 ]:
-    app.add_typer(_typer, name=_name)
+    app.add_typer(_typer, name=_name, rich_help_panel=_HELP_PANELS.get(_name, "Advanced"))
 
 __all__ = [
     "api_app",
@@ -112,6 +170,7 @@ __all__ = [
     "artifact_app",
     "checkpoint_app",
     "browser_app",
+    "cache_app",
     "code_app",
     "context_app",
     "config_app",

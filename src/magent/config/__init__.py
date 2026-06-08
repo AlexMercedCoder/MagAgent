@@ -61,6 +61,9 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "max_history_tokens": 6000,
         "prune_stale_tool_results": True,
         "prompt_caching": True,
+        "prompt_cache_key_scope": "project",
+        "prompt_cache_retention": "",
+        "prompt_cache_min_stable_tokens": 1024,
     },
     "tool_budgets": {
         "default": 8000,
@@ -180,6 +183,10 @@ class Config:
         return self._user.get("permissions", {}).get("allowed_shell_patterns", [])
 
     @property
+    def trusted_shell_patterns(self) -> list[str]:
+        return self._user.get("permissions", {}).get("trusted_shell_patterns", [])
+
+    @property
     def memory_budget_tokens(self) -> int:
         return int(
             self._user.get("preferences", {}).get("memory_budget_tokens")
@@ -217,6 +224,19 @@ class Config:
     @property
     def prompt_caching(self) -> bool:
         return bool(self._global.get("context", {}).get("prompt_caching", True))
+
+    @property
+    def prompt_cache_key_scope(self) -> str:
+        scope = str(self._global.get("context", {}).get("prompt_cache_key_scope", "project"))
+        return scope if scope in {"project", "session", "user"} else "project"
+
+    @property
+    def prompt_cache_retention(self) -> str:
+        return str(self._global.get("context", {}).get("prompt_cache_retention", "") or "")
+
+    @property
+    def prompt_cache_min_stable_tokens(self) -> int:
+        return int(self._global.get("context", {}).get("prompt_cache_min_stable_tokens", 1024))
 
     @property
     def recall_body_tokens(self) -> int:

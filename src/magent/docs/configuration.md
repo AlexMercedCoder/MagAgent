@@ -105,6 +105,19 @@ magent permission set paranoid
 magent permission propose "allow pytest and git"
 ```
 
+During an interactive session, shell permission prompts support scoped approvals:
+
+- `once`: approve only this tool call
+- `session`: trust the exact command for the current session
+- `always`: save the exact command to the user's trusted shell patterns
+- `no`: deny the tool call
+
+Read-only shell-control chains such as `cat file | wc -l`, `pip list | grep`,
+and `python3 -c "import docx"` probes can run without repeated prompts. Commands
+that include unknown or dangerous shell-control segments still require approval.
+If you approve them, MagAgent intentionally runs them through a shell so
+pipelines behave as expected.
+
 Use model roles to route specific work to specialized or cheaper models:
 
 ```bash

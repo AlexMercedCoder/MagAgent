@@ -10,6 +10,10 @@ Start with:
 Common issues:
 
 - Provider errors: confirm API keys or local Ollama availability.
+- New user unsure where to begin: run `magent --help` and use the Start Here panel,
+  especially `magent configure`, `magent tutorial`, `magent doctor`, and `magent next`.
+- `magent ask` appears quiet: update MagAgent. One-shot `ask` prints periodic progress lines in human-readable mode while keeping `--json` clean for scripts.
+- `magent research` prints JSON unexpectedly: use `--no-json` on older builds. Newer builds use readable output by default and keep JSON behind `--json`.
 - Empty semantic search: run `magent memory index`.
 - No code symbols: run `magent code index` from the project root.
 - Missing targeted tests: run `magent test map` and confirm tests use `test_*.py` names.
@@ -29,5 +33,16 @@ Common issues:
 - Workspace clutter: run `magent workspace clean-report`.
 - Release readiness: run `magent release check`.
 - Missing command docs: run `magent docs doctor`.
+- A generated file is missing after an agent turn: run `magent checkpoint list` and
+  ask MagAgent to inspect the exact expected path. MagAgent normalizes common
+  tool argument aliases such as `file_path`, but older releases may have failed
+  with `[Error: 'path']` before writing anything.
+- A slash command wakes the agent unexpectedly: update MagAgent. Unknown slash
+  commands are handled by the CLI and should now show `try /help` instead of
+  becoming an agent prompt.
+- A read-only pipeline asks for high-risk permission: update MagAgent. Common
+  read-only chains such as `cat file | wc -l`, `pip list | grep`, and import
+  probes should not repeatedly prompt. Unknown or write-capable chains can still
+  be approved `once`, for the `session`, or `always`.
 
 For a clean first setup, run `magent setup`, create or switch to a user, then run `magent doctor`.

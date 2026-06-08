@@ -82,6 +82,27 @@ def test_provider_catalog_exposes_new_easy_provider_batch() -> None:
     assert validate_provider_catalog()["ok"] is True
 
 
+def test_provider_request_kwargs_adds_cache_hints() -> None:
+    config = SimpleNamespace(
+        prompt_caching=True,
+        prompt_cache_key_scope="project",
+        prompt_cache_retention="",
+    )
+    provider = Provider("openai", "gpt-5", api_key="key")
+
+    kwargs = provider.request_kwargs(
+        config,
+        username="alex",
+        project_slug="repo",
+        session_id="session",
+        cwd="/repo",
+    )
+
+    assert kwargs["model"] == "gpt-5"
+    assert kwargs["api_key"] == "key"
+    assert kwargs["prompt_cache_key"].startswith("magent-project-")
+
+
 @pytest.mark.asyncio
 async def test_provider_complete_stream_and_extract_fn(monkeypatch) -> None:
     async def fake_acompletion(**kwargs):
