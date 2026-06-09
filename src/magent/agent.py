@@ -48,6 +48,7 @@ Key behaviors:
 11. If the user denies a permission request, stop trying equivalent commands and explain the blocked action briefly.
 12. On macOS, prefer python3/pip3 or python3 -m pip; avoid bare python/pip commands.
 13. During research, prefer web_fetch/http_request over repeated curl shell probes. If shell inspection is necessary, use one broad read-only fetch pipeline instead of many tiny variations.
+14. Never use run_shell, heredocs, redirection, tee, or Python snippets to create or edit files. For any generated file, call write_file with the full final content; for changes, call edit_file.
 """
 
 AGENT_CONTEXT_PROMPT = """The following context changes by project and turn. Use it as relevant, but do not repeat it unless needed.

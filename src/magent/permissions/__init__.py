@@ -220,6 +220,13 @@ def classify_shell_command(
         return RiskTier.BLOCK
     if argv and Path(argv[0]).name.lower() in _NETWORK_FETCH_COMMANDS:
         return RiskTier.AUTO if _is_read_only_network_fetch(argv) else RiskTier.CONFIRM
+    if (
+        len(argv) >= 3
+        and Path(argv[0]).name.lower() in {"python", "python3"}
+        and argv[1] == "-c"
+        and _is_python_safe_probe(argv[2])
+    ):
+        return RiskTier.SILENT
     if _matches_any(cmd, _CONFIRM_PATTERNS):
         return RiskTier.CONFIRM
 
@@ -316,7 +323,7 @@ def _classify_shell_segment(tokens: list[str]) -> RiskTier:
     if head in {"python", "python3"}:
         if tokens[1:3] == ["-m", "pip"]:
             return RiskTier.AUTO if "install" in tokens or "uninstall" in tokens else RiskTier.SILENT
-        if len(tokens) >= 3 and tokens[1] == "-c" and _is_python_import_probe(tokens[2]):
+        if len(tokens) >= 3 and tokens[1] == "-c" and _is_python_safe_probe(tokens[2]):
             return RiskTier.SILENT
         return RiskTier.CONFIRM
     if _matches_any(command, _AUTO_PATTERNS):
@@ -326,9 +333,9 @@ def _classify_shell_segment(tokens: list[str]) -> RiskTier:
     return RiskTier.CONFIRM
 
 
-def _is_python_import_probe(code: str) -> bool:
+def _is_python_safe_probe(code: str) -> bool:
     stripped = code.strip()
-    if not stripped.startswith(("import ", "from ")):
+    if not stripped.startswith(("import ", "from ", "print(")):
         return False
     blocked = ("open(", "exec(", "eval(", "subprocess", "os.system", "shutil", "pathlib")
     return not any(term in stripped for term in blocked)

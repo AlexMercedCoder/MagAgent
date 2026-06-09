@@ -50,6 +50,7 @@ def test_shell_control_read_only_chains_do_not_prompt_spam() -> None:
         )
         == RiskTier.AUTO
     )
+    assert classify_shell_command("python3 -c 'print(\"hello\")'") == RiskTier.SILENT
 
 
 def test_network_fetch_mutation_or_download_still_requires_confirmation() -> None:
@@ -190,6 +191,23 @@ async def test_shell_control_can_be_session_allowed(tmp_path: Path) -> None:
 
     assert result["ok"] is True
     assert result["stdout"].strip() == "2"
+
+
+@pytest.mark.asyncio
+async def test_run_shell_declines_native_file_writes_without_prompt(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="balanced", interactive_permissions=False)
+
+    heredoc = await tools.run_shell("cat > cheese.html << 'EOF'\n<h1>Cheese</h1>\nEOF")
+    python_write = await tools.run_shell(
+        "python3 -c \"open('cheese.html', 'w').write('<h1>Cheese</h1>')\""
+    )
+
+    assert heredoc["ok"] is False
+    assert heredoc["blocked_by"] == "native-file-tool-policy"
+    assert heredoc["recommended_tool"] == "write_file"
+    assert python_write["ok"] is False
+    assert python_write["blocked_by"] == "native-file-tool-policy"
+    assert not (tmp_path / "cheese.html").exists()
 
 
 @pytest.mark.asyncio

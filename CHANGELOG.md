@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.31.2
+
+- Refused shell-based file writes such as heredocs, redirection, `tee`, `touch`, and Python write snippets with clear guidance to use `write_file`/`edit_file`.
+- Strengthened agent and tool descriptions so generated files are written through native file tools instead of permission-heavy shell workarounds.
+- Added periodic `Still running <tool>...` feedback for long-running tool calls in interactive sessions.
+- Allowed harmless `python3 -c 'print(...)'` probes without prompting while keeping arbitrary Python execution gated.
+
 ## 0.31.1
 
 - Auto-approved read-only `curl`/`wget` inspection pipelines while keeping uploads, downloads, and mutating HTTP methods confirmation-gated.

@@ -119,6 +119,14 @@ commands that upload, write files, or use mutating HTTP methods still require
 approval. If you approve a shell pipeline, MagAgent intentionally runs it
 through a shell so pipelines behave as expected.
 
+Shell is not used as a file-writing workaround. If a model tries heredocs,
+redirection such as `cat > file`, `tee`, `touch`, or Python snippets that write
+files, MagAgent returns a tool error telling the model to use `write_file` or
+`edit_file` instead of asking you to approve a large shell command.
+
+Long-running tools print a periodic `Still running <tool>...` line in
+interactive sessions so research, browser, and command calls do not look stuck.
+
 On macOS, MagAgent rewrites ambiguous shell commands such as `pip install ...`
 and `python ...` to the Python 3 command family before execution. For manual
 terminal upgrades, prefer:

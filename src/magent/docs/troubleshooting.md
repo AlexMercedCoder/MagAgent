@@ -46,6 +46,12 @@ Common issues:
   pipelines are auto-approved; uploads, output-file writes, and mutating HTTP
   methods still ask. Unknown or write-capable chains can still be approved
   `once`, for the `session`, or `always`.
+- The agent asks to approve a huge heredoc or Python snippet to write a file:
+  update MagAgent. Shell-based file writes are refused with guidance to use
+  `write_file`/`edit_file`, so the model can correct course without another
+  permission prompt.
+- A tool looks hung: interactive sessions print `Still running <tool>...` after
+  a few seconds and then periodically until the tool returns.
 - `pip install --upgrade mag-agent` says every version requires a different
   Python: the `pip` executable is attached to an older Python. Use
   `python3 -m pip install --upgrade mag-agent` or install with

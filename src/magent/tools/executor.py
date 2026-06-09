@@ -111,6 +111,32 @@ def _prefer_platform_python_command(command: str) -> str:
     return rewritten
 
 
+def _shell_native_file_tool_guidance(command: str) -> str:
+    """Return guidance when shell is being used for work native file tools should do."""
+    scrubbed = re.sub(r"\b[12]?>&[12]\b", "", command)
+    scrubbed = re.sub(r"\b[12]?>\s*/dev/null\b", "", scrubbed)
+    if "<<" in scrubbed or re.search(r"(?<![<>&])>>?(?![>&])", scrubbed):
+        return "Shell redirection/heredocs are not used for file writes. Use write_file or edit_file instead."
+
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        argv = []
+    head = Path(argv[0]).name.lower() if argv else ""
+    if head in {"tee", "touch"}:
+        return f"`{head}` writes files. Use write_file or edit_file instead."
+
+    lower = command.lower()
+    if head in {"python", "python3"} and (
+        "open(" in lower
+        or ".write_text(" in lower
+        or ".write_bytes(" in lower
+        or "path(" in lower
+    ):
+        return "Python shell snippets that write files are disabled. Use write_file or edit_file instead."
+    return ""
+
+
 def _rank_search_results(query: str, raw: list[dict[str, Any]], max_results: int) -> list[dict[str, str]]:
     terms = _search_terms(query)
     cleaned = [
@@ -594,6 +620,15 @@ class ToolExecutor:
         command = _prefer_platform_python_command(command)
         if command != original_command and self.show_tool_calls:
             console.print(f"[dim]Using macOS Python command: `{command}`[/dim]")
+        native_guidance = _shell_native_file_tool_guidance(command)
+        if native_guidance:
+            self._log_tool("run_shell", command, RiskTier.BLOCK)
+            return {
+                "ok": False,
+                "error": native_guidance,
+                "blocked_by": "native-file-tool-policy",
+                "recommended_tool": "write_file",
+            }
         tier = RiskTier.AUTO if self._trusted_shell_match(command) else classify_shell_command(command, self.allowed_shell_patterns)
         self._log_tool("run_shell", command, tier)
         perm = self._check_shell_permission(command, tier)
@@ -1237,7 +1272,7 @@ class ToolExecutor:
             ),
             _def(
                 "write_file",
-                "Write content to a file (creates or overwrites).",
+                "Write content to a file (creates or overwrites). Use this for generated pages, docs, scripts, and other file creation.",
                 {"path": ("string", "File path"), "content": ("string", "Full file content")},
             ),
             _def(
@@ -1279,7 +1314,7 @@ class ToolExecutor:
             ),
             _def(
                 "run_shell",
-                "Run a shell command in the project directory.",
+                "Run a shell command in the project directory. Do not use for file creation or edits; use write_file/edit_file instead.",
                 {"command": ("string", None), "timeout": ("integer", "Seconds (default 60)")},
             ),
             _def(
@@ -1551,7 +1586,16 @@ class ToolExecutor:
         if fn is None:
             return {"ok": False, "error": f"Unknown tool: {tool_name}"}
         try:
-            result = await fn()
+            task = asyncio.create_task(fn())
+            wait_seconds = 6.0
+            while True:
+                done, _pending = await asyncio.wait({task}, timeout=wait_seconds)
+                if done:
+                    result = task.result()
+                    break
+                if self.show_tool_calls:
+                    console.print(f"[dim]Still running {tool_name}...[/dim]")
+                wait_seconds = 15.0
         except KeyError as e:
             missing = str(e).strip("'")
             return {
