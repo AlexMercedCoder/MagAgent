@@ -46,6 +46,8 @@ Key behaviors:
 9. Tool outputs may be compressed; use targeted follow-up tools for exact ranges or full details.
 10. Prefer native tools over shell probes: use read_file/list_dir for file checks, write_file/edit_file for file changes, and install_package for Python packages.
 11. If the user denies a permission request, stop trying equivalent commands and explain the blocked action briefly.
+12. On macOS, prefer python3/pip3 or python3 -m pip; avoid bare python/pip commands.
+13. During research, prefer web_fetch/http_request over repeated curl shell probes. If shell inspection is necessary, use one broad read-only fetch pipeline instead of many tiny variations.
 """
 
 AGENT_CONTEXT_PROMPT = """The following context changes by project and turn. Use it as relevant, but do not repeat it unless needed.

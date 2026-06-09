@@ -42,7 +42,13 @@ Common issues:
   becoming an agent prompt.
 - A read-only pipeline asks for high-risk permission: update MagAgent. Common
   read-only chains such as `cat file | wc -l`, `pip list | grep`, and import
-  probes should not repeatedly prompt. Unknown or write-capable chains can still
-  be approved `once`, for the `session`, or `always`.
+  probes should not repeatedly prompt. Read-only `curl`/`wget` inspection
+  pipelines are auto-approved; uploads, output-file writes, and mutating HTTP
+  methods still ask. Unknown or write-capable chains can still be approved
+  `once`, for the `session`, or `always`.
+- `pip install --upgrade mag-agent` says every version requires a different
+  Python: the `pip` executable is attached to an older Python. Use
+  `python3 -m pip install --upgrade mag-agent` or install with
+  `pipx install --python python3 mag-agent`.
 
 For a clean first setup, run `magent setup`, create or switch to a user, then run `magent doctor`.

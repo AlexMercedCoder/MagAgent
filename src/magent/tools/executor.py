@@ -102,6 +102,15 @@ def _is_low_value_search_url(url: str) -> bool:
     return any(host == domain or host.endswith(f".{domain}") for domain in _LOW_VALUE_SEARCH_DOMAINS)
 
 
+def _prefer_platform_python_command(command: str) -> str:
+    """On macOS, prefer the Python 3 command family over ambiguous python/pip."""
+    if sys.platform != "darwin":
+        return command
+    rewritten = re.sub(r"(^|[;&|\n]\s*)pip(?=\s)", r"\1python3 -m pip", command)
+    rewritten = re.sub(r"(^|[;&|\n]\s*)python(?=\s)", r"\1python3", rewritten)
+    return rewritten
+
+
 def _rank_search_results(query: str, raw: list[dict[str, Any]], max_results: int) -> list[dict[str, str]]:
     terms = _search_terms(query)
     cleaned = [
@@ -241,6 +250,33 @@ class ToolExecutor:
         except Exception:
             self.session_shell_patterns.append(command)
 
+    def _shell_trust_pattern(self, command: str, tier: RiskTier) -> str:
+        if tier >= RiskTier.CONFIRM:
+            return command
+        if not re.search(r"(\|\||&&|[;\n|<>]|\$\()", command):
+            return command
+        try:
+            lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;<>")
+            lexer.whitespace_split = True
+            tokens = list(lexer)
+        except ValueError:
+            return command
+        pieces: list[str] = []
+        expect_head = True
+        for token in tokens:
+            if token in {"|", "||", "&&", ";"}:
+                pieces.append(token)
+                expect_head = True
+                continue
+            if token in {">", ">>", "<", "2>", "2>>", "2>&1", "1>&2"}:
+                pieces.append(token)
+                expect_head = False
+                continue
+            if expect_head:
+                pieces.append(f"{Path(token).name} *")
+                expect_head = False
+        return " ".join(pieces) if pieces else command
+
     def _check_shell_permission(self, command: str, tier: RiskTier) -> PermissionResult:
         if self._trusted_shell_match(command):
             return PermissionResult(True, RiskTier.AUTO, "trusted-shell")
@@ -267,12 +303,17 @@ class ToolExecutor:
         if choice in {"no", "n"}:
             return PermissionResult(False, tier, "user-denied")
         if choice in {"session", "s"}:
-            if command not in self.session_shell_patterns:
-                self.session_shell_patterns.append(command)
+            pattern = self._shell_trust_pattern(command, tier)
+            if pattern not in self.session_shell_patterns:
+                self.session_shell_patterns.append(pattern)
+            console.print(f"[dim]Approved for this session; running `{command}`.[/dim]")
             return PermissionResult(True, tier, "user-session-allow")
         if choice in {"always", "a"}:
-            self._remember_trusted_shell_pattern(command)
+            pattern = self._shell_trust_pattern(command, tier)
+            self._remember_trusted_shell_pattern(pattern)
+            console.print(f"[dim]Saved approval for `{pattern}`; running `{command}`.[/dim]")
             return PermissionResult(True, tier, "user-persistent-allow")
+        console.print(f"[dim]Approved once; running `{command}`.[/dim]")
         return PermissionResult(True, tier, "user-confirmed")
 
     def _permission_denied(self, perm: PermissionResult) -> ToolResult:
@@ -549,6 +590,10 @@ class ToolExecutor:
     # ─────────────────────────────────────────────
 
     async def run_shell(self, command: str, timeout: int = 60) -> ToolResult:
+        original_command = command
+        command = _prefer_platform_python_command(command)
+        if command != original_command and self.show_tool_calls:
+            console.print(f"[dim]Using macOS Python command: `{command}`[/dim]")
         tier = RiskTier.AUTO if self._trusted_shell_match(command) else classify_shell_command(command, self.allowed_shell_patterns)
         self._log_tool("run_shell", command, tier)
         perm = self._check_shell_permission(command, tier)
@@ -581,6 +626,10 @@ class ToolExecutor:
             except TimeoutError:
                 proc.kill()
                 return {"ok": False, "error": f"Command timed out after {timeout}s"}
+            if self.show_tool_calls and tier >= RiskTier.CONFIRM:
+                output_bytes = len(stdout) + len(stderr)
+                status = "completed" if proc.returncode == 0 else f"exited {proc.returncode}"
+                console.print(f"[dim]Shell command {status}; captured {output_bytes} bytes.[/dim]")
             return {
                 "ok": proc.returncode == 0,
                 "returncode": proc.returncode,

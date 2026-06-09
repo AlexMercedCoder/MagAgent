@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 import magent.tools as tools_module
+import magent.tools.executor as executor_module
 from magent.permissions import RiskTier, classify_file_op, classify_shell_command
 from magent.tools import ToolExecutor
 
@@ -42,6 +43,33 @@ def test_shell_control_read_only_chains_do_not_prompt_spam() -> None:
     assert classify_shell_command("wc -l file.html 2>/dev/null; echo ---; tail -5 file.html") == RiskTier.SILENT
     assert classify_shell_command("pip list 2>/dev/null | grep -iE 'docx|pptx|python'") == RiskTier.SILENT
     assert classify_shell_command('cd /tmp && python3 -c "import docx; print(docx.__version__)"') == RiskTier.SILENT
+    assert classify_shell_command("curl -s 'https://example.com' | head -500") == RiskTier.AUTO
+    assert (
+        classify_shell_command(
+            "curl -s 'https://example.com' | grep -i 'primary\\|color\\|font' | head -100"
+        )
+        == RiskTier.AUTO
+    )
+
+
+def test_network_fetch_mutation_or_download_still_requires_confirmation() -> None:
+    assert classify_shell_command("curl -X POST https://example.com") == RiskTier.CONFIRM
+    assert classify_shell_command("curl -s https://example.com -o page.html") == RiskTier.CONFIRM
+    assert classify_shell_command("wget https://example.com -O page.html") == RiskTier.CONFIRM
+
+
+def test_macos_shell_rewrites_prefer_python3(monkeypatch) -> None:
+    monkeypatch.setattr(executor_module.sys, "platform", "darwin")
+
+    assert (
+        executor_module._prefer_platform_python_command("pip install python-pptx")
+        == "python3 -m pip install python-pptx"
+    )
+    assert (
+        executor_module._prefer_platform_python_command("pip list | grep docx")
+        == "python3 -m pip list | grep docx"
+    )
+    assert executor_module._prefer_platform_python_command("python -c 'print(1)'") == "python3 -c 'print(1)'"
 
 
 def test_shell_control_blocks_dangerous_segment_even_if_allowlisted() -> None:

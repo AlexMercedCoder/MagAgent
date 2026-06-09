@@ -177,6 +177,24 @@ _READ_ONLY_COMMANDS = {
     "wc",
     "which",
 }
+_NETWORK_FETCH_COMMANDS = {"curl", "wget"}
+_NETWORK_WRITE_FLAGS = {
+    "-d",
+    "--data",
+    "--data-raw",
+    "--data-binary",
+    "--data-urlencode",
+    "-F",
+    "--form",
+    "--form-string",
+    "-T",
+    "--upload-file",
+    "-o",
+    "--output",
+    "-O",
+    "--remote-name",
+    "--remote-header-name",
+}
 
 
 def _matches_any(cmd: str, patterns: list[str]) -> bool:
@@ -196,6 +214,12 @@ def classify_shell_command(
 
     if _matches_any(cmd, _BLOCK_PATTERNS):
         return RiskTier.BLOCK
+    try:
+        argv = shlex.split(cmd_stripped)
+    except ValueError:
+        return RiskTier.BLOCK
+    if argv and Path(argv[0]).name.lower() in _NETWORK_FETCH_COMMANDS:
+        return RiskTier.AUTO if _is_read_only_network_fetch(argv) else RiskTier.CONFIRM
     if _matches_any(cmd, _CONFIRM_PATTERNS):
         return RiskTier.CONFIRM
 
@@ -208,11 +232,8 @@ def classify_shell_command(
         return RiskTier.AUTO
     if _matches_any(cmd, _SILENT_PATTERNS):
         return RiskTier.SILENT
-    try:
-        if not shlex.split(cmd_stripped):
-            return RiskTier.CONFIRM
-    except ValueError:
-        return RiskTier.BLOCK
+    if not argv:
+        return RiskTier.CONFIRM
     # Unknown commands default to CONFIRM
     return RiskTier.CONFIRM
 
@@ -283,9 +304,11 @@ def _classify_shell_segment(tokens: list[str]) -> RiskTier:
         return RiskTier.BLOCK
     if _matches_any(command, _BLOCK_PATTERNS):
         return RiskTier.BLOCK
+    head = Path(tokens[0]).name.lower()
+    if head in _NETWORK_FETCH_COMMANDS:
+        return RiskTier.AUTO if _is_read_only_network_fetch(tokens) else RiskTier.CONFIRM
     if _matches_any(command, _CONFIRM_PATTERNS):
         return RiskTier.CONFIRM
-    head = Path(tokens[0]).name.lower()
     if head in _READ_ONLY_COMMANDS:
         return RiskTier.SILENT
     if head in {"pip", "pip3"}:
@@ -309,6 +332,25 @@ def _is_python_import_probe(code: str) -> bool:
         return False
     blocked = ("open(", "exec(", "eval(", "subprocess", "os.system", "shutil", "pathlib")
     return not any(term in stripped for term in blocked)
+
+
+def _is_read_only_network_fetch(tokens: list[str]) -> bool:
+    """Return true for network fetch commands that do not write/upload/mutate."""
+    lowered = [token.lower() for token in tokens]
+    for index, token in enumerate(lowered):
+        if token in _NETWORK_WRITE_FLAGS:
+            return False
+        if token.startswith("--request="):
+            method = token.split("=", 1)[1].upper()
+            if method not in {"GET", "HEAD"}:
+                return False
+        if token == "--request" and index + 1 < len(lowered) and lowered[index + 1].upper() not in {"GET", "HEAD"}:
+            return False
+        if token == "-x" and index + 1 < len(lowered) and lowered[index + 1].upper() not in {"GET", "HEAD"}:
+            return False
+        if token.startswith("-x") and len(token) > 2 and token[2:].upper() not in {"GET", "HEAD"}:
+            return False
+    return True
 
 
 # ─────────────────────────────────────────────

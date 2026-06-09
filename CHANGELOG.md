@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.31.1
+
+- Auto-approved read-only `curl`/`wget` inspection pipelines while keeping uploads, downloads, and mutating HTTP methods confirmation-gated.
+- Made shell approval prompts visibly acknowledge approved commands and report completion for confirmed shell actions.
+- Added macOS shell normalization so ambiguous `pip ...` and `python ...` commands run as `python3 -m pip ...` and `python3 ...`.
+- Documented the Python interpreter mismatch behind `pip install --upgrade mag-agent` failures on Macs.
+
 ## 0.31.0
 
 - Added provider-aware prompt caching support with stable prompt prefixes, cache request hints, cache telemetry normalization, and `magent cache doctor/status`.

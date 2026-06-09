@@ -19,10 +19,11 @@ class TestClassifyShellCommand:
         assert classify_shell_command("npm install") == RiskTier.AUTO
         assert classify_shell_command("cargo build") == RiskTier.AUTO
         assert classify_shell_command("pytest tests/") == RiskTier.AUTO
+        assert classify_shell_command("curl https://example.com") == RiskTier.AUTO
 
     def test_confirm_commands(self):
         assert classify_shell_command("git push origin main") == RiskTier.CONFIRM
-        assert classify_shell_command("curl https://example.com") == RiskTier.CONFIRM
+        assert classify_shell_command("curl -X POST https://example.com") == RiskTier.CONFIRM
         assert classify_shell_command("npm publish") == RiskTier.CONFIRM
 
     def test_block_commands(self):
