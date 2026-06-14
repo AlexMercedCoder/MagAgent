@@ -12,6 +12,26 @@
 
 Built-in recipes include release prep, bug triage, docs audit, dependency upgrade, and test repair. If `.magent/playbook.toml` exists, `magent recipe list` also exposes a `project-playbook` recipe from project routines.
 
+## Goal Loops
+
+`magent goal` is the daily-driver wrapper around plans, recipes, subagents, and
+the daemon queue.
+
+```bash
+magent goal "Implement the settings page until tests pass and review is clean"
+magent goal "Ship the landing page" --background
+magent jobs
+```
+
+The generated prompt asks the main agent to implement, verify, review, and
+repeat until the measurable goal is met or the loop cap is reached. The default
+loop points at the packaged `verify-and-review` recipe, uses the `cheap` model
+role for verifier-style checks, and uses the `review` model role for fresh
+review context.
+
+For interactive sessions, `/goal <task>` sends the goal-loop prompt directly to
+the current chat. Use `/jobs` to inspect queued background work.
+
 ## Fix failing CI
 
 1. Run `magent ci --logs --repair-plan --save`.

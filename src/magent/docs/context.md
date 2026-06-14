@@ -16,6 +16,7 @@ magent context map
 magent context map --project /path/to/repo
 magent context map --query "release workflow"
 magent context map --json
+magent context audit
 ```
 
 By default, the CLI renders a compact terminal briefing with tables for workspace
@@ -23,6 +24,19 @@ signals, active plans, memory candidates, and optional recall. Use `--json` when
 a desktop app, script, or debugging session needs the full structured payload.
 Use `--query` when you want the context map to include a compact memory recall
 result for the topic you are about to work on.
+
+## Context Hygiene
+
+`magent context audit` renders the same readable context map and adds practical
+cleanup suggestions. It is useful before large tasks or when quota matters:
+
+- create or update `.magent/playbook.toml` for missing command roles
+- discard stale plans before starting unrelated work
+- promote recurring command failures through `magent memory inbox`
+- use `/clear` before switching tasks in an interactive session
+
+Inside `magent`, use `/context` or `/context <topic>` for the same briefing
+without leaving the chat.
 
 ## Memory Promotion
 

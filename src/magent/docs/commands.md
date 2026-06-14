@@ -10,6 +10,11 @@ Important command paths:
 - `magent ask --strict-audit "task"`: exit nonzero when the final task audit is incomplete.
 - `magent ask --json "task"`: emit a machine-readable response, audit, and tool summary.
 - `magent ask --json --events "task"`: include coarse structured desktop timeline events.
+- `magent goal "task"`: create a measurable goal loop with verifier/reviewer workflow scaffolding.
+- `magent goal "task" --background`: queue the goal prompt in the daemon queue.
+- `magent jobs`: show background daemon jobs in a friendly table.
+- `magent jobs --json`: emit machine-readable daemon queue status.
+- `magent statusline`: render a compact provider/model/project/jobs statusline.
 - `magent research "topic"`: run direct deep web research with cited sources and readable terminal output.
 - `magent research "topic" --question "focus" --max-sources 8`: add focused questions and source limits.
 - `magent research "topic" --write`: write a Markdown research report in the active directory.
@@ -31,6 +36,7 @@ Important command paths:
 - `magent workbench prune`: prune old high-volume workbench records.
 - `magent workbench compact`: rewrite JSON workbench stores and report bytes reclaimed.
 - `magent config show`: show global and current-user config files.
+- `magent config ux`: show a friendly control-center summary for provider, model roles, permissions, memory, subagents, context, and jobs.
 - `magent config get`: return redacted machine-readable global/user/merged config.
 - `magent config schema`: return guided config field metadata for desktop apps.
 - `magent config set <path> <value>`: update a dot-path config value for desktop integrations.
@@ -110,6 +116,7 @@ Important command paths:
 - `magent plugin import opencode <path>`: import OpenCode-style agents, commands, and MCP config.
 - `magent plugin import claude <path>`: import Claude-style project instructions, agents, commands, and MCP config.
 - `magent plugin import codex-skill <path>`: import a Codex-style `SKILL.md` pack.
+- `magent plugin import gemini <path>`: import Gemini CLI-style extensions, commands, skills, and MCP config.
 - `magent browser snapshot <url>`: capture page title and visible text with Playwright.
 - `magent browser screenshot <url>`: capture a page screenshot with Playwright.
 - `magent eval init`: create a starter local eval suite.
@@ -203,6 +210,7 @@ Important command paths:
 - `magent release notes`: generate release notes from recent commits.
 - `magent context map`: show memory, workbench, and project state for the current project.
 - `magent context map --json`: emit the full machine-readable context payload.
+- `magent context audit`: show context-hygiene suggestions for stale plans, missing project commands, memory candidates, and task switching.
 - `magent recipe list`: list built-in, saved, and playbook-backed workflows.
 - `magent recipe show <name>`: inspect a workflow recipe.
 - `magent recipe save <name> --step "..." --command "..."`: save a reusable workflow.

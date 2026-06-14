@@ -101,16 +101,27 @@ def test_importers_convert_known_ecosystem_shapes(tmp_path: Path, monkeypatch) -
     skill.mkdir()
     (skill / "SKILL.md").write_text("---\nname: demo\n---\n# Demo", encoding="utf-8")
 
+    gemini = tmp_path / "gemini"
+    (gemini / ".gemini" / "commands").mkdir(parents=True)
+    (gemini / ".gemini" / "skills").mkdir()
+    (gemini / "GEMINI.md").write_text("Gemini project instructions", encoding="utf-8")
+    (gemini / ".gemini" / "commands" / "verify.md").write_text("Verify recipe", encoding="utf-8")
+    (gemini / ".gemini" / "skills" / "ui.md").write_text("UI skill", encoding="utf-8")
+
     imported_open = import_compat_plugin("opencode", opencode, name="open-pack")
     imported_claude = import_compat_plugin("claude", claude, name="claude-pack")
     imported_skill = import_compat_plugin("codex-skill", skill, name="skill-pack")
+    imported_gemini = import_compat_plugin("gemini", gemini, name="gemini-pack")
     listed = list_plugins()
 
     assert imported_open["converted"]["agents"]
     assert imported_open["converted"]["recipes"]
     assert imported_claude["converted"]["agents"]
     assert imported_skill["converted"]["skills"]
-    assert {item["name"] for item in listed["plugins"]} >= {"open-pack", "claude-pack", "skill-pack"}
+    assert imported_gemini["converted"]["agents"]
+    assert imported_gemini["converted"]["recipes"]
+    assert imported_gemini["converted"]["skills"]
+    assert {item["name"] for item in listed["plugins"]} >= {"open-pack", "claude-pack", "skill-pack", "gemini-pack"}
 
 
 def test_cli_plugin_compatibility_commands(tmp_path: Path, monkeypatch) -> None:
@@ -124,6 +135,7 @@ def test_cli_plugin_compatibility_commands(tmp_path: Path, monkeypatch) -> None:
     mcp_import = runner.invoke(cli_main.app, ["plugin", "mcp", "import", str(mcp_file), "--name", "cli-mcp"])
     metadata = runner.invoke(cli_main.app, ["plugin", "metadata", str(skill)])
     skill_import = runner.invoke(cli_main.app, ["plugin", "import", "codex-skill", str(skill), "--name", "cli-skill"])
+    gemini_import = runner.invoke(cli_main.app, ["plugin", "import", "gemini", str(skill), "--name", "cli-gemini"])
     listed_json = runner.invoke(cli_main.app, ["plugin", "list", "--json"])
 
     assert mcp_import.exit_code == 0
@@ -131,5 +143,6 @@ def test_cli_plugin_compatibility_commands(tmp_path: Path, monkeypatch) -> None:
     assert json.loads(mcp_import.output)["enabled"] is False
     assert metadata.exit_code == 0
     assert skill_import.exit_code == 0
+    assert gemini_import.exit_code == 0
     assert listed_json.exit_code == 0
     assert json.loads(listed_json.output)["plugins"]

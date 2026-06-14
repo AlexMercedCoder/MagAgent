@@ -131,3 +131,17 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
         console.print_json(data=result)
         if not result.get("ok"):
             raise typer.Exit(1)
+
+    @import_app.command("gemini")
+    def plugin_import_gemini_cmd(
+        source: str = typer.Argument(...),
+        name: str = typer.Option("", "--name"),
+        force: bool = typer.Option(False, "--force"),
+    ) -> None:
+        """Import Gemini CLI-style extensions, commands, skills, and MCP config."""
+        from magent.plugins import import_compat_plugin
+
+        result = import_compat_plugin("gemini", source, name=name, force=force)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)

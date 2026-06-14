@@ -29,7 +29,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.31.2" in version.output
+    assert "MagAgent 0.32.0" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -332,7 +332,7 @@ def test_cli_desktop_integration_commands(tmp_path: Path, monkeypatch) -> None:
     memory_graph = runner.invoke(cli_main.app, ["memory", "graph", "--limit", "5"])
 
     assert system.exit_code == 0
-    assert json.loads(system.output)["magent_version"] == "0.31.2"
+    assert json.loads(system.output)["magent_version"] == "0.32.0"
     assert config_get.exit_code == 0
     assert json.loads(config_get.output)["ok"] is True
     assert config_set.exit_code == 0
@@ -517,6 +517,49 @@ def test_cli_context_map_and_memory_promote(tmp_path: Path, monkeypatch) -> None
     assert json.loads(promoted.output)["written"] == 1
 
 
+def test_cli_goal_jobs_statusline_config_and_context_audit(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    store = WorkbenchStore("cli-user")
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+
+    class FakeMemory:
+        available = True
+
+        def stats(self):
+            return {"nodes": 1}
+
+        def recall(self, query):
+            return ""
+
+    monkeypatch.setattr(cli_main, "_get_memory_manager", lambda: (FakeMemory(), "cli-user"))
+
+    goal = runner.invoke(
+        cli_main.app,
+        ["goal", "Ship the login page", "--project", str(project), "--background", "--json"],
+    )
+    jobs = runner.invoke(cli_main.app, ["jobs", "--json"])
+    statusline = runner.invoke(cli_main.app, ["statusline", "--json"])
+    config_ux = runner.invoke(cli_main.app, ["config", "ux"])
+    audit = runner.invoke(cli_main.app, ["context", "audit", "--project", str(project)])
+
+    assert goal.exit_code == 0
+    goal_data = json.loads(goal.output)
+    assert goal_data["goal"]["verify"] is True
+    assert goal_data["queued"]["kind"] == "ask"
+    assert jobs.exit_code == 0
+    assert json.loads(jobs.output)["counts"]["pending"] == 1
+    assert statusline.exit_code == 0
+    assert json.loads(statusline.output)["pending_jobs"] == 1
+    assert config_ux.exit_code == 0
+    assert "Control Center" in config_ux.output
+    assert audit.exit_code == 0
+    assert "Context Hygiene Suggestions" in audit.output
+
+
 def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch) -> None:
     project = tmp_path / "project"
     (project / ".magent").mkdir(parents=True)
@@ -573,6 +616,8 @@ def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch
     assert json.loads(playbook.output)["commands"]["test"] == ["pytest -q"]
     assert recipes.exit_code == 0
     assert "project-playbook" in recipes.output
+    assert "verify-and-review" in recipes.output
+    assert "context-hygiene" in recipes.output
     assert saved.exit_code == 0
     assert json.loads(saved.output)["name"] == "daily-check"
     assert run.exit_code == 0

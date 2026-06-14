@@ -4,11 +4,39 @@ from __future__ import annotations
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 console = Console()
 
 
 def register_config_commands(config_app: typer.Typer) -> None:
+    @config_app.command("ux")
+    def config_ux_cmd(user: str | None = typer.Option(None, "--user", "-u")) -> None:
+        """Show a friendly control-center summary for common configuration UX."""
+        from magent.config import get_current_user, load_config
+
+        username = user or get_current_user()
+        config = load_config(username)
+        console.print(Panel.fit("[bold]MagAgent Config[/bold]", title="Control Center"))
+        table = Table("Area", "Current", "Try")
+        table.add_row("Provider", f"{config.default_provider}/{config.default_model}", "magent provider wizard")
+        table.add_row(
+            "Model roles",
+            ", ".join(f"{role}:{value or '-'}" for role, value in config.model_roles.items()),
+            "magent model wizard",
+        )
+        table.add_row("Permissions", config.permission_mode, "magent permission set balanced")
+        table.add_row("Memory", f"write every {config.write_every_n_turns} turns", "magent memory configure")
+        table.add_row(
+            "Subagents",
+            f"max {config.max_subagents}, parallel {config.max_parallel_subagents}",
+            "magent subagent wizard",
+        )
+        table.add_row("Context", "audit active prompt load", "magent context audit")
+        table.add_row("Jobs", "background daemon queue", "magent jobs")
+        console.print(table)
+
     @config_app.command("get")
     def config_get_cmd(
         user: str | None = typer.Option(None, "--user", "-u"),

@@ -648,6 +648,11 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 "[bold]Available commands:[/bold]\n\n"
                 "  [cyan]/help[/cyan]            — Show this help\n"
                 "  [cyan]/compose[/cyan]         — Write a formatted multiline prompt\n"
+                "  [cyan]/goal <task>[/cyan]     — Start a verify/review goal loop prompt\n"
+                "  [cyan]/jobs[/cyan]            — Show background jobs\n"
+                "  [cyan]/context [q][/cyan]     — Audit active context and memory\n"
+                "  [cyan]/config[/cyan]          — Show config control-center summary\n"
+                "  [cyan]/statusline[/cyan]      — Preview statusline payload\n"
                 "  [cyan]/memory[/cyan]          — Show memory stats\n"
                 "  [cyan]/skills[/cyan]          — List active skills\n"
                 "  [cyan]/model[/cyan]           — Show current model\n"
@@ -659,6 +664,45 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 title="[bold cyan]MagAgent Help[/bold cyan]",
             )
         )
+        return True
+
+    if command == "/goal":
+        if not arg:
+            console.print("[yellow]Usage: /goal <measurable task>[/yellow]")
+            return True
+        from magent.daily_driver import build_goal_prompt
+        from magent.tui import print_streaming_response
+
+        print_streaming_response(session.stream_chat(build_goal_prompt(arg)), _loop)
+        return True
+
+    if command == "/jobs":
+        from magent.daily_driver import jobs_summary
+
+        _print_jobs_summary(jobs_summary(_store()))
+        return True
+
+    if command == "/context":
+        from magent.context import context_map
+        from magent.daily_driver import context_audit
+
+        data = context_map(_store(), project=os.getcwd(), memory_manager=session.memory, query=arg)
+        _print_context_map(data)
+        audit = context_audit(data)
+        console.print("[bold]Suggestions[/bold]")
+        for item in audit.get("suggestions", []):
+            console.print(f"- {item}")
+        return True
+
+    if command == "/config":
+        _print_config_center(config, provider.display_name)
+        return True
+
+    if command == "/statusline":
+        from magent.daily_driver import render_statusline, statusline_data
+
+        data = statusline_data(config, username=get_current_user() or "user", cwd=os.getcwd(), store=_store())
+        console.print(render_statusline(data))
         return True
 
     if command == "/compose":
@@ -1290,6 +1334,80 @@ def run_cmd(
     plan_cmd(goal, project or os.getcwd())
 
 
+@app.command("goal", rich_help_panel="Everyday Agent Work")
+def goal_cmd(
+    goal: str = typer.Argument(...),
+    project: str = typer.Option(".", "--project", "-p"),
+    background: bool = typer.Option(False, "--background/--no-background", help="Queue the goal as a daemon task."),
+    verify: bool = typer.Option(True, "--verify/--no-verify", help="Include verifier pass instructions."),
+    review: bool = typer.Option(True, "--review/--no-review", help="Include reviewer pass instructions."),
+    max_loops: int = typer.Option(3, "--max-loops", min=1, max=20),
+    verifier_model: str = typer.Option("cheap", "--verifier-model-role"),
+    reviewer_model: str = typer.Option("review", "--reviewer-model-role"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Create a goal loop with verifier/reviewer workflow scaffolding."""
+    from magent.daily_driver import create_goal
+
+    result = create_goal(
+        _store(),
+        goal,
+        project=project,
+        verify=verify,
+        review=review,
+        background=background,
+        max_loops=max_loops,
+        verifier_model=verifier_model,
+        reviewer_model=reviewer_model,
+    )
+    if json_output:
+        console.print_json(data=result)
+        return
+    goal_item = result["goal"]
+    plan = result["plan"]
+    console.print(f"[green]✓ Created goal {goal_item['id']}[/green]")
+    console.print(Panel(goal_item["prompt"], title="Goal Loop Prompt"))
+    console.print(f"[dim]Saved plan:[/dim] {plan['id']}")
+    if result.get("queued"):
+        console.print(f"[dim]Queued background job:[/dim] {result['queued']['id']}")
+        console.print("[dim]Inspect with `magent jobs` and run due work with `magent daemon run-once`.[/dim]")
+    else:
+        console.print("[dim]Run now with:[/dim]")
+        console.print(f"  magent ask {json.dumps(goal_item['prompt'])} --project {json.dumps(str(Path(project).resolve()))}")
+
+
+@app.command("jobs", rich_help_panel="Everyday Agent Work")
+def jobs_cmd(
+    status: str = typer.Option("", "--status"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show background daemon jobs in a friendly table."""
+    from magent.daily_driver import jobs_summary
+
+    data = jobs_summary(_store(), status=status)
+    if json_output:
+        console.print_json(data=data)
+        return
+    _print_jobs_summary(data)
+
+
+@app.command("statusline", rich_help_panel="Setup & Configuration")
+def statusline_cmd(
+    template: str = typer.Option("", "--template", "-t", help="Python format template for statusline fields."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Render a compact shell statusline payload."""
+    from magent.daily_driver import render_statusline, statusline_data
+
+    username = get_current_user() or "default"
+    config = load_config(username)
+    data = statusline_data(config, username=username, cwd=os.getcwd(), store=_store())
+    if json_output:
+        console.print_json(data=data)
+        return
+    console.print(render_statusline(data, template=template))
+
+
 @app.command("review", rich_help_panel="Planning, Review & Release")
 def review_cmd(
     base: str = typer.Option("HEAD", "--since"),
@@ -1536,6 +1654,27 @@ def context_map_cmd(
     _print_context_map(data)
 
 
+@context_app.command("audit")
+def context_audit_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    query: str = typer.Option("", "--query", "-q"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Audit active context and suggest token-saving cleanup actions."""
+    from magent.context import context_map
+    from magent.daily_driver import context_audit
+
+    mgr, _ = _get_memory_manager()
+    data = context_audit(context_map(_store(), project=project, memory_manager=mgr, query=query))
+    if json_output:
+        console.print_json(data=data)
+        return
+    _print_context_map(data["data"])
+    console.print("[bold]Context Hygiene Suggestions[/bold]")
+    for item in data.get("suggestions", []):
+        console.print(f"- {item}")
+
+
 def _print_context_map(data: dict) -> None:
     console.print(Panel.fit(f"[bold]{data.get('project', '')}[/bold]", title="Context Map"))
     workspace = data.get("workspace") or {}
@@ -1580,6 +1719,54 @@ def _print_context_map(data: dict) -> None:
     recall = (memory.get("recall") or "").strip()
     if recall:
         console.print(Panel(recall, title="Memory Recall"))
+
+
+def _print_jobs_summary(data: dict) -> None:
+    counts = data.get("counts") or {}
+    title = ", ".join(f"{key}: {value}" for key, value in sorted(counts.items())) or "no jobs"
+    console.print(Panel.fit(title, title="Background Jobs"))
+    table = Table("ID", "Status", "Kind", "Project", "Payload")
+    for item in (data.get("jobs") or [])[:20]:
+        payload = item.get("payload") or {}
+        table.add_row(
+            item.get("id", ""),
+            item.get("status", ""),
+            item.get("kind", ""),
+            Path(item.get("project", ".")).name,
+            json.dumps(payload)[:90],
+        )
+    console.print(table)
+
+
+def _print_config_center(config, provider_display: str = "") -> None:
+    console.print(Panel.fit("[bold]MagAgent Config[/bold]", title="Control Center"))
+    table = Table("Area", "Current", "Command")
+    table.add_row(
+        "Provider",
+        f"{config.default_provider}/{config.default_model}",
+        "magent provider wizard",
+    )
+    table.add_row(
+        "Model roles",
+        ", ".join(f"{role}:{value or '-'}" for role, value in config.model_roles.items()),
+        "magent model wizard",
+    )
+    table.add_row("Permissions", config.permission_mode, "magent permission set <mode>")
+    table.add_row(
+        "Memory",
+        f"write every {config.write_every_n_turns} turns",
+        "magent memory configure",
+    )
+    table.add_row(
+        "Subagents",
+        f"max {config.max_subagents}, parallel {config.max_parallel_subagents}",
+        "magent subagent wizard",
+    )
+    table.add_row("Tools", "capability packs", "magent tools list")
+    table.add_row("Context", "audit active context", "magent context audit")
+    if provider_display:
+        table.add_row("Session provider", provider_display, "magent model")
+    console.print(table)
 
 
 @recipe_app.command("list")

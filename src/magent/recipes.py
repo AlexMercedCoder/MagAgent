@@ -62,6 +62,27 @@ BUILTIN_RECIPES: dict[str, dict[str, Any]] = {
         ],
         "commands": ["magent test related", "magent memory inbox"],
     },
+    "verify-and-review": {
+        "name": "verify-and-review",
+        "description": "Run the standard goal-loop verifier and reviewer pass.",
+        "steps": [
+            "Run project doctor and configured checks.",
+            "Verify build/test/lint status and inspect UI output when relevant.",
+            "Review the diff with fresh context for critical and medium issues.",
+            "Return actionable feedback or mark the contribution ready for human review.",
+        ],
+        "commands": ["magent project doctor", "magent release check", "magent review --save"],
+    },
+    "context-hygiene": {
+        "name": "context-hygiene",
+        "description": "Audit active context, stale plans, memory candidates, and unused project routines.",
+        "steps": [
+            "Inspect the current context map and memory recall.",
+            "Discard or promote stale plans, command failures, and memory candidates.",
+            "Trim unused MCP/skills/tool packs before starting a large task.",
+        ],
+        "commands": ["magent context audit", "magent memory inbox", "magent tools list"],
+    },
 }
 
 

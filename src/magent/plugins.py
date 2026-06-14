@@ -172,7 +172,7 @@ def import_compat_plugin(
     if not src.exists():
         return {"ok": False, "error": f"Import source not found: {src}"}
     ecosystem = ecosystem.replace("_", "-").lower()
-    if ecosystem not in {"opencode", "claude", "codex-skill"}:
+    if ecosystem not in {"opencode", "claude", "codex-skill", "gemini"}:
         return {"ok": False, "error": f"Unsupported importer: {ecosystem}"}
     plugin_name = name or f"{src.stem}-{ecosystem}"
     target = PLUGIN_DIR / plugin_name
@@ -186,6 +186,8 @@ def import_compat_plugin(
         _import_opencode(src, target, converted)
     elif ecosystem == "claude":
         _import_claude(src, target, converted)
+    elif ecosystem == "gemini":
+        _import_gemini(src, target, converted)
     else:
         _import_codex_skill(src, target, converted)
     _copy_mcp_if_present(src, target, converted)
@@ -307,6 +309,9 @@ def _inferred_metadata(path: Path) -> dict[str, Any]:
     if (path / "CLAUDE.md").exists() or (path / ".claude").exists():
         compatibility.append("claude")
         capabilities.extend(["agents", "recipes"])
+    if (path / "GEMINI.md").exists() or (path / ".gemini").exists():
+        compatibility.append("gemini")
+        capabilities.extend(["agents", "recipes", "skills"])
     if (path / "SKILL.md").exists():
         compatibility.append("codex-skill")
         capabilities.append("skills")
@@ -360,6 +365,17 @@ def _import_codex_skill(src: Path, target: Path, converted: dict[str, list[str]]
         converted["skills"].append(str((dest_dir / "SKILL.md").relative_to(target)))
     elif src.is_dir():
         _copy_markdown_dir(src, target / "skills" / _safe_name(src.name), converted["skills"])
+
+
+def _import_gemini(src: Path, target: Path, converted: dict[str, list[str]]) -> None:
+    _copy_markdown_dir(src / "agents", target / "agents", converted["agents"])
+    _copy_markdown_dir(src / ".gemini" / "agents", target / "agents", converted["agents"])
+    _copy_markdown_dir(src / "commands", target / "recipes", converted["recipes"])
+    _copy_markdown_dir(src / ".gemini" / "commands", target / "recipes", converted["recipes"])
+    _copy_markdown_dir(src / "skills", target / "skills" / _safe_name(src.name), converted["skills"])
+    _copy_markdown_dir(src / ".gemini" / "skills", target / "skills" / _safe_name(src.name), converted["skills"])
+    if (src / "GEMINI.md").exists():
+        _write_agent_from_markdown(src / "GEMINI.md", target / "agents" / "gemini.md", converted["agents"])
 
 
 def _copy_markdown_dir(src: Path, dest: Path, converted: list[str]) -> None:

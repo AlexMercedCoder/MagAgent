@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.32.0
+
+- Added `magent goal` and `/goal` for measurable implement/verify/review goal loops with durable plan records and optional daemon queueing.
+- Added `magent jobs`, `/jobs`, `magent statusline`, and `/statusline` for daily-driver background task and statusline UX.
+- Added `magent context audit`, `/context`, and `magent config ux`/`/config` control-center summaries for context hygiene and CLI-first configuration.
+- Added built-in `verify-and-review` and `context-hygiene` recipes.
+- Added Gemini CLI-style plugin import support with `magent plugin import gemini <path>`.
+- Updated README and built-in docs for goal loops, context hygiene, statusline, jobs, and Gemini migration.
+
 ## 0.31.2
 
 - Refused shell-based file writes such as heredocs, redirection, `tee`, `touch`, and Python write snippets with clear guidance to use `write_file`/`edit_file`.

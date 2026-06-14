@@ -124,6 +124,9 @@ magent
 
 ```bash
 magent ask "Refactor the auth module to use JWTs and add tests"
+magent goal "Implement the dashboard until tests pass and review is clean"
+magent goal "Ship the landing page" --background
+magent jobs
 magent research "topic"
 magent research "topic" --write
 magent docs list
@@ -131,6 +134,8 @@ magent tutorial
 magent doctor
 magent recipe run release-prep
 magent memory inbox
+magent context audit
+magent statusline
 magent plan "Ship the UX fixes"
 magent plan --save --executable "Ship the UX fixes" -c "pytest -q"
 magent plan-sandbox <plan-id> --dry-run
@@ -409,6 +414,7 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Follow-ups** — `magent followup add/list`
 - **Knowledge commands** — `magent knowledge remember/recall/forget`
 - **Review and planning** — `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent review --json`, `magent review --save`, `magent review-show`, `magent run`
+- **Goal loops and jobs** — `magent goal --verify --review`, `magent goal --background`, `magent jobs`, `magent daemon run-once`, `magent statusline`
 - **Repo/test helpers** — `magent graph`, `magent code index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
 - **Patch queue** — `magent patch save/list/apply/revert`
 - **Patch-first workflow** — `magent patch preview/explain`, `magent workspace status/clean-report`
@@ -669,6 +675,11 @@ magent --version       # Show version
 |---|---|
 | `/help` | All slash commands |
 | `/compose` | Write a formatted multiline prompt |
+| `/goal <task>` | Run a measurable goal-loop prompt with verifier/reviewer instructions |
+| `/jobs` | Show background daemon jobs |
+| `/context [query]` | Audit current context, memory recall, plans, and cleanup suggestions |
+| `/config` | Show the interactive session config control center |
+| `/statusline` | Preview compact statusline output |
 | `/memory` | Memory graph stats |
 | `/skills` | Loaded skills list |
 | `/model` | Current model / change model |
