@@ -185,6 +185,80 @@ def _rank_search_results(query: str, raw: list[dict[str, Any]], max_results: int
     return [result for _score, _index, result in scored[:max_results]]
 
 
+def _normalize_document_sections(value: list[dict[str, Any]] | str) -> list[dict[str, Any]]:
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            parsed = [{"title": "Content", "content": value}]
+    else:
+        parsed = value
+    if isinstance(parsed, dict):
+        parsed = [parsed]
+    sections: list[dict[str, Any]] = []
+    for item in parsed if isinstance(parsed, list) else []:
+        if isinstance(item, dict):
+            bullets = item.get("bullets") or []
+            if isinstance(bullets, str):
+                bullets = [line.strip("-• ") for line in bullets.splitlines() if line.strip()]
+            sections.append(
+                {
+                    "title": str(item.get("title") or ""),
+                    "content": str(item.get("content") or ""),
+                    "bullets": [str(bullet) for bullet in bullets if str(bullet).strip()],
+                }
+            )
+        elif str(item).strip():
+            sections.append({"title": "", "content": str(item), "bullets": []})
+    return sections or [{"title": "Content", "content": "", "bullets": []}]
+
+
+def _split_paragraphs(text: str) -> list[str]:
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", text or "") if block.strip()]
+    if blocks:
+        return blocks
+    return [line.strip() for line in (text or "").splitlines() if line.strip()]
+
+
+def _pptx_set_background(slide: Any, color: Any) -> None:
+    fill = slide.background.fill
+    fill.solid()
+    fill.fore_color.rgb = color
+
+
+def _pptx_add_text(
+    slide: Any,
+    text: str,
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    *,
+    size: int,
+    color: Any,
+    bold: bool = False,
+    align: Any = None,
+) -> Any:
+    from pptx.util import Inches, Pt
+
+    box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+    frame = box.text_frame
+    frame.word_wrap = True
+    frame.clear()
+    lines = (text or "").splitlines() or [""]
+    for index, line in enumerate(lines):
+        paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
+        paragraph.text = line
+        if align is not None:
+            paragraph.alignment = align
+        for run in paragraph.runs:
+            run.font.size = Pt(size)
+            run.font.bold = bold
+            run.font.color.rgb = color
+            run.font.name = "Aptos"
+    return box
+
+
 def _normalize_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
     """Normalize common provider/model argument aliases before dispatch."""
     normalized = dict(args)
@@ -193,6 +267,8 @@ def _normalize_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]
         "read_file_range",
         "outline_file",
         "write_file",
+        "create_docx",
+        "create_pptx",
         "edit_file",
         "delete_file",
         "list_dir",
@@ -510,6 +586,173 @@ class ToolExecutor:
             }
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    async def create_docx(
+        self,
+        path: str,
+        title: str,
+        sections: list[dict[str, Any]] | str,
+        subtitle: str = "",
+    ) -> ToolResult:
+        """Create a Word document from structured sections."""
+        abs_path, tier = self._path_tier("write", path)
+        self._log_tool("create_docx", str(abs_path), tier)
+        perm = self._check_permission(f"Create Word document {abs_path}", tier)
+        if not perm.approved:
+            return self._permission_denied(perm)
+        try:
+            from docx import Document
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from docx.shared import Pt, RGBColor
+
+            normalized_sections = _normalize_document_sections(sections)
+            checkpoint_id = self._checkpoint(abs_path, "create_docx")
+            abs_path.parent.mkdir(parents=True, exist_ok=True)
+
+            doc = Document()
+            normal = doc.styles["Normal"]
+            normal.font.name = "Aptos"
+            normal.font.size = Pt(11)
+
+            heading = doc.add_heading(str(title or abs_path.stem), 0)
+            heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            if subtitle:
+                para = doc.add_paragraph(str(subtitle))
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for run in para.runs:
+                    run.italic = True
+                    run.font.color.rgb = RGBColor(0x66, 0x55, 0x44)
+
+            for section in normalized_sections:
+                section_title = str(section.get("title") or "").strip()
+                if section_title:
+                    doc.add_heading(section_title, level=1)
+                content = str(section.get("content") or "").strip()
+                if content:
+                    for paragraph in _split_paragraphs(content):
+                        doc.add_paragraph(paragraph)
+                for bullet in section.get("bullets") or []:
+                    text = str(bullet).strip()
+                    if text:
+                        doc.add_paragraph(text, style="List Bullet")
+
+            doc.save(abs_path)
+            return {
+                "ok": True,
+                "path": str(abs_path),
+                "sections": len(normalized_sections),
+                "bytes": abs_path.stat().st_size,
+                "checkpoint_id": checkpoint_id,
+            }
+        except ModuleNotFoundError as e:
+            return {
+                "ok": False,
+                "error": f"Missing document dependency `{e.name}`. Install or upgrade MagAgent to include document support.",
+                "path": str(abs_path),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e), "path": str(abs_path)}
+
+    async def create_pptx(
+        self,
+        path: str,
+        title: str,
+        slides: list[dict[str, Any]] | str,
+        subtitle: str = "",
+    ) -> ToolResult:
+        """Create a PowerPoint presentation from structured slides."""
+        abs_path, tier = self._path_tier("write", path)
+        self._log_tool("create_pptx", str(abs_path), tier)
+        perm = self._check_permission(f"Create PowerPoint presentation {abs_path}", tier)
+        if not perm.approved:
+            return self._permission_denied(perm)
+        try:
+            from pptx import Presentation
+            from pptx.dml.color import RGBColor
+            from pptx.enum.text import PP_ALIGN
+            from pptx.util import Inches
+
+            normalized_slides = _normalize_document_sections(slides)
+            checkpoint_id = self._checkpoint(abs_path, "create_pptx")
+            abs_path.parent.mkdir(parents=True, exist_ok=True)
+
+            prs = Presentation()
+            prs.slide_width = Inches(13.333)
+            prs.slide_height = Inches(7.5)
+
+            title_slide = prs.slides.add_slide(prs.slide_layouts[6])
+            _pptx_set_background(title_slide, RGBColor(0xF7, 0xEF, 0xE1))
+            _pptx_add_text(
+                title_slide,
+                str(title or abs_path.stem),
+                0.9,
+                1.7,
+                11.5,
+                1.0,
+                size=42,
+                bold=True,
+                color=RGBColor(0x86, 0x46, 0x16),
+                align=PP_ALIGN.CENTER,
+            )
+            if subtitle:
+                _pptx_add_text(
+                    title_slide,
+                    str(subtitle),
+                    1.6,
+                    3.0,
+                    10.2,
+                    0.8,
+                    size=22,
+                    color=RGBColor(0x5F, 0x45, 0x2C),
+                    align=PP_ALIGN.CENTER,
+                )
+
+            for slide_data in normalized_slides:
+                slide = prs.slides.add_slide(prs.slide_layouts[6])
+                _pptx_set_background(slide, RGBColor(0xFF, 0xFB, 0xF4))
+                _pptx_add_text(
+                    slide,
+                    str(slide_data.get("title") or "Slide"),
+                    0.6,
+                    0.35,
+                    12.0,
+                    0.65,
+                    size=30,
+                    bold=True,
+                    color=RGBColor(0x86, 0x46, 0x16),
+                )
+                bullets = [str(item).strip() for item in slide_data.get("bullets") or [] if str(item).strip()]
+                content = str(slide_data.get("content") or "").strip()
+                if content and not bullets:
+                    bullets = _split_paragraphs(content)
+                body = "\n".join(f"- {item}" for item in bullets[:8])
+                _pptx_add_text(
+                    slide,
+                    body,
+                    0.9,
+                    1.35,
+                    11.5,
+                    5.5,
+                    size=20,
+                    color=RGBColor(0x35, 0x2B, 0x20),
+                )
+
+            prs.save(abs_path)
+            return {
+                "ok": True,
+                "path": str(abs_path),
+                "slides": len(prs.slides),
+                "bytes": abs_path.stat().st_size,
+                "checkpoint_id": checkpoint_id,
+            }
+        except ModuleNotFoundError as e:
+            return {
+                "ok": False,
+                "error": f"Missing presentation dependency `{e.name}`. Install or upgrade MagAgent to include presentation support.",
+                "path": str(abs_path),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e), "path": str(abs_path)}
 
     async def edit_file(self, path: str, old_str: str, new_str: str) -> ToolResult:
         abs_path, tier = self._path_tier("edit", path)
@@ -1309,6 +1552,26 @@ class ToolExecutor:
                 {"path": ("string", "File path"), "content": ("string", "Full file content")},
             ),
             _def(
+                "create_docx",
+                "Create a Word .docx document from structured sections. Prefer this over generating Python scripts for Word documents.",
+                {
+                    "path": ("string", "Output .docx file path"),
+                    "title": ("string", "Document title"),
+                    "sections": ("array", "Sections with title, content, and optional bullets"),
+                    "subtitle": ("string", "Optional subtitle"),
+                },
+            ),
+            _def(
+                "create_pptx",
+                "Create a PowerPoint .pptx presentation from structured slides. Prefer this over generating Python scripts for presentations.",
+                {
+                    "path": ("string", "Output .pptx file path"),
+                    "title": ("string", "Presentation title"),
+                    "slides": ("array", "Slides with title, content, and/or bullets"),
+                    "subtitle": ("string", "Optional subtitle"),
+                },
+            ),
+            _def(
                 "edit_file",
                 "Replace an exact string in a file.",
                 {
@@ -1552,6 +1815,21 @@ class ToolExecutor:
             selected.add("diff_files")
         if any(word in text for word in ("install", "package", "dependency")):
             selected.add("install_package")
+        if any(
+            word in text
+            for word in (
+                "docx",
+                "word doc",
+                "word document",
+                "document",
+                "powerpoint",
+                "presentation",
+                "pptx",
+                "slides",
+                "slide deck",
+            )
+        ):
+            selected.update({"create_docx", "create_pptx"})
         if len(text.split()) > 120 or any(word in text for word in ("everything", "full access", "all tools")):
             selected.update(by_name)
         return [by_name[name] for name in by_name if name in selected]
@@ -1567,6 +1845,12 @@ class ToolExecutor:
             ),
             "outline_file": lambda: self.outline_file(a["path"], a.get("max_symbols", 200)),
             "write_file": lambda: self.write_file(a["path"], a["content"]),
+            "create_docx": lambda: self.create_docx(
+                a["path"], a["title"], a["sections"], a.get("subtitle", "")
+            ),
+            "create_pptx": lambda: self.create_pptx(
+                a["path"], a["title"], a["slides"], a.get("subtitle", "")
+            ),
             "edit_file": lambda: self.edit_file(a["path"], a["old_str"], a["new_str"]),
             "delete_file": lambda: self.delete_file(a["path"]),
             "list_dir": lambda: self.list_dir(a.get("path", ".")),

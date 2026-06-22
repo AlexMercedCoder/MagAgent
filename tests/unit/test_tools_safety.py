@@ -143,6 +143,49 @@ def test_tool_definitions_have_required_arguments(tmp_path: Path) -> None:
     assert "outline_file" in defs
     assert "read_file_range" in defs
     assert "deep_research" in defs
+    assert "create_docx" in defs
+    assert "create_pptx" in defs
+
+
+@pytest.mark.asyncio
+async def test_document_tools_create_docx_and_pptx(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+    sections = [
+        {
+            "title": "Origins",
+            "content": "Oranges emerged from ancient citrus cultivation.",
+            "bullets": ["Hybrid of pomelo and mandarin", "Spread through trade routes"],
+        },
+        {"title": "Modern Impact", "bullets": ["Global crop", "Vitamin C source"]},
+    ]
+
+    docx = await tools.create_docx(
+        "history_of_oranges.docx",
+        "History of Oranges",
+        sections,
+        "A concise research brief",
+    )
+    pptx = await tools.create_pptx(
+        "history_of_oranges.pptx",
+        "History of Oranges",
+        sections,
+        "From citrus groves to global tables",
+    )
+
+    assert docx["ok"] is True
+    assert pptx["ok"] is True
+    assert (tmp_path / "history_of_oranges.docx").stat().st_size > 0
+    assert (tmp_path / "history_of_oranges.pptx").stat().st_size > 0
+
+    from docx import Document
+    from pptx import Presentation
+
+    document_text = "\n".join(paragraph.text for paragraph in Document(tmp_path / "history_of_oranges.docx").paragraphs)
+    presentation = Presentation(tmp_path / "history_of_oranges.pptx")
+
+    assert "History of Oranges" in document_text
+    assert "Origins" in document_text
+    assert len(presentation.slides) == 3
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.6
+
+- Added native `create_docx` and `create_pptx` tools so Word documents and PowerPoint decks can be generated directly instead of by writing/debugging temporary Python scripts.
+- Added `python-pptx` as an installed dependency so presentation generation works out of the box on fresh installs.
+- Included Office artifact tools in file mutation tracking, selective tool loading, and the files capability pack.
+- Shortened the streamed max-round stop diagnostic so terminal output does not duplicate the same loop-stop message.
+
 ## 0.32.5
 
 - Added bounded artifact recovery for providers that repeatedly call `write_file` with `path` but no `content`: MagAgent now asks once for the raw artifact body with tools disabled, then writes it through the native file tool.

@@ -74,6 +74,10 @@ Common issues:
 - The final answer says a file was written but the file is missing or unchanged:
   update MagAgent. The file mutation verifier appends unresolved failed
   `write_file`/`edit_file`/`delete_file` attempts to the final response.
+- Word or PowerPoint generation gets stuck debugging a temporary script:
+  update MagAgent. The agent now has native `create_docx` and `create_pptx`
+  tools and should use them instead of generating and running Python scripts for
+  normal document/deck requests.
 - File write verification reports a failure even after a later successful write:
   update MagAgent. File mutation tracking normalizes relative and absolute paths
   before deciding whether a later success fixed an earlier failure.

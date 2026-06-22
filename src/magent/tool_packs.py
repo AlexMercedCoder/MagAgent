@@ -12,6 +12,8 @@ PACKS: dict[str, dict[str, Any]] = {
             "read_file_range",
             "outline_file",
             "write_file",
+            "create_docx",
+            "create_pptx",
             "edit_file",
             "delete_file",
             "list_dir",

@@ -39,6 +39,7 @@ MAX_MODEL_ROUNDS_PER_TURN = 16
 MAX_FAILED_SAME_TOOL_PER_TURN = 2
 ARTIFACT_RECOVERY_MAX_TOKENS = 12000
 TOOL_USE_ENFORCEMENT_MODELS = ("gpt", "codex", "gemini", "gemma", "grok", "glm", "qwen", "deepseek")
+FILE_MUTATION_TOOLS = {"write_file", "edit_file", "delete_file", "create_docx", "create_pptx"}
 
 AGENT_STATIC_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
 
@@ -60,6 +61,7 @@ Key behaviors:
 12. On macOS, prefer python3/pip3 or python3 -m pip; avoid bare python/pip commands.
 13. During research, prefer web_fetch/http_request over repeated curl shell probes. If shell inspection is necessary, use one broad read-only fetch pipeline instead of many tiny variations.
 14. Never use run_shell, heredocs, redirection, tee, or Python snippets to create or edit files. For any generated file, call write_file with the full final content; for changes, call edit_file.
+15. For Word documents and PowerPoint presentations, prefer create_docx and create_pptx over generating Python scripts.
 """
 
 TOOL_USE_ENFORCEMENT_PROMPT = """# Tool-Use Enforcement
@@ -447,7 +449,7 @@ class AgentSession:
                 else:
                     result = await self.tools.dispatch(tool_name, tool_args)
                 run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
-                if tool_name in {"write_file", "edit_file", "delete_file"}:
+                if tool_name in FILE_MUTATION_TOOLS:
                     run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
                 if tool_name == "run_shell" and not result.get("ok", True):
                     run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
@@ -546,7 +548,7 @@ class AgentSession:
                         f"Stopped after {self._max_model_rounds_per_turn()} model rounds to avoid an agent loop.",
                         failed_file_mutations,
                     )
-                    console.print(f"[yellow]  stop {full_response}[/yellow]")
+                    console.print(f"[yellow]  stop {self._stop_console_summary(full_response)}[/yellow]")
                     messages.append({"role": "assistant", "content": full_response})
                     self.conversation.append({"role": "assistant", "content": full_response})
                     self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
@@ -779,7 +781,7 @@ class AgentSession:
                     else:
                         result = await self.tools.dispatch(tool_name, tool_args)
                     run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
-                    if tool_name in {"write_file", "edit_file", "delete_file"}:
+                    if tool_name in FILE_MUTATION_TOOLS:
                         run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
                     if tool_name == "run_shell" and not result.get("ok", True):
                         run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
@@ -994,7 +996,7 @@ class AgentSession:
         tool_args: dict[str, Any],
         result: dict[str, Any],
     ) -> None:
-        if tool_name not in {"write_file", "edit_file", "delete_file"}:
+        if tool_name not in FILE_MUTATION_TOOLS:
             return
         raw_path = str(result.get("path") or tool_args.get("path") or tool_args.get("file_path") or "")
         path = self._canonical_tool_path(raw_path)
@@ -1189,7 +1191,7 @@ class AgentSession:
         else:
             result = await self.tools.dispatch(tool_name, tool_args)
         run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
-        if tool_name in {"write_file", "edit_file", "delete_file"}:
+        if tool_name in FILE_MUTATION_TOOLS:
             run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
         if tool_name == "run_shell" and not result.get("ok", True):
             run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
@@ -1237,7 +1239,7 @@ class AgentSession:
     def _observe_tool_result(
         self, tool_name: str, tool_args: dict[str, Any], result: dict[str, Any]
     ) -> None:
-        if tool_name in {"write_file", "edit_file", "delete_file"} and result.get("path"):
+        if tool_name in FILE_MUTATION_TOOLS and result.get("path"):
             self._remember_scratchpad("files_touched", str(result["path"]))
         if tool_name == "run_shell":
             command = str(tool_args.get("command", ""))
@@ -1284,7 +1286,7 @@ class AgentSession:
         tool_name: str,
         result: dict[str, Any],
     ) -> None:
-        if tool_name not in {"write_file", "edit_file", "delete_file"} or not result.get("path"):
+        if tool_name not in FILE_MUTATION_TOOLS or not result.get("path"):
             return
         changed_path = str(result["path"])
         pruned = 0
@@ -1462,7 +1464,7 @@ def _tool_call_fingerprint(tool_name: str, tool_args: dict[str, Any]) -> str:
 
 
 def _tool_call_description(tool_name: str, tool_args: dict[str, Any]) -> str:
-    if tool_name in {"write_file", "edit_file", "delete_file", "read_file", "read_file_range"}:
+    if tool_name in FILE_MUTATION_TOOLS | {"read_file", "read_file_range"}:
         return str(tool_args.get("path") or tool_args.get("file_path") or "")[:120]
     if tool_name == "run_shell":
         return str(tool_args.get("command") or "")[:120]
