@@ -63,6 +63,7 @@ daemon_app = typer.Typer(help="Background worker queue", name="daemon")
 plugin_app = typer.Typer(help="Installable extension packs", name="plugin")
 provider_app = typer.Typer(help="Provider setup and diagnostics", name="provider")
 model_app = typer.Typer(help="Model role configuration", name="model")
+auth_app = typer.Typer(help="Credential storage and keyring helpers", name="auth")
 subagent_app = typer.Typer(help="Sub-agent configuration and runs", name="subagent")
 profile_app = typer.Typer(help="Guided UX configuration profiles", name="profile")
 permission_app = typer.Typer(help="Permission profile UX", name="permission")
@@ -111,6 +112,7 @@ _HELP_PANELS = {
     "plugin": "Agents & Automation",
     "provider": "Setup & Configuration",
     "model": "Setup & Configuration",
+    "auth": "Setup & Configuration",
     "subagent": "Agents & Automation",
     "profile": "Setup & Configuration",
     "permission": "Setup & Configuration",
@@ -154,6 +156,7 @@ for _name, _typer in [
     ("plugin", plugin_app),
     ("provider", provider_app),
     ("model", model_app),
+    ("auth", auth_app),
     ("subagent", subagent_app),
     ("profile", profile_app),
     ("permission", permission_app),
@@ -167,6 +170,7 @@ __all__ = [
     "api_app",
     "app",
     "agent_app",
+    "auth_app",
     "artifact_app",
     "checkpoint_app",
     "browser_app",

@@ -11,7 +11,7 @@ Commands:
 
 Built-in packs:
 
-- `files`: file reads, writes, Word/PowerPoint artifact creation, SVG/diagram/image creation, diffs, archives, image reads, and docs search
+- `files`: file reads, writes, Word/PowerPoint artifact creation, SVG/diagram/local image creation, AI image generation, diffs, archives, image reads, and docs search
 - `shell`: shell, Python subprocess, package install, search, git, and system info
 - `web`: DDGS/DuckDuckGo web search with relevance filtering, fetch, deep research, HTTP requests, browser snapshots, and browser screenshots
 - `data`: JSON query helpers
@@ -33,3 +33,5 @@ The `create_docx` and `create_pptx` tools create Word documents and PowerPoint p
 ## Visual Artifacts
 
 The `create_svg`, `create_diagram`, and `create_image` tools create local visual artifacts without shell scripts. `create_svg` writes structured SVG vector files, `create_diagram` writes Mermaid `.mmd` or Markdown diagram files, and `create_image` renders simple PNG/JPEG compositions from shapes and text.
+
+The `generate_image` tool uses the configured `image_maker` model role to create AI-generated PNGs. Configure it with `magent model image-wizard` or `magent model set-role image_maker openai/gpt-image-1`.

@@ -9,6 +9,8 @@ from typing import Any
 
 import tomli_w
 
+from magent import __version__
+
 # ─────────────────────────────────────────────
 # Paths
 # ─────────────────────────────────────────────
@@ -29,11 +31,11 @@ CURRENT_USER_FILE = USERS_DIR / "current"
 DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent": {
         "name": "MagAgent",
-        "version": "0.25.0",
+        "version": __version__,
         "selective_tools": True,
         "max_subagents": 3,
         "max_model_rounds_per_turn": 16,
-        "max_tool_calls_per_turn": 40,
+        "max_tool_calls_per_turn": 80,
         "max_identical_tool_calls_per_turn": 3,
         "max_failed_same_tool_per_turn": 2,
         "doom_loop_policy": "halt",
@@ -66,6 +68,7 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "compact_every_n_turns": 10,
         "keep_recent_turns": 6,
         "max_history_tokens": 6000,
+        "instructions": [],
         "prune_stale_tool_results": True,
         "prompt_caching": True,
         "prompt_cache_key_scope": "project",
@@ -97,6 +100,7 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "review": "",
         "memory": "",
         "cheap": "",
+        "image_maker": "",
         "fallback": [],
     },
     "subagents": {
@@ -246,6 +250,15 @@ class Config:
         return int(self._global.get("context", {}).get("prompt_cache_min_stable_tokens", 1024))
 
     @property
+    def instruction_sources(self) -> list[str]:
+        raw = self._global.get("context", {}).get("instructions", [])
+        if isinstance(raw, str):
+            return [raw]
+        if isinstance(raw, list):
+            return [str(item) for item in raw if str(item).strip()]
+        return []
+
+    @property
     def recall_body_tokens(self) -> int:
         return int(self._global.get("memory", {}).get("recall_body_tokens", 220))
 
@@ -287,7 +300,7 @@ class Config:
 
     @property
     def max_tool_calls_per_turn(self) -> int:
-        return int(self._global.get("agent", {}).get("max_tool_calls_per_turn", 40))
+        return int(self._global.get("agent", {}).get("max_tool_calls_per_turn", 80))
 
     @property
     def max_identical_tool_calls_per_turn(self) -> int:
@@ -368,6 +381,19 @@ class Config:
     def model_roles(self) -> dict[str, Any]:
         return self._global.get("models", {})
 
+    def model_for_role(self, role: str) -> str:
+        value = self.model_roles.get(role, "")
+        if isinstance(value, list):
+            return str(value[0] if value else "")
+        return str(value or "")
+
+    def provider_and_model_for_role(self, role: str) -> tuple[str, str]:
+        value = self.model_for_role(role)
+        if value and "/" in value:
+            provider_id, model = value.split("/", 1)
+            return provider_id, model
+        return self.default_provider, value or self.default_model
+
     def provider_config(self, provider_id: str) -> dict[str, Any]:
         return self.providers.get(provider_id, {})
 
@@ -376,6 +402,12 @@ class Config:
         env_var = cfg.get("api_key_env")
         if env_var:
             return os.environ.get(env_var)
+        if cfg.get("api_key_keyring"):
+            from magent.auth_store import load_keyring_secret
+
+            secret = load_keyring_secret(provider_id)
+            if secret:
+                return secret
         return cfg.get("api_key")
 
     def as_dict(self) -> dict[str, Any]:

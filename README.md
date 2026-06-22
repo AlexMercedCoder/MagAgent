@@ -62,7 +62,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Provides local eval suite scaffolding for repeatable repo tasks
 - Maintains a **persistent memory graph** per user that grows smarter over time
 - Connects to **20 provider options** (local and cloud) via a single config
-- Has **33 built-in tools** out of the box — no plugins or configuration required
+- Has **40 built-in tools** out of the box — no plugins or configuration required
 - Includes **10 pre-built skill libraries** for docs, spreadsheets, PDFs, images, video, data analysis, REST APIs, databases, desktop automation, and Git
 - Uses token-efficient context management: conversation compaction, repo-map slices, memory/skill budgets, and compressed tool results
 - Ships built-in offline documentation and self-help search through `magent docs`
@@ -194,6 +194,8 @@ magent provider set openai --model gpt-5 --access codex
 magent provider wizard
 magent provider test
 magent provider doctor
+magent provider cooldowns
+magent provider clear-cooldown openai
 ```
 
 Provider access modes are intentionally distinct:
@@ -211,10 +213,24 @@ magent model set-role coding openai/gpt-5
 magent model set-role review anthropic/claude-sonnet-4-5
 magent model set-role memory ollama/qwen2.5:7b
 magent model set-role cheap openrouter/deepseek/deepseek-chat
+magent model set-role image_maker openai/gpt-image-1
 magent model set-role fallback "ollama/qwen2.5-coder:32b,openrouter/deepseek/deepseek-chat"
 magent model health
+magent model capabilities
 magent model wizard
+magent model image-wizard
 ```
+
+Credential helpers:
+
+```bash
+magent auth list
+magent auth add openai
+magent auth remove openai
+magent provider set openai --model gpt-5 --api-key-keyring openai
+```
+
+When Python `keyring` is available, `magent auth add` stores the provider key in the OS credential store and config can reference it without putting the secret in TOML.
 
 Review config changes before applying them:
 
@@ -229,7 +245,7 @@ magent events list
 
 ## Tools
 
-MagAgent ships with **33 built-in tools** the agent can call without any setup.
+MagAgent ships with **40 built-in tools** the agent can call without any setup.
 
 Tool capability packs make selective loading explicit:
 
@@ -301,6 +317,15 @@ magent browser screenshot https://example.com --out example.png
 | `clipboard_write` | Write to clipboard | Auto |
 | `open_file` | Open file in default application (xdg-open) | Auto |
 | `read_image` | Image metadata + base64 for vision models | Silent in project, confirm outside |
+
+### Visual Artifact Tools
+
+| Tool | Description | Permission |
+|---|---|---|
+| `create_svg` | Create a structured SVG vector artifact | Auto |
+| `create_diagram` | Create a Mermaid diagram file | Auto |
+| `create_image` | Create a local PNG/JPEG from structured shapes and text | Auto |
+| `generate_image` | Generate an AI-created PNG through the configured `image_maker` model role | Auto |
 
 ---
 
@@ -635,9 +660,13 @@ magent provider recommend # Recommend providers for a goal
 magent provider set    # Set default provider/model
 magent provider wizard # Interactive provider/access/model setup
 magent provider doctor # Provider/config readiness
+magent provider cooldowns # Show rate-limit cooldowns
 magent model roles     # Show role-specific model routing
-magent model set-role  # Set coding/review/memory/cheap/fallback role
+magent model set-role  # Set coding/review/memory/cheap/image_maker/fallback role
+magent model capabilities # Show inferred model capabilities by role
 magent model wizard    # Interactive model role setup
+magent model image-wizard # Interactive image model role and credential setup
+magent auth add        # Store a provider key in the OS keyring
 magent subagent status # Show sub-agent caps/defaults
 magent subagent run    # Run one focused sub-agent task
 magent subagent wizard # Interactive sub-agent setup
@@ -745,6 +774,7 @@ coding = "openai/gpt-4.1"
 review = "anthropic/claude-sonnet-4"
 memory = "ollama/qwen2.5:7b"
 cheap = "opencode-go/deepseek-v4-flash"
+image_maker = "openai/gpt-image-1"
 fallback = ["ollama/qwen2.5-coder:32b"]
 
 [context]
@@ -852,7 +882,7 @@ src/magent/
 ├── skills/           # SKILL.md discovery, matching, lockfile
 ├── subagents/        # Sub-agent runner
 ├── tokens.py         # Lightweight token budgeting helpers
-├── tools/            # 33 built-in tools (file, web/browser, db, system)
+├── tools/            # 40 built-in tools (file, web/browser, db, system, image)
 │   ├── executor.py   # ToolExecutor implementation
 │   └── db.py         # SQLite named database tools
 ├── context.py        # Context map and memory promotion bridge

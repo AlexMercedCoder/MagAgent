@@ -39,6 +39,7 @@ Important command paths:
 - `magent config ux`: show a friendly control-center summary for provider, model roles, permissions, memory, subagents, context, and jobs.
 - `magent config get`: return redacted machine-readable global/user/merged config.
 - `magent config schema`: return guided config field metadata for desktop apps.
+- `magent config validate`: validate provider/model roles and configured instruction sources.
 - `magent config set <path> <value>`: update a dot-path config value for desktop integrations.
 - `magent config backup`: back up global and current-user config files.
 - `magent config list-backups`: list config backups.
@@ -69,6 +70,8 @@ Important command paths:
 - `magent provider tool-smoke <provider> --timeout 60`: cap live smoke runtime.
 - `magent provider smoke-all`: run tiny tool-use smokes for configured ready providers.
 - `magent provider doctor`: show provider and configuration readiness.
+- `magent provider cooldowns`: show providers temporarily paused after rate-limit errors.
+- `magent provider clear-cooldown <provider>`: clear a saved provider cooldown.
 - `magent provider recommend`: recommend providers for a goal.
 - `magent provider catalog-doctor`: validate provider catalog metadata.
 - `magent model roles`: show model routing roles.
@@ -76,8 +79,13 @@ Important command paths:
 - `magent model clear-role <role>`: clear a model role.
 - `magent model doctor`: show model role readiness.
 - `magent model health`: show model role provider/runtime health.
+- `magent model capabilities`: show inferred role capabilities such as text, tool calling, vision, and image generation.
 - `magent model recommend`: recommend a model from successful local health observations.
 - `magent model wizard`: interactively set common model roles.
+- `magent model image-wizard`: interactively set the image_maker role and provider credential.
+- `magent auth list`: list configured keyring-backed provider credentials.
+- `magent auth add <provider>`: store a provider API key in the OS keyring when available.
+- `magent auth remove <provider>`: remove a provider key from the OS keyring.
 - `magent system info`: return machine-readable install, path, platform, and user info.
 - `magent docs list`: list built-in documentation topics.
 - `magent docs show <topic>`: render a built-in documentation topic.

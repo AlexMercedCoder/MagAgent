@@ -66,6 +66,17 @@ def build_provider(config: Any, provider_id: str | None, model: str | None):
     return _build_provider(p_id, m, api_key, p_cfg)
 
 
+def build_provider_for_role(config: Any, role: str):
+    """Build a provider from a configured model role such as image_maker."""
+    from magent.providers import build_provider as _build_provider
+
+    p_id, m = config.provider_and_model_for_role(role)
+    api_key = config.resolve_api_key(p_id)
+    p_cfg = config.provider_config(p_id)
+    _ensure_provider_credentials(p_id, api_key, p_cfg)
+    return _build_provider(p_id, m, api_key, p_cfg)
+
+
 def build_extraction_provider(config: Any):
     from magent.providers import build_provider as _build_provider
 

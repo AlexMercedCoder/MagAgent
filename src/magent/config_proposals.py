@@ -96,11 +96,12 @@ def _parse_operations(text: str) -> list[dict[str, Any]]:
                 "model": PROVIDER_CATALOG[provider_id]["default_model"],
             }
         )
-    for role in ("coding", "review", "memory", "cheap"):
+    role_order = ("coding", "review", "memory", "cheap", "image_maker")
+    for role in role_order:
         if role in normalized and provider_ids:
             provider_id = provider_ids[0]
             if len(provider_ids) > 1:
-                idx = min(len(provider_ids) - 1, ["coding", "review", "memory", "cheap"].index(role))
+                idx = min(len(provider_ids) - 1, role_order.index(role))
                 provider_id = provider_ids[idx]
             operations.append(
                 {

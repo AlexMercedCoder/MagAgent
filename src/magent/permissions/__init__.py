@@ -60,16 +60,23 @@ _SILENT_PATTERNS: list[str] = [
     "head *",
     "tail *",
     "wc *",
-    "find * -name*",
+    "find *",
     "echo *",
     "pwd",
     "whoami",
     "which *",
     "type *",
+    "sort *",
     "rg *",
     "grep *",
     "fd *",
     "bat *",
+    "node --version",
+    "node -v",
+    "npm --version",
+    "npm -v",
+    "npx --version",
+    "npx -v",
 ]
 
 # Patterns that are tier 1 (auto with audit)
@@ -173,6 +180,7 @@ _READ_ONLY_COMMANDS = {
     "pwd",
     "rg",
     "tail",
+    "sort",
     "type",
     "wc",
     "which",
@@ -220,6 +228,8 @@ def classify_shell_command(
         return RiskTier.BLOCK
     if argv and Path(argv[0]).name.lower() in _NETWORK_FETCH_COMMANDS:
         return RiskTier.AUTO if _is_read_only_network_fetch(argv) else RiskTier.CONFIRM
+    if _is_version_probe(argv):
+        return RiskTier.SILENT
     if (
         len(argv) >= 3
         and Path(argv[0]).name.lower() in {"python", "python3"}
@@ -314,6 +324,8 @@ def _classify_shell_segment(tokens: list[str]) -> RiskTier:
     head = Path(tokens[0]).name.lower()
     if head in _NETWORK_FETCH_COMMANDS:
         return RiskTier.AUTO if _is_read_only_network_fetch(tokens) else RiskTier.CONFIRM
+    if _is_version_probe(tokens):
+        return RiskTier.SILENT
     if _matches_any(command, _CONFIRM_PATTERNS):
         return RiskTier.CONFIRM
     if head in _READ_ONLY_COMMANDS:
@@ -331,6 +343,16 @@ def _classify_shell_segment(tokens: list[str]) -> RiskTier:
     if _matches_any(command, _SILENT_PATTERNS):
         return RiskTier.SILENT
     return RiskTier.CONFIRM
+
+
+def _is_version_probe(tokens: list[str]) -> bool:
+    if len(tokens) != 2:
+        return False
+    head = Path(tokens[0]).name.lower()
+    return head in {"node", "npm", "npx", "yarn", "pnpm", "bun"} and tokens[1] in {
+        "--version",
+        "-v",
+    }
 
 
 def _is_python_safe_probe(code: str) -> bool:

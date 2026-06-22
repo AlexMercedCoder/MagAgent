@@ -4,7 +4,8 @@ from pathlib import Path
 
 from magent import config as magent_config
 from magent import config_safety, config_ux, workbench_store
-from magent.cli.command_context import ProviderCredentialError, build_provider
+from magent import auth_store
+from magent.cli.command_context import ProviderCredentialError, build_provider, build_provider_for_role
 from magent.config import Config
 from magent.config_proposals import (
     apply_config_proposal,
@@ -93,10 +94,67 @@ def test_config_properties_prefer_user_overrides(monkeypatch) -> None:
     assert cfg.auto_write is False
     assert cfg.resolve_api_key("custom") == "secret"
     assert cfg.model_roles == {"coding": "coder"}
+    assert cfg.model_for_role("coding") == "coder"
+    assert cfg.provider_and_model_for_role("coding") == ("custom", "coder")
+    assert cfg.provider_and_model_for_role("image_maker") == ("custom", "cloud")
     assert cfg.max_subagents == 4
     assert cfg.max_parallel_subagents == 2
     assert cfg.subagent_model_role == "coding"
     assert cfg.subagent_sandbox_mode == "copy"
+
+
+def test_model_role_resolution_supports_provider_prefixed_and_fallback_values() -> None:
+    cfg = Config(
+        {
+            "defaults": {"provider": "ollama", "model": "qwen2.5-coder:32b"},
+            "models": {
+                "image_maker": "openai/gpt-image-1",
+                "cheap": "openrouter/deepseek/deepseek-chat",
+                "fallback": ["ollama/llama3.1:8b"],
+            },
+        }
+    )
+
+    assert cfg.model_for_role("image_maker") == "openai/gpt-image-1"
+    assert cfg.provider_and_model_for_role("image_maker") == ("openai", "gpt-image-1")
+    assert cfg.provider_and_model_for_role("cheap") == ("openrouter", "deepseek/deepseek-chat")
+    assert cfg.provider_and_model_for_role("fallback") == ("ollama", "llama3.1:8b")
+    assert cfg.provider_and_model_for_role("review") == ("ollama", "qwen2.5-coder:32b")
+
+
+def test_config_resolves_keyring_and_instruction_sources(monkeypatch) -> None:
+    monkeypatch.setattr(auth_store, "load_keyring_secret", lambda provider_id: "key-from-ring")
+    cfg = Config(
+        {
+            "defaults": {"provider": "openai", "model": "gpt-5"},
+            "providers": {"openai": {"api_key_keyring": "provider:openai"}},
+            "context": {"instructions": ["CONTRIBUTING.md", "docs/*.md"]},
+        }
+    )
+
+    assert cfg.resolve_api_key("openai") == "key-from-ring"
+    assert cfg.instruction_sources == ["CONTRIBUTING.md", "docs/*.md"]
+
+
+def test_config_validation_and_ambient_instructions(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "CONTRIBUTING.md").write_text("Run tests before final response.", encoding="utf-8")
+    magent_config.save_global_config(
+        {
+            "defaults": {"provider": "ollama", "model": "qwen"},
+            "providers": {"ollama": {"access_mode": "local"}},
+            "models": {"image_maker": "openai/gpt-image-1"},
+            "context": {"instructions": ["CONTRIBUTING.md"]},
+        }
+    )
+
+    from magent.config_validation import load_ambient_instructions, validate_config
+
+    cfg = magent_config.load_config(None)
+    assert validate_config(None, project)["ok"] is True
+    assert "Run tests" in load_ambient_instructions(cfg, project)
 
 
 def test_user_lifecycle_and_config_loading(tmp_path: Path, monkeypatch) -> None:
@@ -136,6 +194,7 @@ def test_config_ux_helpers_update_toml_without_manual_editing(tmp_path: Path, mo
     provider = config_ux.set_default_provider("openai", "gpt-5", api_key_env="OPENAI_API_KEY")
     codex = config_ux.set_default_provider("openai", "gpt-5", access_mode="codex")
     role = config_ux.set_model_role("review", "anthropic/claude-sonnet-4-5")
+    image_role = config_ux.set_model_role("image_maker", "openai/gpt-image-1")
     memory = config_ux.configure_memory("alice", mode="inbox-first", semantic=False, write_every=3)
     subagents = config_ux.configure_subagents(max_subagents=5, max_parallel=2, model_role="cheap")
     gateway = config_ux.configure_gateway("telegram", bot_token="secret", allowed_user_ids=["123"])
@@ -144,13 +203,34 @@ def test_config_ux_helpers_update_toml_without_manual_editing(tmp_path: Path, mo
     assert provider["provider"] == "openai"
     assert codex["access_mode"] == "codex"
     assert role["value"] == "anthropic/claude-sonnet-4-5"
+    assert image_role["value"] == "openai/gpt-image-1"
     assert memory["memory"]["inbox_first"] is True
     assert subagents["subagents"]["max_subagents"] == 5
     assert gateway["gateway"]["telegram"]["bot_token"] == "***"
     assert summary["provider"]["provider"] == "openai"
     assert summary["provider"]["access_mode"] == "codex"
     assert summary["model_roles"]["review"] is True
+    assert summary["model_roles"]["image_maker"] is True
     assert summary["gateways"]["telegram"] is True
+
+
+def test_configure_provider_entry_does_not_change_default_provider(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    config_ux.set_default_provider("ollama", "qwen2.5-coder:32b", access_mode="local")
+
+    result = config_ux.configure_provider_entry(
+        "openai",
+        model="gpt-image-1",
+        api_key_env="OPENAI_API_KEY",
+        access_mode="api",
+    )
+    cfg = magent_config.load_global_config()
+
+    assert result["ok"] is True
+    assert cfg["defaults"]["provider"] == "ollama"
+    assert cfg["defaults"]["model"] == "qwen2.5-coder:32b"
+    assert cfg["providers"]["openai"]["default_model"] == "gpt-image-1"
+    assert cfg["providers"]["openai"]["api_key_env"] == "OPENAI_API_KEY"
 
 
 def test_config_ux_provider_access_modes_and_doctor_actions(tmp_path: Path, monkeypatch) -> None:
@@ -278,6 +358,21 @@ def test_cli_provider_builder_requires_missing_api_key() -> None:
         raise AssertionError("expected missing credential error")
 
 
+def test_cli_provider_builder_can_use_image_maker_role() -> None:
+    cfg = Config(
+        {
+            "defaults": {"provider": "ollama", "model": "qwen2.5-coder:32b"},
+            "models": {"image_maker": "openai/gpt-image-1"},
+            "providers": {"openai": {"api_key": "inline-secret"}},
+        }
+    )
+
+    provider = build_provider_for_role(cfg, "image_maker")
+
+    assert provider.provider_id == "openai"
+    assert provider.model == "gpt-image-1"
+
+
 def test_config_proposals_events_permissions_and_model_health(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
     monkeypatch.setattr(config_safety, "CONFIG_DIR", magent_config.CONFIG_DIR)
@@ -311,3 +406,4 @@ def test_config_proposals_events_permissions_and_model_health(tmp_path: Path, mo
     assert permission["mode"] == "balanced"
     assert permission_status("alice")["mode"] == "balanced"
     assert any(row["role"] == "review" and row["ok"] for row in health["roles"])
+    assert any(row["role"] == "image_maker" for row in health["roles"])

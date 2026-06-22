@@ -22,10 +22,21 @@ Generated from the active Typer command tree.
 - `magent artifact open`
 - `magent artifact show`
 
+## auth
+
+- `magent auth add`
+- `magent auth list`
+- `magent auth remove`
+
 ## browser
 
 - `magent browser screenshot`
 - `magent browser snapshot`
+
+## cache
+
+- `magent cache doctor`
+- `magent cache status`
 
 ## checkpoint
 
@@ -55,11 +66,15 @@ Generated from the active Typer command tree.
 - `magent config proposals`
 - `magent config propose`
 - `magent config restore`
+- `magent config schema`
 - `magent config set`
 - `magent config show`
+- `magent config ux`
+- `magent config validate`
 
 ## context
 
+- `magent context audit`
 - `magent context map`
 
 ## core
@@ -68,7 +83,9 @@ Generated from the active Typer command tree.
 - `magent api`
 - `magent artifact`
 - `magent ask`
+- `magent auth`
 - `magent browser`
+- `magent cache`
 - `magent checkpoint`
 - `magent ci`
 - `magent code`
@@ -88,9 +105,11 @@ Generated from the active Typer command tree.
 - `magent followup`
 - `magent gateway`
 - `magent github`
+- `magent goal`
 - `magent graph`
 - `magent hook`
 - `magent inbox`
+- `magent jobs`
 - `magent knowledge`
 - `magent lsp`
 - `magent mcp`
@@ -117,9 +136,10 @@ Generated from the active Typer command tree.
 - `magent profile`
 - `magent project`
 - `magent provider`
-- `magent recipe`
 - `magent readiness`
+- `magent recipe`
 - `magent release`
+- `magent research`
 - `magent review`
 - `magent review-show`
 - `magent routine`
@@ -127,7 +147,9 @@ Generated from the active Typer command tree.
 - `magent session`
 - `magent setup`
 - `magent stats`
+- `magent statusline`
 - `magent subagent`
+- `magent system`
 - `magent task`
 - `magent test`
 - `magent test-intel`
@@ -238,11 +260,11 @@ Generated from the active Typer command tree.
 - `magent memory configure`
 - `magent memory delete`
 - `magent memory export`
+- `magent memory graph`
 - `magent memory inbox`
 - `magent memory index`
 - `magent memory log`
 - `magent memory merge`
-- `magent memory graph`
 - `magent memory node`
 - `magent memory promote`
 - `magent memory quality`
@@ -259,13 +281,16 @@ Generated from the active Typer command tree.
 - `magent memory traverse`
 - `magent memory ui`
 - `magent memory unsuppress`
+- `magent memory update-node`
 - `magent memory wizard`
 
 ## model
 
+- `magent model capabilities`
 - `magent model clear-role`
 - `magent model doctor`
 - `magent model health`
+- `magent model image-wizard`
 - `magent model recommend`
 - `magent model roles`
 - `magent model set-role`
@@ -298,6 +323,7 @@ Generated from the active Typer command tree.
 - `magent plugin import`
 - `magent plugin import claude`
 - `magent plugin import codex-skill`
+- `magent plugin import gemini`
 - `magent plugin import opencode`
 - `magent plugin install`
 - `magent plugin list`
@@ -332,6 +358,8 @@ Generated from the active Typer command tree.
 ## provider
 
 - `magent provider catalog-doctor`
+- `magent provider clear-cooldown`
+- `magent provider cooldowns`
 - `magent provider detect`
 - `magent provider doctor`
 - `magent provider env`
@@ -378,16 +406,16 @@ Generated from the active Typer command tree.
 - `magent subagent status`
 - `magent subagent wizard`
 
+## system
+
+- `magent system info`
+
 ## task
 
 - `magent task add`
 - `magent task done`
 - `magent task list`
 - `magent task report`
-
-## system
-
-- `magent system info`
 
 ## test
 

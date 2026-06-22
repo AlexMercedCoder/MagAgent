@@ -134,6 +134,9 @@ class Provider:
             )
             return response.choices[0].message.content or ""
         except Exception as e:
+            from magent.provider_cooldown import cooldown_from_exception
+
+            cooldown_from_exception(self.provider_id, e)
             raise ProviderError(f"Provider '{self.provider_id}' error: {e}") from e
 
     async def stream(
@@ -161,6 +164,9 @@ class Provider:
                 if delta and delta.content:
                     yield delta.content
         except Exception as e:
+            from magent.provider_cooldown import cooldown_from_exception
+
+            cooldown_from_exception(self.provider_id, e)
             raise ProviderError(f"Streaming error from '{self.provider_id}': {e}") from e
 
     def as_extract_fn(self):

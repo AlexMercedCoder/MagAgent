@@ -29,10 +29,10 @@ def test_print_banner_renders_compact_session_context(monkeypatch) -> None:
     captured = Console(record=True, width=60, color_system=None)
     monkeypatch.setattr(tui, "console", captured)
 
-    tui.print_banner("alex", "Ollama", "/repo", "ask", model="llama")
+    tui.print_banner("alex", "Ollama", "/repo", "ask", version="0.32.8", model="llama")
 
     output = captured.export_text()
-    assert "MagAgent" in output
+    assert "MagAgent 0.32.8" in output
     assert "alex" in output
     assert "Ollama" in output
     assert "/repo" in output

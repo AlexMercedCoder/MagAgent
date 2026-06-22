@@ -1,5 +1,6 @@
 """Tests for built-in tool safety and schemas."""
 
+import asyncio
 import sys
 import zipfile
 from pathlib import Path
@@ -60,7 +61,7 @@ def test_network_fetch_mutation_or_download_still_requires_confirmation() -> Non
 
 
 def test_macos_shell_rewrites_prefer_python3(monkeypatch) -> None:
-    monkeypatch.setattr(executor_module.sys, "platform", "darwin")
+    monkeypatch.setattr(executor_module, "sys", SimpleNamespace(platform="darwin"))
 
     assert (
         executor_module._prefer_platform_python_command("pip install python-pptx")
@@ -148,6 +149,17 @@ def test_tool_definitions_have_required_arguments(tmp_path: Path) -> None:
     assert "create_svg" in defs
     assert "create_diagram" in defs
     assert "create_image" in defs
+    assert "generate_image" in defs
+
+
+@pytest.mark.asyncio
+async def test_dispatch_reports_missing_required_arguments(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    result = await tools.dispatch("write_file", {"path": "missing-content.txt"})
+
+    assert result["ok"] is False
+    assert result["missing"] == ["content"]
 
 
 @pytest.mark.asyncio
@@ -222,6 +234,37 @@ async def test_visual_artifact_tools_create_svg_diagram_and_image(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_generate_image_uses_image_maker_role(monkeypatch, tmp_path: Path) -> None:
+    from magent.config import Config
+
+    async def fake_aimage_generation(**kwargs):
+        assert kwargs["model"] == "gpt-image-1"
+        assert kwargs["prompt"] == "flat vector navy blue iceberg"
+        return SimpleNamespace(
+            data=[SimpleNamespace(b64_json="iVBORw0KGgo=")],
+        )
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(aimage_generation=fake_aimage_generation, suppress_debug_info=False),
+    )
+    cfg = Config(
+        {
+            "defaults": {"provider": "ollama", "model": "qwen"},
+            "models": {"image_maker": "openai/gpt-image-1"},
+            "providers": {"openai": {"api_key": "key"}},
+        }
+    )
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent", config=cfg)
+
+    result = await tools.generate_image("iceberg.png", "flat vector navy blue iceberg")
+
+    assert result["ok"] is True
+    assert (tmp_path / "iceberg.png").read_bytes() == b"\x89PNG\r\n\x1a\n"
+
+
+@pytest.mark.asyncio
 async def test_file_tools_read_write_edit_list_diff_and_range(tmp_path: Path) -> None:
     tools = ToolExecutor(str(tmp_path), permission_mode="silent")
 
@@ -264,6 +307,20 @@ async def test_write_file_accepts_real_html_content(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_write_file_skips_identical_duplicate_content(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+    content = "same content\n"
+
+    first = await tools.write_file("notes.txt", content)
+    second = await tools.write_file("notes.txt", content)
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert second["unchanged"] is True
+    assert "checkpoint_id" not in second
+
+
+@pytest.mark.asyncio
 async def test_dispatch_normalizes_common_write_file_aliases(tmp_path: Path) -> None:
     tools = ToolExecutor(str(tmp_path), permission_mode="silent")
 
@@ -278,17 +335,17 @@ async def test_dispatch_normalizes_common_write_file_aliases(tmp_path: Path) -> 
 
 @pytest.mark.asyncio
 async def test_shell_control_can_be_session_allowed(tmp_path: Path) -> None:
-    command = f"{sys.executable} -c 'print(123)'"
+    command = "echo 123 && echo 456"
     tools = ToolExecutor(
         str(tmp_path),
         permission_mode="balanced",
         trusted_shell_patterns=[command],
     )
 
-    result = await tools.run_shell(command)
+    result = tools._check_shell_permission(command, RiskTier.CONFIRM)
 
-    assert result["ok"] is True
-    assert result["stdout"].strip() == "123"
+    assert result.approved is True
+    assert result.reason == "trusted-shell"
 
 
 @pytest.mark.asyncio
@@ -361,43 +418,111 @@ async def test_archive_tools_roundtrip_zip(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_shell_run_python_and_search_codebase(tmp_path: Path, monkeypatch) -> None:
+async def test_run_python_and_search_codebase(tmp_path: Path, monkeypatch) -> None:
     (tmp_path / "app.py").write_text("needle = 'found'\n", encoding="utf-8")
     tools = ToolExecutor(str(tmp_path), permission_mode="silent")
-    calls = []
 
     class FakeProc:
         returncode = 0
 
         async def communicate(self):
-            if calls[-1][0] == "rg":
-                return (f"{tmp_path}/app.py:1:needle = 'found'\n".encode(), b"")
-            return (b"hello\n", b"")
+            return (b"hello from python\n", b"")
 
         def kill(self):
             return None
 
-    async def fake_create_subprocess_exec(*argv, **kwargs):
-        calls.append(argv)
+    async def fake_create_exec_process(*argv, cwd):
         return FakeProc()
 
-    monkeypatch.setattr(
-        tools_module.asyncio,
-        "create_subprocess_exec",
-        fake_create_subprocess_exec,
-    )
-    monkeypatch.setattr(tools_module.shutil, "which", lambda name: "/usr/bin/rg" if name == "rg" else None)
+    monkeypatch.setattr(executor_module, "_create_exec_process", fake_create_exec_process)
 
-    shell = await tools.run_shell("echo hello")
     python = await tools.run_python("print('hello from python')")
     search = await tools.search_codebase("needle")
 
-    assert shell["ok"] is True
-    assert shell["stdout"].strip() == "hello"
     assert python["ok"] is True
-    assert python["stdout"].strip() == "hello"
+    assert python["stdout"].strip() == "hello from python"
     assert search["ok"] is True
     assert search["total"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_run_shell_expands_bash_brace_directories(tmp_path: Path, monkeypatch) -> None:
+    command = "mkdir -p teal-blog/src/{pages/blog,layouts,styles,content/blog}"
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent", trusted_shell_patterns=[command])
+
+    class FakeProc:
+        returncode = 0
+
+        async def communicate(self):
+            return (b"", b"")
+
+        def kill(self):
+            return None
+
+    async def fake_create_shell_process(shell_command, cwd):
+        assert shell_command == command
+        (Path(cwd) / "teal-blog" / "src" / "pages" / "blog").mkdir(parents=True)
+        (Path(cwd) / "teal-blog" / "src" / "layouts").mkdir(parents=True)
+        (Path(cwd) / "teal-blog" / "src" / "styles").mkdir(parents=True)
+        (Path(cwd) / "teal-blog" / "src" / "content" / "blog").mkdir(parents=True)
+        return FakeProc()
+
+    monkeypatch.setattr(executor_module, "_create_shell_process", fake_create_shell_process)
+
+    result = await tools.run_shell(command)
+
+    assert result["ok"] is True
+    assert (tmp_path / "teal-blog" / "src" / "pages" / "blog").is_dir()
+    assert (tmp_path / "teal-blog" / "src" / "layouts").is_dir()
+    assert (tmp_path / "teal-blog" / "src" / "styles").is_dir()
+    assert (tmp_path / "teal-blog" / "src" / "content" / "blog").is_dir()
+    assert not (tmp_path / "teal-blog" / "src" / "{pages").exists()
+
+
+@pytest.mark.asyncio
+async def test_run_shell_uses_longer_default_timeout_for_js_installs(tmp_path: Path, monkeypatch) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent", trusted_shell_patterns=["npm install"])
+    captured: dict[str, int] = {}
+
+    class FakeProc:
+        returncode = 0
+
+        async def communicate(self):
+            return (b"", b"")
+
+        def kill(self):
+            return None
+
+    async def fake_wait_for(coro, timeout):
+        captured["timeout"] = timeout
+        return await coro
+
+    async def fake_create_subprocess_exec(*argv, **kwargs):
+        return FakeProc()
+
+    monkeypatch.setattr(tools_module.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    monkeypatch.setattr(tools_module.asyncio, "wait_for", fake_wait_for)
+
+    result = await tools.run_shell("npm install")
+
+    assert result["ok"] is True
+    assert captured["timeout"] == 300
+
+
+@pytest.mark.asyncio
+async def test_cancel_active_stops_running_shell_task(tmp_path: Path) -> None:
+    command = "sleep 30"
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent", trusted_shell_patterns=[command])
+
+    task = asyncio.create_task(tools.dispatch("run_shell", {"command": command, "timeout": 60}))
+    await asyncio.sleep(0.1)
+    assert tools.has_active_work() is True
+
+    await tools.cancel_active()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert tools.has_active_work() is False
 
 
 @pytest.mark.asyncio

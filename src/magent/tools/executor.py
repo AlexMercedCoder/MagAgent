@@ -24,6 +24,7 @@ import sys
 import tempfile
 import warnings
 import zipfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -44,6 +45,7 @@ from magent.tool_packs import filter_tool_definitions_for_user
 from magent.tools.archive import safe_extract_tar as _safe_extract_tar
 from magent.tools.archive import safe_extract_zip as _safe_extract_zip
 from magent.tools.registry import tool_def as _def
+from magent.tools.registry import validate_tool_args
 from magent.tools.types import DEFAULT_TOOL_BUDGETS, READ_FILE_PREVIEW_CHARS, ToolResult
 
 console = Console()
@@ -74,6 +76,67 @@ _SEARCH_STOP_WORDS = {
     "using",
     "with",
 }
+
+
+def _uses_shell_syntax(command: str) -> bool:
+    """Return true when a command needs shell parsing beyond argv splitting."""
+    return bool(re.search(r"(\|\||&&|[;\n|<>]|\$\(|\{[^{}\s]+,[^{}]+})", command))
+
+
+def _effective_shell_timeout(command: str, requested_timeout: int) -> int:
+    """Give known package-install commands enough time unless caller overrides."""
+    if requested_timeout != 60:
+        return requested_timeout
+    lowered = f" {command.lower()} "
+    package_install_markers = (
+        " npm install",
+        " npm ci",
+        " yarn install",
+        " pnpm install",
+        " bun install",
+    )
+    if any(marker in lowered for marker in package_install_markers):
+        return 300
+    return requested_timeout
+
+
+def _running_tool_status(tool_name: str, args: dict[str, Any], elapsed: float) -> str:
+    label = tool_name
+    if tool_name == "run_shell":
+        command = str(args.get("command") or "").strip()
+        if command:
+            label = command[:90]
+    return f"Still running {label}... {int(elapsed)}s elapsed"
+
+
+async def _create_shell_process(command: str, cwd: str | Path):
+    """Run shell syntax through bash when available so brace expansion behaves."""
+    bash = shutil.which("bash")
+    if bash:
+        return await asyncio.create_subprocess_exec(
+            bash,
+            "-lc",
+            command,
+            cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    return await asyncio.create_subprocess_shell(
+        command,
+        cwd=cwd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+
+async def _create_exec_process(*argv: str, cwd: str | Path):
+    return await asyncio.create_subprocess_exec(
+        *argv,
+        cwd=cwd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
 
 _LOW_VALUE_SEARCH_DOMAINS = {
     "facebook.com",
@@ -381,6 +444,7 @@ def _normalize_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]
         "create_svg",
         "create_diagram",
         "create_image",
+        "generate_image",
         "edit_file",
         "delete_file",
         "list_dir",
@@ -420,6 +484,7 @@ class ToolExecutor:
         tool_budgets: dict[str, int] | None = None,
         session_id: str = "manual",
         interactive_permissions: bool = True,
+        config: Any | None = None,
     ):
         self.cwd = cwd
         self.permission_mode = permission_mode
@@ -431,6 +496,29 @@ class ToolExecutor:
         self.tool_budgets = {**DEFAULT_TOOL_BUDGETS, **(tool_budgets or {})}
         self.session_id = session_id
         self.interactive_permissions = interactive_permissions
+        self.config = config
+        self._active_tasks: set[asyncio.Task[Any]] = set()
+        self._active_processes: set[asyncio.subprocess.Process] = set()
+
+    async def cancel_active(self) -> None:
+        """Cancel active tool work and terminate subprocesses owned by this executor."""
+        tasks = list(self._active_tasks)
+        for task in tasks:
+            task.cancel()
+        for proc in list(self._active_processes):
+            with suppress(ProcessLookupError):
+                if proc.returncode is None:
+                    proc.kill()
+            with suppress(Exception):
+                await proc.wait()
+        if tasks:
+            with suppress(Exception):
+                await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=5)
+        self._active_processes.clear()
+        self._active_tasks.clear()
+
+    def has_active_work(self) -> bool:
+        return bool(self._active_tasks or self._active_processes)
 
     def _checkpoint(self, abs_path: Path, operation: str) -> str:
         try:
@@ -687,6 +775,15 @@ class ToolExecutor:
         if not perm.approved:
             return self._permission_denied(perm)
         try:
+            if abs_path.exists() and abs_path.is_file():
+                existing = abs_path.read_text(encoding="utf-8", errors="replace")
+                if existing == content:
+                    return {
+                        "ok": True,
+                        "path": str(abs_path),
+                        "bytes": len(content.encode()),
+                        "unchanged": True,
+                    }
             checkpoint_id = self._checkpoint(abs_path, "write_file")
             abs_path.parent.mkdir(parents=True, exist_ok=True)
             abs_path.write_text(content, encoding="utf-8")
@@ -1001,6 +1098,37 @@ class ToolExecutor:
         except Exception as e:
             return {"ok": False, "error": str(e), "path": str(abs_path)}
 
+    async def generate_image(
+        self,
+        path: str,
+        prompt: str,
+        aspect_ratio: str = "landscape",
+        reference_image: str = "",
+    ) -> ToolResult:
+        """Generate a PNG using the configured image_maker role."""
+        abs_path, tier = self._path_tier("write", path)
+        self._log_tool("generate_image", str(abs_path), tier)
+        perm = self._check_permission(f"Generate image {abs_path}", tier)
+        if not perm.approved:
+            return self._permission_denied(perm)
+        try:
+            from magent.config import load_config
+            from magent.image_generation import generate_image_with_role
+
+            config = self.config or load_config(self.username)
+            result = await generate_image_with_role(
+                config,
+                prompt,
+                abs_path,
+                aspect_ratio=aspect_ratio,
+                reference_image=reference_image,
+            )
+            if result.get("ok"):
+                result["checkpoint_id"] = self._checkpoint(abs_path, "generate_image")
+            return result
+        except Exception as e:
+            return {"ok": False, "error": str(e), "path": str(abs_path)}
+
     async def edit_file(self, path: str, old_str: str, new_str: str) -> ToolResult:
         abs_path, tier = self._path_tier("edit", path)
         self._log_tool("edit_file", str(abs_path), tier)
@@ -1141,6 +1269,7 @@ class ToolExecutor:
     async def run_shell(self, command: str, timeout: int = 60) -> ToolResult:
         original_command = command
         command = _prefer_platform_python_command(command)
+        timeout = _effective_shell_timeout(command, timeout)
         if command != original_command and self.show_tool_calls:
             console.print(f"[dim]Using macOS Python command: `{command}`[/dim]")
         native_guidance = _shell_native_file_tool_guidance(command)
@@ -1164,26 +1293,28 @@ class ToolExecutor:
                 return {"ok": False, "error": f"Invalid shell syntax: {e}"}
             if not argv:
                 return {"ok": False, "error": "Empty command"}
-            uses_shell_control = bool(re.search(r"(\|\||&&|[;\n|<>]|\$\()", command))
+            uses_shell_control = _uses_shell_syntax(command)
             if uses_shell_control:
-                proc = await asyncio.create_subprocess_shell(
-                    command,
-                    cwd=self.cwd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
+                proc = await _create_shell_process(command, self.cwd)
             else:
-                proc = await asyncio.create_subprocess_exec(
-                    *argv,
-                    cwd=self.cwd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
+                proc = await _create_exec_process(*argv, cwd=self.cwd)
+            self._active_processes.add(proc)
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             except TimeoutError:
-                proc.kill()
+                with suppress(ProcessLookupError):
+                    proc.kill()
+                with suppress(Exception):
+                    await proc.wait()
                 return {"ok": False, "error": f"Command timed out after {timeout}s"}
+            except asyncio.CancelledError:
+                with suppress(ProcessLookupError):
+                    proc.kill()
+                with suppress(Exception):
+                    await proc.wait()
+                raise
+            finally:
+                self._active_processes.discard(proc)
             if self.show_tool_calls and tier >= RiskTier.CONFIRM:
                 output_bytes = len(stdout) + len(stderr)
                 status = "completed" if proc.returncode == 0 else f"exited {proc.returncode}"
@@ -1208,19 +1339,24 @@ class ToolExecutor:
             with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
                 f.write(code)
                 tmp_path = f.name
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable,
-                tmp_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=self.cwd,
-            )
+            proc = await _create_exec_process(sys.executable, tmp_path, cwd=self.cwd)
+            self._active_processes.add(proc)
             try:
                 stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
             except TimeoutError:
-                proc.kill()
+                with suppress(ProcessLookupError):
+                    proc.kill()
+                with suppress(Exception):
+                    await proc.wait()
                 return {"ok": False, "error": f"Python execution timed out after {timeout}s"}
+            except asyncio.CancelledError:
+                with suppress(ProcessLookupError):
+                    proc.kill()
+                with suppress(Exception):
+                    await proc.wait()
+                raise
             finally:
+                self._active_processes.discard(proc)
                 Path(tmp_path).unlink(missing_ok=True)
             return {
                 "ok": proc.returncode == 0,
@@ -1853,6 +1989,16 @@ class ToolExecutor:
                 },
             ),
             _def(
+                "generate_image",
+                "Generate an AI-created PNG image through the configured image_maker model role.",
+                {
+                    "path": ("string", "Output image path such as .png"),
+                    "prompt": ("string", "Detailed visual prompt"),
+                    "aspect_ratio": ("string", "Optional: landscape, portrait, or square"),
+                    "reference_image": ("string", "Optional local path or URL for image editing/reference"),
+                },
+            ),
+            _def(
                 "edit_file",
                 "Replace an exact string in a file.",
                 {
@@ -2087,7 +2233,7 @@ class ToolExecutor:
                 }
             )
         if any(word in text for word in ("image", "screenshot", "photo", "diagram", "vision")):
-            selected.add("read_image")
+            selected.update({"read_image", "generate_image"})
         if any(
             word in text
             for word in (
@@ -2104,7 +2250,7 @@ class ToolExecutor:
                 "illustration",
             )
         ):
-            selected.update({"create_diagram", "create_svg", "create_image"})
+            selected.update({"create_diagram", "create_svg", "create_image", "generate_image"})
         if any(word in text for word in ("zip", "archive", "compress", "extract", "tar")):
             selected.update({"compress", "extract"})
         if any(word in text for word in ("clipboard", "notify", "open file", "desktop")):
@@ -2136,6 +2282,18 @@ class ToolExecutor:
         """Dispatch a tool call by name."""
         a = _normalize_tool_args(tool_name, tool_args)
         raw = bool(a.pop("raw", False))
+        definition = next(
+            (item for item in self.get_tool_definitions() if item.get("function", {}).get("name") == tool_name),
+            None,
+        )
+        if definition:
+            validation = validate_tool_args(definition, a)
+            if not validation["ok"]:
+                return {
+                    "ok": False,
+                    "error": f"Missing required arguments for {tool_name}: {', '.join(validation['missing'])}",
+                    "missing": validation["missing"],
+                }
         dispatch_map: dict[str, Any] = {
             "read_file": lambda: self.read_file(a["path"]),
             "read_file_range": lambda: self.read_file_range(
@@ -2170,6 +2328,12 @@ class ToolExecutor:
                 a.get("width", 1200),
                 a.get("height", 800),
                 a.get("background", "#ffffff"),
+            ),
+            "generate_image": lambda: self.generate_image(
+                a["path"],
+                a["prompt"],
+                a.get("aspect_ratio", "landscape"),
+                a.get("reference_image", ""),
             ),
             "edit_file": lambda: self.edit_file(a["path"], a["old_str"], a["new_str"]),
             "delete_file": lambda: self.delete_file(a["path"]),
@@ -2224,6 +2388,8 @@ class ToolExecutor:
             return {"ok": False, "error": f"Unknown tool: {tool_name}"}
         try:
             task = asyncio.create_task(fn())
+            self._active_tasks.add(task)
+            started = asyncio.get_running_loop().time()
             wait_seconds = 6.0
             while True:
                 done, _pending = await asyncio.wait({task}, timeout=wait_seconds)
@@ -2231,8 +2397,9 @@ class ToolExecutor:
                     result = task.result()
                     break
                 if self.show_tool_calls:
-                    console.print(f"[dim]Still running {tool_name}...[/dim]")
-                wait_seconds = 15.0
+                    elapsed = asyncio.get_running_loop().time() - started
+                    console.print(f"[dim]{_running_tool_status(tool_name, a, elapsed)}[/dim]")
+                wait_seconds = 30.0
         except KeyError as e:
             missing = str(e).strip("'")
             return {
@@ -2241,6 +2408,13 @@ class ToolExecutor:
                 "tool": tool_name,
                 "args": a,
             }
+        except asyncio.CancelledError:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            raise
+        finally:
+            if "task" in locals():
+                self._active_tasks.discard(task)
         return result if raw else self._budget_result(tool_name, result)
 
     def _budget_result(self, tool_name: str, result: ToolResult) -> ToolResult:

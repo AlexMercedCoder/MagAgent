@@ -67,10 +67,12 @@ def print_banner(
     cwd: str,
     mode: str,
     *,
+    version: str = "",
     model: str | None = None,
     git_branch: str | None = None,
 ) -> None:
     """Print a compact startup banner that adapts to terminal width."""
+    title = f"{LOGO} {version}".strip()
     if console.width < 72:
         console.print(
             Panel(
@@ -82,7 +84,7 @@ def print_banner(
                     model=model,
                     git_branch=git_branch,
                 ),
-                title=f"[{THEME.accent}]{LOGO}[/{THEME.accent}]",
+                title=f"[{THEME.accent}]{title}[/{THEME.accent}]",
                 border_style=THEME.border,
                 expand=True,
             )
@@ -92,7 +94,7 @@ def print_banner(
     table = Table.grid(expand=True)
     table.add_column(ratio=1)
     table.add_column(ratio=3)
-    table.add_row(f"[{THEME.accent}]{LOGO}[/{THEME.accent}]", context_line(username, provider, cwd, mode, model=model, git_branch=git_branch))
+    table.add_row(f"[{THEME.accent}]{title}[/{THEME.accent}]", context_line(username, provider, cwd, mode, model=model, git_branch=git_branch))
     console.print(Panel(table, border_style=THEME.border, box=box.ROUNDED, padding=(1, 2)))
 
 
@@ -149,7 +151,14 @@ def print_streaming_response(
             accumulated += chunk
             console.print(chunk, end="", markup=False)
 
-    loop.run_until_complete(_consume())
+    task = loop.create_task(_consume())
+    try:
+        loop.run_until_complete(task)
+    except KeyboardInterrupt:
+        task.cancel()
+        with suppress(Exception):
+            loop.run_until_complete(task)
+        raise
     console.print()
     if render_final_markdown and accumulated.strip():
         console.print()

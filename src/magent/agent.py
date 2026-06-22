@@ -34,7 +34,7 @@ console = Console()
 
 STRIP_MESSAGE_KEYS = {"provider_specific_fields"}
 MAX_IDENTICAL_TOOL_CALLS_PER_TURN = 3
-MAX_TOOL_CALLS_PER_TURN = 40
+MAX_TOOL_CALLS_PER_TURN = 80
 MAX_MODEL_ROUNDS_PER_TURN = 16
 MAX_FAILED_SAME_TOOL_PER_TURN = 2
 ARTIFACT_RECOVERY_MAX_TOKENS = 12000
@@ -48,6 +48,7 @@ FILE_MUTATION_TOOLS = {
     "create_svg",
     "create_diagram",
     "create_image",
+    "generate_image",
 }
 
 AGENT_STATIC_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
@@ -71,7 +72,8 @@ Key behaviors:
 13. During research, prefer web_fetch/http_request over repeated curl shell probes. If shell inspection is necessary, use one broad read-only fetch pipeline instead of many tiny variations.
 14. Never use run_shell, heredocs, redirection, tee, or Python snippets to create or edit files. For any generated file, call write_file with the full final content; for changes, call edit_file.
 15. For Word documents and PowerPoint presentations, prefer create_docx and create_pptx over generating Python scripts.
-16. For diagrams, SVGs, and simple image assets, prefer create_diagram, create_svg, or create_image over generating Python scripts or shell pipelines.
+16. For diagrams, SVGs, and simple local image assets, prefer create_diagram, create_svg, or create_image over generating Python scripts or shell pipelines. For AI-generated bitmap artwork, use generate_image when available.
+17. If the user asks for a new folder, new project, unrelated project, or fresh scaffold, create and work in that new target. Do not keep reading or editing an existing sibling project except for a quick top-level listing or when the user explicitly asks to reuse it as a reference.
 """
 
 TOOL_USE_ENFORCEMENT_PROMPT = """# Tool-Use Enforcement
@@ -156,6 +158,7 @@ class AgentSession:
             tool_budgets=config.get("tool_budgets", default={}),
             session_id=self.session_id,
             interactive_permissions=interactive_permissions,
+            config=config,
         )
 
         # MCP servers (optional — connect only if configured)
@@ -229,6 +232,15 @@ class AgentSession:
         repo_slice = self.repo_map.relevant_slice(user_message, self.config.repo_map_budget_tokens)
         if repo_slice:
             repo_context = f"{repo_slice}\n"
+        instruction_context = ""
+        try:
+            from magent.config_validation import load_ambient_instructions
+
+            instruction_context = load_ambient_instructions(self.config, self.cwd)
+        except Exception:
+            instruction_context = ""
+        if instruction_context:
+            repo_context = f"{instruction_context}\n\n{repo_context}"
         session_context = self._build_session_context()
         skill_context = self.skill_registry.build_skill_context(
             user_message,
@@ -963,7 +975,7 @@ class AgentSession:
         if total_tool_calls > max_tool_calls:
             message = (
                 f"Stopped after {max_tool_calls} tool calls in this turn to avoid an agent loop. "
-                "Please retry with a narrower request or inspect the session log for timings."
+                "Say `continue` to let me resume from the current project state, or retry with a narrower request."
             )
             self.logger.log_timing(
                 "tool_loop_stopped",
@@ -1391,6 +1403,7 @@ class AgentSession:
             console.print(f"[dim red]Memory write error: {e}[/dim red]")
 
     async def end_session(self) -> None:
+        await self.cancel_active_work()
         await self._maybe_write_memories()
         if self.conversation and self.memory.available:
             summary_parts = [
@@ -1404,6 +1417,10 @@ class AgentSession:
         self.logger.close()
         # Stop all MCP server connections
         await self.mcp.stop_all()
+
+    async def cancel_active_work(self) -> None:
+        """Cancel in-flight tool work before accepting another interactive prompt."""
+        await self.tools.cancel_active()
 
 
 def _sanitize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:

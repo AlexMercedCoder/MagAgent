@@ -125,7 +125,7 @@ class FakeConfig:
     repo_map_budget_tokens = 1200
     skill_budget_tokens = 2000
     max_model_rounds_per_turn = 16
-    max_tool_calls_per_turn = 40
+    max_tool_calls_per_turn = 80
     max_identical_tool_calls_per_turn = 3
     max_failed_same_tool_per_turn = 2
     doom_loop_policy = "halt"
@@ -334,6 +334,16 @@ async def test_run_tool_loop_stops_repeated_identical_tool_calls(monkeypatch) ->
     assert len(session.tools.calls) == 3
 
 
+def test_tool_budget_stop_message_suggests_continue() -> None:
+    session = make_session()
+    session.config.max_tool_calls_per_turn = 1
+
+    message = session._record_tool_call_or_stop({}, "write_file", {"path": "app.py"}, 2)
+
+    assert "Stopped after 1 tool calls" in message
+    assert "continue" in message
+
+
 @pytest.mark.asyncio
 async def test_run_tool_loop_stops_repeated_missing_write_content(monkeypatch) -> None:
     async def fake_acompletion(**kwargs):
@@ -440,6 +450,16 @@ def test_deepseek_prompt_gets_tool_use_enforcement() -> None:
 
     assert "Tool-Use Enforcement" in prompt
     assert "`path` and complete `content`" in prompt
+
+
+def test_static_prompt_respects_new_unrelated_folder_requests() -> None:
+    session = make_session()
+
+    prompt = session._build_stable_prompt()
+
+    assert "new folder" in prompt
+    assert "unrelated project" in prompt
+    assert "existing sibling project" in prompt
 
 
 @pytest.mark.asyncio

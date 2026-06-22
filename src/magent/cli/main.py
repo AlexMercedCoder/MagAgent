@@ -24,6 +24,7 @@ from magent.cli.app import (
     api_app,
     app,
     artifact_app,
+    auth_app,
     browser_app,
     cache_app,
     checkpoint_app,
@@ -552,7 +553,7 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
     from magent.agent import AgentSession
     from magent.tui import print_banner, print_streaming_response
 
-    print_banner(username, main_provider.display_name, cwd, config.permission_mode)
+    print_banner(username, main_provider.display_name, cwd, config.permission_mode, version=__version__)
 
     session = AgentSession(
         username=username,
@@ -619,6 +620,8 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
                 loop,
             )
         except KeyboardInterrupt:
+            with contextlib.suppress(Exception):
+                loop.run_until_complete(session.cancel_active_work())
             console.print("\n[dim]Interrupted.[/dim]")
         except Exception as e:
             console.print(f"[red]Error: {e}[/red]")
@@ -1919,6 +1922,7 @@ def provider_set_cmd(
     model: str | None = typer.Option(None, "--model", "-m"),
     api_key_env: str = typer.Option("", "--api-key-env"),
     api_key: str = typer.Option("", "--api-key"),
+    api_key_keyring: str = typer.Option("", "--api-key-keyring"),
     base_url: str = typer.Option("", "--base-url"),
     access_mode: str = typer.Option("", "--access", help="api, codex, payg, subscription, or local"),
 ):
@@ -1931,6 +1935,7 @@ def provider_set_cmd(
             model,
             api_key_env=api_key_env,
             api_key=api_key,
+            api_key_keyring=api_key_keyring,
             base_url=base_url,
             access_mode=access_mode,
         )
@@ -1961,10 +1966,33 @@ def provider_wizard_cmd():
         access_mode = modes[0]["id"]
     model = Prompt.ask("Default model", default=selected["default_model"])
     api_key_env = ""
+    api_key = ""
     if access_mode not in {"codex", "local"}:
         default_env = provider_env_vars().get(selected["id"], "")
-        api_key_env = Prompt.ask("API key environment variable", default=default_env)
-    result = set_default_provider(selected["id"], model, api_key_env=api_key_env, access_mode=access_mode)
+        console.print("[dim]Choose how MagAgent should find this provider credential.[/dim]")
+        console.print("  [cyan]1[/cyan]. Paste key now and save it in MagAgent config")
+        console.print(f"  [cyan]2[/cyan]. Use environment variable [bold]{default_env}[/bold]")
+        console.print("  [cyan]3[/cyan]. Skip for now")
+        credential_choice = Prompt.ask("Credential option", choices=["1", "2", "3"], default="1")
+        if credential_choice == "1":
+            api_key = Prompt.ask("API key", password=True, default="").strip()
+            if not api_key:
+                console.print("[yellow]No key entered; falling back to environment variable setup.[/yellow]")
+                api_key_env = Prompt.ask("API key environment variable", default=default_env)
+        elif credential_choice == "2":
+            api_key_env = Prompt.ask("API key environment variable", default=default_env)
+        else:
+            console.print(
+                f"[yellow]Skipping credential. You can add one later with "
+                f"[bold]magent provider wizard[/bold] or [bold]magent provider set {selected['id']} --api-key-env {default_env}[/bold].[/yellow]"
+            )
+    result = set_default_provider(
+        selected["id"],
+        model,
+        api_key_env=api_key_env,
+        api_key=api_key,
+        access_mode=access_mode,
+    )
     console.print_json(data=result)
 
 
@@ -2001,6 +2029,22 @@ def provider_doctor_cmd():
     from magent.config_ux import ux_doctor
 
     console.print_json(data=ux_doctor(get_current_user()))
+
+
+@provider_app.command("cooldowns")
+def provider_cooldowns_cmd():
+    """Show providers currently paused due to rate limits."""
+    from magent.provider_cooldown import list_provider_cooldowns
+
+    console.print_json(data=list_provider_cooldowns())
+
+
+@provider_app.command("clear-cooldown")
+def provider_clear_cooldown_cmd(provider_id: str = typer.Argument(...)):
+    """Clear a provider cooldown."""
+    from magent.provider_cooldown import clear_provider_cooldown
+
+    console.print_json(data=clear_provider_cooldown(provider_id))
 
 
 @model_app.command("roles")
@@ -2054,6 +2098,15 @@ def model_health_cmd():
         raise typer.Exit(1)
 
 
+@model_app.command("capabilities")
+def model_capabilities_cmd():
+    """Show capability metadata for configured model roles."""
+    from magent.model_capabilities import role_capability_summary
+
+    config = load_config(get_current_user())
+    console.print_json(data={"ok": True, "roles": role_capability_summary(config)})
+
+
 @model_app.command("recommend")
 def model_recommend_cmd(
     provider: str | None = typer.Option(None, "--provider", "-p"),
@@ -2081,6 +2134,148 @@ def model_wizard_cmd():
         if value:
             results.append(set_model_role(role, value))
     console.print_json(data={"ok": all(item.get("ok") for item in results), "results": results})
+
+
+@model_app.command("image-wizard")
+def model_image_wizard_cmd():
+    """Interactively configure the image_maker model role and credentials."""
+    from magent.config_ux import (
+        configure_provider_entry,
+        image_model_choices,
+        set_model_role,
+    )
+    from magent.provider_catalog import provider_env_vars
+
+    choices = image_model_choices()
+    for i, item in enumerate(choices, 1):
+        default = item["value"] or "provider/model"
+        console.print(f"{i}. {item['label']} — {default}")
+    choice = Prompt.ask("Image model", default="1")
+    try:
+        selected = choices[int(choice) - 1]
+    except (ValueError, IndexError):
+        selected = choices[0]
+
+    if selected["id"] == "custom":
+        provider_id = Prompt.ask("Provider id", default="openai").strip()
+        model = Prompt.ask("Image model name", default="gpt-image-1").strip()
+        value = f"{provider_id}/{model}" if provider_id and model else ""
+        access_mode = Prompt.ask("Access mode", default="api").strip()
+        default_env = provider_env_vars().get(provider_id, "")
+    else:
+        provider_id = selected["provider"]
+        model = selected["model"]
+        value = selected["value"]
+        access_mode = selected["access_mode"]
+        default_env = selected["api_key_env"]
+
+    if not value:
+        console.print_json(data={"ok": False, "error": "Image model must be provider/model."})
+        raise typer.Exit(1)
+
+    api_key_env = ""
+    api_key = ""
+    console.print("[dim]Choose how MagAgent should find this image provider credential.[/dim]")
+    console.print("  [cyan]1[/cyan]. Paste key now and save it in MagAgent config")
+    console.print(f"  [cyan]2[/cyan]. Use environment variable [bold]{default_env or 'PROVIDER_API_KEY'}[/bold]")
+    console.print("  [cyan]3[/cyan]. Skip credential setup")
+    credential_choice = Prompt.ask("Credential option", choices=["1", "2", "3"], default="2")
+    if credential_choice == "1":
+        api_key = Prompt.ask("API key", password=True, default="").strip()
+        if not api_key:
+            console.print("[yellow]No key entered; falling back to environment variable setup.[/yellow]")
+            api_key_env = Prompt.ask("API key environment variable", default=default_env)
+    elif credential_choice == "2":
+        api_key_env = Prompt.ask("API key environment variable", default=default_env)
+
+    provider_result = configure_provider_entry(
+        provider_id,
+        model=model,
+        api_key_env=api_key_env,
+        api_key=api_key,
+        access_mode=access_mode,
+    )
+    role_result = set_model_role("image_maker", value)
+    result = {
+        "ok": bool(provider_result.get("ok") and role_result.get("ok")),
+        "provider": provider_result,
+        "role": role_result,
+        "next": "Run `magent model health` to verify credential readiness.",
+    }
+    console.print_json(data=result)
+    if not result["ok"]:
+        raise typer.Exit(1)
+
+
+@auth_app.command("list")
+def auth_list_cmd():
+    """List configured provider credential sources."""
+    from magent.auth_store import keyring_available, list_auth_entries
+
+    config = load_config(get_current_user())
+    console.print_json(
+        data={
+            "ok": True,
+            "keyring_available": keyring_available(),
+            "credentials": list_auth_entries(config.providers),
+        }
+    )
+
+
+@auth_app.command("add")
+def auth_add_cmd(
+    provider_id: str = typer.Argument(...),
+    api_key: str = typer.Option("", "--api-key", prompt=True, hide_input=True),
+):
+    """Store a provider API key in the OS keyring and reference it from config."""
+    from magent.auth_store import keyring_account, save_keyring_secret
+    from magent.config import load_global_config, save_global_config
+
+    result = save_keyring_secret(provider_id, api_key)
+    if result.get("ok"):
+        cfg = load_global_config()
+        entry = cfg.setdefault("providers", {}).setdefault(provider_id, {})
+        entry.pop("api_key", None)
+        entry["api_key_keyring"] = keyring_account(provider_id)
+        save_global_config(cfg)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@auth_app.command("remove")
+def auth_remove_cmd(provider_id: str = typer.Argument(...)):
+    """Remove a provider API key from keyring/config references."""
+    from magent.auth_store import delete_keyring_secret
+    from magent.config import load_global_config, save_global_config
+
+    result = delete_keyring_secret(provider_id)
+    cfg = load_global_config()
+    entry = cfg.setdefault("providers", {}).setdefault(provider_id, {})
+    entry.pop("api_key_keyring", None)
+    save_global_config(cfg)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@config_app.command("validate")
+def config_validate_cmd():
+    """Validate provider, model-role, and instruction config."""
+    from magent.config_validation import validate_config
+
+    result = validate_config(get_current_user(), Path.cwd())
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@config_app.command("schema")
+def config_schema_cmd():
+    """Show generated config schema/default field metadata."""
+    from magent.config_validation import config_schema
+
+    console.print_json(data=config_schema())
 
 
 @subagent_app.command("configure")

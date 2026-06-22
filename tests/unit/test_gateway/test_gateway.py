@@ -144,6 +144,19 @@ class TestMessageRouterHandle:
         mock_session.chat.assert_called_once_with("hello agent")
 
     @pytest.mark.asyncio
+    async def test_gateway_session_approval_adds_exact_command(self):
+        router = MessageRouter({"username": "testuser"})
+        mock_session = MagicMock()
+        mock_session.tools.session_shell_patterns = []
+        router._session_cache["chan1"] = mock_session
+
+        msg = _make_msg(text="/approve session npm install")
+        result = await router.handle(msg)
+
+        assert "Approved for this gateway session" in result
+        assert mock_session.tools.session_shell_patterns == ["npm install"]
+
+    @pytest.mark.asyncio
     async def test_returns_error_string_on_session_exception(self):
         router = MessageRouter({"username": "testuser"})
         mock_session = AsyncMock()

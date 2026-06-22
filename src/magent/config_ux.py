@@ -6,12 +6,8 @@ import os
 import shutil
 from typing import Any
 
-from magent.config import (
-    load_global_config,
-    load_user_profile,
-    save_global_config,
-    save_user_profile,
-)
+from magent import config as magent_config
+from magent.config import load_global_config, load_user_profile, save_global_config, save_user_profile
 from magent.provider_catalog import (
     PROVIDER_CATALOG,
     PROVIDER_ORDER,
@@ -25,10 +21,30 @@ from magent.provider_catalog import (
     provider_choices as catalog_provider_choices,
 )
 
-MODEL_ROLES = ("coding", "review", "memory", "cheap", "fallback")
+MODEL_ROLES = ("coding", "review", "memory", "cheap", "image_maker", "fallback")
 GATEWAY_PLATFORMS = ("slack", "discord", "telegram")
 DEFAULT_MODELS = default_models()
 PROVIDER_CHOICES = catalog_provider_choices()
+IMAGE_MODEL_CHOICES = (
+    {
+        "id": "openai-gpt-image",
+        "label": "OpenAI GPT Image",
+        "provider": "openai",
+        "model": "gpt-image-1",
+        "value": "openai/gpt-image-1",
+        "api_key_env": "OPENAI_API_KEY",
+        "access_mode": "api",
+    },
+    {
+        "id": "custom",
+        "label": "Custom provider/model",
+        "provider": "",
+        "model": "",
+        "value": "",
+        "api_key_env": "",
+        "access_mode": "api",
+    },
+)
 PROVIDER_ACCESS_MODES: dict[str, list[dict[str, str]]] = {
     "openai": [
         {
@@ -64,6 +80,16 @@ PROVIDER_ACCESS_MODES: dict[str, list[dict[str, str]]] = {
         }
     ],
 }
+
+
+def _tighten_global_config_permissions() -> None:
+    try:
+        if magent_config.GLOBAL_CONFIG.exists():
+            magent_config.GLOBAL_CONFIG.chmod(0o600)
+    except OSError:
+        pass
+
+
 DEFAULT_ACCESS_MODE = default_access_modes()
 
 
@@ -225,6 +251,7 @@ def set_default_provider(
     *,
     api_key_env: str = "",
     api_key: str = "",
+    api_key_keyring: str = "",
     base_url: str = "",
     access_mode: str = "",
 ) -> dict[str, Any]:
@@ -242,9 +269,13 @@ def set_default_provider(
         entry["api_key_env"] = api_key_env
     if api_key:
         entry["api_key"] = api_key
+    if api_key_keyring:
+        entry["api_key_keyring"] = api_key_keyring
     if base_url:
         entry["base_url"] = base_url
     save_global_config(cfg)
+    if api_key:
+        _tighten_global_config_permissions()
     return {
         "ok": True,
         "provider": provider_id,
@@ -254,8 +285,49 @@ def set_default_provider(
     }
 
 
+def configure_provider_entry(
+    provider_id: str,
+    *,
+    model: str = "",
+    api_key_env: str = "",
+    api_key: str = "",
+    api_key_keyring: str = "",
+    base_url: str = "",
+    access_mode: str = "",
+) -> dict[str, Any]:
+    """Configure provider credentials without changing the default chat provider."""
+    provider_id = provider_id.strip()
+    if not provider_id:
+        return {"ok": False, "error": "provider_id is required"}
+    cfg = load_global_config()
+    entry = cfg.setdefault("providers", {}).setdefault(provider_id, {})
+    if model:
+        entry["default_model"] = model
+    if access_mode:
+        entry["access_mode"] = access_mode
+    elif provider_id in PROVIDER_CATALOG:
+        entry.setdefault("access_mode", DEFAULT_ACCESS_MODE.get(provider_id, "api"))
+    if api_key_env:
+        entry["api_key_env"] = api_key_env
+    if api_key:
+        entry["api_key"] = api_key
+    if api_key_keyring:
+        entry["api_key_keyring"] = api_key_keyring
+    if base_url:
+        entry["base_url"] = base_url
+    save_global_config(cfg)
+    if api_key:
+        _tighten_global_config_permissions()
+    return {"ok": True, "provider": provider_id, "config": _redact_provider_entry(entry)}
+
+
+def image_model_choices() -> list[dict[str, str]]:
+    """Return recommended image-maker model presets for setup wizards."""
+    return [dict(item) for item in IMAGE_MODEL_CHOICES]
+
+
 def set_model_role(role: str, value: str) -> dict[str, Any]:
-    """Set a model role such as coding, review, memory, cheap, or fallback."""
+    """Set a model role such as coding, review, memory, cheap, image_maker, or fallback."""
     role = role.strip().lower()
     if role not in MODEL_ROLES:
         return {"ok": False, "error": f"Unknown model role: {role}", "known": list(MODEL_ROLES)}

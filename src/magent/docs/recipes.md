@@ -111,7 +111,7 @@ the current chat. Use `/jobs` to inspect queued background work.
 ## Configure provider roles
 
 1. Edit `~/.config/magent/config.toml`.
-2. Add `[models]` entries for `coding`, `review`, `memory`, `cheap`, and `fallback`.
+2. Add `[models]` entries for `coding`, `review`, `memory`, `cheap`, `image_maker`, and `fallback`.
 3. Run `magent doctor`.
 
 ## Review a change

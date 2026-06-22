@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.32.8
+
+- Added startup version visibility in the TUI banner so local installs are easier to verify.
+- Added `magent auth list/add/remove` for optional OS keyring-backed provider credentials.
+- Added the `image_maker` model role, `magent model image-wizard`, model capability summaries, and the AI-backed `generate_image` tool.
+- Added config validation, ambient instruction sources, provider rate-limit cooldown tracking, and gateway approval commands.
+- Tightened tool argument validation, long-running/cancel behavior, and generated-artifact cleanup.
+- Updated README, GitHub docs, packaged docs, and generated command/config references for the expanded CLI surface.
+
 ## 0.32.7
 
 - Added native `create_svg`, `create_diagram`, and `create_image` tools for local SVG, Mermaid, PNG, and JPEG artifact creation.

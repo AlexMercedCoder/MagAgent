@@ -32,3 +32,12 @@ def tool_def(name: str, description: str, params: dict[str, tuple[str, str | Non
             },
         },
     }
+
+
+def validate_tool_args(definition: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    """Validate required arguments from a tool definition."""
+    fn = definition.get("function", {})
+    params = fn.get("parameters", {})
+    required = params.get("required") or []
+    missing = [name for name in required if args.get(name) is None]
+    return {"ok": not missing, "missing": missing, "tool": fn.get("name", "")}

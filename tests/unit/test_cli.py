@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from magent import agent as magent_agent
 from magent import config as magent_config
+from magent import config_ux
 from magent import workbench, workbench_store
 from magent.cli import main as cli_main
 from magent.workbench import WorkbenchStore
@@ -29,7 +30,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.32.7" in version.output
+    assert "MagAgent 0.32.8" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -141,6 +142,66 @@ def test_cli_first_configuration_commands(tmp_path: Path, monkeypatch) -> None:
     payload = json.loads(doctor.output)
     assert payload["provider"]["provider"] == "openai"
     assert payload["gateways"]["telegram"] is True
+
+
+def test_provider_wizard_can_store_inline_api_key(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    monkeypatch.setattr(
+        config_ux,
+        "provider_choices",
+        lambda: [
+            {
+                "id": "opencode-go",
+                "label": "OpenCode Go",
+                "default_model": "deepseek-v4-flash",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        config_ux,
+        "provider_access_modes",
+        lambda _provider_id: [{"id": "subscription", "label": "Subscription"}],
+    )
+
+    result = runner.invoke(
+        cli_main.app,
+        ["provider", "wizard"],
+        input="1\n1\ndeepseek-v4-flash\n1\ninline-secret\n",
+    )
+    cfg = magent_config.load_global_config()
+
+    assert result.exit_code == 0
+    assert "inline-secret" not in result.output
+    assert '"api_key": "***"' in result.output
+    assert cfg["providers"]["opencode-go"]["api_key"] == "inline-secret"
+    assert cfg["providers"]["opencode-go"]["access_mode"] == "subscription"
+    assert magent_config.GLOBAL_CONFIG.stat().st_mode & 0o777 == 0o600
+
+
+def test_model_image_wizard_sets_image_role_without_changing_default_provider(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    config_ux.set_default_provider("ollama", "qwen2.5-coder:32b", access_mode="local")
+
+    result = runner.invoke(
+        cli_main.app,
+        ["model", "image-wizard"],
+        input="1\n2\nOPENAI_API_KEY\n",
+    )
+    cfg = magent_config.load_global_config()
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output[result.output.index('{\n  "ok"') :])
+    assert payload["ok"] is True
+    assert payload["role"]["role"] == "image_maker"
+    assert payload["role"]["value"] == "openai/gpt-image-1"
+    assert cfg["defaults"]["provider"] == "ollama"
+    assert cfg["models"]["image_maker"] == "openai/gpt-image-1"
+    assert cfg["providers"]["openai"]["default_model"] == "gpt-image-1"
+    assert cfg["providers"]["openai"]["api_key_env"] == "OPENAI_API_KEY"
 
 
 def test_cli_guided_ux_commands(tmp_path: Path, monkeypatch) -> None:
@@ -332,7 +393,7 @@ def test_cli_desktop_integration_commands(tmp_path: Path, monkeypatch) -> None:
     memory_graph = runner.invoke(cli_main.app, ["memory", "graph", "--limit", "5"])
 
     assert system.exit_code == 0
-    assert json.loads(system.output)["magent_version"] == "0.32.7"
+    assert json.loads(system.output)["magent_version"] == "0.32.8"
     assert config_get.exit_code == 0
     assert json.loads(config_get.output)["ok"] is True
     assert config_set.exit_code == 0

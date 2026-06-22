@@ -9,11 +9,11 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'0.25.0'`
+- `agent.version` default: `'0.32.8'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 - `agent.max_model_rounds_per_turn` default: `16`
-- `agent.max_tool_calls_per_turn` default: `40`
+- `agent.max_tool_calls_per_turn` default: `80`
 - `agent.max_identical_tool_calls_per_turn` default: `3`
 - `agent.max_failed_same_tool_per_turn` default: `2`
 - `agent.doom_loop_policy` default: `'halt'`
@@ -46,8 +46,12 @@ Stored at `~/.config/magent/config.toml`.
 - `context.compact_every_n_turns` default: `10`
 - `context.keep_recent_turns` default: `6`
 - `context.max_history_tokens` default: `6000`
+- `context.instructions` default: `[]`
 - `context.prune_stale_tool_results` default: `True`
 - `context.prompt_caching` default: `True`
+- `context.prompt_cache_key_scope` default: `'project'`
+- `context.prompt_cache_retention` default: `''`
+- `context.prompt_cache_min_stable_tokens` default: `1024`
 ### `tool_budgets`
 
 - `tool_budgets.default` default: `8000`
@@ -75,6 +79,7 @@ Stored at `~/.config/magent/config.toml`.
 - `models.review` default: `''`
 - `models.memory` default: `''`
 - `models.cheap` default: `''`
+- `models.image_maker` default: `''`
 - `models.fallback` default: `[]`
 ### `subagents`
 
@@ -115,6 +120,7 @@ Use `magent model set-role <role> <provider/model>` and `magent model health`.
 - `review`
 - `memory`
 - `cheap`
+- `image_maker`
 - `fallback`
 
 ## Permission Modes

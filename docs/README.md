@@ -38,10 +38,16 @@ magent provider matrix
 magent provider recommend --goal coding
 magent provider test-matrix
 magent provider set openai --model gpt-5 --access codex
+magent provider cooldowns
 magent model set-role review anthropic/claude-sonnet-4-5
+magent model set-role image_maker openai/gpt-image-1
 magent model health
+magent model capabilities
+magent model image-wizard
+magent auth add openai
 magent memory configure --mode inbox-first
 magent permission status
+magent config validate
 magent config propose "use manual memory and paranoid permissions"
 magent config proposals
 magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN"
@@ -108,6 +114,8 @@ Before pushing documentation or command changes, run:
 
 ```bash
 magent docs doctor
+magent docs generate-reference --out src/magent/docs/command-reference.md
+magent docs generate-config --out src/magent/docs/config-reference.md
 ```
 
-The docs doctor checks that the packaged docs contain required topics and mention the live Typer command tree.
+The docs doctor checks that the packaged docs contain required topics and mention the live Typer command tree. The generated reference commands keep the GitHub-facing command and config references synchronized with the installed CLI.

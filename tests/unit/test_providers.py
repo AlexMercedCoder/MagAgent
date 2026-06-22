@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from magent.provider_catalog import validate_provider_catalog
+from magent.model_capabilities import model_capabilities
 from magent.providers import (
     PROVIDER_BASE_URLS,
     PROVIDER_DISPLAY_NAMES,
@@ -103,6 +104,14 @@ def test_provider_request_kwargs_adds_cache_hints() -> None:
     assert kwargs["prompt_cache_key"].startswith("magent-project-")
 
 
+def test_model_capabilities_identify_image_models() -> None:
+    caps = model_capabilities("openai", "gpt-image-1")
+
+    assert caps["output"] == ["image"]
+    assert "image" in caps["input"]
+    assert caps["tools"] is False
+
+
 @pytest.mark.asyncio
 async def test_provider_complete_stream_and_extract_fn(monkeypatch) -> None:
     async def fake_acompletion(**kwargs):
@@ -154,3 +163,16 @@ async def test_provider_wraps_litellm_errors(monkeypatch) -> None:
         await provider.complete([{"role": "user", "content": "hi"}])
 
     assert await provider_health_check(provider) is False
+
+
+def test_provider_cooldown_records_rate_limits(tmp_path: Path, monkeypatch) -> None:
+    from magent import provider_cooldown
+
+    monkeypatch.setattr(provider_cooldown, "COOLDOWN_DIR", tmp_path)
+    provider_cooldown.record_provider_cooldown("openai", 30, "429")
+
+    remaining = provider_cooldown.provider_cooldown_remaining("openai")
+
+    assert remaining is not None
+    assert remaining > 0
+    assert provider_cooldown.clear_provider_cooldown("openai")["cleared"] is True

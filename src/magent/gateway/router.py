@@ -105,10 +105,40 @@ class MessageRouter:
                 extraction_provider=ext_provider,
                 cwd=os.getcwd(),
                 project_slug=f"gateway_{channel_id[:12]}",
+                interactive_permissions=False,
             )
             self._session_cache[channel_id] = session
 
         return self._session_cache[channel_id]
+
+    def _handle_approval_command(self, msg: IncomingMessage) -> str | None:
+        text = msg.text.strip()
+        if not text.startswith("/approve"):
+            return None
+        parts = text.split(maxsplit=2)
+        if len(parts) < 3 or parts[1] not in {"session", "always"}:
+            return "Usage: `/approve session <exact command>` or `/approve always <exact command>`"
+        scope, command = parts[1], parts[2].strip()
+        if not command:
+            return "No command provided to approve."
+        if scope == "session":
+            session = self._get_session(msg.channel_id)
+            if command not in session.tools.session_shell_patterns:
+                session.tools.session_shell_patterns.append(command)
+            return f"Approved for this gateway session: `{command}`"
+
+        from magent.config import load_user_profile, save_user_profile
+
+        profile = load_user_profile(self._username)
+        permissions = profile.setdefault("permissions", {})
+        patterns = list(permissions.get("trusted_shell_patterns") or [])
+        if command not in patterns:
+            patterns.append(command)
+        permissions["trusted_shell_patterns"] = patterns
+        save_user_profile(self._username, profile)
+        if msg.channel_id in self._session_cache and command not in self._session_cache[msg.channel_id].tools.trusted_shell_patterns:
+            self._session_cache[msg.channel_id].tools.trusted_shell_patterns.append(command)
+        return f"Approved for future sessions: `{command}`"
 
     async def handle(self, msg: IncomingMessage) -> str:
         """Auth-check and dispatch a message. Returns response text."""
@@ -125,6 +155,9 @@ class MessageRouter:
         )
 
         try:
+            approval_result = self._handle_approval_command(msg)
+            if approval_result is not None:
+                return approval_result
             if self.config.get("background"):
                 from magent.daemon import enqueue_task
                 from magent.workbench import WorkbenchStore

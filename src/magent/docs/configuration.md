@@ -14,7 +14,7 @@ Common settings:
 - permission mode
 - memory write behavior
 - semantic memory provider and model
-- model routing roles for coding, review, memory, cheap, and fallback use
+- model routing roles for coding, review, memory, cheap, image_maker, and fallback use
 - context compaction budgets
 - MCP server definitions
 - gateway adapter settings
@@ -46,17 +46,38 @@ magent provider recommend --goal coding
 magent provider explain mistral
 magent provider env
 magent provider test-matrix
+magent provider cooldowns
+magent provider clear-cooldown openai
 ```
 
 During `magent configure`, cloud providers offer three credential paths:
 
 - paste an API key and let MagAgent save it in local config
 - reference an environment variable such as `OPENCODE_ZEN_KEY`
+- store an API key in the OS keyring with `magent auth add <provider>`
 - skip credentials and configure them later
 
 Saved keys are redacted by config display commands. If a session starts with a
 cloud provider whose key is missing, MagAgent stops before the first prompt and
 prints the exact setup command or `export ...` hint to fix it.
+
+Keyring-backed credentials keep secrets out of TOML when the optional Python
+`keyring` package is available:
+
+```bash
+magent auth list
+magent auth add openai
+magent provider set openai --model gpt-5 --api-key-keyring openai
+magent auth remove openai
+```
+
+Provider rate-limit errors are recorded as short cross-session cooldowns so
+new sessions can avoid immediately hammering the same provider again:
+
+```bash
+magent provider cooldowns
+magent provider clear-cooldown openai
+```
 
 Provider access modes are explicit:
 
@@ -72,6 +93,7 @@ Config safety commands make wizard-driven changes easier to trust:
 ```bash
 magent config get
 magent config schema
+magent config validate
 magent config set defaults.provider openai
 magent config show
 magent config backup
@@ -80,7 +102,7 @@ magent config diff
 magent config restore <backup-id>
 ```
 
-`magent config schema` returns machine-readable metadata for common guided settings so desktop apps and other clients can render forms without hand-maintaining TOML knowledge.
+`magent config schema` returns machine-readable metadata for common guided settings so desktop apps and other clients can render forms without hand-maintaining TOML knowledge. `magent config validate` checks default provider/model routing, configured model roles, and ambient instruction file sources.
 
 Natural-language config proposals cover a limited, schema-safe set of common edits. They
 show a diff, write an event log entry, and create a backup before applying:
@@ -143,11 +165,31 @@ magent model set-role coding openai/gpt-5
 magent model set-role review anthropic/claude-sonnet-4-5
 magent model set-role memory ollama/qwen2.5:7b
 magent model set-role cheap openrouter/deepseek/deepseek-chat
+magent model set-role image_maker openai/gpt-image-1
 magent model set-role fallback "ollama/qwen2.5-coder:32b,openrouter/deepseek/deepseek-chat"
 magent model clear-role cheap
 magent model doctor
 magent model health
+magent model capabilities
 magent model wizard
+magent model image-wizard
+```
+
+Use `magent model image-wizard` when you want guided setup for the
+`image_maker` role. It can choose a recommended image model, configure the
+provider credential, and leave your default chat/coding provider unchanged.
+
+Agents can call `generate_image` when the `image_maker` role is configured. Use
+this for bitmap artwork or attractive diagrams; use `create_svg`,
+`create_diagram`, or `create_image` when deterministic local artifact generation
+is more appropriate.
+
+Ambient instruction files can be loaded into every session from config. Keep
+these short and project-relevant:
+
+```toml
+[context]
+instructions = ["AGENTS.md", ".magent/instructions/*.md"]
 ```
 
 Run `magent docs generate-config` to regenerate the packaged config reference from

@@ -17,6 +17,7 @@ PACKS: dict[str, dict[str, Any]] = {
             "create_svg",
             "create_diagram",
             "create_image",
+            "generate_image",
             "edit_file",
             "delete_file",
             "list_dir",
