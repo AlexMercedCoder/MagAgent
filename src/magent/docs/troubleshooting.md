@@ -72,6 +72,12 @@ Common issues:
 - The final answer says a file was written but the file is missing or unchanged:
   update MagAgent. The file mutation verifier appends unresolved failed
   `write_file`/`edit_file`/`delete_file` attempts to the final response.
+- File write verification reports a failure even after a later successful write:
+  update MagAgent. File mutation tracking normalizes relative and absolute paths
+  before deciding whether a later success fixed an earlier failure.
+- LiteLLM prints a remote model-cost-map warning before the agent starts:
+  update MagAgent. Interactive sessions suppress that noisy network warning and
+  continue using LiteLLM's local fallback metadata.
 - `pip install --upgrade mag-agent` says every version requires a different
   Python: the `pip` executable is attached to an older Python. Use
   `python3 -m pip install --upgrade mag-agent` or install with

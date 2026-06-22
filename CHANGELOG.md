@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.4
+
+- Fixed file mutation verification so a later successful absolute-path write clears an earlier relative-path failure for the same file.
+- Suppressed noisy LiteLLM remote cost-map network warnings in interactive sessions.
+- Tightened missing-`content` recovery guidance for `write_file` so artifact recovery avoids unnecessary research/read loops.
+
 ## 0.32.3
 
 - Added Hermes/OpenCode-inspired model-specific tool-use enforcement for tool-sensitive model families such as DeepSeek, Qwen, Gemini, GPT/Codex, Grok, and GLM.

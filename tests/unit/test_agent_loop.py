@@ -71,6 +71,24 @@ class FakeMissingContentTools(FakeTools):
         }
 
 
+class FakeMissingThenSuccessTools(FakeTools):
+    async def dispatch(self, name, args):
+        self.calls.append((name, args))
+        if len(self.calls) == 1:
+            return {
+                "ok": False,
+                "error": "Missing required argument 'content' for tool write_file",
+                "tool": name,
+                "args": args,
+                "path": args.get("path", ""),
+            }
+        return {
+            "ok": True,
+            "path": "/repo/app.py",
+            "bytes": len(str(args.get("content", "")).encode()),
+        }
+
+
 class FakeMCP:
     def get_tool_definitions(self):
         return []
@@ -127,6 +145,24 @@ def tool_call_message() -> SimpleNamespace:
                     "provider_specific_fields": {"internal": True},
                 }
             ],
+        },
+    )
+
+
+def tool_call_message_with_content() -> SimpleNamespace:
+    tool_call = SimpleNamespace(
+        id="call_2",
+        function=SimpleNamespace(
+            name="write_file",
+            arguments='{"path": "app.py", "content": "<!doctype html><html><body>ok</body></html>"}',
+        ),
+    )
+    return SimpleNamespace(
+        content="",
+        tool_calls=[tool_call],
+        model_dump=lambda: {
+            "role": "assistant",
+            "tool_calls": [{"id": "call_2"}],
         },
     )
 
@@ -288,6 +324,37 @@ async def test_run_tool_loop_stops_repeated_missing_write_content(monkeypatch) -
     assert "Missing required argument 'content'" in text
     assert "File write verification" in text
     assert any("Do not repeat `write_file` with only `path`" in str(m.get("content", "")) for m in messages)
+    assert any("do not call research/search/read tools" in str(m.get("content", "")) for m in messages)
+
+
+@pytest.mark.asyncio
+async def test_file_verifier_clears_relative_failure_after_absolute_success(monkeypatch) -> None:
+    responses = [
+        SimpleNamespace(choices=[SimpleNamespace(message=tool_call_message())]),
+        SimpleNamespace(choices=[SimpleNamespace(message=tool_call_message_with_content())]),
+        SimpleNamespace(choices=[SimpleNamespace(message=final_message_with_content("done"))]),
+    ]
+
+    async def fake_acompletion(**kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+    session.cwd = "/repo"
+    session.tools = FakeMissingThenSuccessTools()
+
+    text, _messages, tool_count = await session._run_tool_loop(
+        [{"role": "user", "content": "write file"}],
+        "write file",
+    )
+
+    assert tool_count == 2
+    assert text == "done"
+    assert "File write verification" not in text
 
 
 def test_deepseek_prompt_gets_tool_use_enforcement() -> None:

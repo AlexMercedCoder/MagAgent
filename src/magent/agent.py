@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import html
 import json
+import logging
 import re
 import time
 import uuid
@@ -171,6 +172,7 @@ class AgentSession:
 
         # Sub-agent runner (lazy init)
         self._subagent_runner = None
+        _quiet_litellm_network_warnings()
 
     def _detect_project_slug(self, cwd: str) -> str | None:
         name = Path(cwd).name
@@ -941,7 +943,8 @@ class AgentSession:
     ) -> None:
         if tool_name not in {"write_file", "edit_file", "delete_file"}:
             return
-        path = str(result.get("path") or tool_args.get("path") or tool_args.get("file_path") or "")
+        raw_path = str(result.get("path") or tool_args.get("path") or tool_args.get("file_path") or "")
+        path = self._canonical_tool_path(raw_path)
         if not path:
             return
         if result.get("ok", True):
@@ -954,6 +957,14 @@ class AgentSession:
                 "error": str(result.get("error") or "tool failed")[:500],
             },
         )
+
+    def _canonical_tool_path(self, path: str) -> str:
+        if not path:
+            return ""
+        raw = Path(path).expanduser()
+        if raw.is_absolute():
+            return str(raw.resolve(strict=False))
+        return str((Path(self._cwd()) / raw).resolve(strict=False))
 
     def _tool_failure_steer_or_stop(
         self,
@@ -1368,7 +1379,9 @@ def _tool_failure_steer(
             prefix
             + "Do not repeat `write_file` with only `path`. Retry only if you can provide both "
             "`path` and the complete final `content` string. For an HTML page, `content` must "
-            "contain the full HTML document, not the filename or a placeholder."
+            "contain the full HTML document, not the filename or a placeholder. In the next response, "
+            "do not call research/search/read tools unless absolutely necessary; either call "
+            "`write_file` with the complete file body now or explain that you cannot."
         )
     if tool_name == "write_file" and "suspicious write_file payload" in lower:
         return (
@@ -1390,6 +1403,29 @@ def _format_duration(duration_ms: float) -> str:
         return f"{duration_ms / 1000:.1f}s"
     minutes, seconds = divmod(duration_ms / 1000, 60)
     return f"{int(minutes)}m {seconds:.0f}s"
+
+
+def _quiet_litellm_network_warnings() -> None:
+    """Suppress noisy LiteLLM network-warning lines that confuse CLI users."""
+    for logger_name in (
+        "LiteLLM",
+        "litellm",
+        "litellm.utils",
+        "litellm.get_model_cost_map",
+        "get_model_cost_map",
+    ):
+        logger = logging.getLogger(logger_name)
+        if not any(isinstance(item, _LiteLLMNoiseFilter) for item in logger.filters):
+            logger.addFilter(_LiteLLMNoiseFilter())
+
+
+class _LiteLLMNoiseFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        text = record.getMessage()
+        return not (
+            "Failed to fetch remote model cost map" in text
+            or "model_prices_and_context_window.json" in text
+        )
 
 
 def reflow(text: str) -> str:
