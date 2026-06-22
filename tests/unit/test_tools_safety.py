@@ -166,6 +166,28 @@ async def test_file_tools_read_write_edit_list_diff_and_range(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
+async def test_write_file_rejects_filename_as_content(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    result = await tools.write_file("cheese.html", "cheese.html")
+
+    assert result["ok"] is False
+    assert result["blocked_by"] == "write-file-content-guard"
+    assert not (tmp_path / "cheese.html").exists()
+
+
+@pytest.mark.asyncio
+async def test_write_file_accepts_real_html_content(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+    html = "<!doctype html><html><body><main><h1>History of Cheese</h1></main></body></html>"
+
+    result = await tools.write_file("cheese.html", html)
+
+    assert result["ok"] is True
+    assert (tmp_path / "cheese.html").read_text(encoding="utf-8") == html
+
+
+@pytest.mark.asyncio
 async def test_dispatch_normalizes_common_write_file_aliases(tmp_path: Path) -> None:
     tools = ToolExecutor(str(tmp_path), permission_mode="silent")
 

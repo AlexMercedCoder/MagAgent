@@ -22,6 +22,9 @@ class FakeLogger:
     def log_token_usage(self, *args, **kwargs):
         return None
 
+    def log_timing(self, *args, **kwargs):
+        return None
+
     def log_user_turn(self, *args, **kwargs):
         return None
 
@@ -32,6 +35,7 @@ class FakeLogger:
 class FakeTools:
     def __init__(self):
         self.calls = []
+        self.show_tool_calls = False
 
     def get_tool_definitions(self):
         return [{"function": {"name": "write_file"}}]
@@ -83,6 +87,7 @@ def make_session() -> AgentSession:
     session.provider = SimpleNamespace(_base_kwargs={}, provider_id="fake", model="fake")
     session.logger = FakeLogger()
     session.scratchpad = {"files_touched": [], "commands_run": [], "decisions": []}
+    session.turn_count = 0
     return session
 
 
@@ -217,6 +222,28 @@ async def test_run_tool_loop_summarizes_successful_tools_when_provider_is_silent
     assert tool_count == 1
     assert text.startswith("Done.")
     assert "/repo/app.py" in text
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_stops_repeated_identical_tool_calls(monkeypatch) -> None:
+    async def fake_acompletion(**kwargs):
+        return SimpleNamespace(choices=[SimpleNamespace(message=tool_call_message())])
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+
+    text, _messages, tool_count = await session._run_tool_loop(
+        [{"role": "user", "content": "write file"}],
+        "write file",
+    )
+
+    assert "repeated the same request" in text
+    assert tool_count == 4
+    assert len(session.tools.calls) == 3
 
 
 @pytest.mark.asyncio

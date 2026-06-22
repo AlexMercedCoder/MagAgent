@@ -137,6 +137,27 @@ def _shell_native_file_tool_guidance(command: str) -> str:
     return ""
 
 
+def _suspicious_write_file_content(path: str, content: str) -> str:
+    """Return a reason when a write_file payload is obviously not file content."""
+    stripped = (content or "").strip()
+    if not stripped:
+        return "content is empty"
+
+    target = Path(path)
+    path_tokens = {target.name.lower(), str(target).lower()}
+    if stripped.lower() in path_tokens:
+        return "content is only the target filename/path"
+
+    suffix = target.suffix.lower()
+    if suffix in {".html", ".htm"}:
+        lower = stripped.lower()
+        if len(stripped) < 80 and not any(token in lower for token in ("<html", "<!doctype", "<body", "<section")):
+            return "HTML file content is too short and does not look like markup"
+    if suffix in {".md", ".markdown"} and len(stripped) < 20 and stripped.lower() == target.stem.lower():
+        return "Markdown file content is only the target title"
+    return ""
+
+
 def _rank_search_results(query: str, raw: list[dict[str, Any]], max_results: int) -> list[dict[str, str]]:
     terms = _search_terms(query)
     cleaned = [
@@ -462,6 +483,18 @@ class ToolExecutor:
     async def write_file(self, path: str, content: str) -> ToolResult:
         abs_path, tier = self._path_tier("write", path)
         self._log_tool("write_file", str(abs_path), tier)
+        suspicious_reason = _suspicious_write_file_content(path, content)
+        if suspicious_reason:
+            return {
+                "ok": False,
+                "error": (
+                    f"Refused suspicious write_file payload: {suspicious_reason}. "
+                    "Call write_file again with the complete intended file contents."
+                ),
+                "blocked_by": "write-file-content-guard",
+                "path": str(abs_path),
+                "bytes": len((content or "").encode()),
+            }
         perm = self._check_permission(f"Write {len(content)} chars to {abs_path}", tier)
         if not perm.approved:
             return self._permission_denied(perm)

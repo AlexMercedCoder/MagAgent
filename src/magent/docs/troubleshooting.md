@@ -54,8 +54,17 @@ Common issues:
   writing the file: update MagAgent. Some OpenAI-compatible providers emit
   pseudo tool markup as assistant text; MagAgent parses complete pseudo calls
   and retries truncated markup instead of dumping partial files.
-- A tool looks hung: interactive sessions print `Still running <tool>...` after
-  a few seconds and then periodically until the tool returns.
+- A tool looks hung: interactive sessions print model round timings and tool
+  completion timings, and long tool calls still print `Still running <tool>...`
+  after a few seconds and then periodically until the tool returns. Session JSONL
+  logs also include `timing` events for model calls and tool calls.
+- The agent keeps rewriting the same file: update MagAgent. Interactive turns
+  stop identical repeated tool requests after three attempts and log
+  `tool_loop_stopped` timing metadata instead of rewriting the same target
+  indefinitely.
+- A generated file contains only its own filename, such as `cheese.html`:
+  update MagAgent. `write_file` rejects obvious placeholder payloads before
+  writing to disk and tells the model to retry with the complete file contents.
 - `pip install --upgrade mag-agent` says every version requires a different
   Python: the `pip` executable is attached to an older Python. Use
   `python3 -m pip install --upgrade mag-agent` or install with

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.32.2
+
+- Added interactive timing markers for model rounds and tool completions so slow research/file-writing turns are easier to diagnose from the terminal.
+- Added JSONL timing events for model calls, tool calls, and stopped tool loops.
+- Added a repeated-tool guard that stops identical tool requests after three attempts instead of rewriting the same file path indefinitely.
+- Added a `write_file` content guard that rejects obvious placeholder payloads such as writing `cheese.html` into `cheese.html`.
+
 ## 0.32.1
 
 - Fixed OpenCode Go / DeepSeek-style DSML pseudo tool calls being printed as assistant text instead of executed as real MagAgent tool calls.

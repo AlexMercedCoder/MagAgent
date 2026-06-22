@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import html
 import json
 import re
+import time
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -30,6 +32,8 @@ from magent.tools import ToolExecutor
 console = Console()
 
 STRIP_MESSAGE_KEYS = {"provider_specific_fields"}
+MAX_IDENTICAL_TOOL_CALLS_PER_TURN = 3
+MAX_TOOL_CALLS_PER_TURN = 40
 
 AGENT_STATIC_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
 
@@ -240,6 +244,7 @@ class AgentSession:
         tool_defs = self._tool_definitions(user_message)
         total_tool_calls = 0
         pseudo_retry_count = 0
+        repeated_tool_calls: dict[str, int] = {}
 
         while True:
             try:
@@ -247,6 +252,7 @@ class AgentSession:
 
                 litellm.suppress_debug_info = True
 
+                llm_started = time.monotonic()
                 response = await litellm.acompletion(
                     messages=_sanitize_messages(messages),
                     tools=tool_defs,
@@ -254,6 +260,11 @@ class AgentSession:
                     temperature=0.3,
                     max_tokens=4096,
                     **self._provider_request_kwargs(),
+                )
+                self._log_timing(
+                    "llm_call",
+                    llm_started,
+                    metadata={"tool_calls_so_far": total_tool_calls, "messages": len(messages)},
                 )
                 self._log_llm_usage(response)
             except Exception as e:
@@ -274,7 +285,22 @@ class AgentSession:
                     )
                     total_tool_calls += len(pseudo_calls)
                     for tool_name, tool_args in pseudo_calls:
+                        repeat_message = self._record_tool_call_or_stop(
+                            repeated_tool_calls,
+                            tool_name,
+                            tool_args,
+                            total_tool_calls,
+                        )
+                        if repeat_message:
+                            messages.append({"role": "assistant", "content": repeat_message})
+                            return repeat_message, messages, total_tool_calls
+                        tool_started = time.monotonic()
                         result = await self._dispatch_tool_call(tool_name, tool_args)
+                        self._log_timing(
+                            f"tool.{tool_name}",
+                            tool_started,
+                            metadata=_tool_timing_metadata(tool_name, tool_args, result),
+                        )
                         messages.append(
                             {
                                 "role": "system",
@@ -331,8 +357,18 @@ class AgentSession:
                     tool_args = json.loads(tc.function.arguments)
                 except json.JSONDecodeError:
                     tool_args = {}
+                repeat_message = self._record_tool_call_or_stop(
+                    repeated_tool_calls,
+                    tool_name,
+                    tool_args,
+                    total_tool_calls,
+                )
+                if repeat_message:
+                    messages.append({"role": "assistant", "content": repeat_message})
+                    return repeat_message, messages, total_tool_calls
 
                 # Route to MCP or built-in tool
+                tool_started = time.monotonic()
                 run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
                 if self.mcp.is_mcp_tool(tool_name):
                     result = await self.mcp.dispatch(tool_name, tool_args)
@@ -345,6 +381,11 @@ class AgentSession:
                     run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
                 self._observe_tool_result(tool_name, tool_args, result)
                 result_str = self._compress_tool_result(tool_name, result)
+                self._log_timing(
+                    f"tool.{tool_name}",
+                    tool_started,
+                    metadata=_tool_timing_metadata(tool_name, tool_args, result),
+                )
 
                 # Log the tool call
                 from magent.permissions import RiskTier, classify_shell_command
@@ -392,6 +433,7 @@ class AgentSession:
         tool_defs = self._tool_definitions(user_message)
         total_tool_calls = 0
         pseudo_retry_count = 0
+        repeated_tool_calls: dict[str, int] = {}
 
         try:
             import litellm
@@ -400,7 +442,11 @@ class AgentSession:
 
             # First pass: tool loop
             console.print("[dim]thinking...[/dim]")
+            turn_started = time.monotonic()
+            llm_round = 0
             while True:
+                llm_round += 1
+                llm_started = time.monotonic()
                 response = await litellm.acompletion(
                     messages=_sanitize_messages(messages),
                     tools=tool_defs,
@@ -409,6 +455,21 @@ class AgentSession:
                     max_tokens=4096,
                     **self._provider_request_kwargs(),
                 )
+                llm_elapsed = self._log_timing(
+                    "llm_call",
+                    llm_started,
+                    metadata={
+                        "round": llm_round,
+                        "turn_elapsed_ms": round((time.monotonic() - turn_started) * 1000, 2),
+                        "tool_calls_so_far": total_tool_calls,
+                        "messages": len(messages),
+                    },
+                )
+                if self.tools.show_tool_calls:
+                    console.print(
+                        f"[dim]  time model round {llm_round} responded in {_format_duration(llm_elapsed)} "
+                        f"({total_tool_calls} tools so far)[/dim]"
+                    )
                 self._log_llm_usage(response)
                 choice = response.choices[0]
                 msg = choice.message
@@ -428,7 +489,36 @@ class AgentSession:
                         )
                         total_tool_calls += len(pseudo_calls)
                         for tool_name, tool_args in pseudo_calls:
+                            repeat_message = self._record_tool_call_or_stop(
+                                repeated_tool_calls,
+                                tool_name,
+                                tool_args,
+                                total_tool_calls,
+                            )
+                            if repeat_message:
+                                console.print(f"[yellow]  stop {repeat_message}[/yellow]")
+                                messages.append({"role": "assistant", "content": repeat_message})
+                                self.conversation.append({"role": "assistant", "content": repeat_message})
+                                self.logger.log_assistant_turn(
+                                    self.turn_count,
+                                    repeat_message,
+                                    total_tool_calls,
+                                )
+                                yield repeat_message
+                                self._maybe_compact_conversation()
+                                return
+                            tool_started = time.monotonic()
                             result = await self._dispatch_tool_call(tool_name, tool_args)
+                            tool_elapsed = self._log_timing(
+                                f"tool.{tool_name}",
+                                tool_started,
+                                metadata=_tool_timing_metadata(tool_name, tool_args, result),
+                            )
+                            if self.tools.show_tool_calls:
+                                console.print(
+                                    f"[dim]    -> {tool_name} finished in {_format_duration(tool_elapsed)} "
+                                    f"({self._tool_result_label(result)})[/dim]"
+                                )
                             messages.append(
                                 {
                                     "role": "system",
@@ -512,7 +602,26 @@ class AgentSession:
                         tool_args = json.loads(tc.function.arguments)
                     except json.JSONDecodeError:
                         tool_args = {}
+                    repeat_message = self._record_tool_call_or_stop(
+                        repeated_tool_calls,
+                        tool_name,
+                        tool_args,
+                        total_tool_calls,
+                    )
+                    if repeat_message:
+                        console.print(f"[yellow]  stop {repeat_message}[/yellow]")
+                        messages.append({"role": "assistant", "content": repeat_message})
+                        self.conversation.append({"role": "assistant", "content": repeat_message})
+                        self.logger.log_assistant_turn(
+                            self.turn_count,
+                            repeat_message,
+                            total_tool_calls,
+                        )
+                        yield repeat_message
+                        self._maybe_compact_conversation()
+                        return
                     # Route to MCP or built-in tool
+                    tool_started = time.monotonic()
                     run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
                     if self.mcp.is_mcp_tool(tool_name):
                         result = await self.mcp.dispatch(tool_name, tool_args)
@@ -524,6 +633,16 @@ class AgentSession:
                     if tool_name == "run_shell" and not result.get("ok", True):
                         run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
                     self._observe_tool_result(tool_name, tool_args, result)
+                    tool_elapsed = self._log_timing(
+                        f"tool.{tool_name}",
+                        tool_started,
+                        metadata=_tool_timing_metadata(tool_name, tool_args, result),
+                    )
+                    if self.tools.show_tool_calls:
+                        console.print(
+                            f"[dim]    -> {tool_name} finished in {_format_duration(tool_elapsed)} "
+                            f"({self._tool_result_label(result)})[/dim]"
+                        )
                     messages.append(
                         {
                             "role": "tool",
@@ -607,6 +726,72 @@ class AgentSession:
             f"Stopped because you denied permission for `{tool_name}`. "
             "I will not retry equivalent actions unless you ask me to."
         )
+
+    def _record_tool_call_or_stop(
+        self,
+        repeated_tool_calls: dict[str, int],
+        tool_name: str,
+        tool_args: dict[str, Any],
+        total_tool_calls: int,
+    ) -> str:
+        if total_tool_calls > MAX_TOOL_CALLS_PER_TURN:
+            message = (
+                f"Stopped after {MAX_TOOL_CALLS_PER_TURN} tool calls in this turn to avoid an agent loop. "
+                "Please retry with a narrower request or inspect the session log for timings."
+            )
+            self.logger.log_timing(
+                "tool_loop_stopped",
+                0,
+                turn=self.turn_count,
+                metadata={"reason": "max_tool_calls", "tool": tool_name, "count": total_tool_calls},
+            )
+            return message
+
+        key = _tool_call_fingerprint(tool_name, tool_args)
+        repeated_tool_calls[key] = repeated_tool_calls.get(key, 0) + 1
+        count = repeated_tool_calls[key]
+        if count <= MAX_IDENTICAL_TOOL_CALLS_PER_TURN:
+            return ""
+
+        desc = _tool_call_description(tool_name, tool_args)
+        message = (
+            f"Stopped because `{tool_name}` repeated the same request {count} times"
+            + (f" ({desc})" if desc else "")
+            + ". I did not continue rewriting the same target."
+        )
+        self.logger.log_timing(
+            "tool_loop_stopped",
+            0,
+            turn=self.turn_count,
+            metadata={
+                "reason": "repeated_tool_call",
+                "tool": tool_name,
+                "description": desc,
+                "count": count,
+                "fingerprint": key,
+            },
+        )
+        return message
+
+    def _log_timing(
+        self,
+        name: str,
+        started: float,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> float:
+        elapsed_ms = (time.monotonic() - started) * 1000
+        self.logger.log_timing(name, elapsed_ms, turn=self.turn_count, metadata=metadata)
+        return elapsed_ms
+
+    def _tool_result_label(self, result: dict[str, Any]) -> str:
+        if not result.get("ok", True):
+            return "failed"
+        if result.get("bytes") is not None:
+            return f"{result['bytes']} bytes"
+        if result.get("path"):
+            return str(result["path"])
+        return "ok"
 
     async def _dispatch_tool_call(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a tool call and record hooks, scratchpad, and audit logs."""
@@ -877,6 +1062,57 @@ def _strip_pseudo_tool_markup(content: str) -> str:
     if not match:
         return content
     return content[: match.start()].strip()
+
+
+def _tool_call_fingerprint(tool_name: str, tool_args: dict[str, Any]) -> str:
+    try:
+        payload = json.dumps(tool_args, sort_keys=True, default=str, ensure_ascii=False)
+    except TypeError:
+        payload = repr(tool_args)
+    digest = hashlib.sha256(payload.encode("utf-8", errors="replace")).hexdigest()[:16]
+    return f"{tool_name}:{digest}"
+
+
+def _tool_call_description(tool_name: str, tool_args: dict[str, Any]) -> str:
+    if tool_name in {"write_file", "edit_file", "delete_file", "read_file", "read_file_range"}:
+        return str(tool_args.get("path") or tool_args.get("file_path") or "")[:120]
+    if tool_name == "run_shell":
+        return str(tool_args.get("command") or "")[:120]
+    if tool_name in {"web_search", "deep_research"}:
+        return str(tool_args.get("query") or "")[:120]
+    if tool_name in {"web_fetch", "http_request", "browser_snapshot", "browser_screenshot"}:
+        return str(tool_args.get("url") or "")[:120]
+    return ""
+
+
+def _tool_timing_metadata(
+    tool_name: str,
+    tool_args: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "tool": tool_name,
+        "ok": result.get("ok", True),
+    }
+    desc = _tool_call_description(tool_name, tool_args)
+    if desc:
+        metadata["description"] = desc
+    if result.get("path"):
+        metadata["path"] = str(result["path"])
+    if result.get("bytes") is not None:
+        metadata["bytes"] = result["bytes"]
+    if result.get("error"):
+        metadata["error"] = str(result["error"])[:300]
+    return metadata
+
+
+def _format_duration(duration_ms: float) -> str:
+    if duration_ms < 1000:
+        return f"{duration_ms:.0f}ms"
+    if duration_ms < 60_000:
+        return f"{duration_ms / 1000:.1f}s"
+    minutes, seconds = divmod(duration_ms / 1000, 60)
+    return f"{int(minutes)}m {seconds:.0f}s"
 
 
 def reflow(text: str) -> str:

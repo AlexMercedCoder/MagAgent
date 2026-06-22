@@ -73,6 +73,24 @@ class SessionLogger:
             },
         )
 
+    def log_timing(
+        self,
+        name: str,
+        duration_ms: float,
+        *,
+        turn: int | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        self._write(
+            "timing",
+            {
+                "name": name,
+                "duration_ms": round(duration_ms, 2),
+                "turn": turn,
+                "metadata": metadata or {},
+            },
+        )
+
     def log_memory_write(self, nodes_written: int, project_slug: str | None) -> None:
         self._write(
             "memory_write",
