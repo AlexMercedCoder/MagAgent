@@ -59,6 +59,7 @@ from magent.cli.app import (
     release_app,
     routine_app,
     session_app,
+    skill_app,
     subagent_app,
     system_app,
     task_app,
@@ -472,6 +473,24 @@ def research_cmd(
         raise typer.Exit(1)
 
 
+@app.command("update", rich_help_panel="Setup & Configuration")
+def update_cmd(run: bool = typer.Option(False, "--run", help="Run the detected update command.")):
+    """Show or run the recommended MagAgent update command."""
+    from magent.install import update_plan
+
+    plan = update_plan()
+    if not run:
+        console.print_json(data=plan)
+        console.print(f"[dim]Run with `magent update --run` to execute:[/dim] {plan['command']}")
+        return
+    import subprocess
+
+    console.print(f"[dim]Running:[/dim] {plan['command']}")
+    completed = subprocess.run(plan["command"], shell=True)
+    if completed.returncode:
+        raise typer.Exit(completed.returncode)
+
+
 def _print_research_result(result: dict) -> None:
     if not result.get("ok"):
         console.print(f"[red]Research failed:[/red] {result.get('error', 'unknown error')}")
@@ -490,6 +509,58 @@ def _print_research_result(result: dict) -> None:
                 str(index),
                 str(source.get("title") or "Untitled")[:80],
                 str(source.get("url") or "")[:100],
+            )
+        console.print(table)
+
+
+def _print_session_usage(data: dict) -> None:
+    if not data.get("ok"):
+        console.print("[dim]No session log found yet.[/dim]")
+        return
+    table = Table("Metric", "Value")
+    for key in ("turns", "tool_calls", "prompt_tokens", "completion_tokens", "total_tokens", "cached_tokens"):
+        table.add_row(key.replace("_", " ").title(), str(data.get(key, 0)))
+    table.add_row("Estimated Cost", f"${float(data.get('cost_usd') or 0):.6f}")
+    console.print(table)
+    slowest = data.get("slowest") or []
+    if slowest:
+        slow_table = Table("Slow Step", "Duration", "Detail")
+        for item in slowest[:5]:
+            duration = float(item.get("duration_ms") or 0)
+            metadata = item.get("metadata") or {}
+            detail = str(metadata.get("description") or metadata.get("path") or metadata.get("tool") or "")[:80]
+            slow_table.add_row(str(item.get("name") or ""), f"{duration / 1000:.1f}s", detail)
+        console.print(slow_table)
+
+
+def _print_recent_insights(data: dict) -> None:
+    totals = data.get("totals") or {}
+    console.print(
+        Panel(
+            "\n".join(
+                [
+                    f"Sessions: {totals.get('sessions', 0)}",
+                    f"Turns: {totals.get('turns', 0)}",
+                    f"Tool calls: {totals.get('tool_calls', 0)}",
+                    f"Tokens: {totals.get('total_tokens', 0)}",
+                    f"Cached tokens: {totals.get('cached_tokens', 0)}",
+                    f"Estimated cost: ${float(totals.get('cost_usd') or 0):.6f}",
+                ]
+            ),
+            title="Recent Session Insights",
+        )
+    )
+    rows = data.get("sessions") or []
+    if rows:
+        table = Table("Session Log", "Turns", "Tools", "Tokens", "Slowest")
+        for item in rows:
+            slowest = (item.get("slowest") or [{}])[0]
+            table.add_row(
+                Path(str(item.get("path") or "")).name,
+                str(item.get("turns", 0)),
+                str(item.get("tool_calls", 0)),
+                str(item.get("total_tokens", 0)),
+                str(slowest.get("name") or ""),
             )
         console.print(table)
 
@@ -656,11 +727,15 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 "  [cyan]/context [q][/cyan]     — Audit active context and memory\n"
                 "  [cyan]/config[/cyan]          — Show config control-center summary\n"
                 "  [cyan]/statusline[/cyan]      — Preview statusline payload\n"
+                "  [cyan]/usage[/cyan]           — Show token/tool/timing usage for this session\n"
+                "  [cyan]/insights[/cyan]        — Show recent session diagnostics\n"
                 "  [cyan]/memory[/cyan]          — Show memory stats\n"
                 "  [cyan]/skills[/cyan]          — List active skills\n"
                 "  [cyan]/model[/cyan]           — Show current model\n"
                 "  [cyan]/user[/cyan]            — Show current user\n"
                 "  [cyan]/mode <mode>[/cyan]     — Set permission mode (silent/balanced/paranoid/yolo)\n"
+                "  [cyan]/retry[/cyan]           — Retry the last user prompt\n"
+                "  [cyan]/undo[/cyan]            — Remove the last exchange from context\n"
                 "  [cyan]/spawn <task>[/cyan]    — Spawn a sub-agent for a focused task\n"
                 "  [cyan]/clear[/cyan]           — Clear conversation history\n"
                 "  [cyan]/exit[/cyan]            — End session",
@@ -708,6 +783,18 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
         console.print(render_statusline(data))
         return True
 
+    if command == "/usage":
+        from magent.session_controls import session_usage
+
+        _print_session_usage(session_usage(session.logger.path))
+        return True
+
+    if command == "/insights":
+        from magent.session_controls import recent_insights
+
+        _print_recent_insights(recent_insights())
+        return True
+
     if command == "/compose":
         prompt = read_multiline_prompt(get_current_user() or "user")
         if prompt.strip():
@@ -744,10 +831,36 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
         modes = ("silent", "balanced", "paranoid", "yolo")
         if arg in modes:
             session.config._user.setdefault("permissions", {})["mode"] = arg
+            session.tools.permission_mode = arg
             console.print(f"[green]Permission mode set to [bold]{arg}[/bold][/green]")
         else:
             console.print(f"[yellow]Current mode: {config.permission_mode}[/yellow]")
             console.print(f"[dim]Available: {', '.join(modes)}[/dim]")
+        return True
+
+    if command == "/undo":
+        from magent.session_controls import pop_last_turn
+
+        removed = pop_last_turn(session.conversation)
+        if removed.get("user") or removed.get("assistant"):
+            console.print("[green]Removed the last exchange from conversation context.[/green]")
+            if removed.get("user"):
+                console.print(f"[dim]Last prompt:[/dim] {removed['user'][:180]}")
+        else:
+            console.print("[dim]Nothing to undo.[/dim]")
+        return True
+
+    if command == "/retry":
+        from magent.session_controls import last_user_message, pop_last_turn
+        from magent.tui import print_streaming_response
+
+        last = last_user_message(session.conversation)
+        if not last:
+            console.print("[yellow]No previous prompt to retry.[/yellow]")
+            return True
+        pop_last_turn(session.conversation)
+        console.print(f"[dim]Retrying:[/dim] {last[:180]}")
+        print_streaming_response(session.stream_chat(last), _loop)
         return True
 
     if command == "/spawn":
@@ -1342,11 +1455,16 @@ def goal_cmd(
     goal: str = typer.Argument(...),
     project: str = typer.Option(".", "--project", "-p"),
     background: bool = typer.Option(False, "--background/--no-background", help="Queue the goal as a daemon task."),
+    run: bool = typer.Option(False, "--run/--no-run", help="Run the generated goal prompt immediately."),
     verify: bool = typer.Option(True, "--verify/--no-verify", help="Include verifier pass instructions."),
     review: bool = typer.Option(True, "--review/--no-review", help="Include reviewer pass instructions."),
     max_loops: int = typer.Option(3, "--max-loops", min=1, max=20),
     verifier_model: str = typer.Option("cheap", "--verifier-model-role"),
     reviewer_model: str = typer.Option("review", "--reviewer-model-role"),
+    provider: str | None = typer.Option(None, "--provider", help="Provider ID when using --run."),
+    model: str | None = typer.Option(None, "--model", "-m", help="Model name when using --run."),
+    permission_mode: str | None = typer.Option(None, "--permission-mode", help="Permission mode when using --run."),
+    repair_attempts: int = typer.Option(2, "--repair-attempts", min=0, max=5, help="Audit repair attempts when using --run."),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create a goal loop with verifier/reviewer workflow scaffolding."""
@@ -1374,9 +1492,27 @@ def goal_cmd(
     if result.get("queued"):
         console.print(f"[dim]Queued background job:[/dim] {result['queued']['id']}")
         console.print("[dim]Inspect with `magent jobs` and run due work with `magent daemon run-once`.[/dim]")
+    elif run:
+        username = _require_user()
+        cfg = load_config(username)
+        main_provider = _build_provider(cfg, provider, model)
+        extract_provider = _build_extraction_provider(cfg)
+        _run_one_shot(
+            username,
+            cfg,
+            main_provider,
+            extract_provider,
+            str(Path(project).resolve()),
+            goal_item["prompt"],
+            permission_mode_override=permission_mode,
+            repair_attempts=repair_attempts,
+            strict_audit=True,
+        )
     else:
         console.print("[dim]Run now with:[/dim]")
-        console.print(f"  magent ask {json.dumps(goal_item['prompt'])} --project {json.dumps(str(Path(project).resolve()))}")
+        console.print(f"  magent goal {json.dumps(goal)} --project {json.dumps(str(Path(project).resolve()))} --run")
+        console.print("[dim]Or run the generated prompt directly:[/dim]")
+        console.print(f"  magent ask {json.dumps(goal_item['prompt'])} --project {json.dumps(str(Path(project).resolve()))} --repair-attempts 2 --strict-audit")
 
 
 @app.command("jobs", rich_help_panel="Everyday Agent Work")
@@ -1894,6 +2030,95 @@ def tools_disable_cmd(pack: str = typer.Argument(...)):
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)
+
+
+@tools_app.command("gateway")
+def tools_gateway_cmd():
+    """Show local, subscription, and MCP tool backend readiness."""
+    from magent.tool_gateway import gateway_status
+
+    config = load_config(_require_user())
+    data = gateway_status(config)
+    table = Table("Backend", "Enabled", "Credential", "Description")
+    for item in data.get("backends", []):
+        table.add_row(
+            item.get("id", ""),
+            "yes" if item.get("enabled") else "no",
+            item.get("credential") or "-",
+            item.get("description", "")[:90],
+        )
+    console.print(table)
+
+
+@tools_app.command("backend")
+def tools_backend_cmd(name: str = typer.Argument(...)):
+    """Explain one tool backend/gateway surface."""
+    from magent.tool_gateway import explain_backend
+
+    result = explain_backend(name)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@skill_app.command("list")
+def skill_list_cmd(project: str = typer.Option(".", "--project", "-p")):
+    """List user and project skills available to MagAgent."""
+    from magent.skills import SkillRegistry
+
+    project_skills = Path(project).resolve() / ".magent" / "skills"
+    registry = SkillRegistry(extra_dirs=[project_skills] if project_skills.exists() else None)
+    registry.load(respect_lockfile=False)
+    table = Table("Name", "Version", "Description", "Path")
+    for item in registry.list_all():
+        table.add_row(item["name"], item["version"], item["description"], item["path"])
+    console.print(table)
+
+
+@skill_app.command("search")
+def skill_search_cmd(query: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Find skills relevant to a task or phrase."""
+    from magent.skills import SkillRegistry
+
+    project_skills = Path(project).resolve() / ".magent" / "skills"
+    registry = SkillRegistry(extra_dirs=[project_skills] if project_skills.exists() else None)
+    registry.load(respect_lockfile=False)
+    table = Table("Name", "Score", "Description")
+    scored = sorted(
+        ((skill.score_relevance(query), skill) for skill in registry.skills),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    for score, skill in scored[:10]:
+        if score <= 0:
+            continue
+        table.add_row(skill.name, f"{score:.2f}", skill.description[:100])
+    console.print(table)
+
+
+@skill_app.command("show")
+def skill_show_cmd(name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+    """Show one local skill's metadata and path."""
+    from magent.skills import SkillRegistry
+
+    project_skills = Path(project).resolve() / ".magent" / "skills"
+    registry = SkillRegistry(extra_dirs=[project_skills] if project_skills.exists() else None)
+    registry.load(respect_lockfile=False)
+    for skill in registry.skills:
+        if skill.name == name:
+            console.print_json(
+                data={
+                    "ok": True,
+                    "name": skill.name,
+                    "version": skill.version,
+                    "description": skill.description,
+                    "tools_required": skill.tools_required,
+                    "path": str(skill.path),
+                }
+            )
+            return
+    console.print_json(data={"ok": False, "error": f"Skill not found: {name}"})
+    raise typer.Exit(1)
 
 
 @provider_app.command("list")

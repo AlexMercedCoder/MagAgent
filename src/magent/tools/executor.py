@@ -83,6 +83,70 @@ def _uses_shell_syntax(command: str) -> bool:
     return bool(re.search(r"(\|\||&&|[;\n|<>]|\$\(|\{[^{}\s]+,[^{}]+})", command))
 
 
+def _first_command_name(command: str) -> str:
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;<>")
+        lexer.whitespace_split = True
+        for token in lexer:
+            if token not in {"|", "||", "&&", ";", ">", ">>", "<"}:
+                return Path(token).name.lower()
+    except ValueError:
+        return ""
+    return ""
+
+
+def _looks_like_read_only_fetch_pipeline(command: str) -> bool:
+    """Return true for fetch-and-inspect shell pipelines worth trust-pattern widening."""
+    if not re.search(r"\b(curl|wget)\b", command) or "|" not in command:
+        return False
+    if re.search(r"(?<![<>&])>>?(?![>&])", command) or "<<" in command:
+        return False
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;<>")
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        return False
+    write_flags = {
+        "-d",
+        "--data",
+        "--data-raw",
+        "--data-binary",
+        "--data-urlencode",
+        "-F",
+        "--form",
+        "--form-string",
+        "-T",
+        "--upload-file",
+        "-o",
+        "--output",
+        "-O",
+        "--remote-name",
+        "--remote-header-name",
+        "-X",
+        "--request",
+    }
+    if any(token in write_flags for token in tokens):
+        # `-X GET` is technically read-only, but broad approval for arbitrary
+        # request overrides is too easy to misapply later.
+        return False
+    allowed_heads = {"curl", "wget", "grep", "head", "tail", "sed", "awk", "cut", "tr", "od", "wc", "sort", "cat"}
+    expect_head = True
+    for token in tokens:
+        if token in {"|", "||", "&&", ";"}:
+            expect_head = True
+            continue
+        if token in {"2>&1", "1>&2"}:
+            continue
+        if token in {">", ">>", "<", "2>", "2>>"}:
+            return False
+        if expect_head:
+            if Path(token).name.lower() not in allowed_heads:
+                return False
+            expect_head = False
+    return True
+
+
 def _effective_shell_timeout(command: str, requested_timeout: int) -> int:
     """Give known package-install commands enough time unless caller overrides."""
     if requested_timeout != 60:
@@ -574,6 +638,9 @@ class ToolExecutor:
             self.session_shell_patterns.append(command)
 
     def _shell_trust_pattern(self, command: str, tier: RiskTier) -> str:
+        if _looks_like_read_only_fetch_pipeline(command):
+            head = _first_command_name(command)
+            return f"{head} * | *" if head in {"curl", "wget"} else command
         if tier >= RiskTier.CONFIRM:
             return command
         if not re.search(r"(\|\||&&|[;\n|<>]|\$\()", command):
@@ -1413,12 +1480,12 @@ class ToolExecutor:
             else ["grep", "-rn", pattern, str(abs_path)]
         )
         try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            proc = await _create_exec_process(*cmd, cwd=self.cwd)
+            self._active_processes.add(proc)
+            try:
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            finally:
+                self._active_processes.discard(proc)
             lines = stdout.decode("utf-8", errors="replace").strip().splitlines()
             return {
                 "ok": True,

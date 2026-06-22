@@ -146,6 +146,7 @@ Generated from the active Typer command tree.
 - `magent run`
 - `magent session`
 - `magent setup`
+- `magent skill`
 - `magent stats`
 - `magent statusline`
 - `magent subagent`
@@ -156,6 +157,7 @@ Generated from the active Typer command tree.
 - `magent tools`
 - `magent tutorial`
 - `magent ui`
+- `magent update`
 - `magent user`
 - `magent workbench`
 - `magent workspace`
@@ -315,6 +317,8 @@ Generated from the active Typer command tree.
 - `magent permission propose`
 - `magent permission set`
 - `magent permission status`
+- `magent permission trust-clear`
+- `magent permission trust-list`
 
 ## plugin
 
@@ -406,6 +410,12 @@ Generated from the active Typer command tree.
 - `magent subagent status`
 - `magent subagent wizard`
 
+## skill
+
+- `magent skill list`
+- `magent skill search`
+- `magent skill show`
+
 ## system
 
 - `magent system info`
@@ -426,9 +436,11 @@ Generated from the active Typer command tree.
 
 ## tools
 
+- `magent tools backend`
 - `magent tools disable`
 - `magent tools enable`
 - `magent tools explain`
+- `magent tools gateway`
 - `magent tools list`
 
 ## user

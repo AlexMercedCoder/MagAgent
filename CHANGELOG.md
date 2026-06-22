@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.32.9
+
+- Added direct `magent goal --run` execution with stronger verifier/reviewer goal-loop instructions.
+- Fixed missing-`content` artifact recovery for pluralized `write_file` validation errors.
+- Added `/retry`, `/undo`, `/usage`, and `/insights` interactive session commands.
+- Improved permission UX for safe read-only shell pipelines and added `magent permission trust-list/trust-clear`.
+- Added tool backend readiness commands, local skill browsing commands, and a conservative `magent update` helper.
+- Updated README, built-in command docs, TUI docs, tool docs, and tests for the new daily-driver UX.
+
 ## 0.32.8
 
 - Added startup version visibility in the TUI banner so local installs are easier to verify.

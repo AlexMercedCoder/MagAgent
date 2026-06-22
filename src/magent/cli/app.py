@@ -65,6 +65,7 @@ provider_app = typer.Typer(help="Provider setup and diagnostics", name="provider
 model_app = typer.Typer(help="Model role configuration", name="model")
 auth_app = typer.Typer(help="Credential storage and keyring helpers", name="auth")
 subagent_app = typer.Typer(help="Sub-agent configuration and runs", name="subagent")
+skill_app = typer.Typer(help="Browse and inspect local skills", name="skill")
 profile_app = typer.Typer(help="Guided UX configuration profiles", name="profile")
 permission_app = typer.Typer(help="Permission profile UX", name="permission")
 performance_app = typer.Typer(help="Local performance diagnostics", name="performance")
@@ -114,6 +115,7 @@ _HELP_PANELS = {
     "model": "Setup & Configuration",
     "auth": "Setup & Configuration",
     "subagent": "Agents & Automation",
+    "skill": "Agents & Automation",
     "profile": "Setup & Configuration",
     "permission": "Setup & Configuration",
     "performance": "Performance & Diagnostics",
@@ -158,6 +160,7 @@ for _name, _typer in [
     ("model", model_app),
     ("auth", auth_app),
     ("subagent", subagent_app),
+    ("skill", skill_app),
     ("profile", profile_app),
     ("permission", permission_app),
     ("performance", performance_app),
@@ -210,6 +213,7 @@ __all__ = [
     "tools_app",
     "model_app",
     "subagent_app",
+    "skill_app",
     "user_app",
     "workspace_app",
     "workbench_app",

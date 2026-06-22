@@ -89,6 +89,7 @@ OPEN_MODEL_EXECUTION_PROMPT = """# Execution Discipline For Tool-Sensitive Model
 - Before finalizing, check whether requested files were successfully created or edited.
 - If a file write fails because an argument is missing, retry once with the missing argument supplied. If you cannot provide the full content, explain the blocker instead of repeating the failing call.
 - During research-to-artifact tasks, finish research first, then create the artifact with one complete `write_file` call, then verify the file exists.
+- When creating Astro projects, install the `astro` npm package but describe it as Astro/AstroJS. Do not invent an `astrojs` package name.
 """
 
 AGENT_CONTEXT_PROMPT = """The following context changes by project and turn. Use it as relevant, but do not repeat it unless needed.
@@ -1536,7 +1537,7 @@ def _tool_failure_steer(
         + f" (failure {count}). Error: {error}\n"
     )
     lower = error.lower()
-    if tool_name == "write_file" and "missing required argument 'content'" in lower:
+    if tool_name == "write_file" and _missing_write_content_error(lower):
         return (
             prefix
             + "Do not repeat `write_file` with only `path`. Retry only if you can provide both "
@@ -1561,7 +1562,15 @@ def _tool_failure_steer(
 def _is_missing_write_file_content(tool_name: str, result: dict[str, Any]) -> bool:
     if tool_name != "write_file" or result.get("ok", True):
         return False
-    return "missing required argument 'content'" in str(result.get("error") or "").lower()
+    return _missing_write_content_error(str(result.get("error") or "").lower())
+
+
+def _missing_write_content_error(lower_error: str) -> bool:
+    return (
+        "missing required argument 'content'" in lower_error
+        or "missing required arguments for write_file: content" in lower_error
+        or "missing required argument for write_file: content" in lower_error
+    )
 
 
 def _clean_recovered_artifact_content(content: str, path: str) -> str:

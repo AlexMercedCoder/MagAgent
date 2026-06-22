@@ -6,6 +6,8 @@ Commands:
 
 - `magent tools list`
 - `magent tools explain files`
+- `magent tools gateway`
+- `magent tools backend local`
 - `magent tools disable web`
 - `magent tools enable web`
 
@@ -19,6 +21,19 @@ Built-in packs:
 - `desktop`: notifications, clipboard, and open-file helpers
 
 Disabled packs are stored in the local workbench and used by the tool executor when it advertises callable tools for a turn.
+
+## Tool Backends And Gateway Readiness
+
+`magent tools gateway` shows which tool backends are currently available:
+
+- local built-ins
+- local web search/fetch/research
+- browser automation
+- configured image generation model role
+- subscription-backed provider surfaces such as Nous Portal and OpenCode Go
+- MCP servers
+
+`magent tools backend <name>` explains one backend, its credential expectations, and whether it is subscription-backed. This is metadata today; it gives the CLI and Mag Command Center a stable surface for routing future tool gateway behavior without requiring users to edit config files directly.
 
 ## Deep Research
 

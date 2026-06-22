@@ -16,6 +16,8 @@ class TestClassifyShellCommand:
         assert classify_shell_command("find /tmp/project -type f | sort") == RiskTier.SILENT
         assert classify_shell_command("which npx && npx --version") == RiskTier.SILENT
         assert classify_shell_command("which npm && npm --version 2>&1") == RiskTier.SILENT
+        assert classify_shell_command("curl -s https://example.com | grep title | head -5") == RiskTier.AUTO
+        assert classify_shell_command("curl -s https://example.com | sed -n '1,5p' | cut -c1-80") == RiskTier.AUTO
 
     def test_auto_commands(self):
         assert classify_shell_command("git add -A") == RiskTier.AUTO

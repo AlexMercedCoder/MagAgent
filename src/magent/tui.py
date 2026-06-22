@@ -17,6 +17,13 @@ from rich.table import Table
 console = Console()
 
 LOGO = "MagAgent"
+MAGPIE_PET = "\n".join(
+    [
+        "[bold white]  ,_[/bold white]",
+        "[bold cyan]<(o )___[/bold cyan]",
+        "[dim]  (___/[/dim]",
+    ]
+)
 
 
 @dataclass(frozen=True)
@@ -92,9 +99,14 @@ def print_banner(
         return
 
     table = Table.grid(expand=True)
+    table.add_column(width=12)
     table.add_column(ratio=1)
-    table.add_column(ratio=3)
-    table.add_row(f"[{THEME.accent}]{title}[/{THEME.accent}]", context_line(username, provider, cwd, mode, model=model, git_branch=git_branch))
+    table.add_column(ratio=4)
+    table.add_row(
+        MAGPIE_PET,
+        f"[{THEME.accent}]{title}[/{THEME.accent}]",
+        context_line(username, provider, cwd, mode, model=model, git_branch=git_branch),
+    )
     console.print(Panel(table, border_style=THEME.border, box=box.ROUNDED, padding=(1, 2)))
 
 

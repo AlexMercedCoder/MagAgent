@@ -80,6 +80,9 @@ def build_goal_prompt(
         "",
         f"Continue until the measurable goal is complete or {max_loops} implement/verify/review loops have run.",
         "Use native file tools for edits and run the narrowest useful checks after each implementation pass.",
+        "If the goal asks for a new folder, create and work in that new folder; do not accidentally continue inside an existing sibling project unless asked.",
+        "Before installing dependencies, inspect the target framework's expected package names and use the canonical package name. Example: Astro/AstroJS projects install the npm package `astro`, not `astrojs`.",
+        "For generated files, use one complete `write_file` call per file with both `path` and full `content`. If a write fails due to missing content, immediately retry with complete content before doing more research.",
     ]
     if verify:
         lines.extend(
@@ -88,6 +91,7 @@ def build_goal_prompt(
                 "Verifier loop:",
                 f"- Spawn or emulate a verifier subagent using the `{verifier_model}` model role when available.",
                 "- Build/test/lint the project using configured project commands.",
+                "- If no project commands are configured, infer the likely checks from package files; for Astro projects run install if needed and then `npm run build`.",
                 "- For UI work, use browser automation or screenshots when available.",
                 "- Return critical and medium issues to the main agent for repair.",
             ]
@@ -108,6 +112,7 @@ def build_goal_prompt(
             "Stop condition:",
             "- The goal is implemented.",
             "- Verification passes or the remaining blocker is clearly explained.",
+            "- Every requested file exists and has non-placeholder content.",
             "- Review finds no critical or medium issues.",
             "- Final response summarizes files changed, checks run, and any residual risk.",
         ]

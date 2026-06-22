@@ -17,11 +17,13 @@ PERMISSION_MODES: dict[str, str] = {
 def permission_status(username: str) -> dict[str, Any]:
     profile = load_user_profile(username)
     mode = profile.get("permissions", {}).get("mode", "balanced")
+    permissions = profile.get("permissions", {})
     return {
         "ok": True,
         "mode": mode,
         "description": PERMISSION_MODES.get(mode, ""),
-        "allowed_shell_patterns": profile.get("permissions", {}).get("allowed_shell_patterns", []),
+        "allowed_shell_patterns": permissions.get("allowed_shell_patterns", []),
+        "trusted_shell_patterns": permissions.get("trusted_shell_patterns", []),
     }
 
 
@@ -65,4 +67,31 @@ def permission_propose(text: str) -> dict[str, Any]:
         "risk": "normal" if patterns else "unknown",
         "command": "magent config propose \"allow selected shell commands\"",
         "description": "Use config proposals to review shell allowlist changes before applying them.",
+    }
+
+
+def permission_trust_list(username: str) -> dict[str, Any]:
+    profile = load_user_profile(username)
+    permissions = profile.get("permissions", {})
+    return {
+        "ok": True,
+        "trusted_shell_patterns": list(permissions.get("trusted_shell_patterns") or []),
+        "allowed_shell_patterns": list(permissions.get("allowed_shell_patterns") or []),
+    }
+
+
+def permission_trust_clear(username: str, pattern: str = "") -> dict[str, Any]:
+    profile = load_user_profile(username)
+    permissions = profile.setdefault("permissions", {})
+    existing = list(permissions.get("trusted_shell_patterns") or [])
+    if pattern:
+        remaining = [item for item in existing if item != pattern]
+    else:
+        remaining = []
+    permissions["trusted_shell_patterns"] = remaining
+    save_user_profile(username, profile)
+    return {
+        "ok": True,
+        "removed": len(existing) - len(remaining),
+        "trusted_shell_patterns": remaining,
     }

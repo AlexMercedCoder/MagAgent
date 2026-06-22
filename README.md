@@ -125,6 +125,7 @@ magent
 ```bash
 magent ask "Refactor the auth module to use JWTs and add tests"
 magent goal "Implement the dashboard until tests pass and review is clean"
+magent goal "Create an Astro blog and make the build pass" --run
 magent goal "Ship the landing page" --background
 magent jobs
 magent research "topic"
@@ -136,6 +137,7 @@ magent recipe run release-prep
 magent memory inbox
 magent context audit
 magent statusline
+magent update
 magent plan "Ship the UX fixes"
 magent plan --save --executable "Ship the UX fixes" -c "pytest -q"
 magent plan-sandbox <plan-id> --dry-run
@@ -252,6 +254,8 @@ Tool capability packs make selective loading explicit:
 ```bash
 magent tools list
 magent tools explain web
+magent tools gateway
+magent tools backend nous-portal
 magent tools disable desktop
 magent tools enable desktop
 ```
@@ -344,8 +348,16 @@ MagAgent uses a **4-tier risk system** to auto-approve safe operations and only 
 magent permission status
 magent permission explain paranoid
 magent permission set paranoid
+magent permission trust-list
+magent permission trust-clear "curl * | *"
 /mode paranoid
 ```
+
+Shell prompts can be approved once, for the current session, or always. Saved
+approvals are stored as trusted shell patterns in the active user profile. For
+safe read-only fetch pipelines such as `curl | grep | head`, MagAgent stores a
+broader scoped pattern like `curl * | *` so similar diagnostic probes do not
+repeatedly interrupt the session.
 
 Pre-approve patterns in your config (e.g. trust all `git` and `pytest` commands):
 
@@ -709,11 +721,15 @@ magent --version       # Show version
 | `/context [query]` | Audit current context, memory recall, plans, and cleanup suggestions |
 | `/config` | Show the interactive session config control center |
 | `/statusline` | Preview compact statusline output |
+| `/usage` | Show token, tool, cost, and slow-step diagnostics for this session |
+| `/insights` | Summarize recent session logs |
 | `/memory` | Memory graph stats |
 | `/skills` | Loaded skills list |
 | `/model` | Current model / change model |
 | `/user` | Active user |
 | `/mode <mode>` | Change permission mode |
+| `/retry` | Retry the previous prompt after removing the last exchange from context |
+| `/undo` | Remove the last exchange from conversation context |
 | `/spawn <task>` | Spawn a sub-agent |
 | `/db` | List your SQLite databases |
 | `/clear` | Clear conversation history |

@@ -436,10 +436,14 @@ async def test_run_tool_loop_recovers_missing_write_content_with_no_tools_artifa
 
 
 def test_recovered_artifact_content_rejects_filename_placeholder() -> None:
-    from magent.agent import _clean_recovered_artifact_content
+    from magent.agent import _clean_recovered_artifact_content, _is_missing_write_file_content
 
     assert _clean_recovered_artifact_content("oranges.html", "oranges.html") == ""
     assert _clean_recovered_artifact_content("```html\n<html>ok</html>\n```", "oranges.html") == "<html>ok</html>"
+    assert _is_missing_write_file_content(
+        "write_file",
+        {"ok": False, "error": "Missing required arguments for write_file: content"},
+    )
 
 
 def test_deepseek_prompt_gets_tool_use_enforcement() -> None:

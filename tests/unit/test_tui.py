@@ -36,6 +36,19 @@ def test_print_banner_renders_compact_session_context(monkeypatch) -> None:
     assert "alex" in output
     assert "Ollama" in output
     assert "/repo" in output
+    assert "<(o )___" not in output
+
+
+def test_print_banner_renders_magpie_pet_when_wide(monkeypatch) -> None:
+    captured = Console(record=True, width=110, color_system=None)
+    monkeypatch.setattr(tui, "console", captured)
+
+    tui.print_banner("alex", "Ollama", "/repo", "ask", version="0.32.8", model="llama")
+
+    output = captured.export_text()
+    assert "MagAgent 0.32.8" in output
+    assert "<(o )___" in output
+    assert "(___/" in output
 
 
 def test_print_response_uses_agent_panel(monkeypatch) -> None:

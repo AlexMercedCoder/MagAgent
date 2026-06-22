@@ -50,3 +50,25 @@ def register_permission_commands(permission_app: typer.Typer) -> None:
         from magent.permission_ux import permission_propose
 
         console.print_json(data=permission_propose(text))
+
+    @permission_app.command("trust-list")
+    def permission_trust_list_cmd() -> None:
+        """Show shell patterns saved by session/always approvals."""
+        from magent.cli.command_context import require_user
+        from magent.permission_ux import permission_trust_list
+
+        console.print_json(data=permission_trust_list(require_user()))
+
+    @permission_app.command("trust-clear")
+    def permission_trust_clear_cmd(
+        pattern: str = typer.Argument("", help="Exact trusted pattern to remove; omit to clear all."),
+        yes: bool = typer.Option(False, "--yes", "-y", help="Required when clearing all trusted shell patterns."),
+    ) -> None:
+        """Remove saved trusted shell approval patterns."""
+        from magent.cli.command_context import require_user
+        from magent.permission_ux import permission_trust_clear
+
+        if not pattern and not yes:
+            console.print("[red]Clearing all trusted shell patterns requires --yes.[/red]")
+            raise typer.Exit(1)
+        console.print_json(data=permission_trust_clear(require_user(), pattern))

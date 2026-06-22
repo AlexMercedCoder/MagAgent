@@ -23,6 +23,17 @@ TUI helpers expose compact status rendering for operational events:
 
 Use these for checkpoint saves, memory writes, command outcomes, and other short-lived agent events.
 
+## Session Controls
+
+Interactive sessions include daily-driver slash commands:
+
+- `/retry` removes the last exchange from context and reruns the previous user prompt.
+- `/undo` removes the last exchange from context without rerunning it.
+- `/usage` summarizes token usage, tool calls, estimated cost, and slowest steps for the current session.
+- `/insights` summarizes recent session logs.
+- `/mode <silent|balanced|paranoid|yolo>` changes the live permission mode for the current session.
+- `/goal <task>` runs a strengthened goal-loop prompt with implementation, verification, review, and artifact-existence stop conditions.
+
 ## Theme
 
 The built-in `TuiTheme` centralizes styles for accent, border, success, warning, danger, muted, user, provider, mode, and path text. Keeping styles named makes future light/dark and compact modes easier to add without touching every render call.
