@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.5
+
+- Added bounded artifact recovery for providers that repeatedly call `write_file` with `path` but no `content`: MagAgent now asks once for the raw artifact body with tools disabled, then writes it through the native file tool.
+- Rejected filename-only recovered artifacts so a failed HTML generation cannot create a file containing only `cheese.html` or `oranges.html`.
+- Reduced duplicate terminal noise when the loop guard stops a turn: the inline `stop` diagnostic stays short while the full verifier details are returned once.
+
 ## 0.32.4
 
 - Fixed file mutation verification so a later successful absolute-path write clears an earlier relative-path failure for the same file.

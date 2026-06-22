@@ -37,6 +37,7 @@ MAX_IDENTICAL_TOOL_CALLS_PER_TURN = 3
 MAX_TOOL_CALLS_PER_TURN = 40
 MAX_MODEL_ROUNDS_PER_TURN = 16
 MAX_FAILED_SAME_TOOL_PER_TURN = 2
+ARTIFACT_RECOVERY_MAX_TOKENS = 12000
 TOOL_USE_ENFORCEMENT_MODELS = ("gpt", "codex", "gemini", "gemma", "grok", "glm", "qwen", "deepseek")
 
 AGENT_STATIC_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
@@ -372,6 +373,15 @@ class AgentSession:
                             failed_tool_counts,
                         )
                         if stop_message:
+                            recovered = await self._maybe_recover_missing_write_file_content(
+                                messages,
+                                tool_args,
+                                result,
+                                failed_file_mutations,
+                            )
+                            if recovered:
+                                messages.append({"role": "assistant", "content": recovered})
+                                return recovered, messages, total_tool_calls
                             content = self._finalize_turn_response(stop_message, failed_file_mutations)
                             messages.append({"role": "assistant", "content": content})
                             return content, messages, total_tool_calls
@@ -481,6 +491,15 @@ class AgentSession:
                     failed_tool_counts,
                 )
                 if stop_message:
+                    recovered = await self._maybe_recover_missing_write_file_content(
+                        messages,
+                        tool_args,
+                        result,
+                        failed_file_mutations,
+                    )
+                    if recovered:
+                        messages.append({"role": "assistant", "content": recovered})
+                        return recovered, messages, total_tool_calls
                     content = self._finalize_turn_response(stop_message, failed_file_mutations)
                     messages.append({"role": "assistant", "content": content})
                     return content, messages, total_tool_calls
@@ -637,11 +656,28 @@ class AgentSession:
                                 failed_tool_counts,
                             )
                             if stop_message:
+                                recovered = await self._maybe_recover_missing_write_file_content(
+                                    messages,
+                                    tool_args,
+                                    result,
+                                    failed_file_mutations,
+                                )
+                                if recovered:
+                                    messages.append({"role": "assistant", "content": recovered})
+                                    self.conversation.append({"role": "assistant", "content": recovered})
+                                    self.logger.log_assistant_turn(
+                                        self.turn_count,
+                                        recovered,
+                                        total_tool_calls,
+                                    )
+                                    yield recovered
+                                    self._maybe_compact_conversation()
+                                    return
                                 full_response = self._finalize_turn_response(
                                     stop_message,
                                     failed_file_mutations,
                                 )
-                                console.print(f"[yellow]  stop {full_response}[/yellow]")
+                                console.print(f"[yellow]  stop {self._stop_console_summary(stop_message)}[/yellow]")
                                 messages.append({"role": "assistant", "content": full_response})
                                 self.conversation.append({"role": "assistant", "content": full_response})
                                 self.logger.log_assistant_turn(
@@ -787,11 +823,28 @@ class AgentSession:
                         failed_tool_counts,
                     )
                     if stop_message:
+                        recovered = await self._maybe_recover_missing_write_file_content(
+                            messages,
+                            tool_args,
+                            result,
+                            failed_file_mutations,
+                        )
+                        if recovered:
+                            messages.append({"role": "assistant", "content": recovered})
+                            self.conversation.append({"role": "assistant", "content": recovered})
+                            self.logger.log_assistant_turn(
+                                self.turn_count,
+                                recovered,
+                                total_tool_calls,
+                            )
+                            yield recovered
+                            self._maybe_compact_conversation()
+                            return
                         full_response = self._finalize_turn_response(
                             stop_message,
                             failed_file_mutations,
                         )
-                        console.print(f"[yellow]  stop {full_response}[/yellow]")
+                        console.print(f"[yellow]  stop {self._stop_console_summary(stop_message)}[/yellow]")
                         messages.append({"role": "assistant", "content": full_response})
                         self.conversation.append({"role": "assistant", "content": full_response})
                         self.logger.log_assistant_turn(
@@ -1026,6 +1079,86 @@ class AgentSession:
         if response.strip():
             return response.rstrip() + "\n\n" + footer
         return footer
+
+    def _stop_console_summary(self, response: str) -> str:
+        """Keep inline stop diagnostics short; the full response is yielded once."""
+        return response.split("\n", 1)[0][:220]
+
+    async def _maybe_recover_missing_write_file_content(
+        self,
+        messages: list[dict[str, Any]],
+        tool_args: dict[str, Any],
+        result: dict[str, Any],
+        failed_file_mutations: dict[str, dict[str, str]],
+    ) -> str:
+        if not _is_missing_write_file_content("write_file", result):
+            return ""
+        path = str(tool_args.get("path") or tool_args.get("file_path") or result.get("path") or "").strip()
+        if not path:
+            return ""
+        try:
+            import litellm
+
+            recovery_messages = _sanitize_messages(messages) + [
+                {
+                    "role": "system",
+                    "content": (
+                        "Artifact recovery mode: the previous write_file call omitted required content. "
+                        f"Return ONLY the complete final file body for `{path}` as plain text. "
+                        "Do not call tools. Do not include explanations, summaries, markdown fences, or the filename."
+                    ),
+                }
+            ]
+            started = time.monotonic()
+            response = await litellm.acompletion(
+                messages=recovery_messages,
+                temperature=0.2,
+                max_tokens=int(
+                    getattr(
+                        self.config,
+                        "artifact_recovery_max_tokens",
+                        ARTIFACT_RECOVERY_MAX_TOKENS,
+                    )
+                ),
+                **self._provider_request_kwargs(),
+            )
+            self._log_timing(
+                "artifact_recovery.llm_call",
+                started,
+                metadata={"path": path, "messages": len(recovery_messages)},
+            )
+            content = _clean_recovered_artifact_content(
+                str(getattr(response.choices[0].message, "content", "") or ""),
+                path,
+            )
+            if not content:
+                return ""
+            tool_started = time.monotonic()
+            write_result = await self._dispatch_tool_call("write_file", {"path": path, "content": content})
+            self._log_timing(
+                "artifact_recovery.write_file",
+                tool_started,
+                metadata=_tool_timing_metadata("write_file", {"path": path}, write_result),
+            )
+            self._record_file_mutation_result(
+                failed_file_mutations,
+                "write_file",
+                {"path": path, "content": content},
+                write_result,
+            )
+            if not write_result.get("ok", True):
+                return ""
+            bytes_written = write_result.get("bytes")
+            suffix = f" ({bytes_written} bytes)" if bytes_written is not None else ""
+            return f"Recovered the artifact write and created `{write_result.get('path', path)}`{suffix}."
+        except Exception as exc:
+            self.logger.log_timing(
+                "artifact_recovery_failed",
+                0,
+                turn=self.turn_count,
+                metadata={"path": path, "error": str(exc)[:300]},
+            )
+            return ""
 
     def _log_timing(
         self,
@@ -1394,6 +1527,26 @@ def _tool_failure_steer(
         + "Inspect the error and change strategy or arguments before retrying. Do not repeat the "
         "same failing call unchanged."
     )
+
+
+def _is_missing_write_file_content(tool_name: str, result: dict[str, Any]) -> bool:
+    if tool_name != "write_file" or result.get("ok", True):
+        return False
+    return "missing required argument 'content'" in str(result.get("error") or "").lower()
+
+
+def _clean_recovered_artifact_content(content: str, path: str) -> str:
+    text = (content or "").strip()
+    if not text:
+        return ""
+    fence = re.match(r"^```(?:[a-zA-Z0-9_+.-]+)?\s*\n(.*?)\n```\s*$", text, re.DOTALL)
+    if fence:
+        text = fence.group(1).strip()
+    if text.strip() == Path(path).name:
+        return ""
+    if Path(path).suffix.lower() in {".html", ".htm"} and "<html" not in text.lower():
+        return ""
+    return text
 
 
 def _format_duration(duration_ms: float) -> str:

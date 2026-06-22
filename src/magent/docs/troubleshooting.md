@@ -64,11 +64,13 @@ Common issues:
   indefinitely.
 - A generated file contains only its own filename, such as `cheese.html`:
   update MagAgent. `write_file` rejects obvious placeholder payloads before
-  writing to disk and tells the model to retry with the complete file contents.
+  writing to disk, and artifact recovery rejects filename-only output before it
+  can overwrite the target.
 - A model repeatedly calls `write_file` with only `path` and no `content`:
   update MagAgent. Tool-sensitive model families receive stronger tool-use
   guidance, failed tools add targeted corrective steering to the next model
-  round, and repeated same-tool failures halt quickly with the latest error.
+  round, and repeated same-tool failures trigger one bounded no-tools artifact
+  recovery attempt before halting with the latest error.
 - The final answer says a file was written but the file is missing or unchanged:
   update MagAgent. The file mutation verifier appends unresolved failed
   `write_file`/`edit_file`/`delete_file` attempts to the final response.

@@ -89,6 +89,24 @@ class FakeMissingThenSuccessTools(FakeTools):
         }
 
 
+class FakeMissingUntilContentTools(FakeTools):
+    async def dispatch(self, name, args):
+        self.calls.append((name, args))
+        if "content" not in args:
+            return {
+                "ok": False,
+                "error": "Missing required argument 'content' for tool write_file",
+                "tool": name,
+                "args": args,
+                "path": args.get("path", ""),
+            }
+        return {
+            "ok": True,
+            "path": "/repo/oranges.html",
+            "bytes": len(str(args.get("content", "")).encode()),
+        }
+
+
 class FakeMCP:
     def get_tool_definitions(self):
         return []
@@ -163,6 +181,21 @@ def tool_call_message_with_content() -> SimpleNamespace:
         model_dump=lambda: {
             "role": "assistant",
             "tool_calls": [{"id": "call_2"}],
+        },
+    )
+
+
+def orange_tool_call_message() -> SimpleNamespace:
+    tool_call = SimpleNamespace(
+        id="call_orange",
+        function=SimpleNamespace(name="write_file", arguments='{"path": "oranges.html"}'),
+    )
+    return SimpleNamespace(
+        content="",
+        tool_calls=[tool_call],
+        model_dump=lambda: {
+            "role": "assistant",
+            "tool_calls": [{"id": "call_orange"}],
         },
     )
 
@@ -355,6 +388,48 @@ async def test_file_verifier_clears_relative_failure_after_absolute_success(monk
     assert tool_count == 2
     assert text == "done"
     assert "File write verification" not in text
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_recovers_missing_write_content_with_no_tools_artifact(monkeypatch) -> None:
+    calls = []
+    html = "<!doctype html><html><body><h1>Oranges</h1></body></html>"
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
+        if len(calls) <= 2:
+            return SimpleNamespace(choices=[SimpleNamespace(message=orange_tool_call_message())])
+        assert "tools" not in kwargs
+        return SimpleNamespace(choices=[SimpleNamespace(message=final_message_with_content(html))])
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+    session.cwd = "/repo"
+    session.tools = FakeMissingUntilContentTools()
+
+    text, _messages, tool_count = await session._run_tool_loop(
+        [{"role": "user", "content": "write oranges page"}],
+        "write oranges page",
+    )
+
+    assert tool_count == 2
+    assert "Recovered the artifact write" in text
+    assert "File write verification" not in text
+    assert session.tools.calls[-1] == (
+        "write_file",
+        {"path": "oranges.html", "content": html},
+    )
+
+
+def test_recovered_artifact_content_rejects_filename_placeholder() -> None:
+    from magent.agent import _clean_recovered_artifact_content
+
+    assert _clean_recovered_artifact_content("oranges.html", "oranges.html") == ""
+    assert _clean_recovered_artifact_content("```html\n<html>ok</html>\n```", "oranges.html") == "<html>ok</html>"
 
 
 def test_deepseek_prompt_gets_tool_use_enforcement() -> None:
