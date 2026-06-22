@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.1
+
+- Fixed OpenCode Go / DeepSeek-style DSML pseudo tool calls being printed as assistant text instead of executed as real MagAgent tool calls.
+- Added retry handling for truncated DSML tool markup so interactive sessions do not dump partial generated files into the terminal.
+- Added regression coverage for streamed and non-streamed pseudo `write_file` tool calls.
+
 ## 0.32.0
 
 - Added `magent goal` and `/goal` for measurable implement/verify/review goal loops with durable plan records and optional daemon queueing.

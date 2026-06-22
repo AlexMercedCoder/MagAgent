@@ -30,10 +30,14 @@ class FakeLogger:
 
 
 class FakeTools:
+    def __init__(self):
+        self.calls = []
+
     def get_tool_definitions(self):
         return [{"function": {"name": "write_file"}}]
 
     async def dispatch(self, name, args):
+        self.calls.append((name, args))
         return {"ok": True, "path": "/repo/app.py", "content": "done"}
 
 
@@ -134,6 +138,23 @@ def final_message_with_content(text: str) -> SimpleNamespace:
     )
 
 
+def dsml_write_file_message() -> SimpleNamespace:
+    text = (
+        'Before tool.\n<｜DSML｜tool_calls>\n<｜DSML｜invoke name="write_file">\n'
+        '<｜DSML｜parameter name="path" string="true">history-of-cheese.html</｜DSML｜parameter>\n'
+        '<｜DSML｜parameter name="content" string="true">&lt;!DOCTYPE html&gt;\n'
+        "<html><body><h1>Cheese</h1></body></html></｜DSML｜parameter>"
+    )
+    return final_message_with_content(text)
+
+
+def truncated_dsml_message() -> SimpleNamespace:
+    return final_message_with_content(
+        'Before tool.\n<｜DSML｜tool_calls>\n<｜DSML｜invoke name="write_file">\n'
+        '<｜DSML｜parameter name="path" string="true">history-of-cheese.html'
+    )
+
+
 def empty_final_message() -> SimpleNamespace:
     return SimpleNamespace(
         content="",
@@ -196,6 +217,66 @@ async def test_run_tool_loop_summarizes_successful_tools_when_provider_is_silent
     assert tool_count == 1
     assert text.startswith("Done.")
     assert "/repo/app.py" in text
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_executes_dsml_pseudo_tool_markup(monkeypatch) -> None:
+    responses = [
+        SimpleNamespace(choices=[SimpleNamespace(message=dsml_write_file_message())]),
+        SimpleNamespace(choices=[SimpleNamespace(message=final_message())]),
+    ]
+
+    async def fake_acompletion(**kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+
+    text, messages, tool_count = await session._run_tool_loop(
+        [{"role": "user", "content": "write cheese page"}],
+        "write cheese page",
+    )
+
+    assert text == "finished"
+    assert tool_count == 1
+    assert session.tools.calls[0][0] == "write_file"
+    assert session.tools.calls[0][1]["path"] == "history-of-cheese.html"
+    assert "<!DOCTYPE html>" in session.tools.calls[0][1]["content"]
+    assert session.scratchpad["files_touched"] == ["/repo/app.py"]
+    assert not any("<｜DSML｜tool_calls>" in str(message.get("content", "")) for message in messages)
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_retries_truncated_dsml_without_dumping_content(monkeypatch) -> None:
+    responses = [
+        SimpleNamespace(choices=[SimpleNamespace(message=truncated_dsml_message())]),
+        SimpleNamespace(choices=[SimpleNamespace(message=final_message())]),
+    ]
+
+    async def fake_acompletion(**kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+
+    text, messages, tool_count = await session._run_tool_loop(
+        [{"role": "user", "content": "write cheese page"}],
+        "write cheese page",
+    )
+
+    assert text == "finished"
+    assert tool_count == 0
+    assert session.tools.calls == []
+    assert any("incomplete DSML tool markup" in str(message.get("content", "")) for message in messages)
+    assert not any("history-of-cheese.html" in str(message.get("content", "")) for message in messages if message.get("role") == "assistant")
 
 
 @pytest.mark.asyncio
@@ -314,6 +395,45 @@ async def test_stream_chat_does_not_make_second_finalizing_model_call(monkeypatc
 
     assert chunks == ["final answer"]
     assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_chat_executes_dsml_pseudo_tool_markup(monkeypatch) -> None:
+    responses = [
+        SimpleNamespace(choices=[SimpleNamespace(message=dsml_write_file_message())]),
+        SimpleNamespace(choices=[SimpleNamespace(message=final_message_with_content("wrote file"))]),
+    ]
+
+    async def fake_acompletion(**kwargs):
+        return responses.pop(0)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+    session.username = "user"
+    session.cwd = "/repo"
+    session.project_slug = "repo"
+    session.session_id = "session"
+    session.turn_count = 0
+    session.conversation = []
+    session.memory = SimpleNamespace(available=False)
+    session.repo_map = SimpleNamespace(relevant_slice=lambda *_args: "")
+    session.skill_registry = SimpleNamespace(build_skill_context=lambda *_args, **_kwargs: "")
+    session.compacted_summary = ""
+    session.config.write_every_n_turns = 999
+    session.config.keep_recent_turns = 6
+    session.config.compact_every_n_turns = 10
+    session.config.max_history_tokens = 6000
+
+    chunks = [chunk async for chunk in session.stream_chat("write cheese page")]
+
+    assert chunks == ["wrote file"]
+    assert session.tools.calls[0][0] == "write_file"
+    assert session.tools.calls[0][1]["path"] == "history-of-cheese.html"
+    assert "<｜DSML｜tool_calls>" not in "".join(chunks)
 
 
 @pytest.mark.asyncio

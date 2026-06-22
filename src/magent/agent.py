@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import json
+import re
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime
@@ -237,6 +239,7 @@ class AgentSession:
         # Merge built-in tools + MCP tools
         tool_defs = self._tool_definitions(user_message)
         total_tool_calls = 0
+        pseudo_retry_count = 0
 
         while True:
             try:
@@ -261,6 +264,59 @@ class AgentSession:
 
             if not message.tool_calls:
                 content = message.content or ""
+                pseudo_calls = _extract_pseudo_tool_calls(content)
+                if pseudo_calls:
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": _strip_pseudo_tool_markup(content) or "Using tools.",
+                        }
+                    )
+                    total_tool_calls += len(pseudo_calls)
+                    for tool_name, tool_args in pseudo_calls:
+                        result = await self._dispatch_tool_call(tool_name, tool_args)
+                        messages.append(
+                            {
+                                "role": "system",
+                                "content": (
+                                    f"Parsed and executed assistant-emitted tool markup for `{tool_name}`. "
+                                    f"Tool result:\n{self._compress_tool_result(tool_name, result)}"
+                                ),
+                            }
+                        )
+                        if self._permission_denied_by_user(result):
+                            content = self._permission_denial_summary(tool_name, tool_args)
+                            messages.append({"role": "assistant", "content": content})
+                            return content, messages, total_tool_calls
+                        if self.config.prune_stale_tool_results:
+                            self._prune_stale_tool_results(messages, tool_name, result)
+                    continue
+                if _contains_pseudo_tool_markup(content):
+                    pseudo_retry_count += 1
+                    if pseudo_retry_count > 2:
+                        content = (
+                            "I tried to use a tool, but the provider returned truncated tool markup. "
+                            "Please retry the request; I will use native file tools instead of printing the file."
+                        )
+                        messages.append({"role": "assistant", "content": content})
+                        return content, messages, total_tool_calls
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": _strip_pseudo_tool_markup(content) or "Tool markup was incomplete.",
+                        }
+                    )
+                    messages.append(
+                        {
+                            "role": "system",
+                            "content": (
+                                "The previous assistant response contained incomplete DSML tool markup and was not executed. "
+                                "Retry by using the native tool call API, especially write_file for generated files. "
+                                "Do not print DSML or the full file content as normal assistant text."
+                            ),
+                        }
+                    )
+                    continue
                 if not content.strip() and total_tool_calls:
                     content = self._fallback_tool_summary()
                 messages.append({"role": "assistant", "content": content})
@@ -335,6 +391,7 @@ class AgentSession:
         # Merge built-in tools + MCP tools
         tool_defs = self._tool_definitions(user_message)
         total_tool_calls = 0
+        pseudo_retry_count = 0
 
         try:
             import litellm
@@ -360,6 +417,72 @@ class AgentSession:
                     # Got final text. Do not make a second "finalizing" model call:
                     # some OpenAI-compatible models emit pseudo tool-call markup when
                     # tools are removed, which can claim work happened without running it.
+                    content = msg.content or ""
+                    pseudo_calls = _extract_pseudo_tool_calls(content)
+                    if pseudo_calls:
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "content": _strip_pseudo_tool_markup(content) or "Using tools.",
+                            }
+                        )
+                        total_tool_calls += len(pseudo_calls)
+                        for tool_name, tool_args in pseudo_calls:
+                            result = await self._dispatch_tool_call(tool_name, tool_args)
+                            messages.append(
+                                {
+                                    "role": "system",
+                                    "content": (
+                                        f"Parsed and executed assistant-emitted tool markup for `{tool_name}`. "
+                                        f"Tool result:\n{self._compress_tool_result(tool_name, result)}"
+                                    ),
+                                }
+                            )
+                            if self._permission_denied_by_user(result):
+                                full_response = self._permission_denial_summary(tool_name, tool_args)
+                                messages.append({"role": "assistant", "content": full_response})
+                                self.conversation.append({"role": "assistant", "content": full_response})
+                                self.logger.log_assistant_turn(
+                                    self.turn_count,
+                                    full_response,
+                                    total_tool_calls,
+                                )
+                                yield full_response
+                                self._maybe_compact_conversation()
+                                return
+                            if self.config.prune_stale_tool_results:
+                                self._prune_stale_tool_results(messages, tool_name, result)
+                        continue
+                    if _contains_pseudo_tool_markup(content):
+                        pseudo_retry_count += 1
+                        if pseudo_retry_count > 2:
+                            full_response = (
+                                "I tried to use a tool, but the provider returned truncated tool markup. "
+                                "Please retry the request; I will use native file tools instead of printing the file."
+                            )
+                            messages.append({"role": "assistant", "content": full_response})
+                            self.conversation.append({"role": "assistant", "content": full_response})
+                            self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
+                            yield full_response
+                            self._maybe_compact_conversation()
+                            return
+                        messages.append(
+                            {
+                                "role": "assistant",
+                                "content": _strip_pseudo_tool_markup(content) or "Tool markup was incomplete.",
+                            }
+                        )
+                        messages.append(
+                            {
+                                "role": "system",
+                                "content": (
+                                    "The previous assistant response contained incomplete DSML tool markup and was not executed. "
+                                    "Retry by using the native tool call API, especially write_file for generated files. "
+                                    "Do not print DSML or the full file content as normal assistant text."
+                                ),
+                            }
+                        )
+                        continue
                     if not (msg.content or "").strip() and total_tool_calls:
                         fallback = self._fallback_tool_summary()
                         messages.append({"role": "assistant", "content": fallback})
@@ -370,7 +493,7 @@ class AgentSession:
                             await self._maybe_write_memories()
                         self._maybe_compact_conversation()
                         return
-                    full_response = msg.content or ""
+                    full_response = content
                     messages.append(_sanitize_message(msg.model_dump()))
                     self.conversation.append({"role": "assistant", "content": full_response})
                     self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
@@ -484,6 +607,31 @@ class AgentSession:
             f"Stopped because you denied permission for `{tool_name}`. "
             "I will not retry equivalent actions unless you ask me to."
         )
+
+    async def _dispatch_tool_call(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
+        """Dispatch a tool call and record hooks, scratchpad, and audit logs."""
+        run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
+        if self.mcp.is_mcp_tool(tool_name):
+            result = await self.mcp.dispatch(tool_name, tool_args)
+        else:
+            result = await self.tools.dispatch(tool_name, tool_args)
+        run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
+        if tool_name in {"write_file", "edit_file", "delete_file"}:
+            run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
+        if tool_name == "run_shell" and not result.get("ok", True):
+            run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
+        self._observe_tool_result(tool_name, tool_args, result)
+
+        from magent.permissions import RiskTier, classify_shell_command
+
+        tier = RiskTier.AUTO
+        if tool_name == "run_shell":
+            tier = classify_shell_command(
+                tool_args.get("command", ""),
+                self.config.allowed_shell_patterns,
+            )
+        self.logger.log_tool_call(tool_name, tool_args, result.get("ok", True), int(tier))
+        return result
 
     def _maybe_compact_conversation(self) -> None:
         keep = self.config.keep_recent_turns
@@ -688,6 +836,47 @@ def _sanitize_message(value: Any) -> Any:
     if isinstance(value, list):
         return [_sanitize_message(item) for item in value]
     return value
+
+
+_DSML = r"[|｜]+DSML[|｜]+"
+_DSML_INVOKE_RE = re.compile(
+    rf"<{_DSML}invoke\s+name=[\"']([^\"']+)[\"']\s*>(.*?)(?=<{_DSML}invoke\s+name=|</?{_DSML}tool_calls|$)",
+    re.DOTALL,
+)
+_DSML_PARAMETER_RE = re.compile(
+    rf"<{_DSML}parameter\s+name=[\"']([^\"']+)[\"'][^>]*>(.*?)</{_DSML}parameter>",
+    re.DOTALL,
+)
+_DSML_START_RE = re.compile(rf"<{_DSML}(tool_calls|invoke|parameter)\b", re.DOTALL)
+
+
+def _contains_pseudo_tool_markup(content: str) -> bool:
+    """Return true when a provider printed DSML tool markup as text."""
+    return bool(_DSML_START_RE.search(content or ""))
+
+
+def _extract_pseudo_tool_calls(content: str) -> list[tuple[str, dict[str, Any]]]:
+    """Parse DSML-style pseudo tool calls emitted as text by some providers."""
+    calls: list[tuple[str, dict[str, Any]]] = []
+    for match in _DSML_INVOKE_RE.finditer(content or ""):
+        tool_name = match.group(1).strip()
+        body = match.group(2)
+        args: dict[str, Any] = {}
+        for param in _DSML_PARAMETER_RE.finditer(body):
+            key = param.group(1).strip()
+            value = html.unescape(param.group(2))
+            args[key] = value
+        if tool_name and args:
+            calls.append((tool_name, args))
+    return calls
+
+
+def _strip_pseudo_tool_markup(content: str) -> str:
+    """Keep any explanatory text before pseudo tool markup and discard the markup."""
+    match = _DSML_START_RE.search(content or "")
+    if not match:
+        return content
+    return content[: match.start()].strip()
 
 
 def reflow(text: str) -> str:

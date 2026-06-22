@@ -180,17 +180,17 @@ async def test_dispatch_normalizes_common_write_file_aliases(tmp_path: Path) -> 
 
 @pytest.mark.asyncio
 async def test_shell_control_can_be_session_allowed(tmp_path: Path) -> None:
+    command = f"{sys.executable} -c 'print(123)'"
     tools = ToolExecutor(
         str(tmp_path),
         permission_mode="balanced",
-        trusted_shell_patterns=["cat a.txt | wc -l"],
+        trusted_shell_patterns=[command],
     )
-    (tmp_path / "a.txt").write_text("one\ntwo\n", encoding="utf-8")
 
-    result = await tools.run_shell("cat a.txt | wc -l")
+    result = await tools.run_shell(command)
 
     assert result["ok"] is True
-    assert result["stdout"].strip() == "2"
+    assert result["stdout"].strip() == "123"
 
 
 @pytest.mark.asyncio

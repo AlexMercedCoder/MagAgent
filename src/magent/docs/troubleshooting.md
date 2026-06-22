@@ -50,6 +50,10 @@ Common issues:
   update MagAgent. Shell-based file writes are refused with guidance to use
   `write_file`/`edit_file`, so the model can correct course without another
   permission prompt.
+- The terminal prints `<｜DSML｜tool_calls>` and a generated file body instead of
+  writing the file: update MagAgent. Some OpenAI-compatible providers emit
+  pseudo tool markup as assistant text; MagAgent parses complete pseudo calls
+  and retries truncated markup instead of dumping partial files.
 - A tool looks hung: interactive sessions print `Still running <tool>...` after
   a few seconds and then periodically until the tool returns.
 - `pip install --upgrade mag-agent` says every version requires a different
