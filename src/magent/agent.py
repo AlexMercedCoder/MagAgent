@@ -34,6 +34,9 @@ console = Console()
 STRIP_MESSAGE_KEYS = {"provider_specific_fields"}
 MAX_IDENTICAL_TOOL_CALLS_PER_TURN = 3
 MAX_TOOL_CALLS_PER_TURN = 40
+MAX_MODEL_ROUNDS_PER_TURN = 16
+MAX_FAILED_SAME_TOOL_PER_TURN = 2
+TOOL_USE_ENFORCEMENT_MODELS = ("gpt", "codex", "gemini", "gemma", "grok", "glm", "qwen", "deepseek")
 
 AGENT_STATIC_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
 
@@ -55,6 +58,21 @@ Key behaviors:
 12. On macOS, prefer python3/pip3 or python3 -m pip; avoid bare python/pip commands.
 13. During research, prefer web_fetch/http_request over repeated curl shell probes. If shell inspection is necessary, use one broad read-only fetch pipeline instead of many tiny variations.
 14. Never use run_shell, heredocs, redirection, tee, or Python snippets to create or edit files. For any generated file, call write_file with the full final content; for changes, call edit_file.
+"""
+
+TOOL_USE_ENFORCEMENT_PROMPT = """# Tool-Use Enforcement
+When tools are available, use them to do the work instead of describing what you would do. Every response should either contain tool calls that make progress or deliver a final result. Do not end a turn with a promise to act later.
+
+For `write_file`, always provide both required arguments: `path` and complete `content`. Never call `write_file` with only a filename/path. For generated HTML, Markdown, documents, scripts, or reports, put the full intended file body in `content` in the tool call.
+
+If a tool fails, read the exact error before retrying. Change the arguments or strategy; do not repeat the same failing tool call unchanged.
+"""
+
+OPEN_MODEL_EXECUTION_PROMPT = """# Execution Discipline For Tool-Sensitive Models
+- Keep working until the requested artifact is actually written and verified.
+- Before finalizing, check whether requested files were successfully created or edited.
+- If a file write fails because an argument is missing, retry once with the missing argument supplied. If you cannot provide the full content, explain the blocker instead of repeating the failing call.
+- During research-to-artifact tasks, finish research first, then create the artifact with one complete `write_file` call, then verify the file exists.
 """
 
 AGENT_CONTEXT_PROMPT = """The following context changes by project and turn. Use it as relevant, but do not repeat it unless needed.
@@ -166,7 +184,25 @@ class AgentSession:
         return self._build_stable_prompt() + "\n\n" + self._build_context_prompt(user_message)
 
     def _build_stable_prompt(self) -> str:
-        return AGENT_STATIC_PROMPT
+        parts = [AGENT_STATIC_PROMPT]
+        if self._should_inject_tool_use_enforcement():
+            parts.append(TOOL_USE_ENFORCEMENT_PROMPT)
+            parts.append(OPEN_MODEL_EXECUTION_PROMPT)
+        return "\n\n".join(parts)
+
+    def _should_inject_tool_use_enforcement(self) -> bool:
+        value = getattr(self.config, "tool_use_enforcement", "auto")
+        if isinstance(value, bool):
+            return value
+        model_text = f"{getattr(self.provider, 'provider_id', '')} {getattr(self.provider, 'model', '')}".lower()
+        if isinstance(value, list):
+            return any(str(item).lower() in model_text for item in value)
+        lowered = str(value).strip().lower()
+        if lowered in {"true", "always", "yes", "on"}:
+            return True
+        if lowered in {"false", "never", "no", "off"}:
+            return False
+        return any(token in model_text for token in TOOL_USE_ENFORCEMENT_MODELS)
 
     def _build_context_prompt(self, user_message: str) -> str:
         memory_context = ""
@@ -245,6 +281,9 @@ class AgentSession:
         total_tool_calls = 0
         pseudo_retry_count = 0
         repeated_tool_calls: dict[str, int] = {}
+        failed_tool_counts: dict[str, int] = {}
+        failed_file_mutations: dict[str, dict[str, str]] = {}
+        llm_round = 0
 
         while True:
             try:
@@ -252,6 +291,14 @@ class AgentSession:
 
                 litellm.suppress_debug_info = True
 
+                llm_round += 1
+                if llm_round > self._max_model_rounds_per_turn():
+                    content = self._finalize_turn_response(
+                        f"Stopped after {self._max_model_rounds_per_turn()} model rounds to avoid an agent loop.",
+                        failed_file_mutations,
+                    )
+                    messages.append({"role": "assistant", "content": content})
+                    return content, messages, total_tool_calls
                 llm_started = time.monotonic()
                 response = await litellm.acompletion(
                     messages=_sanitize_messages(messages),
@@ -301,6 +348,7 @@ class AgentSession:
                             tool_started,
                             metadata=_tool_timing_metadata(tool_name, tool_args, result),
                         )
+                        self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
                         messages.append(
                             {
                                 "role": "system",
@@ -312,6 +360,17 @@ class AgentSession:
                         )
                         if self._permission_denied_by_user(result):
                             content = self._permission_denial_summary(tool_name, tool_args)
+                            messages.append({"role": "assistant", "content": content})
+                            return content, messages, total_tool_calls
+                        stop_message = self._tool_failure_steer_or_stop(
+                            messages,
+                            tool_name,
+                            tool_args,
+                            result,
+                            failed_tool_counts,
+                        )
+                        if stop_message:
+                            content = self._finalize_turn_response(stop_message, failed_file_mutations)
                             messages.append({"role": "assistant", "content": content})
                             return content, messages, total_tool_calls
                         if self.config.prune_stale_tool_results:
@@ -345,6 +404,7 @@ class AgentSession:
                     continue
                 if not content.strip() and total_tool_calls:
                     content = self._fallback_tool_summary()
+                content = self._finalize_turn_response(content, failed_file_mutations)
                 messages.append({"role": "assistant", "content": content})
                 return content, messages, total_tool_calls
 
@@ -386,6 +446,7 @@ class AgentSession:
                     tool_started,
                     metadata=_tool_timing_metadata(tool_name, tool_args, result),
                 )
+                self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
 
                 # Log the tool call
                 from magent.permissions import RiskTier, classify_shell_command
@@ -408,6 +469,17 @@ class AgentSession:
                 )
                 if self._permission_denied_by_user(result):
                     content = self._permission_denial_summary(tool_name, tool_args)
+                    messages.append({"role": "assistant", "content": content})
+                    return content, messages, total_tool_calls
+                stop_message = self._tool_failure_steer_or_stop(
+                    messages,
+                    tool_name,
+                    tool_args,
+                    result,
+                    failed_tool_counts,
+                )
+                if stop_message:
+                    content = self._finalize_turn_response(stop_message, failed_file_mutations)
                     messages.append({"role": "assistant", "content": content})
                     return content, messages, total_tool_calls
                 if self.config.prune_stale_tool_results:
@@ -434,6 +506,8 @@ class AgentSession:
         total_tool_calls = 0
         pseudo_retry_count = 0
         repeated_tool_calls: dict[str, int] = {}
+        failed_tool_counts: dict[str, int] = {}
+        failed_file_mutations: dict[str, dict[str, str]] = {}
 
         try:
             import litellm
@@ -446,6 +520,18 @@ class AgentSession:
             llm_round = 0
             while True:
                 llm_round += 1
+                if llm_round > self._max_model_rounds_per_turn():
+                    full_response = self._finalize_turn_response(
+                        f"Stopped after {self._max_model_rounds_per_turn()} model rounds to avoid an agent loop.",
+                        failed_file_mutations,
+                    )
+                    console.print(f"[yellow]  stop {full_response}[/yellow]")
+                    messages.append({"role": "assistant", "content": full_response})
+                    self.conversation.append({"role": "assistant", "content": full_response})
+                    self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
+                    yield full_response
+                    self._maybe_compact_conversation()
+                    return
                 llm_started = time.monotonic()
                 response = await litellm.acompletion(
                     messages=_sanitize_messages(messages),
@@ -514,6 +600,7 @@ class AgentSession:
                                 tool_started,
                                 metadata=_tool_timing_metadata(tool_name, tool_args, result),
                             )
+                            self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
                             if self.tools.show_tool_calls:
                                 console.print(
                                     f"[dim]    -> {tool_name} finished in {_format_duration(tool_elapsed)} "
@@ -530,6 +617,29 @@ class AgentSession:
                             )
                             if self._permission_denied_by_user(result):
                                 full_response = self._permission_denial_summary(tool_name, tool_args)
+                                messages.append({"role": "assistant", "content": full_response})
+                                self.conversation.append({"role": "assistant", "content": full_response})
+                                self.logger.log_assistant_turn(
+                                    self.turn_count,
+                                    full_response,
+                                    total_tool_calls,
+                                )
+                                yield full_response
+                                self._maybe_compact_conversation()
+                                return
+                            stop_message = self._tool_failure_steer_or_stop(
+                                messages,
+                                tool_name,
+                                tool_args,
+                                result,
+                                failed_tool_counts,
+                            )
+                            if stop_message:
+                                full_response = self._finalize_turn_response(
+                                    stop_message,
+                                    failed_file_mutations,
+                                )
+                                console.print(f"[yellow]  stop {full_response}[/yellow]")
                                 messages.append({"role": "assistant", "content": full_response})
                                 self.conversation.append({"role": "assistant", "content": full_response})
                                 self.logger.log_assistant_turn(
@@ -574,7 +684,10 @@ class AgentSession:
                         )
                         continue
                     if not (msg.content or "").strip() and total_tool_calls:
-                        fallback = self._fallback_tool_summary()
+                        fallback = self._finalize_turn_response(
+                            self._fallback_tool_summary(),
+                            failed_file_mutations,
+                        )
                         messages.append({"role": "assistant", "content": fallback})
                         self.conversation.append({"role": "assistant", "content": fallback})
                         self.logger.log_assistant_turn(self.turn_count, fallback, total_tool_calls)
@@ -583,7 +696,7 @@ class AgentSession:
                             await self._maybe_write_memories()
                         self._maybe_compact_conversation()
                         return
-                    full_response = content
+                    full_response = self._finalize_turn_response(content, failed_file_mutations)
                     messages.append(_sanitize_message(msg.model_dump()))
                     self.conversation.append({"role": "assistant", "content": full_response})
                     self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
@@ -638,6 +751,7 @@ class AgentSession:
                         tool_started,
                         metadata=_tool_timing_metadata(tool_name, tool_args, result),
                     )
+                    self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
                     if self.tools.show_tool_calls:
                         console.print(
                             f"[dim]    -> {tool_name} finished in {_format_duration(tool_elapsed)} "
@@ -653,6 +767,29 @@ class AgentSession:
                     )
                     if self._permission_denied_by_user(result):
                         full_response = self._permission_denial_summary(tool_name, tool_args)
+                        messages.append({"role": "assistant", "content": full_response})
+                        self.conversation.append({"role": "assistant", "content": full_response})
+                        self.logger.log_assistant_turn(
+                            self.turn_count,
+                            full_response,
+                            total_tool_calls,
+                        )
+                        yield full_response
+                        self._maybe_compact_conversation()
+                        return
+                    stop_message = self._tool_failure_steer_or_stop(
+                        messages,
+                        tool_name,
+                        tool_args,
+                        result,
+                        failed_tool_counts,
+                    )
+                    if stop_message:
+                        full_response = self._finalize_turn_response(
+                            stop_message,
+                            failed_file_mutations,
+                        )
+                        console.print(f"[yellow]  stop {full_response}[/yellow]")
                         messages.append({"role": "assistant", "content": full_response})
                         self.conversation.append({"role": "assistant", "content": full_response})
                         self.logger.log_assistant_turn(
@@ -727,6 +864,27 @@ class AgentSession:
             "I will not retry equivalent actions unless you ask me to."
         )
 
+    def _max_model_rounds_per_turn(self) -> int:
+        return int(getattr(self.config, "max_model_rounds_per_turn", MAX_MODEL_ROUNDS_PER_TURN))
+
+    def _max_tool_calls_per_turn(self) -> int:
+        return int(getattr(self.config, "max_tool_calls_per_turn", MAX_TOOL_CALLS_PER_TURN))
+
+    def _max_identical_tool_calls_per_turn(self) -> int:
+        return int(
+            getattr(
+                self.config,
+                "max_identical_tool_calls_per_turn",
+                MAX_IDENTICAL_TOOL_CALLS_PER_TURN,
+            )
+        )
+
+    def _max_failed_same_tool_per_turn(self) -> int:
+        return int(getattr(self.config, "max_failed_same_tool_per_turn", MAX_FAILED_SAME_TOOL_PER_TURN))
+
+    def _doom_loop_policy(self) -> str:
+        return str(getattr(self.config, "doom_loop_policy", "halt"))
+
     def _record_tool_call_or_stop(
         self,
         repeated_tool_calls: dict[str, int],
@@ -734,9 +892,10 @@ class AgentSession:
         tool_args: dict[str, Any],
         total_tool_calls: int,
     ) -> str:
-        if total_tool_calls > MAX_TOOL_CALLS_PER_TURN:
+        max_tool_calls = self._max_tool_calls_per_turn()
+        if total_tool_calls > max_tool_calls:
             message = (
-                f"Stopped after {MAX_TOOL_CALLS_PER_TURN} tool calls in this turn to avoid an agent loop. "
+                f"Stopped after {max_tool_calls} tool calls in this turn to avoid an agent loop. "
                 "Please retry with a narrower request or inspect the session log for timings."
             )
             self.logger.log_timing(
@@ -750,7 +909,7 @@ class AgentSession:
         key = _tool_call_fingerprint(tool_name, tool_args)
         repeated_tool_calls[key] = repeated_tool_calls.get(key, 0) + 1
         count = repeated_tool_calls[key]
-        if count <= MAX_IDENTICAL_TOOL_CALLS_PER_TURN:
+        if count <= self._max_identical_tool_calls_per_turn():
             return ""
 
         desc = _tool_call_description(tool_name, tool_args)
@@ -773,6 +932,90 @@ class AgentSession:
         )
         return message
 
+    def _record_file_mutation_result(
+        self,
+        failed_file_mutations: dict[str, dict[str, str]],
+        tool_name: str,
+        tool_args: dict[str, Any],
+        result: dict[str, Any],
+    ) -> None:
+        if tool_name not in {"write_file", "edit_file", "delete_file"}:
+            return
+        path = str(result.get("path") or tool_args.get("path") or tool_args.get("file_path") or "")
+        if not path:
+            return
+        if result.get("ok", True):
+            failed_file_mutations.pop(path, None)
+            return
+        failed_file_mutations.setdefault(
+            path,
+            {
+                "tool": tool_name,
+                "error": str(result.get("error") or "tool failed")[:500],
+            },
+        )
+
+    def _tool_failure_steer_or_stop(
+        self,
+        messages: list[dict[str, Any]],
+        tool_name: str,
+        tool_args: dict[str, Any],
+        result: dict[str, Any],
+        failed_tool_counts: dict[str, int],
+    ) -> str:
+        if result.get("ok", True):
+            failed_tool_counts.pop(tool_name, None)
+            return ""
+        if self._permission_denied_by_user(result):
+            return ""
+
+        failed_tool_counts[tool_name] = failed_tool_counts.get(tool_name, 0) + 1
+        count = failed_tool_counts[tool_name]
+        error = str(result.get("error") or "tool failed")
+
+        steer = _tool_failure_steer(tool_name, tool_args, error, count)
+        if steer:
+            messages.append({"role": "system", "content": steer})
+
+        if count >= self._max_failed_same_tool_per_turn() and self._doom_loop_policy() == "halt":
+            desc = _tool_call_description(tool_name, tool_args)
+            self.logger.log_timing(
+                "tool_loop_stopped",
+                0,
+                turn=self.turn_count,
+                metadata={
+                    "reason": "same_tool_failure",
+                    "tool": tool_name,
+                    "description": desc,
+                    "count": count,
+                    "error": error[:300],
+                },
+            )
+            return (
+                f"Stopped because `{tool_name}` failed {count} times this turn"
+                + (f" ({desc})" if desc else "")
+                + f". Latest error: {error}"
+            )
+        return ""
+
+    def _finalize_turn_response(
+        self,
+        response: str,
+        failed_file_mutations: dict[str, dict[str, str]],
+    ) -> str:
+        if not failed_file_mutations or not getattr(self.config, "file_mutation_verifier", True):
+            return response
+        lines = [
+            "File write verification:",
+            "One or more requested file changes failed and were not later fixed:",
+        ]
+        for path, item in list(failed_file_mutations.items())[:5]:
+            lines.append(f"- `{path}` via `{item.get('tool', 'file tool')}`: {item.get('error', 'failed')}")
+        footer = "\n".join(lines)
+        if response.strip():
+            return response.rstrip() + "\n\n" + footer
+        return footer
+
     def _log_timing(
         self,
         name: str,
@@ -786,7 +1029,8 @@ class AgentSession:
 
     def _tool_result_label(self, result: dict[str, Any]) -> str:
         if not result.get("ok", True):
-            return "failed"
+            error = str(result.get("error") or "failed")
+            return f"failed: {error[:90]}"
         if result.get("bytes") is not None:
             return f"{result['bytes']} bytes"
         if result.get("path"):
@@ -1104,6 +1348,39 @@ def _tool_timing_metadata(
     if result.get("error"):
         metadata["error"] = str(result["error"])[:300]
     return metadata
+
+
+def _tool_failure_steer(
+    tool_name: str,
+    tool_args: dict[str, Any],
+    error: str,
+    count: int,
+) -> str:
+    desc = _tool_call_description(tool_name, tool_args)
+    prefix = (
+        f"The previous `{tool_name}` call failed"
+        + (f" for `{desc}`" if desc else "")
+        + f" (failure {count}). Error: {error}\n"
+    )
+    lower = error.lower()
+    if tool_name == "write_file" and "missing required argument 'content'" in lower:
+        return (
+            prefix
+            + "Do not repeat `write_file` with only `path`. Retry only if you can provide both "
+            "`path` and the complete final `content` string. For an HTML page, `content` must "
+            "contain the full HTML document, not the filename or a placeholder."
+        )
+    if tool_name == "write_file" and "suspicious write_file payload" in lower:
+        return (
+            prefix
+            + "The file payload looked like a placeholder. Generate the complete intended file body "
+            "and call `write_file` once with that full content, or explain why you cannot."
+        )
+    return (
+        prefix
+        + "Inspect the error and change strategy or arguments before retrying. Do not repeat the "
+        "same failing call unchanged."
+    )
 
 
 def _format_duration(duration_ms: float) -> str:

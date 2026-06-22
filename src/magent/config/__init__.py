@@ -32,6 +32,13 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "version": "0.25.0",
         "selective_tools": True,
         "max_subagents": 3,
+        "max_model_rounds_per_turn": 16,
+        "max_tool_calls_per_turn": 40,
+        "max_identical_tool_calls_per_turn": 3,
+        "max_failed_same_tool_per_turn": 2,
+        "doom_loop_policy": "halt",
+        "tool_use_enforcement": "auto",
+        "file_mutation_verifier": True,
     },
     "defaults": {
         "provider": "ollama",
@@ -273,6 +280,35 @@ class Config:
                 self._global.get("agent", {}).get("max_subagents", 3),
             )
         )
+
+    @property
+    def max_model_rounds_per_turn(self) -> int:
+        return int(self._global.get("agent", {}).get("max_model_rounds_per_turn", 16))
+
+    @property
+    def max_tool_calls_per_turn(self) -> int:
+        return int(self._global.get("agent", {}).get("max_tool_calls_per_turn", 40))
+
+    @property
+    def max_identical_tool_calls_per_turn(self) -> int:
+        return int(self._global.get("agent", {}).get("max_identical_tool_calls_per_turn", 3))
+
+    @property
+    def max_failed_same_tool_per_turn(self) -> int:
+        return int(self._global.get("agent", {}).get("max_failed_same_tool_per_turn", 2))
+
+    @property
+    def doom_loop_policy(self) -> str:
+        policy = str(self._global.get("agent", {}).get("doom_loop_policy", "halt"))
+        return policy if policy in {"halt", "warn"} else "halt"
+
+    @property
+    def tool_use_enforcement(self) -> str | bool | list[str]:
+        return self._global.get("agent", {}).get("tool_use_enforcement", "auto")
+
+    @property
+    def file_mutation_verifier(self) -> bool:
+        return bool(self._global.get("agent", {}).get("file_mutation_verifier", True))
 
     @property
     def max_parallel_subagents(self) -> int:

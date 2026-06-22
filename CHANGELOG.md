@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.32.3
+
+- Added Hermes/OpenCode-inspired model-specific tool-use enforcement for tool-sensitive model families such as DeepSeek, Qwen, Gemini, GPT/Codex, Grok, and GLM.
+- Added configurable agent loop controls for max model rounds, max tool calls, repeated identical tool calls, same-tool failures, doom-loop policy, and file mutation verification.
+- Added targeted corrective steering for failed tool calls, including `write_file` calls missing the required `content` argument.
+- Added turn-end file mutation verification so unresolved failed writes are surfaced in the final response instead of being accidentally summarized as complete.
+- Improved failed tool timing labels so interactive output includes the failure reason inline.
+
 ## 0.32.2
 
 - Added interactive timing markers for model rounds and tool completions so slow research/file-writing turns are easier to diagnose from the terminal.

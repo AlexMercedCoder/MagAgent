@@ -59,6 +59,18 @@ class FakeDeniedTools(FakeTools):
         }
 
 
+class FakeMissingContentTools(FakeTools):
+    async def dispatch(self, name, args):
+        self.calls.append((name, args))
+        return {
+            "ok": False,
+            "error": "Missing required argument 'content' for tool write_file",
+            "tool": name,
+            "args": args,
+            "path": args.get("path", ""),
+        }
+
+
 class FakeMCP:
     def get_tool_definitions(self):
         return []
@@ -76,6 +88,13 @@ class FakeConfig:
     prompt_cache_retention = ""
     repo_map_budget_tokens = 1200
     skill_budget_tokens = 2000
+    max_model_rounds_per_turn = 16
+    max_tool_calls_per_turn = 40
+    max_identical_tool_calls_per_turn = 3
+    max_failed_same_tool_per_turn = 2
+    doom_loop_policy = "halt"
+    tool_use_enforcement = "auto"
+    file_mutation_verifier = True
 
 
 def make_session() -> AgentSession:
@@ -244,6 +263,41 @@ async def test_run_tool_loop_stops_repeated_identical_tool_calls(monkeypatch) ->
     assert "repeated the same request" in text
     assert tool_count == 4
     assert len(session.tools.calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_run_tool_loop_stops_repeated_missing_write_content(monkeypatch) -> None:
+    async def fake_acompletion(**kwargs):
+        return SimpleNamespace(choices=[SimpleNamespace(message=tool_call_message())])
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    session = make_session()
+    session.tools = FakeMissingContentTools()
+
+    text, messages, tool_count = await session._run_tool_loop(
+        [{"role": "user", "content": "write file"}],
+        "write file",
+    )
+
+    assert tool_count == 2
+    assert len(session.tools.calls) == 2
+    assert "Missing required argument 'content'" in text
+    assert "File write verification" in text
+    assert any("Do not repeat `write_file` with only `path`" in str(m.get("content", "")) for m in messages)
+
+
+def test_deepseek_prompt_gets_tool_use_enforcement() -> None:
+    session = make_session()
+    session.provider = SimpleNamespace(_base_kwargs={}, provider_id="opencode-go", model="deepseek-v4-flash")
+
+    prompt = session._build_stable_prompt()
+
+    assert "Tool-Use Enforcement" in prompt
+    assert "`path` and complete `content`" in prompt
 
 
 @pytest.mark.asyncio

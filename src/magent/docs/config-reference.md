@@ -12,6 +12,13 @@ Stored at `~/.config/magent/config.toml`.
 - `agent.version` default: `'0.25.0'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
+- `agent.max_model_rounds_per_turn` default: `16`
+- `agent.max_tool_calls_per_turn` default: `40`
+- `agent.max_identical_tool_calls_per_turn` default: `3`
+- `agent.max_failed_same_tool_per_turn` default: `2`
+- `agent.doom_loop_policy` default: `'halt'`
+- `agent.tool_use_enforcement` default: `'auto'`
+- `agent.file_mutation_verifier` default: `True`
 ### `defaults`
 
 - `defaults.provider` default: `'ollama'`
