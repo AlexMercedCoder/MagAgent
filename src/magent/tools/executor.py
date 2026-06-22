@@ -13,6 +13,7 @@ import asyncio
 import base64
 import difflib
 import fnmatch
+import html
 import importlib.util
 import io
 import json
@@ -220,6 +221,114 @@ def _split_paragraphs(text: str) -> list[str]:
     return [line.strip() for line in (text or "").splitlines() if line.strip()]
 
 
+def _normalize_visual_items(value: list[dict[str, Any]] | str | None) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return [{"type": "text", "text": value, "x": 24, "y": 42}]
+    else:
+        parsed = value
+    if isinstance(parsed, dict):
+        parsed = [parsed]
+    return [dict(item) for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
+
+
+def _svg_attr(value: Any, default: str = "") -> str:
+    text = str(value if value is not None else default)
+    return html.escape(text, quote=True)
+
+
+def _svg_from_elements(width: int, height: int, title: str, elements: list[dict[str, Any]]) -> str:
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}" role="img">',
+    ]
+    if title:
+        parts.append(f"<title>{html.escape(title)}</title>")
+    for item in elements:
+        kind = str(item.get("type") or item.get("kind") or "text").lower()
+        fill = _svg_attr(item.get("fill"), "none")
+        stroke = _svg_attr(item.get("stroke"), "#1f2937")
+        stroke_width = _svg_attr(item.get("stroke_width") or item.get("stroke-width"), "2")
+        if kind in {"rect", "rectangle", "card"}:
+            parts.append(
+                '<rect '
+                f'x="{_svg_attr(item.get("x"), "0")}" y="{_svg_attr(item.get("y"), "0")}" '
+                f'width="{_svg_attr(item.get("width") or item.get("w"), "120")}" '
+                f'height="{_svg_attr(item.get("height") or item.get("h"), "80")}" '
+                f'rx="{_svg_attr(item.get("rx"), "8")}" fill="{fill}" stroke="{stroke}" '
+                f'stroke-width="{stroke_width}" />'
+            )
+        elif kind in {"circle", "ellipse"}:
+            if kind == "ellipse" or item.get("rx") or item.get("ry"):
+                parts.append(
+                    '<ellipse '
+                    f'cx="{_svg_attr(item.get("cx") or item.get("x"), "60")}" '
+                    f'cy="{_svg_attr(item.get("cy") or item.get("y"), "60")}" '
+                    f'rx="{_svg_attr(item.get("rx"), "40")}" ry="{_svg_attr(item.get("ry"), "28")}" '
+                    f'fill="{fill}" stroke="{stroke}" stroke-width="{stroke_width}" />'
+                )
+            else:
+                parts.append(
+                    '<circle '
+                    f'cx="{_svg_attr(item.get("cx") or item.get("x"), "60")}" '
+                    f'cy="{_svg_attr(item.get("cy") or item.get("y"), "60")}" '
+                    f'r="{_svg_attr(item.get("r") or item.get("radius"), "32")}" '
+                    f'fill="{fill}" stroke="{stroke}" stroke-width="{stroke_width}" />'
+                )
+        elif kind == "line":
+            parts.append(
+                '<line '
+                f'x1="{_svg_attr(item.get("x1"), "0")}" y1="{_svg_attr(item.get("y1"), "0")}" '
+                f'x2="{_svg_attr(item.get("x2"), "100")}" y2="{_svg_attr(item.get("y2"), "100")}" '
+                f'stroke="{stroke}" stroke-width="{stroke_width}" />'
+            )
+        elif kind == "path" and item.get("d"):
+            parts.append(
+                f'<path d="{_svg_attr(item.get("d"))}" fill="{fill}" stroke="{stroke}" '
+                f'stroke-width="{stroke_width}" />'
+            )
+        else:
+            text = html.escape(str(item.get("text") or item.get("label") or ""))
+            parts.append(
+                '<text '
+                f'x="{_svg_attr(item.get("x"), "24")}" y="{_svg_attr(item.get("y"), "32")}" '
+                f'fill="{_svg_attr(item.get("color") or item.get("fill"), "#111827")}" '
+                f'font-size="{_svg_attr(item.get("font_size") or item.get("font-size"), "18")}" '
+                f'font-family="{_svg_attr(item.get("font_family") or item.get("font-family"), "system-ui, sans-serif")}">{text}</text>'
+            )
+    parts.append("</svg>")
+    return "\n".join(parts) + "\n"
+
+
+def _mermaid_from_graph(title: str, nodes: list[dict[str, Any]], edges: list[dict[str, Any]], direction: str) -> str:
+    lines = [f"flowchart {direction or 'TD'}"]
+    if title:
+        lines.append(f"%% {title}")
+    known: set[str] = set()
+    for index, node in enumerate(nodes, start=1):
+        node_id = re.sub(r"\W+", "_", str(node.get("id") or f"n{index}")).strip("_") or f"n{index}"
+        label = str(node.get("label") or node.get("title") or node_id)
+        known.add(node_id)
+        lines.append(f'    {node_id}["{label.replace(chr(34), chr(39))}"]')
+    for index, edge in enumerate(edges, start=1):
+        source = re.sub(r"\W+", "_", str(edge.get("from") or edge.get("source") or f"n{index}")).strip("_")
+        target = re.sub(r"\W+", "_", str(edge.get("to") or edge.get("target") or f"n{index + 1}")).strip("_")
+        label = str(edge.get("label") or "").replace('"', "'")
+        connector = f'-- "{label}" -->' if label else "-->"
+        if source and target:
+            if source not in known:
+                lines.append(f'    {source}["{source}"]')
+                known.add(source)
+            if target not in known:
+                lines.append(f'    {target}["{target}"]')
+                known.add(target)
+            lines.append(f"    {source} {connector} {target}")
+    return "\n".join(lines) + "\n"
+
+
 def _pptx_set_background(slide: Any, color: Any) -> None:
     fill = slide.background.fill
     fill.solid()
@@ -269,6 +378,9 @@ def _normalize_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]
         "write_file",
         "create_docx",
         "create_pptx",
+        "create_svg",
+        "create_diagram",
+        "create_image",
         "edit_file",
         "delete_file",
         "list_dir",
@@ -749,6 +861,141 @@ class ToolExecutor:
             return {
                 "ok": False,
                 "error": f"Missing presentation dependency `{e.name}`. Install or upgrade MagAgent to include presentation support.",
+                "path": str(abs_path),
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e), "path": str(abs_path)}
+
+    async def create_svg(
+        self,
+        path: str,
+        elements: list[dict[str, Any]] | str,
+        title: str = "",
+        width: int = 1200,
+        height: int = 800,
+    ) -> ToolResult:
+        """Create an SVG from simple structured vector elements."""
+        abs_path, tier = self._path_tier("write", path)
+        self._log_tool("create_svg", str(abs_path), tier)
+        perm = self._check_permission(f"Create SVG {abs_path}", tier)
+        if not perm.approved:
+            return self._permission_denied(perm)
+        try:
+            normalized = _normalize_visual_items(elements)
+            content = _svg_from_elements(int(width), int(height), title, normalized)
+            checkpoint_id = self._checkpoint(abs_path, "create_svg")
+            abs_path.parent.mkdir(parents=True, exist_ok=True)
+            abs_path.write_text(content, encoding="utf-8")
+            return {
+                "ok": True,
+                "path": str(abs_path),
+                "elements": len(normalized),
+                "bytes": len(content.encode()),
+                "checkpoint_id": checkpoint_id,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e), "path": str(abs_path)}
+
+    async def create_diagram(
+        self,
+        path: str,
+        title: str,
+        nodes: list[dict[str, Any]] | str,
+        edges: list[dict[str, Any]] | str = "",
+        direction: str = "TD",
+    ) -> ToolResult:
+        """Create a Mermaid diagram file from graph nodes and edges."""
+        abs_path, tier = self._path_tier("write", path)
+        self._log_tool("create_diagram", str(abs_path), tier)
+        perm = self._check_permission(f"Create diagram {abs_path}", tier)
+        if not perm.approved:
+            return self._permission_denied(perm)
+        try:
+            normalized_nodes = _normalize_visual_items(nodes)
+            normalized_edges = _normalize_visual_items(edges)
+            diagram = _mermaid_from_graph(title, normalized_nodes, normalized_edges, direction)
+            if abs_path.suffix.lower() in {".md", ".markdown"}:
+                content = f"# {title or 'Diagram'}\n\n```mermaid\n{diagram}```\n"
+            else:
+                content = diagram
+            checkpoint_id = self._checkpoint(abs_path, "create_diagram")
+            abs_path.parent.mkdir(parents=True, exist_ok=True)
+            abs_path.write_text(content, encoding="utf-8")
+            return {
+                "ok": True,
+                "path": str(abs_path),
+                "nodes": len(normalized_nodes),
+                "edges": len(normalized_edges),
+                "bytes": len(content.encode()),
+                "checkpoint_id": checkpoint_id,
+            }
+        except Exception as e:
+            return {"ok": False, "error": str(e), "path": str(abs_path)}
+
+    async def create_image(
+        self,
+        path: str,
+        elements: list[dict[str, Any]] | str,
+        title: str = "",
+        width: int = 1200,
+        height: int = 800,
+        background: str = "#ffffff",
+    ) -> ToolResult:
+        """Create a simple PNG/JPEG image from structured shapes and text."""
+        abs_path, tier = self._path_tier("write", path)
+        self._log_tool("create_image", str(abs_path), tier)
+        perm = self._check_permission(f"Create image {abs_path}", tier)
+        if not perm.approved:
+            return self._permission_denied(perm)
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+
+            normalized = _normalize_visual_items(elements)
+            image = Image.new("RGB", (int(width), int(height)), background or "#ffffff")
+            draw = ImageDraw.Draw(image)
+            if title:
+                draw.text((24, 24), str(title), fill="#111827", font=ImageFont.load_default())
+            for item in normalized:
+                kind = str(item.get("type") or item.get("kind") or "text").lower()
+                fill = str(item.get("fill") or item.get("color") or "#f3f4f6")
+                outline = str(item.get("stroke") or item.get("outline") or "#1f2937")
+                x = int(float(item.get("x", item.get("cx", 40))))
+                y = int(float(item.get("y", item.get("cy", 40))))
+                if kind in {"rect", "rectangle", "card"}:
+                    w = int(float(item.get("width", item.get("w", 160))))
+                    h = int(float(item.get("height", item.get("h", 90))))
+                    draw.rounded_rectangle([x, y, x + w, y + h], radius=int(item.get("radius", 8)), fill=fill, outline=outline)
+                elif kind in {"circle", "ellipse"}:
+                    rx = int(float(item.get("rx", item.get("r", item.get("radius", 40)))))
+                    ry = int(float(item.get("ry", item.get("r", item.get("radius", 40)))))
+                    draw.ellipse([x - rx, y - ry, x + rx, y + ry], fill=fill, outline=outline)
+                elif kind == "line":
+                    draw.line(
+                        [
+                            int(float(item.get("x1", x))),
+                            int(float(item.get("y1", y))),
+                            int(float(item.get("x2", x + 100))),
+                            int(float(item.get("y2", y + 100))),
+                        ],
+                        fill=outline,
+                        width=int(item.get("stroke_width", item.get("width", 2))),
+                    )
+                else:
+                    draw.text((x, y), str(item.get("text") or item.get("label") or ""), fill=fill, font=ImageFont.load_default())
+            checkpoint_id = self._checkpoint(abs_path, "create_image")
+            abs_path.parent.mkdir(parents=True, exist_ok=True)
+            image.save(abs_path)
+            return {
+                "ok": True,
+                "path": str(abs_path),
+                "elements": len(normalized),
+                "bytes": abs_path.stat().st_size,
+                "checkpoint_id": checkpoint_id,
+            }
+        except ModuleNotFoundError as e:
+            return {
+                "ok": False,
+                "error": f"Missing image dependency `{e.name}`. Install or upgrade MagAgent to include image support.",
                 "path": str(abs_path),
             }
         except Exception as e:
@@ -1572,6 +1819,40 @@ class ToolExecutor:
                 },
             ),
             _def(
+                "create_svg",
+                "Create an SVG vector image from structured shapes, paths, lines, and text. Prefer this over generating SVGs with shell or Python scripts.",
+                {
+                    "path": ("string", "Output .svg file path"),
+                    "elements": ("array", "Visual elements with type, position, fill/stroke, text, etc."),
+                    "title": ("string", "Optional accessible SVG title"),
+                    "width": ("integer", "Optional width in pixels"),
+                    "height": ("integer", "Optional height in pixels"),
+                },
+            ),
+            _def(
+                "create_diagram",
+                "Create a Mermaid diagram file from structured nodes and edges.",
+                {
+                    "path": ("string", "Output .mmd or .md file path"),
+                    "title": ("string", "Diagram title"),
+                    "nodes": ("array", "Nodes with id and label"),
+                    "edges": ("array", "Optional edges with from/source, to/target, and optional label"),
+                    "direction": ("string", "Optional Mermaid flowchart direction such as TD or LR"),
+                },
+            ),
+            _def(
+                "create_image",
+                "Create a simple PNG/JPEG image from structured shapes and text using local rendering.",
+                {
+                    "path": ("string", "Output image path such as .png or .jpg"),
+                    "elements": ("array", "Visual elements with type, position, fill/stroke, text, etc."),
+                    "title": ("string", "Optional title text"),
+                    "width": ("integer", "Optional width in pixels"),
+                    "height": ("integer", "Optional height in pixels"),
+                    "background": ("string", "Optional background color"),
+                },
+            ),
+            _def(
                 "edit_file",
                 "Replace an exact string in a file.",
                 {
@@ -1807,6 +2088,23 @@ class ToolExecutor:
             )
         if any(word in text for word in ("image", "screenshot", "photo", "diagram", "vision")):
             selected.add("read_image")
+        if any(
+            word in text
+            for word in (
+                "diagram",
+                "flowchart",
+                "mermaid",
+                "svg",
+                "vector",
+                "visual",
+                "image",
+                "png",
+                "jpg",
+                "jpeg",
+                "illustration",
+            )
+        ):
+            selected.update({"create_diagram", "create_svg", "create_image"})
         if any(word in text for word in ("zip", "archive", "compress", "extract", "tar")):
             selected.update({"compress", "extract"})
         if any(word in text for word in ("clipboard", "notify", "open file", "desktop")):
@@ -1850,6 +2148,28 @@ class ToolExecutor:
             ),
             "create_pptx": lambda: self.create_pptx(
                 a["path"], a["title"], a["slides"], a.get("subtitle", "")
+            ),
+            "create_svg": lambda: self.create_svg(
+                a["path"],
+                a["elements"],
+                a.get("title", ""),
+                a.get("width", 1200),
+                a.get("height", 800),
+            ),
+            "create_diagram": lambda: self.create_diagram(
+                a["path"],
+                a["title"],
+                a["nodes"],
+                a.get("edges", []),
+                a.get("direction", "TD"),
+            ),
+            "create_image": lambda: self.create_image(
+                a["path"],
+                a["elements"],
+                a.get("title", ""),
+                a.get("width", 1200),
+                a.get("height", 800),
+                a.get("background", "#ffffff"),
             ),
             "edit_file": lambda: self.edit_file(a["path"], a["old_str"], a["new_str"]),
             "delete_file": lambda: self.delete_file(a["path"]),

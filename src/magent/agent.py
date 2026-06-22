@@ -39,7 +39,16 @@ MAX_MODEL_ROUNDS_PER_TURN = 16
 MAX_FAILED_SAME_TOOL_PER_TURN = 2
 ARTIFACT_RECOVERY_MAX_TOKENS = 12000
 TOOL_USE_ENFORCEMENT_MODELS = ("gpt", "codex", "gemini", "gemma", "grok", "glm", "qwen", "deepseek")
-FILE_MUTATION_TOOLS = {"write_file", "edit_file", "delete_file", "create_docx", "create_pptx"}
+FILE_MUTATION_TOOLS = {
+    "write_file",
+    "edit_file",
+    "delete_file",
+    "create_docx",
+    "create_pptx",
+    "create_svg",
+    "create_diagram",
+    "create_image",
+}
 
 AGENT_STATIC_PROMPT = """You are MagAgent, an expert AI coding assistant with persistent memory.
 
@@ -62,6 +71,7 @@ Key behaviors:
 13. During research, prefer web_fetch/http_request over repeated curl shell probes. If shell inspection is necessary, use one broad read-only fetch pipeline instead of many tiny variations.
 14. Never use run_shell, heredocs, redirection, tee, or Python snippets to create or edit files. For any generated file, call write_file with the full final content; for changes, call edit_file.
 15. For Word documents and PowerPoint presentations, prefer create_docx and create_pptx over generating Python scripts.
+16. For diagrams, SVGs, and simple image assets, prefer create_diagram, create_svg, or create_image over generating Python scripts or shell pipelines.
 """
 
 TOOL_USE_ENFORCEMENT_PROMPT = """# Tool-Use Enforcement

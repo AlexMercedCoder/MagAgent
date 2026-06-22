@@ -78,6 +78,9 @@ Common issues:
   update MagAgent. The agent now has native `create_docx` and `create_pptx`
   tools and should use them instead of generating and running Python scripts for
   normal document/deck requests.
+- Diagram, SVG, or simple image generation gets stuck in Python scripts:
+  update MagAgent. The agent has native `create_diagram`, `create_svg`, and
+  `create_image` tools for local visual artifacts.
 - File write verification reports a failure even after a later successful write:
   update MagAgent. File mutation tracking normalizes relative and absolute paths
   before deciding whether a later success fixed an earlier failure.

@@ -145,6 +145,9 @@ def test_tool_definitions_have_required_arguments(tmp_path: Path) -> None:
     assert "deep_research" in defs
     assert "create_docx" in defs
     assert "create_pptx" in defs
+    assert "create_svg" in defs
+    assert "create_diagram" in defs
+    assert "create_image" in defs
 
 
 @pytest.mark.asyncio
@@ -186,6 +189,36 @@ async def test_document_tools_create_docx_and_pptx(tmp_path: Path) -> None:
     assert "History of Oranges" in document_text
     assert "Origins" in document_text
     assert len(presentation.slides) == 3
+
+
+@pytest.mark.asyncio
+async def test_visual_artifact_tools_create_svg_diagram_and_image(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+    elements = [
+        {"type": "rect", "x": 20, "y": 20, "width": 180, "height": 90, "fill": "#f97316"},
+        {"type": "text", "x": 42, "y": 72, "text": "Orange", "fill": "#ffffff"},
+    ]
+
+    svg = await tools.create_svg("orange.svg", elements, "Orange card", 240, 140)
+    diagram = await tools.create_diagram(
+        "orange-flow.mmd",
+        "Orange Journey",
+        [{"id": "origin", "label": "Origins"}, {"id": "trade", "label": "Trade"}],
+        [{"from": "origin", "to": "trade", "label": "spreads"}],
+        "LR",
+    )
+    image = await tools.create_image("orange.png", elements, "Orange card", 240, 140, "#fff7ed")
+
+    assert svg["ok"] is True
+    assert diagram["ok"] is True
+    assert image["ok"] is True
+    assert "<svg" in (tmp_path / "orange.svg").read_text(encoding="utf-8")
+    assert "flowchart LR" in (tmp_path / "orange-flow.mmd").read_text(encoding="utf-8")
+
+    from PIL import Image
+
+    rendered = Image.open(tmp_path / "orange.png")
+    assert rendered.size == (240, 140)
 
 
 @pytest.mark.asyncio

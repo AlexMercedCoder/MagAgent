@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.7
+
+- Added native `create_svg`, `create_diagram`, and `create_image` tools for local SVG, Mermaid, PNG, and JPEG artifact creation.
+- Added visual artifact tools to selective tool loading, file mutation tracking, and the files capability pack.
+- Updated agent guidance and built-in docs so diagram/image/SVG requests use native tools instead of generated scripts or shell pipelines.
+
 ## 0.32.6
 
 - Added native `create_docx` and `create_pptx` tools so Word documents and PowerPoint decks can be generated directly instead of by writing/debugging temporary Python scripts.

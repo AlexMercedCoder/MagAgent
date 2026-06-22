@@ -11,7 +11,7 @@ Commands:
 
 Built-in packs:
 
-- `files`: file reads, writes, Word/PowerPoint artifact creation, diffs, archives, image reads, and docs search
+- `files`: file reads, writes, Word/PowerPoint artifact creation, SVG/diagram/image creation, diffs, archives, image reads, and docs search
 - `shell`: shell, Python subprocess, package install, search, git, and system info
 - `web`: DDGS/DuckDuckGo web search with relevance filtering, fetch, deep research, HTTP requests, browser snapshots, and browser screenshots
 - `data`: JSON query helpers
@@ -29,3 +29,7 @@ The result includes the topic, generated queries, search metadata, source URLs, 
 ## Office Artifacts
 
 The `create_docx` and `create_pptx` tools create Word documents and PowerPoint presentations from structured sections/slides. Agents should prefer these tools over generating temporary Python scripts for common document and deck requests.
+
+## Visual Artifacts
+
+The `create_svg`, `create_diagram`, and `create_image` tools create local visual artifacts without shell scripts. `create_svg` writes structured SVG vector files, `create_diagram` writes Mermaid `.mmd` or Markdown diagram files, and `create_image` renders simple PNG/JPEG compositions from shapes and text.
