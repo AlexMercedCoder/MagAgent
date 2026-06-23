@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.11
+
+- Refreshed GitHub and packaged documentation after the `0.32.10` file-write recovery release.
+- Updated the README test badge to match the current unit suite.
+- Clarified troubleshooting guidance for immediate missing-content `write_file` recovery.
+
 ## 0.32.10
 
 - Fixed interactive file-generation turns that stopped after repeated malformed `write_file` calls.

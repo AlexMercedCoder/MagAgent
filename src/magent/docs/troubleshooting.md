@@ -68,9 +68,10 @@ Common issues:
   can overwrite the target.
 - A model repeatedly calls `write_file` with only `path` and no `content`:
   update MagAgent. Tool-sensitive model families receive stronger tool-use
-  guidance, failed tools add targeted corrective steering to the next model
-  round, and repeated same-tool failures trigger one bounded no-tools artifact
-  recovery attempt before halting with the latest error.
+  guidance, and MagAgent now attempts one bounded no-tools artifact recovery as
+  soon as the first missing-content `write_file` failure names a target path.
+  Repeated failures still halt the turn with the latest error instead of looping
+  forever.
 - The final answer says a file was written but the file is missing or unchanged:
   update MagAgent. The file mutation verifier appends unresolved failed
   `write_file`/`edit_file`/`delete_file` attempts to the final response.
