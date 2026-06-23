@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.32.10
+
+- Fixed interactive file-generation turns that stopped after repeated malformed `write_file` calls.
+- Missing-`content` recovery now runs immediately after the first `write_file` validation failure when a path is known, before the same-tool failure guard can end the turn.
+- Updated tests to cover early artifact recovery for generated HTML/game-style scaffolds.
+
 ## 0.32.9
 
 - Added direct `magent goal --run` execution with stronger verifier/reviewer goal-loop instructions.

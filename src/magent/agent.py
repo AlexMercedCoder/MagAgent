@@ -386,6 +386,15 @@ class AgentSession:
                                 ),
                             }
                         )
+                        recovered = await self._maybe_recover_missing_write_file_content(
+                            messages,
+                            tool_args,
+                            result,
+                            failed_file_mutations,
+                        )
+                        if recovered:
+                            messages.append({"role": "assistant", "content": recovered})
+                            return recovered, messages, total_tool_calls
                         if self._permission_denied_by_user(result):
                             content = self._permission_denial_summary(tool_name, tool_args)
                             messages.append({"role": "assistant", "content": content})
@@ -504,6 +513,15 @@ class AgentSession:
                         "name": tool_name,
                     }
                 )
+                recovered = await self._maybe_recover_missing_write_file_content(
+                    messages,
+                    tool_args,
+                    result,
+                    failed_file_mutations,
+                )
+                if recovered:
+                    messages.append({"role": "assistant", "content": recovered})
+                    return recovered, messages, total_tool_calls
                 if self._permission_denied_by_user(result):
                     content = self._permission_denial_summary(tool_name, tool_args)
                     messages.append({"role": "assistant", "content": content})
@@ -661,6 +679,23 @@ class AgentSession:
                                     ),
                                 }
                             )
+                            recovered = await self._maybe_recover_missing_write_file_content(
+                                messages,
+                                tool_args,
+                                result,
+                                failed_file_mutations,
+                            )
+                            if recovered:
+                                messages.append({"role": "assistant", "content": recovered})
+                                self.conversation.append({"role": "assistant", "content": recovered})
+                                self.logger.log_assistant_turn(
+                                    self.turn_count,
+                                    recovered,
+                                    total_tool_calls,
+                                )
+                                yield recovered
+                                self._maybe_compact_conversation()
+                                return
                             if self._permission_denied_by_user(result):
                                 full_response = self._permission_denial_summary(tool_name, tool_args)
                                 messages.append({"role": "assistant", "content": full_response})
@@ -828,6 +863,23 @@ class AgentSession:
                             "name": tool_name,
                         }
                     )
+                    recovered = await self._maybe_recover_missing_write_file_content(
+                        messages,
+                        tool_args,
+                        result,
+                        failed_file_mutations,
+                    )
+                    if recovered:
+                        messages.append({"role": "assistant", "content": recovered})
+                        self.conversation.append({"role": "assistant", "content": recovered})
+                        self.logger.log_assistant_turn(
+                            self.turn_count,
+                            recovered,
+                            total_tool_calls,
+                        )
+                        yield recovered
+                        self._maybe_compact_conversation()
+                        return
                     if self._permission_denied_by_user(result):
                         full_response = self._permission_denial_summary(tool_name, tool_args)
                         messages.append({"role": "assistant", "content": full_response})

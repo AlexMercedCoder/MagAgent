@@ -372,10 +372,10 @@ async def test_run_tool_loop_stops_repeated_missing_write_content(monkeypatch) -
 
 @pytest.mark.asyncio
 async def test_file_verifier_clears_relative_failure_after_absolute_success(monkeypatch) -> None:
+    html = "<!doctype html><html><body><h1>Recovered</h1></body></html>"
     responses = [
         SimpleNamespace(choices=[SimpleNamespace(message=tool_call_message())]),
-        SimpleNamespace(choices=[SimpleNamespace(message=tool_call_message_with_content())]),
-        SimpleNamespace(choices=[SimpleNamespace(message=final_message_with_content("done"))]),
+        SimpleNamespace(choices=[SimpleNamespace(message=final_message_with_content(html))]),
     ]
 
     async def fake_acompletion(**kwargs):
@@ -395,8 +395,8 @@ async def test_file_verifier_clears_relative_failure_after_absolute_success(monk
         "write file",
     )
 
-    assert tool_count == 2
-    assert text == "done"
+    assert tool_count == 1
+    assert "Recovered the artifact write" in text
     assert "File write verification" not in text
 
 
@@ -407,7 +407,7 @@ async def test_run_tool_loop_recovers_missing_write_content_with_no_tools_artifa
 
     async def fake_acompletion(**kwargs):
         calls.append(kwargs)
-        if len(calls) <= 2:
+        if len(calls) == 1:
             return SimpleNamespace(choices=[SimpleNamespace(message=orange_tool_call_message())])
         assert "tools" not in kwargs
         return SimpleNamespace(choices=[SimpleNamespace(message=final_message_with_content(html))])
@@ -426,7 +426,7 @@ async def test_run_tool_loop_recovers_missing_write_content_with_no_tools_artifa
         "write oranges page",
     )
 
-    assert tool_count == 2
+    assert tool_count == 1
     assert "Recovered the artifact write" in text
     assert "File write verification" not in text
     assert session.tools.calls[-1] == (
