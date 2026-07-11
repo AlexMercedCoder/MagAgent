@@ -344,6 +344,24 @@ def test_tool_budget_stop_message_suggests_continue() -> None:
     assert "continue" in message
 
 
+def test_tool_call_fingerprint_ignores_activity_metadata() -> None:
+    from magent.agent import _tool_call_fingerprint
+
+    base = _tool_call_fingerprint("read_file", {"path": "app.py"})
+    with_activity = _tool_call_fingerprint(
+        "read_file",
+        {
+            "path": "app.py",
+            "activity": {
+                "phase": "inspect",
+                "intent": "Check the current implementation.",
+            },
+        },
+    )
+
+    assert base == with_activity
+
+
 @pytest.mark.asyncio
 async def test_run_tool_loop_stops_repeated_missing_write_content(monkeypatch) -> None:
     async def fake_acompletion(**kwargs):

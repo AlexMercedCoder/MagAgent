@@ -44,8 +44,8 @@ from magent.permissions import (
 from magent.tool_packs import filter_tool_definitions_for_user
 from magent.tools.archive import safe_extract_tar as _safe_extract_tar
 from magent.tools.archive import safe_extract_zip as _safe_extract_zip
+from magent.tools.registry import strip_tool_activity, validate_tool_args
 from magent.tools.registry import tool_def as _def
-from magent.tools.registry import validate_tool_args
 from magent.tools.types import DEFAULT_TOOL_BUDGETS, READ_FILE_PREVIEW_CHARS, ToolResult
 
 console = Console()
@@ -2347,7 +2347,7 @@ class ToolExecutor:
 
     async def dispatch(self, tool_name: str, tool_args: dict[str, Any]) -> ToolResult:
         """Dispatch a tool call by name."""
-        a = _normalize_tool_args(tool_name, tool_args)
+        a = _normalize_tool_args(tool_name, strip_tool_activity(tool_args))
         raw = bool(a.pop("raw", False))
         definition = next(
             (item for item in self.get_tool_definitions() if item.get("function", {}).get("name") == tool_name),

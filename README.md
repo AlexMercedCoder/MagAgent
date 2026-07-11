@@ -289,6 +289,11 @@ magent browser screenshot https://example.com --out example.png
 | `search_codebase` | Ripgrep pattern search | Silent |
 | `git_op` | Any git subcommand | Tiered |
 
+Tool calls may include optional `activity` metadata with `phase`, `intent`, and
+`expected` fields. MagAgent displays and logs this as user-facing status and
+diagnostic context, then strips it before executing the tool so it cannot break
+tool handlers. This metadata is not chain-of-thought.
+
 ### Web & Network Tools
 
 | Tool | Description | Permission |

@@ -63,11 +63,16 @@ class SessionLogger:
         )
 
     def log_tool_call(self, tool_name: str, args: dict, result_ok: bool, tier: int) -> None:
+        activity = {}
+        raw_activity = args.get("activity") if isinstance(args, dict) else None
+        if isinstance(raw_activity, dict):
+            activity = {k: str(v)[:180] for k, v in raw_activity.items() if v is not None}
         self._write(
             "tool_call",
             {
                 "tool": tool_name,
                 "args": {k: str(v)[:100] for k, v in args.items()},
+                "activity": activity,
                 "ok": result_ok,
                 "tier": tier,
             },

@@ -34,6 +34,10 @@ Interactive sessions include daily-driver slash commands:
 - `/mode <silent|balanced|paranoid|yolo>` changes the live permission mode for the current session.
 - `/goal <task>` runs a strengthened goal-loop prompt with implementation, verification, review, and artifact-existence stop conditions.
 
+When the model supplies tool `activity` metadata, the TUI prints a short
+`intent:` line before the tool runs. This is only status/diagnostic context and
+does not expose hidden reasoning.
+
 ## Theme
 
 The built-in `TuiTheme` centralizes styles for accent, border, success, warning, danger, muted, user, provider, mode, and path text. Keeping styles named makes future light/dark and compact modes easier to add without touching every render call.

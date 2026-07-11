@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from rich.console import Console
+from rich.markup import escape
 
 from magent.agent_defs import resolve_invocation
 from magent.cache import extract_cache_usage
@@ -29,6 +30,7 @@ from magent.repo_map import RepoMapCache
 from magent.skills import SkillRegistry
 from magent.tokens import estimate_tokens, truncate_to_tokens
 from magent.tools import ToolExecutor
+from magent.tools.registry import normalize_tool_activity, strip_tool_activity
 
 console = Console()
 
@@ -74,6 +76,7 @@ Key behaviors:
 15. For Word documents and PowerPoint presentations, prefer create_docx and create_pptx over generating Python scripts.
 16. For diagrams, SVGs, and simple local image assets, prefer create_diagram, create_svg, or create_image over generating Python scripts or shell pipelines. For AI-generated bitmap artwork, use generate_image when available.
 17. If the user asks for a new folder, new project, unrelated project, or fresh scaffold, create and work in that new target. Do not keep reading or editing an existing sibling project except for a quick top-level listing or when the user explicitly asks to reuse it as a reference.
+18. When useful, include optional tool `activity` metadata with short user-facing `phase`, `intent`, and `expected` fields. This is for status display and diagnostics only. Do not include hidden chain-of-thought or private reasoning.
 """
 
 TOOL_USE_ENFORCEMENT_PROMPT = """# Tool-Use Enforcement
@@ -475,11 +478,12 @@ class AgentSession:
 
                 # Route to MCP or built-in tool
                 tool_started = time.monotonic()
+                dispatch_args = strip_tool_activity(tool_args)
                 run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
                 if self.mcp.is_mcp_tool(tool_name):
-                    result = await self.mcp.dispatch(tool_name, tool_args)
+                    result = await self.mcp.dispatch(tool_name, dispatch_args)
                 else:
-                    result = await self.tools.dispatch(tool_name, tool_args)
+                    result = await self.tools.dispatch(tool_name, dispatch_args)
                 run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
                 if tool_name in FILE_MUTATION_TOOLS:
                     run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
@@ -657,6 +661,9 @@ class AgentSession:
                                 yield repeat_message
                                 self._maybe_compact_conversation()
                                 return
+                            activity_label = _tool_activity_label(tool_args)
+                            if activity_label and self.tools.show_tool_calls:
+                                console.print(f"[dim]    intent: {escape(activity_label)}[/dim]")
                             tool_started = time.monotonic()
                             result = await self._dispatch_tool_call(tool_name, tool_args)
                             tool_elapsed = self._log_timing(
@@ -831,13 +838,17 @@ class AgentSession:
                         yield repeat_message
                         self._maybe_compact_conversation()
                         return
+                    activity_label = _tool_activity_label(tool_args)
+                    if activity_label and self.tools.show_tool_calls:
+                        console.print(f"[dim]    intent: {escape(activity_label)}[/dim]")
                     # Route to MCP or built-in tool
                     tool_started = time.monotonic()
+                    dispatch_args = strip_tool_activity(tool_args)
                     run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
                     if self.mcp.is_mcp_tool(tool_name):
-                        result = await self.mcp.dispatch(tool_name, tool_args)
+                        result = await self.mcp.dispatch(tool_name, dispatch_args)
                     else:
-                        result = await self.tools.dispatch(tool_name, tool_args)
+                        result = await self.tools.dispatch(tool_name, dispatch_args)
                     run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
                     if tool_name in FILE_MUTATION_TOOLS:
                         run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
@@ -1260,11 +1271,12 @@ class AgentSession:
 
     async def _dispatch_tool_call(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a tool call and record hooks, scratchpad, and audit logs."""
+        dispatch_args = strip_tool_activity(tool_args)
         run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
         if self.mcp.is_mcp_tool(tool_name):
-            result = await self.mcp.dispatch(tool_name, tool_args)
+            result = await self.mcp.dispatch(tool_name, dispatch_args)
         else:
-            result = await self.tools.dispatch(tool_name, tool_args)
+            result = await self.tools.dispatch(tool_name, dispatch_args)
         run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
         if tool_name in FILE_MUTATION_TOOLS:
             run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
@@ -1535,6 +1547,7 @@ def _strip_pseudo_tool_markup(content: str) -> str:
 
 
 def _tool_call_fingerprint(tool_name: str, tool_args: dict[str, Any]) -> str:
+    tool_args = strip_tool_activity(tool_args)
     try:
         payload = json.dumps(tool_args, sort_keys=True, default=str, ensure_ascii=False)
     except TypeError:
@@ -1544,6 +1557,7 @@ def _tool_call_fingerprint(tool_name: str, tool_args: dict[str, Any]) -> str:
 
 
 def _tool_call_description(tool_name: str, tool_args: dict[str, Any]) -> str:
+    tool_args = strip_tool_activity(tool_args)
     if tool_name in FILE_MUTATION_TOOLS | {"read_file", "read_file_range"}:
         return str(tool_args.get("path") or tool_args.get("file_path") or "")[:120]
     if tool_name == "run_shell":
@@ -1553,6 +1567,17 @@ def _tool_call_description(tool_name: str, tool_args: dict[str, Any]) -> str:
     if tool_name in {"web_fetch", "http_request", "browser_snapshot", "browser_screenshot"}:
         return str(tool_args.get("url") or "")[:120]
     return ""
+
+
+def _tool_activity_label(tool_args: dict[str, Any]) -> str:
+    activity = normalize_tool_activity(tool_args)
+    if not activity:
+        return ""
+    prefix = activity.get("phase", "")
+    details = activity.get("intent") or activity.get("expected") or ""
+    if prefix and details:
+        return f"{prefix}: {details}"[:220]
+    return (details or prefix)[:220]
 
 
 def _tool_timing_metadata(
@@ -1567,6 +1592,9 @@ def _tool_timing_metadata(
     desc = _tool_call_description(tool_name, tool_args)
     if desc:
         metadata["description"] = desc
+    activity = normalize_tool_activity(tool_args)
+    if activity:
+        metadata["activity"] = activity
     if result.get("path"):
         metadata["path"] = str(result["path"])
     if result.get("bytes") is not None:

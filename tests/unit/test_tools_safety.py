@@ -138,9 +138,13 @@ def test_tool_definitions_have_required_arguments(tmp_path: Path) -> None:
 
     read_file_required = defs["read_file"]["function"]["parameters"]["required"]
     write_file_required = defs["write_file"]["function"]["parameters"]["required"]
+    write_file_props = defs["write_file"]["function"]["parameters"]["properties"]
 
     assert "path" in read_file_required
     assert {"path", "content"} <= set(write_file_required)
+    assert "activity" in write_file_props
+    assert "activity" not in write_file_required
+    assert {"phase", "intent", "expected"} <= set(write_file_props["activity"]["properties"])
     assert "outline_file" in defs
     assert "read_file_range" in defs
     assert "deep_research" in defs
@@ -331,6 +335,27 @@ async def test_dispatch_normalizes_common_write_file_aliases(tmp_path: Path) -> 
 
     assert result["ok"] is True
     assert (tmp_path / "notes" / "alias.txt").read_text(encoding="utf-8") == "alias worked"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_strips_tool_activity_metadata(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    result = await tools.dispatch(
+        "write_file",
+        {
+            "path": "notes/activity.txt",
+            "content": "metadata ignored by handler",
+            "activity": {
+                "phase": "edit",
+                "intent": "Create the requested notes file.",
+                "expected": "A file exists on disk.",
+            },
+        },
+    )
+
+    assert result["ok"] is True
+    assert (tmp_path / "notes" / "activity.txt").read_text(encoding="utf-8") == "metadata ignored by handler"
 
 
 @pytest.mark.asyncio

@@ -57,7 +57,9 @@ Common issues:
 - A tool looks hung: interactive sessions print model round timings and tool
   completion timings, and long tool calls still print `Still running <tool>...`
   after a few seconds and then periodically until the tool returns. Session JSONL
-  logs also include `timing` events for model calls and tool calls.
+  logs also include `timing` events for model calls and tool calls. Tool calls
+  can also carry short `activity` metadata so the terminal and logs can show
+  what the tool is for without exposing hidden reasoning.
 - The agent keeps rewriting the same file: update MagAgent. Interactive turns
   stop identical repeated tool requests after three attempts and log
   `tool_loop_stopped` timing metadata instead of rewriting the same target

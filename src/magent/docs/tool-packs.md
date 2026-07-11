@@ -41,6 +41,12 @@ The `deep_research` tool runs several web searches, deduplicates source URLs, op
 
 The result includes the topic, generated queries, search metadata, source URLs, snippets, fetched excerpts when available, and fetch failures. It does not hide provenance behind a synthesized answer.
 
+## Tool Activity Metadata
+
+Built-in tools accept an optional `activity` object with `phase`, `intent`, and `expected` fields. The agent uses this for concise status lines and JSONL diagnostics, then removes it before tool validation and execution.
+
+This is deliberately user-facing metadata, not hidden reasoning. Good examples are `inspect: Find the existing entry point before editing` or `verify: Confirm the generated file exists`.
+
 ## Office Artifacts
 
 The `create_docx` and `create_pptx` tools create Word documents and PowerPoint presentations from structured sections/slides. Agents should prefer these tools over generating temporary Python scripts for common document and deck requests.
