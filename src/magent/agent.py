@@ -510,16 +510,11 @@ class AgentSession:
                     tool_started,
                     metadata=_tool_timing_metadata(tool_name, tool_args, result),
                 )
-                self.logger.log_activity_event(
-                    activity_event(
-                        "tool_finished",
-                        turn=self.turn_count,
-                        tool=tool_name,
-                        ok=result.get("ok", True),
-                        duration_ms=(time.monotonic() - tool_started) * 1000,
-                        activity=normalize_tool_activity(tool_args),
-                        detail=_tool_timing_metadata(tool_name, tool_args, result),
-                    )
+                self._log_tool_activity_event(
+                    tool_name,
+                    tool_args,
+                    result,
+                    duration_ms=(time.monotonic() - tool_started) * 1000,
                 )
                 self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
 
@@ -888,17 +883,7 @@ class AgentSession:
                         tool_started,
                         metadata=_tool_timing_metadata(tool_name, tool_args, result),
                     )
-                    self.logger.log_activity_event(
-                        activity_event(
-                            "tool_finished",
-                            turn=self.turn_count,
-                            tool=tool_name,
-                            ok=result.get("ok", True),
-                            duration_ms=tool_elapsed,
-                            activity=normalize_tool_activity(tool_args),
-                            detail=_tool_timing_metadata(tool_name, tool_args, result),
-                        )
-                    )
+                    self._log_tool_activity_event(tool_name, tool_args, result, duration_ms=tool_elapsed)
                     self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
                     if self.tools.show_tool_calls:
                         console.print(
@@ -1326,6 +1311,27 @@ class AgentSession:
             return str(result["path"])
         return "ok"
 
+    def _log_tool_activity_event(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        result: dict[str, Any],
+        *,
+        duration_ms: float | None = None,
+    ) -> None:
+        """Record a stable tool activity event for logs and desktop clients."""
+        self.logger.log_activity_event(
+            activity_event(
+                "tool_finished",
+                turn=self.turn_count,
+                tool=tool_name,
+                ok=result.get("ok", True),
+                duration_ms=duration_ms,
+                activity=normalize_tool_activity(tool_args),
+                detail=_tool_timing_metadata(tool_name, tool_args, result),
+            )
+        )
+
     async def _dispatch_tool_call(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a tool call and record hooks, scratchpad, and audit logs."""
         dispatch_args = strip_tool_activity(tool_args)
@@ -1350,16 +1356,7 @@ class AgentSession:
                 self.config.allowed_shell_patterns,
             )
         self.logger.log_tool_call(tool_name, tool_args, result.get("ok", True), int(tier))
-        self.logger.log_activity_event(
-            activity_event(
-                "tool_finished",
-                turn=self.turn_count,
-                tool=tool_name,
-                ok=result.get("ok", True),
-                activity=normalize_tool_activity(tool_args),
-                detail=_tool_timing_metadata(tool_name, tool_args, result),
-            )
-        )
+        self._log_tool_activity_event(tool_name, tool_args, result)
         return result
 
     def _maybe_compact_conversation(self) -> None:
