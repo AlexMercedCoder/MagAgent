@@ -12,6 +12,7 @@ class FakeLogger:
     def __init__(self):
         self.tool_calls = []
         self.pruned = []
+        self.activity_events = []
 
     def log_tool_call(self, *args):
         self.tool_calls.append(args)
@@ -26,6 +27,7 @@ class FakeLogger:
         return None
 
     def log_activity_event(self, *args, **kwargs):
+        self.activity_events.append((args, kwargs))
         return None
 
     def log_user_turn(self, *args, **kwargs):
@@ -298,6 +300,46 @@ async def test_run_tool_loop_dispatches_tool_and_returns_final_text(monkeypatch)
     assert any(message.get("role") == "tool" for message in messages)
     assert session.scratchpad["files_touched"] == ["/repo/app.py"]
     assert session.logger.tool_calls[0][0] == "write_file"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_tool_call_strips_activity_but_keeps_audit_metadata(monkeypatch) -> None:
+    hook_payloads = []
+
+    def fake_run_hooks(project, event, payload):
+        hook_payloads.append((project, event, payload))
+        return []
+
+    monkeypatch.setattr("magent.agent.run_hooks", fake_run_hooks)
+    session = make_session()
+    result = await session._dispatch_tool_call(
+        "write_file",
+        {
+            "path": "app.py",
+            "content": "print('ok')",
+            "activity": {
+                "phase": "creating",
+                "intent": "Write the requested script",
+            },
+        },
+    )
+
+    original_args = {
+        "path": "app.py",
+        "content": "print('ok')",
+        "activity": {
+            "phase": "creating",
+            "intent": "Write the requested script",
+        },
+    }
+    assert result["ok"] is True
+    assert session.tools.calls == [("write_file", {"path": "app.py", "content": "print('ok')"})]
+    assert session.logger.tool_calls == [("write_file", original_args, True, 1)]
+    assert hook_payloads[0][1] == "pre_tool"
+    assert hook_payloads[0][2]["args"]["activity"]["phase"] == "creating"
+    event_args, _event_kwargs = session.logger.activity_events[0]
+    assert event_args[0]["type"] == "tool_finished"
+    assert event_args[0]["activity"]["intent"] == "Write the requested script"
 
 
 @pytest.mark.asyncio
