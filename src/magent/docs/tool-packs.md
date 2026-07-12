@@ -47,6 +47,10 @@ Built-in tools accept an optional `activity` object with `phase`, `intent`, and 
 
 This is deliberately user-facing metadata, not hidden reasoning. Good examples are `inspect: Find the existing entry point before editing` or `verify: Confirm the generated file exists`.
 
+Session logs also emit stable `activity_event` records for tool completion so
+desktop clients can render tool progress in the chat flow without parsing
+human-formatted terminal text.
+
 ## Office Artifacts
 
 The `create_docx` and `create_pptx` tools create Word documents and PowerPoint presentations from structured sections/slides. Agents should prefer these tools over generating temporary Python scripts for common document and deck requests.

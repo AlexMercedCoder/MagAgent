@@ -7,7 +7,12 @@ import shutil
 from typing import Any
 
 from magent import config as magent_config
-from magent.config import load_global_config, load_user_profile, save_global_config, save_user_profile
+from magent.config import (
+    load_global_config,
+    load_user_profile,
+    save_global_config,
+    save_user_profile,
+)
 from magent.provider_catalog import (
     PROVIDER_CATALOG,
     PROVIDER_ORDER,

@@ -122,10 +122,16 @@ Permission profiles can be inspected and adjusted without opening `profile.toml`
 
 ```bash
 magent permission status
+magent permission profiles
+magent permission apply-profile coding
 magent permission explain paranoid
 magent permission set paranoid
 magent permission propose "allow pytest and git"
 ```
+
+Named profiles include `read-only`, `coding`, `web-research`, `local-dev`,
+`trusted-project`, and `yolo`. Profiles update permission mode plus common shell
+allowlist patterns without requiring manual TOML edits.
 
 During an interactive session, shell permission prompts support scoped approvals:
 

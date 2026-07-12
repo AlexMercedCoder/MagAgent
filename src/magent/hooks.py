@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 import tomllib
 from pathlib import Path
 from typing import Any
+
+from magent.command_policy import run_policy_checked_shell
 
 HOOK_EVENTS = {
     "pre_tool",
@@ -66,28 +67,19 @@ def run_hooks(
         "MAGENT_HOOK_PAYLOAD": json.dumps(payload, default=str),
     }
     for command in load_hooks(root).get(event, []):
-        try:
-            result = subprocess.run(
-                command,
-                cwd=root,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                env=env,
-            )
-            results.append(
-                {
-                    "event": event,
-                    "command": command,
-                    "ok": result.returncode == 0,
-                    "returncode": result.returncode,
-                    "stdout": result.stdout[-4000:],
-                    "stderr": result.stderr[-4000:],
-                }
-            )
-        except Exception as e:
-            results.append({"event": event, "command": command, "ok": False, "error": str(e)})
+        result = run_policy_checked_shell(command, cwd=root, timeout=timeout, env=env)
+        results.append(
+            {
+                "event": event,
+                "command": command,
+                "ok": result.get("ok", False),
+                "tier": result.get("tier"),
+                "returncode": result.get("returncode"),
+                "stdout": str(result.get("stdout", ""))[-4000:],
+                "stderr": str(result.get("stderr", ""))[-4000:],
+                "error": result.get("error", ""),
+            }
+        )
     return results
 
 

@@ -7,8 +7,7 @@ from typer.testing import CliRunner
 
 from magent import agent as magent_agent
 from magent import config as magent_config
-from magent import config_ux
-from magent import workbench, workbench_store
+from magent import config_ux, workbench, workbench_store
 from magent.cli import main as cli_main
 from magent.workbench import WorkbenchStore
 

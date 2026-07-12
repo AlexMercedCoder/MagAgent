@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
 from pathlib import Path
@@ -35,19 +36,15 @@ def provider_cooldown_remaining(provider_id: str) -> float | None:
         return None
     if remaining > 0:
         return remaining
-    try:
+    with contextlib.suppress(OSError):
         path.unlink()
-    except OSError:
-        pass
     return None
 
 
 def clear_provider_cooldown(provider_id: str) -> dict[str, Any]:
     existed = _path(provider_id).exists()
-    try:
+    with contextlib.suppress(FileNotFoundError):
         _path(provider_id).unlink()
-    except FileNotFoundError:
-        pass
     return {"ok": True, "provider": provider_id, "cleared": existed}
 
 

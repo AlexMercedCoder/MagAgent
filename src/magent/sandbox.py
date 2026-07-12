@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from magent.command_policy import run_policy_checked_shell
 from magent.workbench_domains.plans import show_plan
 from magent.workbench_store import now_iso
 
@@ -157,10 +158,11 @@ def _plan_commands(plan: dict[str, Any], *, run_checks: bool) -> list[str]:
 
 
 def _run_shell(cwd: Path, command: str, *, timeout: int) -> dict[str, Any]:
-    return _completed(
-        command,
-        subprocess.run(command, cwd=cwd, shell=True, capture_output=True, text=True, timeout=timeout),
-    )
+    result = run_policy_checked_shell(command, cwd=cwd, timeout=timeout)
+    if "returncode" in result:
+        result["stdout"] = str(result.get("stdout", ""))[-3000:]
+        result["stderr"] = str(result.get("stderr", ""))[-3000:]
+    return result
 
 
 def _run(cwd: Path, cmd: list[str], *, timeout: int) -> dict[str, Any]:

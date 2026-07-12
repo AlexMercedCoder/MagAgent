@@ -25,6 +25,9 @@ class FakeLogger:
     def log_timing(self, *args, **kwargs):
         return None
 
+    def log_activity_event(self, *args, **kwargs):
+        return None
+
     def log_user_turn(self, *args, **kwargs):
         return None
 
@@ -136,6 +139,7 @@ class FakeConfig:
 def make_session() -> AgentSession:
     session = AgentSession.__new__(AgentSession)
     session._mcp_start_task = None
+    session._mcp_start_attempted = False
     session.tools = FakeTools()
     session.mcp = FakeMCP()
     session.config = FakeConfig()
@@ -143,7 +147,18 @@ def make_session() -> AgentSession:
     session.logger = FakeLogger()
     session.scratchpad = {"files_touched": [], "commands_run": [], "decisions": []}
     session.turn_count = 0
+    session.cwd = "/repo"
     return session
+
+
+class FakeConfiguredMCP(FakeMCP):
+    def __init__(self):
+        self._config = {"demo": {"command": "demo"}}
+        self.started = 0
+
+    async def start_all(self):
+        self.started += 1
+        return {"demo": True}
 
 
 def tool_call_message() -> SimpleNamespace:
@@ -360,6 +375,32 @@ def test_tool_call_fingerprint_ignores_activity_metadata() -> None:
     )
 
     assert base == with_activity
+
+
+@pytest.mark.asyncio
+async def test_ensure_mcp_started_lazily_inside_active_loop() -> None:
+    session = make_session()
+    mcp = FakeConfiguredMCP()
+    session.mcp = mcp
+
+    await session._ensure_mcp_started()
+
+    assert mcp.started == 1
+    assert session._mcp_start_attempted is True
+
+
+def test_finalize_turn_response_reports_missing_expected_artifact(tmp_path) -> None:
+    session = make_session()
+    session.cwd = str(tmp_path)
+
+    response = session._finalize_turn_response(
+        "Done.",
+        {},
+        user_message="create a page named cheese.html",
+    )
+
+    assert "Artifact verification" in response
+    assert "cheese.html" in response
 
 
 @pytest.mark.asyncio

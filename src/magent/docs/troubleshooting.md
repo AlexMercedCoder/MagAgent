@@ -26,6 +26,7 @@ Common issues:
 - GitHub Actions triage: run `magent ci --logs` in a repository with authenticated `gh`.
 - GitHub Actions repair planning: run `magent ci --repair-plan`.
 - Project checks: run `magent diagnostics`.
+- Broader local setup checks: run `magent diagnostics --deep`.
 - Project command discovery: run `magent project commands`.
 - Project command roles: run `magent project doctor`.
 - Undo an agent file change: run `magent checkpoint restore-last`.
@@ -68,6 +69,9 @@ Common issues:
   update MagAgent. `write_file` rejects obvious placeholder payloads before
   writing to disk, and artifact recovery rejects filename-only output before it
   can overwrite the target.
+- A requested artifact is missing after the final response: include the exact
+  filename in the prompt. MagAgent verifies explicitly named artifacts before
+  finalizing and reports missing or placeholder-like files in the response.
 - A model repeatedly calls `write_file` with only `path` and no `content`:
   update MagAgent. Tool-sensitive model families receive stronger tool-use
   guidance, and MagAgent now attempts one bounded no-tools artifact recovery as

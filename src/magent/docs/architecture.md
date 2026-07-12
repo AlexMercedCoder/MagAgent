@@ -26,6 +26,17 @@ backups, and delegates actual mutations to `magent.config_ux` and
 `magent.permission_ux` owns friendly permission-mode status, explanations, and mode
 changes for user profiles.
 
+`magent.artifact_contracts` infers explicitly requested artifact paths from user
+prompts and verifies that those files exist and are not obvious placeholders
+before final responses claim success.
+
+`magent.command_policy` centralizes command risk classification for internal
+automation surfaces such as hooks, sandbox execution, and update helpers.
+
+`magent.diagnostics` composes deep local checks across project diagnostics,
+provider readiness, MCP config, hooks, plugins, permissions, and artifact
+contracts.
+
 `magent.ux_flows` owns guided onboarding behavior: profile presets, project initialization, safe doctor fixes, and next-action recommendations. It composes config, workbench, memory inbox, and playbook helpers without making those lower-level modules depend on UX prompts.
 
 `magent.provider_catalog` is the shared source of truth for provider metadata: setup labels, default models, environment variables, access modes, display names, LiteLLM routing modes, and OpenAI-compatible base URLs. Provider additions should start there, then add focused tests for runtime model routing and config detection.

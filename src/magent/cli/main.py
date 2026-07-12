@@ -483,10 +483,10 @@ def update_cmd(run: bool = typer.Option(False, "--run", help="Run the detected u
         console.print_json(data=plan)
         console.print(f"[dim]Run with `magent update --run` to execute:[/dim] {plan['command']}")
         return
-    import subprocess
+    from magent.command_policy import run_policy_checked_exec
 
     console.print(f"[dim]Running:[/dim] {plan['command']}")
-    completed = subprocess.run(plan["command"], shell=True)
+    completed = run_policy_checked_exec(plan["command"], cwd=".")
     if completed.returncode:
         raise typer.Exit(completed.returncode)
 
@@ -2714,8 +2714,18 @@ def ci_cmd(
 
 
 @app.command("diagnostics", rich_help_panel="Performance & Diagnostics")
-def diagnostics_cmd(project: str = typer.Option(".", "--project", "-p")):
+def diagnostics_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    deep: bool = typer.Option(False, "--deep", help="Include provider, MCP, hooks, plugins, and permissions."),
+    prompt: str = typer.Option("", "--prompt", help="Optional prompt to verify expected artifacts from."),
+):
     """Run available local diagnostics for the current project."""
+    if deep:
+        from magent.diagnostics import deep_diagnostics
+
+        username = _require_user()
+        console.print_json(data=deep_diagnostics(username, load_config(username), _store(), project=project, prompt=prompt))
+        return
     from magent.workbench import project_diagnostics
 
     console.print_json(data=project_diagnostics(project, store=_store()))

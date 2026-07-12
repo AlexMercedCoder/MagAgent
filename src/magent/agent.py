@@ -18,7 +18,13 @@ from typing import Any
 from rich.console import Console
 from rich.markup import escape
 
+from magent.activity_events import activity_event
 from magent.agent_defs import resolve_invocation
+from magent.artifact_contracts import (
+    artifact_audit_note,
+    infer_expected_artifacts,
+    verify_expected_artifacts,
+)
 from magent.cache import extract_cache_usage
 from magent.config import Config, user_memory_dir
 from magent.hooks import run_hooks
@@ -172,9 +178,14 @@ class AgentSession:
         self.mcp = MCPManager(mcp_servers_cfg if isinstance(mcp_servers_cfg, dict) else {})
         # Start MCP connections in the background (don't block __init__)
         self._mcp_start_task: asyncio.Task[Any] | None = None
+        self._mcp_start_attempted = False
         if mcp_servers_cfg:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop and loop.is_running():
+                self._mcp_start_attempted = True
                 self._mcp_start_task = loop.create_task(self.mcp.start_all())
 
         # Load skills
@@ -304,8 +315,7 @@ class AgentSession:
         Run the LLM + tool loop. Returns (final_text, updated_messages, tool_call_count).
         """
         # Wait for MCP servers to finish connecting (if still starting)
-        if self._mcp_start_task and not self._mcp_start_task.done():
-            await self._mcp_start_task
+        await self._ensure_mcp_started()
 
         # Merge built-in tools + MCP tools
         tool_defs = self._tool_definitions(user_message)
@@ -453,7 +463,11 @@ class AgentSession:
                     continue
                 if not content.strip() and total_tool_calls:
                     content = self._fallback_tool_summary()
-                content = self._finalize_turn_response(content, failed_file_mutations)
+                content = self._finalize_turn_response(
+                    content,
+                    failed_file_mutations,
+                    user_message=user_message,
+                )
                 messages.append({"role": "assistant", "content": content})
                 return content, messages, total_tool_calls
 
@@ -495,6 +509,17 @@ class AgentSession:
                     f"tool.{tool_name}",
                     tool_started,
                     metadata=_tool_timing_metadata(tool_name, tool_args, result),
+                )
+                self.logger.log_activity_event(
+                    activity_event(
+                        "tool_finished",
+                        turn=self.turn_count,
+                        tool=tool_name,
+                        ok=result.get("ok", True),
+                        duration_ms=(time.monotonic() - tool_started) * 1000,
+                        activity=normalize_tool_activity(tool_args),
+                        detail=_tool_timing_metadata(tool_name, tool_args, result),
+                    )
                 )
                 self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
 
@@ -566,8 +591,7 @@ class AgentSession:
 
         # Run tool loop first (tools don't stream)
         # Wait for MCP servers to finish connecting (if still starting)
-        if self._mcp_start_task and not self._mcp_start_task.done():
-            await self._mcp_start_task
+        await self._ensure_mcp_started()
 
         # Merge built-in tools + MCP tools
         tool_defs = self._tool_definitions(user_message)
@@ -801,7 +825,11 @@ class AgentSession:
                             await self._maybe_write_memories()
                         self._maybe_compact_conversation()
                         return
-                    full_response = self._finalize_turn_response(content, failed_file_mutations)
+                    full_response = self._finalize_turn_response(
+                        content,
+                        failed_file_mutations,
+                        user_message=user_message,
+                    )
                     messages.append(_sanitize_message(msg.model_dump()))
                     self.conversation.append({"role": "assistant", "content": full_response})
                     self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
@@ -859,6 +887,17 @@ class AgentSession:
                         f"tool.{tool_name}",
                         tool_started,
                         metadata=_tool_timing_metadata(tool_name, tool_args, result),
+                    )
+                    self.logger.log_activity_event(
+                        activity_event(
+                            "tool_finished",
+                            turn=self.turn_count,
+                            tool=tool_name,
+                            ok=result.get("ok", True),
+                            duration_ms=tool_elapsed,
+                            activity=normalize_tool_activity(tool_args),
+                            detail=_tool_timing_metadata(tool_name, tool_args, result),
+                        )
                     )
                     self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
                     if self.tools.show_tool_calls:
@@ -1107,6 +1146,17 @@ class AgentSession:
             return str(raw.resolve(strict=False))
         return str((Path(self._cwd()) / raw).resolve(strict=False))
 
+    async def _ensure_mcp_started(self) -> None:
+        """Start configured MCP servers from inside the active event loop."""
+        config = getattr(self.mcp, "_config", {})
+        if not config:
+            return
+        if self._mcp_start_task is None and not self._mcp_start_attempted:
+            self._mcp_start_attempted = True
+            self._mcp_start_task = asyncio.create_task(self.mcp.start_all())
+        if self._mcp_start_task and not self._mcp_start_task.done():
+            await self._mcp_start_task
+
     def _tool_failure_steer_or_stop(
         self,
         messages: list[dict[str, Any]],
@@ -1154,9 +1204,16 @@ class AgentSession:
         self,
         response: str,
         failed_file_mutations: dict[str, dict[str, str]],
+        *,
+        user_message: str = "",
     ) -> str:
+        artifact_note = ""
+        if user_message and getattr(self.config, "file_mutation_verifier", True):
+            artifact_note = artifact_audit_note(
+                verify_expected_artifacts(infer_expected_artifacts(user_message, cwd=self._cwd()))
+            )
         if not failed_file_mutations or not getattr(self.config, "file_mutation_verifier", True):
-            return response
+            return response + artifact_note
         lines = [
             "File write verification:",
             "One or more requested file changes failed and were not later fixed:",
@@ -1165,8 +1222,8 @@ class AgentSession:
             lines.append(f"- `{path}` via `{item.get('tool', 'file tool')}`: {item.get('error', 'failed')}")
         footer = "\n".join(lines)
         if response.strip():
-            return response.rstrip() + "\n\n" + footer
-        return footer
+            return response.rstrip() + "\n\n" + footer + artifact_note
+        return footer + artifact_note
 
     def _stop_console_summary(self, response: str) -> str:
         """Keep inline stop diagnostics short; the full response is yielded once."""
@@ -1293,6 +1350,16 @@ class AgentSession:
                 self.config.allowed_shell_patterns,
             )
         self.logger.log_tool_call(tool_name, tool_args, result.get("ok", True), int(tier))
+        self.logger.log_activity_event(
+            activity_event(
+                "tool_finished",
+                turn=self.turn_count,
+                tool=tool_name,
+                ok=result.get("ok", True),
+                activity=normalize_tool_activity(tool_args),
+                detail=_tool_timing_metadata(tool_name, tool_args, result),
+            )
+        )
         return result
 
     def _maybe_compact_conversation(self) -> None:

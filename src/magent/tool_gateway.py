@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 TOOL_BACKENDS: dict[str, dict[str, Any]] = {
     "local": {
         "label": "Local built-ins",

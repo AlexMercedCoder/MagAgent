@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from magent import auth_store, config_safety, config_ux, workbench_store
 from magent import config as magent_config
-from magent import config_safety, config_ux, workbench_store
-from magent import auth_store
-from magent.cli.command_context import ProviderCredentialError, build_provider, build_provider_for_role
+from magent.cli.command_context import (
+    ProviderCredentialError,
+    build_provider,
+    build_provider_for_role,
+)
 from magent.config import Config
 from magent.config_proposals import (
     apply_config_proposal,

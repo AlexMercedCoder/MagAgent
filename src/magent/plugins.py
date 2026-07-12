@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tomllib
 from pathlib import Path
@@ -12,6 +13,33 @@ from magent.config import CONFIG_DIR
 
 PLUGIN_DIR = CONFIG_DIR / "plugins"
 PLUGIN_STATE = CONFIG_DIR / "plugins.toml"
+PLUGIN_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
+
+
+def _safe_plugin_name(value: str) -> dict[str, Any]:
+    raw = str(value or "").strip()
+    if "/" in raw or "\\" in raw:
+        return {"ok": False, "error": f"Invalid plugin name: {value!r}. Path separators are not allowed."}
+    name = raw
+    if not name or name in {".", ".."} or not PLUGIN_NAME_RE.fullmatch(name):
+        return {
+            "ok": False,
+            "error": f"Invalid plugin name: {value!r}. Use letters, numbers, dots, underscores, or dashes.",
+        }
+    return {"ok": True, "name": name}
+
+
+def _plugin_target(name: str) -> dict[str, Any]:
+    name_result = _safe_plugin_name(name)
+    if not name_result["ok"]:
+        return name_result
+    root = PLUGIN_DIR.resolve(strict=False)
+    target = (root / name_result["name"]).resolve(strict=False)
+    try:
+        target.relative_to(root)
+    except ValueError:
+        return {"ok": False, "error": f"Plugin target escapes plugin directory: {name}"}
+    return {"ok": True, "name": name_result["name"], "path": target}
 
 
 def list_plugins() -> dict[str, Any]:
@@ -38,8 +66,14 @@ def install_plugin(source: str | Path, *, name: str = "", force: bool = False) -
     if not src.exists() or not src.is_dir():
         return {"ok": False, "error": f"Plugin source directory not found: {src}"}
     manifest = normalize_plugin_metadata(src)
-    plugin_name = name or manifest.get("name") or src.name
-    target = PLUGIN_DIR / plugin_name
+    plugin_name_result = _safe_plugin_name(name or manifest.get("name") or src.name)
+    if not plugin_name_result["ok"]:
+        return plugin_name_result
+    plugin_name = plugin_name_result["name"]
+    target_result = _plugin_target(plugin_name)
+    if not target_result["ok"]:
+        return target_result
+    target = target_result["path"]
     if target.exists() and force:
         shutil.rmtree(target)
     if target.exists():
@@ -59,7 +93,10 @@ def install_plugin(source: str | Path, *, name: str = "", force: bool = False) -
 
 
 def set_plugin_enabled(name: str, enabled: bool) -> dict[str, Any]:
-    exists = (PLUGIN_DIR / name).exists()
+    target_result = _plugin_target(name)
+    if not target_result["ok"]:
+        return {**target_result, "plugin": name, "name": name, "enabled": enabled}
+    exists = target_result["path"].exists()
     if not exists:
         return {"ok": False, "plugin": name, "name": name, "enabled": enabled, "error": f"Plugin not installed: {name}"}
     state = _state()
@@ -98,8 +135,14 @@ def import_mcp_plugin(
     servers = _mcp_servers_from_source(src)
     if not servers:
         return {"ok": False, "error": f"No MCP servers found in {src}"}
-    plugin_name = name or f"{src.stem}-mcp"
-    target = PLUGIN_DIR / plugin_name
+    plugin_name_result = _safe_plugin_name(name or f"{src.stem}-mcp")
+    if not plugin_name_result["ok"]:
+        return plugin_name_result
+    plugin_name = plugin_name_result["name"]
+    target_result = _plugin_target(plugin_name)
+    if not target_result["ok"]:
+        return target_result
+    target = target_result["path"]
     if target.exists() and force:
         shutil.rmtree(target)
     if target.exists():
@@ -133,7 +176,10 @@ def import_mcp_plugin(
 
 
 def apply_plugin_mcp(name: str, *, force: bool = False) -> dict[str, Any]:
-    plugin_path = PLUGIN_DIR / name
+    target_result = _plugin_target(name)
+    if not target_result["ok"]:
+        return target_result
+    plugin_path = target_result["path"]
     if not plugin_path.exists():
         return {"ok": False, "error": f"Plugin not installed: {name}"}
     servers = _mcp_servers_from_path(plugin_path)
@@ -174,8 +220,14 @@ def import_compat_plugin(
     ecosystem = ecosystem.replace("_", "-").lower()
     if ecosystem not in {"opencode", "claude", "codex-skill", "gemini"}:
         return {"ok": False, "error": f"Unsupported importer: {ecosystem}"}
-    plugin_name = name or f"{src.stem}-{ecosystem}"
-    target = PLUGIN_DIR / plugin_name
+    plugin_name_result = _safe_plugin_name(name or f"{src.stem}-{ecosystem}")
+    if not plugin_name_result["ok"]:
+        return plugin_name_result
+    plugin_name = plugin_name_result["name"]
+    target_result = _plugin_target(plugin_name)
+    if not target_result["ok"]:
+        return target_result
+    target = target_result["path"]
     if target.exists() and force:
         shutil.rmtree(target)
     if target.exists():

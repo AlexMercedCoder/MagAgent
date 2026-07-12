@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from magent.provider_catalog import validate_provider_catalog
 from magent.model_capabilities import model_capabilities
+from magent.provider_catalog import validate_provider_catalog
 from magent.providers import (
     PROVIDER_BASE_URLS,
     PROVIDER_DISPLAY_NAMES,

@@ -16,6 +16,9 @@ Plugins are installable local extension packs for MagAgent.
 - `magent plugin import codex-skill ./SKILL.md`
 
 Installed plugins live under `~/.config/magent/plugins`, and enabled state is recorded in `~/.config/magent/plugins.toml`.
+Plugin names are validated before install/import and may contain only letters,
+numbers, dots, underscores, and dashes. Path separators are rejected so imported
+manifests cannot write outside the plugin directory.
 
 ## Pack Layout
 

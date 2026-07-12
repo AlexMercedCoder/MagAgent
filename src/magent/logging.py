@@ -96,6 +96,9 @@ class SessionLogger:
             },
         )
 
+    def log_activity_event(self, event: dict[str, Any]) -> None:
+        self._write("activity_event", event)
+
     def log_memory_write(self, nodes_written: int, project_slug: str | None) -> None:
         self._write(
             "memory_write",

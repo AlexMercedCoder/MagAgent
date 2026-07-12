@@ -44,6 +44,30 @@ def register_permission_commands(permission_app: typer.Typer) -> None:
         if not result.get("ok"):
             raise typer.Exit(1)
 
+    @permission_app.command("profiles")
+    def permission_profiles_cmd() -> None:
+        """List named permission profiles."""
+        from magent.permission_ux import permission_profiles
+
+        console.print_json(data=permission_profiles())
+
+    @permission_app.command("apply-profile")
+    def permission_apply_profile_cmd(
+        profile: str = typer.Argument(...),
+        yes: bool = typer.Option(False, "--yes", "-y", help="Required for yolo profile."),
+    ) -> None:
+        """Apply a named permission profile."""
+        from magent.cli.command_context import require_user
+        from magent.permission_ux import permission_apply_profile
+
+        if profile.strip().lower() == "yolo" and not yes:
+            console.print("[red]yolo profile requires --yes.[/red]")
+            raise typer.Exit(1)
+        result = permission_apply_profile(require_user(), profile)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
     @permission_app.command("propose")
     def permission_propose_cmd(text: str = typer.Argument(...)) -> None:
         """Parse a natural-language permission request into a suggested action."""

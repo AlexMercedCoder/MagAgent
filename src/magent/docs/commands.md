@@ -50,6 +50,8 @@ Important command paths:
 - `magent config apply <proposal-id>`: apply a proposal after backing up config.
 - `magent config discard <proposal-id>`: discard a proposal.
 - `magent permission status`: show the active user's permission profile.
+- `magent permission profiles`: list named permission profiles.
+- `magent permission apply-profile <name>`: apply a named permission mode and shell allowlist bundle.
 - `magent permission explain <mode>`: explain a permission mode.
 - `magent permission set <mode>`: set the active user's permission mode.
 - `magent permission propose "request"`: parse a permission request into a suggested action.
@@ -210,6 +212,7 @@ Important command paths:
 - `magent patch apply <id>`: apply a saved patch.
 - `magent ci --logs`: inspect recent GitHub Actions failures.
 - `magent diagnostics`: run local project diagnostics.
+- `magent diagnostics --deep`: include provider, MCP, hooks, plugin, permission, and optional artifact checks.
 - `magent dashboard --serve`: serve the local dashboard.
 - `magent ui`: serve the live local operations UI.
 - `magent workspace status`: report git/workbench status.

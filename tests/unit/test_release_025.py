@@ -49,6 +49,22 @@ def test_mcp_plugin_import_enable_and_config_merge(tmp_path: Path, monkeypatch) 
     assert cfg["mcp"]["servers"]["files"]["source_plugin"] == "filesystem"
 
 
+def test_plugin_install_rejects_path_traversal_name(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    source = tmp_path / "bad"
+    source.mkdir()
+    (source / "magent-plugin.toml").write_text('[plugin]\nname = "../escape"\n', encoding="utf-8")
+    mcp_file = tmp_path / "mcp.toml"
+    mcp_file.write_text("[mcp.servers.demo]\ncommand = 'echo'\n", encoding="utf-8")
+
+    installed = plugins.install_plugin(source)
+    imported = import_mcp_plugin(mcp_file, name="../escape")
+
+    assert installed["ok"] is False
+    assert "Invalid plugin name" in installed["error"]
+    assert imported["ok"] is False
+
+
 def test_mcp_plugin_apply_writes_global_config(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
     source = tmp_path / "pack"

@@ -351,6 +351,8 @@ MagAgent uses a **4-tier risk system** to auto-approve safe operations and only 
 
 ```bash
 magent permission status
+magent permission profiles
+magent permission apply-profile coding
 magent permission explain paranoid
 magent permission set paranoid
 magent permission trust-list
@@ -363,6 +365,9 @@ approvals are stored as trusted shell patterns in the active user profile. For
 safe read-only fetch pipelines such as `curl | grep | head`, MagAgent stores a
 broader scoped pattern like `curl * | *` so similar diagnostic probes do not
 repeatedly interrupt the session.
+
+When a prompt explicitly names artifacts such as `cheese.html`, MagAgent verifies
+that the expected paths exist and are not obvious placeholders before finalizing.
 
 Pre-approve patterns in your config (e.g. trust all `git` and `pytest` commands):
 
@@ -457,7 +462,7 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Knowledge commands** — `magent knowledge remember/recall/forget`
 - **Review and planning** — `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent review --json`, `magent review --save`, `magent review-show`, `magent run`
 - **Goal loops and jobs** — `magent goal --verify --review`, `magent goal --background`, `magent jobs`, `magent daemon run-once`, `magent statusline`
-- **Repo/test helpers** — `magent graph`, `magent code index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent ci --logs`, `magent ci --repair-plan --save`
+- **Repo/test helpers** — `magent graph`, `magent code index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent diagnostics --deep`, `magent ci --logs`, `magent ci --repair-plan --save`
 - **Patch queue** — `magent patch save/list/apply/revert`
 - **Patch-first workflow** — `magent patch preview/explain`, `magent workspace status/clean-report`
 - **Checkpoint undo** — `magent checkpoint list/show/diff/restore/restore-last/session-list/session-diff/session-restore`

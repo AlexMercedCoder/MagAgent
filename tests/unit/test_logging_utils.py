@@ -21,6 +21,7 @@ def test_session_logger_writes_and_lists_events(tmp_path, monkeypatch) -> None:
     logger.log_user_turn(1, "x" * 600)
     logger.log_assistant_turn(1, "response", tool_calls=2)
     logger.log_tool_call("read_file", {"path": "a" * 150}, True, 0)
+    logger.log_activity_event({"type": "tool_finished", "tool": "read_file", "ok": True})
     logger.log_memory_write(2, "demo")
     logger.log_token_usage("openai", "gpt", prompt_tokens=10, completion_tokens=5)
     logger.log_context_pruned("stale", 3, approx_tokens_saved=120)
@@ -35,6 +36,7 @@ def test_session_logger_writes_and_lists_events(tmp_path, monkeypatch) -> None:
         "user_turn",
         "assistant_turn",
         "tool_call",
+        "activity_event",
         "memory_write",
         "token_usage",
         "context_pruned",
@@ -42,10 +44,10 @@ def test_session_logger_writes_and_lists_events(tmp_path, monkeypatch) -> None:
     ]
     assert len(records[1]["message"]) == 500
     assert len(records[3]["args"]["path"]) == 100
-    assert records[5]["total_tokens"] == 15
+    assert records[6]["total_tokens"] == 15
     assert listed[0]["session"] == "sess1"
     assert listed[0]["ended"] != "active"
-    assert listed[0]["events"] == 8
+    assert listed[0]["events"] == 9
 
 
 def test_list_session_logs_handles_missing_and_active_logs(tmp_path, monkeypatch) -> None:
