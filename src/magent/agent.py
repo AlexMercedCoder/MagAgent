@@ -490,20 +490,8 @@ class AgentSession:
                     messages.append({"role": "assistant", "content": repeat_message})
                     return repeat_message, messages, total_tool_calls
 
-                # Route to MCP or built-in tool
                 tool_started = time.monotonic()
-                dispatch_args = strip_tool_activity(tool_args)
-                run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
-                if self.mcp.is_mcp_tool(tool_name):
-                    result = await self.mcp.dispatch(tool_name, dispatch_args)
-                else:
-                    result = await self.tools.dispatch(tool_name, dispatch_args)
-                run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
-                if tool_name in FILE_MUTATION_TOOLS:
-                    run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
-                if tool_name == "run_shell" and not result.get("ok", True):
-                    run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
-                self._observe_tool_result(tool_name, tool_args, result)
+                result = await self._execute_tool_call(tool_name, tool_args)
                 result_str = self._compress_tool_result(tool_name, result)
                 self._log_timing(
                     f"tool.{tool_name}",
@@ -517,17 +505,6 @@ class AgentSession:
                     duration_ms=(time.monotonic() - tool_started) * 1000,
                 )
                 self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
-
-                # Log the tool call
-                from magent.permissions import RiskTier, classify_shell_command
-
-                tier = RiskTier.AUTO
-                if tool_name == "run_shell":
-                    tier = classify_shell_command(
-                        tool_args.get("command", ""),
-                        self.config.allowed_shell_patterns,
-                    )
-                self.logger.log_tool_call(tool_name, tool_args, result.get("ok", True), int(tier))
 
                 messages.append(
                     {
@@ -864,20 +841,8 @@ class AgentSession:
                     activity_label = _tool_activity_label(tool_args)
                     if activity_label and self.tools.show_tool_calls:
                         console.print(f"[dim]    intent: {escape(activity_label)}[/dim]")
-                    # Route to MCP or built-in tool
                     tool_started = time.monotonic()
-                    dispatch_args = strip_tool_activity(tool_args)
-                    run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
-                    if self.mcp.is_mcp_tool(tool_name):
-                        result = await self.mcp.dispatch(tool_name, dispatch_args)
-                    else:
-                        result = await self.tools.dispatch(tool_name, dispatch_args)
-                    run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
-                    if tool_name in FILE_MUTATION_TOOLS:
-                        run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
-                    if tool_name == "run_shell" and not result.get("ok", True):
-                        run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
-                    self._observe_tool_result(tool_name, tool_args, result)
+                    result = await self._execute_tool_call(tool_name, tool_args)
                     tool_elapsed = self._log_timing(
                         f"tool.{tool_name}",
                         tool_started,
@@ -1332,7 +1297,7 @@ class AgentSession:
             )
         )
 
-    async def _dispatch_tool_call(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
+    async def _execute_tool_call(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a tool call and record hooks, scratchpad, and audit logs."""
         dispatch_args = strip_tool_activity(tool_args)
         run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
@@ -1356,6 +1321,11 @@ class AgentSession:
                 self.config.allowed_shell_patterns,
             )
         self.logger.log_tool_call(tool_name, tool_args, result.get("ok", True), int(tier))
+        return result
+
+    async def _dispatch_tool_call(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
+        """Dispatch a pseudo-tool call and record its stable activity event."""
+        result = await self._execute_tool_call(tool_name, tool_args)
         self._log_tool_activity_event(tool_name, tool_args, result)
         return result
 
