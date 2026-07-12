@@ -522,7 +522,18 @@ def _normalize_tool_args(tool_name: str, args: dict[str, Any]) -> dict[str, Any]
                 normalized["path"] = normalized[alias]
                 break
     if tool_name == "write_file" and "content" not in normalized:
-        for alias in ("contents", "text", "body", "data"):
+        for alias in (
+            "contents",
+            "file_content",
+            "file_contents",
+            "full_content",
+            "html",
+            "markdown",
+            "text",
+            "body",
+            "data",
+            "source",
+        ):
             if alias in normalized:
                 normalized["content"] = normalized[alias]
                 break

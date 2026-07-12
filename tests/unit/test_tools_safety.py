@@ -167,6 +167,25 @@ async def test_dispatch_reports_missing_required_arguments(tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
+async def test_write_file_accepts_common_content_aliases(tmp_path: Path) -> None:
+    tools = ToolExecutor(str(tmp_path), permission_mode="yolo")
+
+    html = await tools.dispatch("write_file", {"path": "page.html", "html": "<!doctype html><h1>ok</h1>"})
+    file_content = await tools.dispatch(
+        "write_file",
+        {
+            "filename": "notes.md",
+            "file_content": "# Notes\n\nComplete content.",
+        },
+    )
+
+    assert html["ok"] is True
+    assert file_content["ok"] is True
+    assert (tmp_path / "page.html").read_text(encoding="utf-8") == "<!doctype html><h1>ok</h1>"
+    assert (tmp_path / "notes.md").read_text(encoding="utf-8") == "# Notes\n\nComplete content."
+
+
+@pytest.mark.asyncio
 async def test_document_tools_create_docx_and_pptx(tmp_path: Path) -> None:
     tools = ToolExecutor(str(tmp_path), permission_mode="silent")
     sections = [
