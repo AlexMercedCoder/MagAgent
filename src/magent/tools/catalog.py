@@ -309,3 +309,89 @@ def built_in_tool_definitions() -> list[dict[str, Any]]:
         ),
     ]
     return definitions
+
+
+def select_tool_definitions_for_message(
+    definitions: list[dict[str, Any]],
+    message: str,
+) -> list[dict[str, Any]]:
+    """Return a compact relevant tool subset for a user turn."""
+    by_name = {item["function"]["name"]: item for item in definitions}
+    text = message.lower()
+    selected = {
+        "read_file",
+        "read_file_range",
+        "outline_file",
+        "list_dir",
+        "search_codebase",
+        "run_shell",
+        "edit_file",
+        "write_file",
+        "git_op",
+        "system_info",
+        "magent_docs_search",
+    }
+    if any(word in text for word in ("delete", "remove", "clean up", "rename")):
+        selected.add("delete_file")
+    if any(word in text for word in ("web", "url", "http", "api", "docs", "latest", "search online")):
+        selected.update({"web_search", "web_fetch", "http_request"})
+    if any(word in text for word in ("research", "compare", "survey", "investigate", "market")):
+        selected.update({"web_search", "web_fetch", "deep_research", "http_request"})
+    if any(word in text for word in ("browser", "screenshot", "page", "playwright")):
+        selected.update({"browser_snapshot", "browser_screenshot"})
+    if any(word in text for word in ("json", "csv", "sqlite", "database", "sql", "dataframe", "query")):
+        selected.update(
+            {
+                "json_query",
+                "db_query",
+                "db_execute",
+                "db_list_tables",
+                "db_schema",
+                "db_list_databases",
+            }
+        )
+    if any(word in text for word in ("image", "screenshot", "photo", "diagram", "vision")):
+        selected.update({"read_image", "generate_image"})
+    if any(
+        word in text
+        for word in (
+            "diagram",
+            "flowchart",
+            "mermaid",
+            "svg",
+            "vector",
+            "visual",
+            "image",
+            "png",
+            "jpg",
+            "jpeg",
+            "illustration",
+        )
+    ):
+        selected.update({"create_diagram", "create_svg", "create_image", "generate_image"})
+    if any(word in text for word in ("zip", "archive", "compress", "extract", "tar")):
+        selected.update({"compress", "extract"})
+    if any(word in text for word in ("clipboard", "notify", "open file", "desktop")):
+        selected.update({"clipboard_read", "clipboard_write", "notify", "open_file"})
+    if any(word in text for word in ("diff", "compare")):
+        selected.add("diff_files")
+    if any(word in text for word in ("install", "package", "dependency")):
+        selected.add("install_package")
+    if any(
+        word in text
+        for word in (
+            "docx",
+            "word doc",
+            "word document",
+            "document",
+            "powerpoint",
+            "presentation",
+            "pptx",
+            "slides",
+            "slide deck",
+        )
+    ):
+        selected.update({"create_docx", "create_pptx"})
+    if len(text.split()) > 120 or any(word in text for word in ("everything", "full access", "all tools")):
+        selected.update(by_name)
+    return [by_name[name] for name in by_name if name in selected]

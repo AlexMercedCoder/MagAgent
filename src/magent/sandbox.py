@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from magent.command_policy import run_policy_checked_shell
+from magent.command_policy import command_policy, run_policy_checked_command
 from magent.workbench_domains.plans import show_plan
 from magent.workbench_store import now_iso
 
@@ -112,10 +112,10 @@ def _execute_local_plan(plan: dict[str, Any], workspace: Path, *, run_checks: bo
         if op.get("type") == "patch" and op.get("path"):
             results.append({**_run(workspace, ["git", "apply", str(op["path"])], timeout=120), "operation": op})
         elif op.get("type") == "shell" and op.get("command"):
-            results.append({**_run_shell(workspace, op["command"], timeout=120), "operation": op})
+            results.append({**_run_command(workspace, op["command"], timeout=120), "operation": op})
     if run_checks:
         for command in plan.get("checks", []):
-            results.append({**_run_shell(workspace, command, timeout=180), "check": command})
+            results.append({**_run_command(workspace, command, timeout=180), "check": command})
     return {"ok": all(item.get("ok") for item in results), "workspace": str(workspace), "results": results}
 
 
@@ -129,7 +129,15 @@ def _execute_container_plan(
     if not shutil.which("docker"):
         return {"ok": False, "error": "Docker is not available"}
     commands = _plan_commands(plan, run_checks=run_checks)
-    script = " && ".join(commands) or "pwd"
+    policies = [command_policy(_command_text(command)) for command in commands]
+    if any(policy.get("blocked") for policy in policies):
+        return {
+            "ok": False,
+            "workspace": str(workspace),
+            "image": image,
+            "results": [{**policy, "error": "Blocked by MagAgent command policy"} for policy in policies],
+        }
+    script = " && ".join(_command_text(command) for command in commands) or "pwd"
     cmd = [
         "docker",
         "run",
@@ -144,10 +152,17 @@ def _execute_container_plan(
         script,
     ]
     result = _run(Path.cwd(), cmd, timeout=600)
-    return {"ok": result["ok"], "workspace": str(workspace), "image": image, "command": shlex.join(cmd), "results": [result]}
+    return {
+        "ok": result["ok"],
+        "workspace": str(workspace),
+        "image": image,
+        "command": shlex.join(cmd),
+        "command_policies": policies,
+        "results": [result],
+    }
 
 
-def _plan_commands(plan: dict[str, Any], *, run_checks: bool) -> list[str]:
+def _plan_commands(plan: dict[str, Any], *, run_checks: bool) -> list[Any]:
     commands = []
     for op in plan.get("operations", []):
         if op.get("type") == "shell" and op.get("command"):
@@ -157,8 +172,20 @@ def _plan_commands(plan: dict[str, Any], *, run_checks: bool) -> list[str]:
     return commands
 
 
-def _run_shell(cwd: Path, command: str, *, timeout: int) -> dict[str, Any]:
-    result = run_policy_checked_shell(command, cwd=cwd, timeout=timeout)
+def _command_text(command: Any) -> str:
+    if isinstance(command, str):
+        return command
+    if isinstance(command, dict):
+        if "argv" in command:
+            return shlex.join(str(item) for item in command.get("argv") or [])
+        return str(command.get("command") or "")
+    if isinstance(command, (list, tuple)):
+        return shlex.join(str(item) for item in command)
+    return str(command)
+
+
+def _run_command(cwd: Path, command: Any, *, timeout: int) -> dict[str, Any]:
+    result = run_policy_checked_command(command, cwd=cwd, timeout=timeout)
     if "returncode" in result:
         result["stdout"] = str(result.get("stdout", ""))[-3000:]
         result["stderr"] = str(result.get("stderr", ""))[-3000:]

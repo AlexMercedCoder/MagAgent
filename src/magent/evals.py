@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
-import shlex
-import subprocess
 from pathlib import Path
 from typing import Any
 
+from magent.command_policy import run_policy_checked_command
 from magent.workbench_store import now_iso
 
 EVALS_DIR = Path("evals")
@@ -21,7 +20,7 @@ def eval_template() -> str:
     {
       "id": "unit-tests",
       "prompt": "Fix the failing unit tests without changing public behavior.",
-      "commands": ["python -m pytest -q"],
+      "commands": [{"argv": ["python", "-m", "pytest", "-q"]}],
       "success": ["command:0"]
     }
   ]
@@ -97,16 +96,9 @@ def _load_suite(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _run_command(root: Path, command: str) -> dict[str, Any]:
-    try:
-        result = subprocess.run(command, cwd=root, shell=True, text=True, capture_output=True, timeout=300)
-        return {
-            "ok": result.returncode == 0,
-            "command": command,
-            "argv": shlex.split(command),
-            "returncode": result.returncode,
-            "stdout": result.stdout[-3000:],
-            "stderr": result.stderr[-3000:],
-        }
-    except Exception as e:
-        return {"ok": False, "command": command, "error": str(e)}
+def _run_command(root: Path, command: Any) -> dict[str, Any]:
+    result = run_policy_checked_command(command, cwd=root, timeout=300)
+    if "stdout" in result:
+        result["stdout"] = str(result.get("stdout", ""))[-3000:]
+        result["stderr"] = str(result.get("stderr", ""))[-3000:]
+    return result

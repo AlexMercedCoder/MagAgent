@@ -38,6 +38,29 @@ def test_sandbox_preview_and_copy_execution(tmp_path: Path, monkeypatch) -> None
     assert store.read("sandbox_runs", [])[0]["plan_id"] == plan["id"]
 
 
+def test_sandbox_accepts_structured_command_specs(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("sandbox-structured-test")
+    plan = workbench.save_execution_plan(
+        store,
+        project,
+        "Run structured smoke",
+        commands=[{"argv": ["python", "-c", "print('structured')"]}],  # type: ignore[list-item]
+        include_diff=False,
+    )
+
+    preview = sandbox.sandbox_plan_preview(store, plan["id"], mode="copy")
+    result = sandbox.execute_plan_sandbox(store, plan["id"], mode="copy")
+
+    assert preview["commands"][0]["argv"] == ["python", "-c", "print('structured')"]
+    assert result["ok"] is True
+    command_result = result["result"]["results"][0]
+    assert command_result["shell"] is False
+    assert command_result["argv"] == ["python", "-c", "print('structured')"]
+
+
 def test_eval_suite_init_list_run_and_report(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("eval-test")
@@ -58,6 +81,42 @@ def test_eval_suite_init_list_run_and_report(tmp_path: Path, monkeypatch) -> Non
     assert suites[0]["tasks"] == 1
     assert report["ok"] is True
     assert evals.eval_report(store)[0]["suite"] == "sample-python-repair"
+
+
+def test_eval_suite_accepts_structured_commands_and_blocks_risky_shell(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("eval-structured-test")
+    evals.init_evals(tmp_path)
+    (tmp_path / "evals" / "magagent-evals.json").write_text(
+        json.dumps(
+            {
+                "name": "structured-evals",
+                "tasks": [
+                    {
+                        "id": "argv",
+                        "prompt": "Run structured command",
+                        "commands": [{"argv": ["python", "-c", "print(2)"]}],
+                    },
+                    {
+                        "id": "blocked",
+                        "prompt": "Do not run destructive shell",
+                        "commands": ["rm -rf /"],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = evals.run_eval_suite(tmp_path, "evals/magagent-evals.json", store=store)
+
+    assert report["ok"] is False
+    structured = report["tasks"][0]["commands"][0]
+    blocked = report["tasks"][1]["commands"][0]
+    assert structured["ok"] is True
+    assert structured["shell"] is False
+    assert blocked["blocked"] is True
+    assert "command policy" in blocked["error"].lower()
 
 
 def test_github_workflows_parse_gh_json(tmp_path: Path, monkeypatch) -> None:

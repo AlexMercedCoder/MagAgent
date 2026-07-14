@@ -7,7 +7,7 @@ from magent.cli import command_context
 from magent.cli import main as cli_main
 from magent.cli.commands import browser, docs, evals, github
 from magent.records import PlanRecord, PromotionCandidateRecord, TaskRecord
-from magent.tools.catalog import built_in_tool_definitions
+from magent.tools.catalog import built_in_tool_definitions, select_tool_definitions_for_message
 from magent.tools.executor import ToolExecutor as ExecutorImpl
 from magent.tools.registry import tool_def
 from magent.tools.types import DEFAULT_TOOL_BUDGETS, ToolResult
@@ -50,10 +50,18 @@ def test_workbench_domain_modules_expose_compatible_facades() -> None:
 def test_tool_helper_modules_expose_executor_building_blocks() -> None:
     definition = tool_def("demo", "Demo tool", {"path": ("string", None)})
     built_in_names = {item["function"]["name"] for item in built_in_tool_definitions()}
+    browser_names = {
+        item["function"]["name"]
+        for item in select_tool_definitions_for_message(
+            built_in_tool_definitions(),
+            "take a browser screenshot",
+        )
+    }
 
     assert definition["function"]["name"] == "demo"
     assert "path" in definition["function"]["parameters"]["required"]
     assert {"write_file", "deep_research", "create_pptx"} <= built_in_names
+    assert {"browser_snapshot", "browser_screenshot"} <= browser_names
     assert DEFAULT_TOOL_BUDGETS["read_file"] >= DEFAULT_TOOL_BUDGETS["default"]
     assert str(ToolResult).startswith("dict")
 
