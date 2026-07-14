@@ -31,6 +31,17 @@ jobs:
       - name: Unit tests
         run: python -m pytest tests/unit -q
 
+      - name: Documentation drift check
+        run: |
+          python - <<'PY'
+          from typer.testing import CliRunner
+          from magent.cli.main import app
+
+          result = CliRunner().invoke(app, ["docs", "generate-reference", "--check"])
+          print(result.output)
+          raise SystemExit(result.exit_code)
+          PY
+
       - name: Coverage
         if: matrix.python-version == '3.12'
         run: python -m pytest tests/unit --cov=magent --cov-report=term-missing:skip-covered

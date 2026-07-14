@@ -78,9 +78,13 @@ from magent.cli.command_context import (
     store,
 )
 from magent.cli.commands.agents import register_agent_commands
+from magent.cli.commands.browser import register_browser_commands
 from magent.cli.commands.config import register_config_commands
 from magent.cli.commands.daemon import register_daemon_commands
+from magent.cli.commands.docs import register_docs_commands
+from magent.cli.commands.evals import register_eval_commands
 from magent.cli.commands.events import register_event_commands
+from magent.cli.commands.github import register_github_commands
 from magent.cli.commands.hooks import register_hook_commands
 from magent.cli.commands.lsp import register_lsp_commands
 from magent.cli.commands.performance import register_performance_commands
@@ -103,10 +107,14 @@ from magent.prompt_input import read_multiline_prompt, read_user_prompt
 
 console = Console()
 register_agent_commands(agent_app)
+register_browser_commands(browser_app)
 register_provider_ux_commands(provider_app)
 register_config_commands(config_app)
 register_daemon_commands(daemon_app)
+register_docs_commands(docs_app, known_command_names=lambda: known_command_names(app))
+register_eval_commands(eval_app, store=store)
 register_event_commands(events_app)
+register_github_commands(github_app)
 register_hook_commands(hook_app)
 register_lsp_commands(lsp_app)
 register_permission_commands(permission_app)
@@ -2575,120 +2583,6 @@ def subagent_wizard_cmd():
     )
 
 
-@eval_app.command("init")
-def eval_init_cmd(project: str = typer.Option(".", "--project", "-p")):
-    """Create a starter local eval suite."""
-    from magent.evals import init_evals
-
-    console.print_json(data=init_evals(project))
-
-
-@eval_app.command("list")
-def eval_list_cmd(project: str = typer.Option(".", "--project", "-p")):
-    """List local eval suites."""
-    from magent.evals import list_eval_suites
-
-    console.print_json(data={"ok": True, "suites": list_eval_suites(project)})
-
-
-@eval_app.command("run")
-def eval_run_cmd(
-    suite: str = typer.Argument("evals/magagent-evals.json"),
-    project: str = typer.Option(".", "--project", "-p"),
-):
-    """Run a local eval suite's verification commands."""
-    from magent.evals import run_eval_suite
-
-    console.print_json(data=run_eval_suite(project, suite, store=_store()))
-
-
-@eval_app.command("report")
-def eval_report_cmd(limit: int = typer.Option(20, "--limit", "-n")):
-    """Show recent eval run reports."""
-    from magent.evals import eval_report
-
-    console.print_json(data={"ok": True, "runs": eval_report(_store(), limit=limit)})
-
-
-@browser_app.command("snapshot")
-def browser_snapshot_cmd(url: str = typer.Argument(...), wait_ms: int = typer.Option(500, "--wait-ms")):
-    """Capture title and text from a page using Playwright."""
-    from magent.browser import browser_snapshot
-
-    console.print_json(data=asyncio.run(browser_snapshot(url, wait_ms=wait_ms)))
-
-
-@browser_app.command("screenshot")
-def browser_screenshot_cmd(
-    url: str = typer.Argument(...),
-    out: str = typer.Option("magent-browser.png", "--out", "-o"),
-    wait_ms: int = typer.Option(500, "--wait-ms"),
-):
-    """Capture a page screenshot using Playwright."""
-    from magent.browser import browser_screenshot
-
-    console.print_json(data=asyncio.run(browser_screenshot(url, out, wait_ms=wait_ms)))
-
-
-@github_app.command("status")
-def github_status_cmd(project: str = typer.Option(".", "--project", "-p")):
-    """Check gh availability and authentication."""
-    from magent.github_workflows import github_status
-
-    console.print_json(data=github_status(project))
-
-
-@github_app.command("issues")
-def github_issues_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
-    limit: int = typer.Option(20, "--limit", "-n"),
-    state: str = typer.Option("open", "--state"),
-):
-    """List GitHub issues with gh."""
-    from magent.github_workflows import list_issues
-
-    console.print_json(data=list_issues(project, limit=limit, state=state))
-
-
-@github_app.command("prs")
-def github_prs_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
-    limit: int = typer.Option(20, "--limit", "-n"),
-    state: str = typer.Option("open", "--state"),
-):
-    """List GitHub pull requests with gh."""
-    from magent.github_workflows import list_prs
-
-    console.print_json(data=list_prs(project, limit=limit, state=state))
-
-
-@github_app.command("issue")
-def github_issue_cmd(number: int = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
-    """Show one GitHub issue with gh."""
-    from magent.github_workflows import show_issue
-
-    console.print_json(data=show_issue(project, number))
-
-
-@github_app.command("pr")
-def github_pr_cmd(number: int = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
-    """Show one GitHub pull request with gh."""
-    from magent.github_workflows import show_pr
-
-    console.print_json(data=show_pr(project, number))
-
-
-@github_app.command("checks")
-def github_checks_cmd(
-    number: int | None = typer.Argument(None),
-    project: str = typer.Option(".", "--project", "-p"),
-):
-    """Show pull request checks with gh."""
-    from magent.github_workflows import pr_checks
-
-    console.print_json(data=pr_checks(project, number))
-
-
 @app.command("env-doctor", rich_help_panel="Performance & Diagnostics")
 def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Run project environment checks."""
@@ -2904,97 +2798,6 @@ def ui_cmd(
         signal.pause()
     except (AttributeError, KeyboardInterrupt):
         return
-
-
-@docs_app.command("list")
-def docs_list_cmd():
-    """List built-in documentation topics."""
-    from magent.docs import list_topics
-
-    table = Table("Topic", "Title")
-    for topic in list_topics():
-        table.add_row(topic.slug, topic.title)
-    console.print(table)
-
-
-@docs_app.command("show")
-def docs_show_cmd(topic: str = typer.Argument(...)):
-    """Show a built-in documentation topic."""
-    from magent.docs import read_topic
-
-    try:
-        console.print(read_topic(topic))
-    except KeyError:
-        console.print(f"[red]Unknown docs topic: {topic}[/red]")
-        raise typer.Exit(1) from None
-
-
-@docs_app.command("search")
-def docs_search_cmd(query: str = typer.Argument(...), limit: int = typer.Option(8, "--limit", "-n")):
-    """Search built-in MagAgent documentation."""
-    from magent.docs import search_docs
-
-    results = search_docs(query, limit=limit)
-    table = Table("Topic", "Score", "Snippet")
-    for item in results:
-        table.add_row(item["slug"], str(item["score"]), item["snippet"])
-    console.print(table)
-
-
-@docs_app.command("doctor")
-def docs_doctor_cmd():
-    """Check built-in docs coverage."""
-    from magent.docs import docs_doctor
-
-    console.print_json(data=docs_doctor(_known_command_names()))
-
-
-@docs_app.command("generate-reference")
-def docs_generate_reference_cmd(
-    out: str | None = typer.Option(None, "--out", "-o"),
-    check: bool = typer.Option(False, "--check", help="Fail if the generated reference differs from --out."),
-):
-    """Generate command reference Markdown from the live CLI tree."""
-    from magent.docs import render_command_reference
-
-    text = render_command_reference(_known_command_names())
-    target = Path(out or "src/magent/docs/command-reference.md")
-    if check:
-        if not target.exists():
-            console.print(f"[red]Command reference is missing: {target}[/red]")
-            raise typer.Exit(1)
-        if target.read_text(encoding="utf-8", errors="replace") != text:
-            console.print(f"[red]Command reference is stale: {target}[/red]")
-            console.print(f"[dim]Run: magent docs generate-reference --out {target}[/dim]")
-            raise typer.Exit(1)
-        console.print(f"[green]✓ Command reference is current: {target}[/green]")
-    elif out:
-        target.write_text(text, encoding="utf-8")
-        console.print(f"[green]✓ Wrote {target}[/green]")
-    else:
-        console.print(text)
-
-
-@docs_app.command("generate-providers")
-def docs_generate_providers_cmd(out: str | None = typer.Option(None, "--out", "-o")):
-    """Generate provider reference Markdown from the provider catalog."""
-    from magent.docs import render_provider_reference
-
-    text = render_provider_reference()
-    target = out or "src/magent/docs/providers.md"
-    Path(target).write_text(text, encoding="utf-8")
-    console.print(f"[green]✓ Wrote {target}[/green]")
-
-
-@docs_app.command("generate-config")
-def docs_generate_config_cmd(out: str | None = typer.Option(None, "--out", "-o")):
-    """Generate config reference Markdown from packaged defaults."""
-    from magent.docs import render_config_reference
-
-    text = render_config_reference()
-    target = out or "src/magent/docs/config-reference.md"
-    Path(target).write_text(text, encoding="utf-8")
-    console.print(f"[green]✓ Wrote {target}[/green]")
 
 
 @checkpoint_app.command("list")

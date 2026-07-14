@@ -5,7 +5,9 @@ from magent import memory_inbox, playbook, recipes, tool_packs, ui_actions
 from magent.cli import app as cli_app
 from magent.cli import command_context
 from magent.cli import main as cli_main
+from magent.cli.commands import browser, docs, evals, github
 from magent.records import PlanRecord, PromotionCandidateRecord, TaskRecord
+from magent.tools.catalog import built_in_tool_definitions
 from magent.tools.executor import ToolExecutor as ExecutorImpl
 from magent.tools.registry import tool_def
 from magent.tools.types import DEFAULT_TOOL_BUDGETS, ToolResult
@@ -47,11 +49,20 @@ def test_workbench_domain_modules_expose_compatible_facades() -> None:
 
 def test_tool_helper_modules_expose_executor_building_blocks() -> None:
     definition = tool_def("demo", "Demo tool", {"path": ("string", None)})
+    built_in_names = {item["function"]["name"] for item in built_in_tool_definitions()}
 
     assert definition["function"]["name"] == "demo"
     assert "path" in definition["function"]["parameters"]["required"]
+    assert {"write_file", "deep_research", "create_pptx"} <= built_in_names
     assert DEFAULT_TOOL_BUDGETS["read_file"] >= DEFAULT_TOOL_BUDGETS["default"]
     assert str(ToolResult).startswith("dict")
+
+
+def test_cli_command_modules_register_extracted_groups() -> None:
+    assert callable(browser.register_browser_commands)
+    assert callable(docs.register_docs_commands)
+    assert callable(evals.register_eval_commands)
+    assert callable(github.register_github_commands)
 
 
 def test_typed_records_wrap_common_payload_shapes() -> None:
