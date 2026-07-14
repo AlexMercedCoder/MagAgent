@@ -107,15 +107,23 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
     missing_topics = sorted(required - slugs)
     docs_text = "\n".join(read_topic(topic.slug) for topic in topics)
     missing_commands = []
+    command_reference_current = True
     if command_names:
         missing_commands = [
             name for name in sorted(set(command_names)) if f"magent {name}" not in docs_text
         ]
+        command_reference = docs_root() / "command-reference.md"
+        if command_reference.exists():
+            command_reference_current = command_reference.read_text(
+                encoding="utf-8",
+                errors="replace",
+            ) == render_command_reference(command_names)
     return {
-        "ok": not missing_topics and not missing_commands,
+        "ok": not missing_topics and not missing_commands and command_reference_current,
         "topics": len(topics),
         "missing_topics": missing_topics,
         "missing_commands": missing_commands,
+        "command_reference_current": command_reference_current,
     }
 
 

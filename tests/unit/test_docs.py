@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from typer.testing import CliRunner
+
+from magent.cli import main as cli_main
 from magent.docs import (
     docs_doctor,
+    docs_root,
     list_topics,
     read_topic,
     render_command_reference,
@@ -39,6 +45,40 @@ def test_docs_doctor_passes_baseline():
 
     assert result["ok"] is True
     assert read_topic("memory").startswith("# Memory")
+
+
+def test_docs_doctor_checks_generated_command_reference():
+    result = docs_doctor(cli_main._known_command_names())
+
+    assert result["ok"] is True
+    assert result["command_reference_current"] is True
+
+
+def test_packaged_command_reference_is_current():
+    expected = render_command_reference(cli_main._known_command_names())
+    current = (docs_root() / "command-reference.md").read_text(encoding="utf-8")
+
+    assert current == expected
+
+
+def test_docs_generate_reference_check_command():
+    result = CliRunner().invoke(cli_main.app, ["docs", "generate-reference", "--check"])
+
+    assert result.exit_code == 0
+    assert "Command reference is current" in result.output
+
+
+def test_docs_generate_reference_check_detects_stale_file(tmp_path: Path):
+    stale = tmp_path / "command-reference.md"
+    stale.write_text("# stale\n", encoding="utf-8")
+
+    result = CliRunner().invoke(
+        cli_main.app,
+        ["docs", "generate-reference", "--check", "--out", str(stale)],
+    )
+
+    assert result.exit_code == 1
+    assert "Command reference is stale" in result.output
 
 
 def test_render_command_reference():

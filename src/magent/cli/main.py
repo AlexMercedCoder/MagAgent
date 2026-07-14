@@ -2950,14 +2950,27 @@ def docs_doctor_cmd():
 
 
 @docs_app.command("generate-reference")
-def docs_generate_reference_cmd(out: str | None = typer.Option(None, "--out", "-o")):
+def docs_generate_reference_cmd(
+    out: str | None = typer.Option(None, "--out", "-o"),
+    check: bool = typer.Option(False, "--check", help="Fail if the generated reference differs from --out."),
+):
     """Generate command reference Markdown from the live CLI tree."""
     from magent.docs import render_command_reference
 
     text = render_command_reference(_known_command_names())
-    if out:
-        Path(out).write_text(text, encoding="utf-8")
-        console.print(f"[green]✓ Wrote {out}[/green]")
+    target = Path(out or "src/magent/docs/command-reference.md")
+    if check:
+        if not target.exists():
+            console.print(f"[red]Command reference is missing: {target}[/red]")
+            raise typer.Exit(1)
+        if target.read_text(encoding="utf-8", errors="replace") != text:
+            console.print(f"[red]Command reference is stale: {target}[/red]")
+            console.print(f"[dim]Run: magent docs generate-reference --out {target}[/dim]")
+            raise typer.Exit(1)
+        console.print(f"[green]✓ Command reference is current: {target}[/green]")
+    elif out:
+        target.write_text(text, encoding="utf-8")
+        console.print(f"[green]✓ Wrote {target}[/green]")
     else:
         console.print(text)
 

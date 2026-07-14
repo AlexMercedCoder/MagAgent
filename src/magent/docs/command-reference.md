@@ -405,18 +405,18 @@ Generated from the active Typer command tree.
 
 - `magent session timeline`
 
+## skill
+
+- `magent skill list`
+- `magent skill search`
+- `magent skill show`
+
 ## subagent
 
 - `magent subagent configure`
 - `magent subagent run`
 - `magent subagent status`
 - `magent subagent wizard`
-
-## skill
-
-- `magent skill list`
-- `magent skill search`
-- `magent skill show`
 
 ## system
 
