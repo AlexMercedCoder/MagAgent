@@ -24,6 +24,7 @@ import sys
 import tempfile
 import warnings
 import zipfile
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
@@ -559,6 +560,7 @@ class ToolExecutor:
         session_id: str = "manual",
         interactive_permissions: bool = True,
         config: Any | None = None,
+        activity_callback: Callable[[str, dict[str, Any], float, str], None] | None = None,
     ):
         self.cwd = cwd
         self.permission_mode = permission_mode
@@ -571,6 +573,7 @@ class ToolExecutor:
         self.session_id = session_id
         self.interactive_permissions = interactive_permissions
         self.config = config
+        self.activity_callback = activity_callback
         self._active_tasks: set[asyncio.Task[Any]] = set()
         self._active_processes: set[asyncio.subprocess.Process] = set()
 
@@ -2112,7 +2115,10 @@ class ToolExecutor:
                     break
                 if self.show_tool_calls:
                     elapsed = asyncio.get_running_loop().time() - started
-                    console.print(f"[dim]{_running_tool_status(tool_name, a, elapsed)}[/dim]")
+                    status = _running_tool_status(tool_name, a, elapsed)
+                    console.print(f"[dim]{status}[/dim]")
+                    if self.activity_callback:
+                        self.activity_callback(tool_name, a, elapsed, status)
                 wait_seconds = 30.0
         except KeyError as e:
             missing = str(e).strip("'")

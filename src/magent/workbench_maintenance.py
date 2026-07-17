@@ -72,7 +72,16 @@ def prune_workbench(
         if removed > 0 and not dry_run:
             store.write(name, merged)
         changes.append({"store": name, "before": original, "after": len(merged), "removed": removed})
-    return {"ok": True, "dry_run": dry_run, "older_than_days": older_than_days, "changes": changes}
+    removed_total = sum(int(item["removed"]) for item in changes)
+    return {
+        "ok": True,
+        "dry_run": dry_run,
+        "older_than_days": older_than_days,
+        "removed_total": removed_total,
+        "changed_stores": [item["store"] for item in changes if int(item["removed"]) > 0],
+        "next_command": "" if dry_run else "magent performance doctor --json",
+        "changes": changes,
+    }
 
 
 def compact_workbench(store: Any) -> dict[str, Any]:

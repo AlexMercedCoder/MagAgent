@@ -337,9 +337,10 @@ async def test_dispatch_tool_call_strips_activity_but_keeps_audit_metadata(monke
     assert session.logger.tool_calls == [("write_file", original_args, True, 1)]
     assert hook_payloads[0][1] == "pre_tool"
     assert hook_payloads[0][2]["args"]["activity"]["phase"] == "creating"
-    event_args, _event_kwargs = session.logger.activity_events[0]
-    assert event_args[0]["type"] == "tool_finished"
-    assert event_args[0]["activity"]["intent"] == "Write the requested script"
+    event_types = [args[0]["type"] for args, _kwargs in session.logger.activity_events]
+    assert event_types == ["tool_started", "tool_finished"]
+    finished_args, _event_kwargs = session.logger.activity_events[-1]
+    assert finished_args[0]["activity"]["intent"] == "Write the requested script"
 
 
 @pytest.mark.asyncio

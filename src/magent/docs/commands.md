@@ -35,6 +35,7 @@ Important command paths:
 - `magent workbench stats`: show local workbench store sizes and maintenance recommendations.
 - `magent workbench prune`: prune old high-volume workbench records.
 - `magent workbench compact`: rewrite JSON workbench stores and report bytes reclaimed.
+- `magent session events`: show normalized session events for UI and diagnostics.
 - `magent config show`: show global and current-user config files.
 - `magent config ux`: show a friendly control-center summary for provider, model roles, permissions, memory, subagents, context, and jobs.
 - `magent config get`: return redacted machine-readable global/user/merged config.

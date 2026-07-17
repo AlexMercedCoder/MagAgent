@@ -403,6 +403,7 @@ Generated from the active Typer command tree.
 
 ## session
 
+- `magent session events`
 - `magent session timeline`
 
 ## skill

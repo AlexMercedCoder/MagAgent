@@ -4,6 +4,7 @@ import json
 
 from magent import logging as magent_logging
 from magent.logging import SessionLogger, list_session_logs
+from magent.session_controls import session_event_stream
 from magent.utils import human_bytes
 
 
@@ -48,6 +49,10 @@ def test_session_logger_writes_and_lists_events(tmp_path, monkeypatch) -> None:
     assert listed[0]["session"] == "sess1"
     assert listed[0]["ended"] != "active"
     assert listed[0]["events"] == 9
+    stream = session_event_stream(logger.path)
+    stream_types = [item["type"] for item in stream["events"]]
+    assert "tool_finished" in stream_types
+    assert "token_usage" in stream_types
 
 
 def test_list_session_logs_handles_missing_and_active_logs(tmp_path, monkeypatch) -> None:

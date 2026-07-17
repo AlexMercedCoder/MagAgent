@@ -12,6 +12,8 @@ Non-streamed responses render as Markdown inside a light `MagAgent` panel so hea
 
 Streaming responses print tokens immediately for responsiveness. By default, MagAgent no longer re-renders the same answer after streaming completes, which keeps interactive sessions quieter. The renderer still supports an opt-in final Markdown render for debugging or alternate frontends.
 
+Prompt history is persisted per user. Type `/compose` for multiline input, or type `/editor` at a prompt to open `$VISUAL` / `$EDITOR` for longer formatted prompts.
+
 ## Status Lines
 
 TUI helpers expose compact status rendering for operational events:
@@ -37,6 +39,10 @@ Interactive sessions include daily-driver slash commands:
 When the model supplies tool `activity` metadata, the TUI prints a short
 `intent:` line before the tool runs. This is only status/diagnostic context and
 does not expose hidden reasoning.
+
+Long-running tools emit `tool_started`, `tool_progress`, and `tool_finished`
+activity events into the session log. Use `magent session events` to inspect the
+normalized event stream used by desktop integrations.
 
 ## Theme
 

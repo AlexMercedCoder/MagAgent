@@ -19,6 +19,8 @@ workbench store sizes, semantic memory index size, and recommendations.
 
 `magent workbench prune` targets high-volume local stores such as events, command
 history, checkpoints, sandbox runs, and eval runs. Start with `--dry-run`.
+Prune output includes `removed_total`, `changed_stores`, and a suggested next
+command so cleanup can be surfaced cleanly in CLI and desktop UIs.
 
 The `lightweight` profile lowers memory and repo-map budgets, disables semantic
 memory by default for the active user, and limits sub-agent parallelism.

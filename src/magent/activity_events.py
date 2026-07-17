@@ -9,6 +9,7 @@ AgentEventType = Literal[
     "model_round_started",
     "model_round_finished",
     "tool_started",
+    "tool_progress",
     "tool_finished",
     "permission_requested",
     "artifact_audit",

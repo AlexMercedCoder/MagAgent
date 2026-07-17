@@ -169,6 +169,7 @@ class AgentSession:
             session_id=self.session_id,
             interactive_permissions=interactive_permissions,
             config=config,
+            activity_callback=self._log_tool_progress_event,
         )
 
         # MCP servers (optional — connect only if configured)
@@ -1297,9 +1298,39 @@ class AgentSession:
             )
         )
 
+    def _log_tool_started_event(self, tool_name: str, tool_args: dict[str, Any]) -> None:
+        self.logger.log_activity_event(
+            activity_event(
+                "tool_started",
+                turn=self.turn_count,
+                tool=tool_name,
+                activity=normalize_tool_activity(tool_args),
+                detail=_tool_timing_metadata(tool_name, tool_args, {}),
+            )
+        )
+
+    def _log_tool_progress_event(
+        self,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        elapsed_seconds: float,
+        status: str,
+    ) -> None:
+        self.logger.log_activity_event(
+            activity_event(
+                "tool_progress",
+                turn=self.turn_count,
+                tool=tool_name,
+                duration_ms=elapsed_seconds * 1000,
+                activity=normalize_tool_activity(tool_args),
+                detail={**_tool_timing_metadata(tool_name, tool_args, {}), "status": status},
+            )
+        )
+
     async def _execute_tool_call(self, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
         """Dispatch a tool call and record hooks, scratchpad, and audit logs."""
         dispatch_args = strip_tool_activity(tool_args)
+        self._log_tool_started_event(tool_name, tool_args)
         run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
         if self.mcp.is_mcp_tool(tool_name):
             result = await self.mcp.dispatch(tool_name, dispatch_args)

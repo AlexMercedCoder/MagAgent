@@ -2743,6 +2743,26 @@ def session_timeline_cmd(session_id: str | None = typer.Argument(None)):
     console.print(table)
 
 
+@session_app.command("events")
+def session_events_cmd(
+    log_path: str | None = typer.Argument(None, help="Session JSONL path. Defaults to the newest log."),
+    limit: int = typer.Option(200, "--limit", "-n"),
+    event_type: Annotated[list[str] | None, typer.Option("--type", help="Filter event type.")] = None,
+):
+    """Show normalized session events for UI and diagnostics."""
+    from magent.config import LOGS_DIR
+    from magent.session_controls import session_event_stream
+
+    target = Path(log_path) if log_path else None
+    if target is None:
+        logs = sorted(LOGS_DIR.glob("*.jsonl"), key=lambda path: path.stat().st_mtime, reverse=True)
+        if not logs:
+            console.print_json(data={"ok": False, "error": "No session logs found"})
+            raise typer.Exit(1)
+        target = logs[0]
+    console.print_json(data=session_event_stream(target, limit=limit, event_types=event_type))
+
+
 @app.command("stats", rich_help_panel="Performance & Diagnostics")
 def stats_cmd():
     """Show approximate local usage and token stats."""

@@ -53,6 +53,8 @@ def test_workbench_maintenance_stats_prune_and_compact(tmp_path: Path, monkeypat
     assert any(item["store"] == "events" for item in stats["stores"])
     event_change = next(item for item in pruned["changes"] if item["store"] == "events")
     assert event_change["removed"] == 1
+    assert pruned["removed_total"] == 1
+    assert pruned["changed_stores"] == ["events"]
     assert compacted["ok"] is True
     assert len(store.read("events", [])) == 1
 

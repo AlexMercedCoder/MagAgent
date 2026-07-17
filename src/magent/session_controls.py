@@ -80,6 +80,63 @@ def session_usage(log_path: str | Path) -> dict[str, Any]:
     return usage
 
 
+def session_event_stream(
+    log_path: str | Path,
+    *,
+    limit: int = 200,
+    event_types: list[str] | None = None,
+) -> dict[str, Any]:
+    """Return recent user-facing events from a session log."""
+    path = Path(log_path)
+    wanted = set(event_types or [])
+    result = {"ok": path.exists(), "path": str(path), "events": []}
+    if not path.exists():
+        return result
+    events: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        event = _stream_event(record)
+        if event is None:
+            continue
+        if wanted and event.get("type") not in wanted:
+            continue
+        events.append(event)
+    result["events"] = events[-max(1, limit) :]
+    return result
+
+
+def _stream_event(record: dict[str, Any]) -> dict[str, Any] | None:
+    kind = record.get("event")
+    if kind == "activity_event":
+        return {
+            "type": record.get("type", "activity"),
+            "ts": record.get("ts", ""),
+            "turn": record.get("turn"),
+            "tool": record.get("tool", ""),
+            "ok": record.get("ok"),
+            "duration_ms": record.get("duration_ms"),
+            "activity": record.get("activity") or {},
+            "detail": record.get("detail") or {},
+        }
+    if kind == "timing":
+        return {
+            "type": "timing",
+            "ts": record.get("ts", ""),
+            "turn": record.get("turn"),
+            "duration_ms": record.get("duration_ms"),
+            "detail": {
+                "name": record.get("name", ""),
+                "metadata": record.get("metadata") or {},
+            },
+        }
+    if kind in {"user_turn", "assistant_turn", "token_usage", "context_pruned"}:
+        return {"type": kind, "ts": record.get("ts", ""), "turn": record.get("turn"), "detail": record}
+    return None
+
+
 def recent_insights(limit: int = 5) -> dict[str, Any]:
     """Summarize recent session logs for diagnostics."""
     logs = sorted(LOGS_DIR.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True) if LOGS_DIR.exists() else []

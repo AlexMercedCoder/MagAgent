@@ -96,6 +96,15 @@ def _recommendations(
                 "command": "magent workbench prune --dry-run",
             }
         )
+    if int(workbench.get("total_bytes") or 0) > 10_000_000:
+        items.append(
+            {
+                "severity": "info",
+                "area": "workbench",
+                "message": "Workbench state is over 10 MB; compact and prune to reduce startup diagnostics cost.",
+                "command": "magent workbench compact && magent workbench prune --dry-run",
+            }
+        )
     if int(semantic.get("chunks") or 0) > 10000:
         items.append(
             {
