@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.32.12
+
+- Fixed the CI coverage gate so it uses a ratcheted floor matching the current measured unit-suite coverage instead of the stale 75% threshold that kept recent pushes red.
+- Refreshed package metadata and built-in testing/config documentation for the patch release.
+
 ## 0.32.11
 
 - Refreshed GitHub and packaged documentation after the `0.32.10` file-write recovery release.

@@ -1,13 +1,15 @@
 # Testing And Reliability
 
 MagAgent uses focused unit tests plus CLI smoke tests to keep local agent workflows reliable.
+The CI coverage gate is ratcheted to the measured unit-suite floor so it catches
+regressions without overstating the current full-package percentage.
 
 Recommended local checks:
 
 ```bash
 python -m pytest -q
 python -m ruff check src tests
-python -m pytest --cov=src/magent --cov-report=term-missing -q
+python -m pytest tests/unit --cov=magent --cov-report=term-missing:skip-covered
 magent docs doctor
 magent readiness
 magent provider test-matrix

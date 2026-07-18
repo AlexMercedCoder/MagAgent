@@ -5,6 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from magent import __version__ as magent_version
 from magent import agent as magent_agent
 from magent import config as magent_config
 from magent import config_ux, workbench, workbench_store
@@ -29,7 +30,7 @@ def test_cli_version_and_tutorial() -> None:
     tutorial = runner.invoke(cli_main.app, ["tutorial"])
 
     assert version.exit_code == 0
-    assert "MagAgent 0.32.11" in version.output
+    assert f"MagAgent {magent_version}" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
 
@@ -392,7 +393,7 @@ def test_cli_desktop_integration_commands(tmp_path: Path, monkeypatch) -> None:
     memory_graph = runner.invoke(cli_main.app, ["memory", "graph", "--limit", "5"])
 
     assert system.exit_code == 0
-    assert json.loads(system.output)["magent_version"] == "0.32.11"
+    assert json.loads(system.output)["magent_version"] == magent_version
     assert config_get.exit_code == 0
     assert json.loads(config_get.output)["ok"] is True
     assert config_set.exit_code == 0
