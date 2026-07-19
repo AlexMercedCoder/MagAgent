@@ -4,6 +4,11 @@ import subprocess
 from pathlib import Path
 
 from magent import workbench
+from magent.goal_orchestrator import (
+    build_step_packet,
+    create_orchestrated_goal,
+    run_orchestrated_goal,
+)
 from magent.ux_flows import init_project, list_profiles
 
 
@@ -161,6 +166,101 @@ def test_build_plan_uses_project_and_goal_context(tmp_path: Path) -> None:
     assert "Check README and packaged docs" in docs_plan
     assert "Reproduce the issue" in test_plan
     assert docs_plan != test_plan
+
+
+def test_orchestrated_goal_creates_cached_step_packets(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    store = workbench.WorkbenchStore("alice")
+
+    result = create_orchestrated_goal(
+        store,
+        "Implement staged release cleanup",
+        project=tmp_path,
+        max_steps=3,
+        planning_model_role="review",
+        execution_model_role="coding",
+    )
+
+    assert result["ok"] is True
+    assert result["goal"]["mode"] == "orchestrated"
+    assert result["plan"]["mode"] == "orchestrated-goal"
+    assert result["orchestration"]["cache_key"]
+    assert len(result["orchestration"]["step_packets"]) == 3
+    assert "MasterPlanCacheKey" in result["orchestration"]["step_packets"][0]
+
+
+def test_orchestrated_step_packet_includes_prior_summaries(tmp_path: Path) -> None:
+    packet = build_step_packet(
+        goal="Ship feature",
+        root=tmp_path,
+        cache_key="abc123",
+        steps=[
+            {
+                "title": "Implement",
+                "instructions": ["Edit files"],
+                "validation": ["Files changed"],
+            },
+            {
+                "title": "Verify",
+                "instructions": ["Run tests"],
+                "validation": ["Tests pass"],
+            },
+        ],
+        step_index=1,
+        planning_model_role="review",
+        execution_model_role="coding",
+        completed_summaries=[{"step": 1, "summary": "Changed app.py"}],
+    )
+
+    assert "Step 2 of 2: Verify" in packet
+    assert "Step 1: Changed app.py" in packet
+    assert "Validation evidence" in packet
+
+
+def test_run_orchestrated_goal_uses_subagent_runner(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    store = workbench.WorkbenchStore("alice")
+    calls = []
+
+    class FakeTask:
+        result = "Summary:\n- Files changed: app.py\n- Commands run: pytest -q"
+        error = ""
+
+    class FakeRunner:
+        def __init__(self, *args, **kwargs):
+            calls.append({"args": args, "kwargs": kwargs})
+
+        async def spawn(self, task_id: str, description: str):
+            calls.append({"task_id": task_id, "description": description})
+            return FakeTask()
+
+    import magent.subagents as subagents
+
+    monkeypatch.setattr(subagents, "SubAgentRunner", FakeRunner)
+
+    import asyncio
+
+    result = asyncio.run(
+        run_orchestrated_goal(
+            store,
+            "Ship staged feature",
+            project=tmp_path,
+            username="alice",
+            provider=object(),
+            extraction_provider=object(),
+            config=object(),
+            max_steps=1,
+            quiet=True,
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == "completed"
+    assert result["completed_summaries"][0]["ok"] is True
+    assert calls[0]["kwargs"]["quiet"] is True
+    assert "MasterPlanCacheKey" in calls[1]["description"]
 
 
 def test_save_execution_plan_with_command(tmp_path: Path, monkeypatch) -> None:

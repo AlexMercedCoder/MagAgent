@@ -621,6 +621,38 @@ def test_cli_goal_jobs_statusline_config_and_context_audit(tmp_path: Path, monke
     assert "Context Hygiene Suggestions" in audit.output
 
 
+def test_cli_goal_orchestrated_creates_staged_plan(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    store = WorkbenchStore("cli-user")
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+
+    result = runner.invoke(
+        cli_main.app,
+        [
+            "goal",
+            "Ship staged orchestration",
+            "--project",
+            str(project),
+            "--orchestrated",
+            "--orchestrated-steps",
+            "2",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["goal"]["mode"] == "orchestrated"
+    assert payload["plan"]["mode"] == "orchestrated-goal"
+    assert len(payload["orchestration"]["step_packets"]) == 2
+    assert payload["orchestration"]["planning_model_role"] == "review"
+
+
 def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch) -> None:
     project = tmp_path / "project"
     (project / ".magent").mkdir(parents=True)

@@ -73,6 +73,7 @@ from magent.cli.command_context import (
     ProviderCredentialError,
     build_extraction_provider,
     build_provider,
+    build_provider_for_role,
     known_command_names,
     require_user,
     store,
@@ -1469,6 +1470,10 @@ def goal_cmd(
     max_loops: int = typer.Option(3, "--max-loops", min=1, max=20),
     verifier_model: str = typer.Option("cheap", "--verifier-model-role"),
     reviewer_model: str = typer.Option("review", "--reviewer-model-role"),
+    orchestrated: bool = typer.Option(False, "--orchestrated/--no-orchestrated", help="Use staged cached-plan/sub-agent orchestration."),
+    orchestrated_steps: int = typer.Option(3, "--orchestrated-steps", min=1, max=8, help="Maximum staged sub-agent steps."),
+    planning_model_role: str = typer.Option("review", "--planning-model-role", help="Model role used for master/step planning metadata."),
+    execution_model_role: str = typer.Option("coding", "--execution-model-role", help="Model role used for sub-agent execution metadata."),
     provider: str | None = typer.Option(None, "--provider", help="Provider ID when using --run."),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name when using --run."),
     permission_mode: str | None = typer.Option(None, "--permission-mode", help="Permission mode when using --run."),
@@ -1476,6 +1481,70 @@ def goal_cmd(
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create a goal loop with verifier/reviewer workflow scaffolding."""
+    if orchestrated:
+        if background:
+            console.print("[red]`magent goal --orchestrated` cannot be queued with --background yet. Use --run or save the staged plan.[/red]")
+            raise typer.Exit(2)
+        from magent.goal_orchestrator import create_orchestrated_goal, run_orchestrated_goal
+
+        if run:
+            username = _require_user()
+            cfg = load_config(username)
+            if provider is None and model is None:
+                try:
+                    main_provider = build_provider_for_role(cfg, execution_model_role)
+                except ProviderCredentialError as exc:
+                    console.print(f"[red]Execution model role not ready:[/red] {exc}")
+                    raise typer.Exit(1) from exc
+            else:
+                main_provider = _build_provider(cfg, provider, model)
+            extract_provider = _build_extraction_provider(cfg)
+
+            async def _run_orchestrated():
+                return await run_orchestrated_goal(
+                    _store(),
+                    goal,
+                    project=project,
+                    username=username,
+                    provider=main_provider,
+                    extraction_provider=extract_provider,
+                    config=cfg,
+                    verify=verify,
+                    review=review,
+                    max_steps=orchestrated_steps,
+                    planning_model_role=planning_model_role,
+                    execution_model_role=execution_model_role,
+                    quiet=json_output,
+                )
+
+            result = asyncio.run(_run_orchestrated())
+        else:
+            result = create_orchestrated_goal(
+                _store(),
+                goal,
+                project=project,
+                verify=verify,
+                review=review,
+                max_steps=orchestrated_steps,
+                planning_model_role=planning_model_role,
+                execution_model_role=execution_model_role,
+            )
+        if json_output:
+            console.print_json(data=result)
+            return
+        goal_item = result["goal"]
+        plan = result["plan"]
+        orchestration = result["orchestration"]
+        console.print(f"[green]✓ Created orchestrated goal {goal_item['id']}[/green]")
+        console.print(Panel(plan["plan_markdown"], title="Cached Master Plan"))
+        console.print(f"[dim]Saved staged plan:[/dim] {plan['id']}")
+        console.print(f"[dim]Cache key:[/dim] {orchestration['cache_key']}")
+        console.print("[dim]Run staged execution with:[/dim]")
+        console.print(
+            f"  magent goal {json.dumps(goal)} --project {json.dumps(str(Path(project).resolve()))} --orchestrated --run"
+        )
+        return
+
     from magent.daily_driver import create_goal
 
     result = create_goal(

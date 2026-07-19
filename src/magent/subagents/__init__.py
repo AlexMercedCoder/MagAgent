@@ -37,12 +37,14 @@ class SubAgentRunner:
         extraction_provider,
         cwd: str,
         config,
+        quiet: bool = False,
     ):
         self.username = username
         self.provider = provider
         self.extraction_provider = extraction_provider
         self.cwd = cwd
         self.config = config
+        self.quiet = quiet
         self._tasks: dict[str, SubAgentTask] = {}
 
     async def spawn(self, task_id: str, description: str) -> SubAgentTask:
@@ -55,17 +57,19 @@ class SubAgentRunner:
         if max_subagents <= 0 or len(self._tasks) >= max_subagents:
             task.done = True
             task.error = f"Sub-agent cap reached ({max_subagents}). Run `magent subagent configure --max <n>` to change it."
-            console.print(f"[dim red]✗ {task.error}[/dim red]")
+            if not self.quiet:
+                console.print(f"[dim red]✗ {task.error}[/dim red]")
             return task
         self._tasks[task_id] = task
 
-        console.print(
-            Panel(
-                f"[bold cyan]⚡ Spawning sub-agent[/bold cyan] [{task_id}]\n"
-                f"[dim]{description[:200]}[/dim]",
-                border_style="cyan",
+        if not self.quiet:
+            console.print(
+                Panel(
+                    f"[bold cyan]⚡ Spawning sub-agent[/bold cyan] [{task_id}]\n"
+                    f"[dim]{description[:200]}[/dim]",
+                    border_style="cyan",
+                )
             )
-        )
 
         try:
             from magent.agent import AgentSession
@@ -84,14 +88,16 @@ class SubAgentRunner:
             task.result = response
             task.done = True
 
-            console.print(
-                f"[dim green]✓ Sub-agent [{task_id}] completed ({len(response)} chars)[/dim green]"
-            )
+            if not self.quiet:
+                console.print(
+                    f"[dim green]✓ Sub-agent [{task_id}] completed ({len(response)} chars)[/dim green]"
+                )
 
         except Exception as e:
             task.error = str(e)
             task.done = True
-            console.print(f"[dim red]✗ Sub-agent [{task_id}] failed: {e}[/dim red]")
+            if not self.quiet:
+                console.print(f"[dim red]✗ Sub-agent [{task_id}] failed: {e}[/dim red]")
 
         return task
 

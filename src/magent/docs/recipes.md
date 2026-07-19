@@ -19,6 +19,7 @@ the daemon queue.
 
 ```bash
 magent goal "Implement the settings page until tests pass and review is clean"
+magent goal "Implement the settings page" --orchestrated
 magent goal "Ship the landing page" --background
 magent jobs
 ```
@@ -31,6 +32,18 @@ review context.
 
 For interactive sessions, `/goal <task>` sends the goal-loop prompt directly to
 the current chat. Use `/jobs` to inspect queued background work.
+
+Use `magent goal --orchestrated` for larger tasks that benefit from a stable
+master plan and smaller sub-agent packets. The command saves an
+`orchestrated-goal` plan with a cache key, planning/execution model-role
+metadata, validation criteria per step, and exact sub-agent summary
+requirements. Add `--run` to execute the staged packets sequentially through
+the configured sub-agent runner; unless `--provider` or `--model` is supplied,
+execution uses the configured `--execution-model-role`. The planning role is
+persisted in the cache and step packets so future model-backed planning can
+route through the same configuration contract. This mode is intentionally
+opt-in; small one-shot tasks should keep using the default goal loop or
+`magent ask`.
 
 ## Fix failing CI
 

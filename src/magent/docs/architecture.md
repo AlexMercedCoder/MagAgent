@@ -51,6 +51,14 @@ so file caps, git-aware discovery, and ignored directories remain consistent.
 
 `magent.subagents` lets the main agent delegate focused work to child sessions. The runner enforces the configured sub-agent cap and parallelism defaults before spawning child sessions.
 
+`magent.goal_orchestrator` owns the opt-in staged goal flow used by
+`magent goal --orchestrated`. It creates a durable cached master plan, derives
+bounded step packets with validation criteria, records planning/execution model
+role intent, and can run the packets sequentially through `magent.subagents`.
+When staged execution runs without an explicit provider/model override, the CLI
+resolves the execution provider from the configured execution model role.
+Default goal loops do not use this path.
+
 `magent.agent_defs` loads built-in, user, project, and plugin-backed Markdown agent definitions. Manual `@review`, `@explore`, and `@docs` invocations are resolved before provider calls so specialist prompts can be reused from chat, one-shot tasks, and future sub-agent orchestration.
 
 `magent.hooks` runs project-local lifecycle hooks around tool calls, edits, command failures, memory candidates, and release checks. Runtime modules should emit hook events through this facade instead of executing hook commands directly.

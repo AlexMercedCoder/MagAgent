@@ -27,6 +27,7 @@ High-confidence coverage focuses on:
 - terminal UI rendering and streaming behavior
 - context maps and explicit workbench-to-memory promotion
 - non-interactive ask audits and provider tool-use smoke checks
+- opt-in orchestrated goal plan creation and sub-agent step packet contracts
 
 Use `magent test explain <file>` when targeted test selection is surprising. Use
 `magent plan-apply --dry-run <plan-id>` before executing buffered plan operations.

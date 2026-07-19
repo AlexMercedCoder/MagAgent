@@ -11,6 +11,8 @@ Important command paths:
 - `magent ask --json "task"`: emit a machine-readable response, audit, and tool summary.
 - `magent ask --json --events "task"`: include coarse structured desktop timeline events.
 - `magent goal "task"`: create a measurable goal loop with verifier/reviewer workflow scaffolding.
+- `magent goal "task" --orchestrated`: create a cached master plan with staged sub-agent step packets.
+- `magent goal "task" --orchestrated --run`: run the staged plan sequentially through focused sub-agents.
 - `magent goal "task" --background`: queue the goal prompt in the daemon queue.
 - `magent jobs`: show background daemon jobs in a friendly table.
 - `magent jobs --json`: emit machine-readable daemon queue status.
