@@ -1482,12 +1482,12 @@ def goal_cmd(
 ):
     """Create a goal loop with verifier/reviewer workflow scaffolding."""
     if orchestrated:
-        if background:
-            console.print("[red]`magent goal --orchestrated` cannot be queued with --background yet. Use --run or save the staged plan.[/red]")
-            raise typer.Exit(2)
         from magent.goal_orchestrator import create_orchestrated_goal, run_orchestrated_goal
 
         if run:
+            if background:
+                console.print("[red]Use either --run or --background for orchestrated goals, not both.[/red]")
+                raise typer.Exit(2)
             username = _require_user()
             cfg = load_config(username)
             if provider is None and model is None:
@@ -1529,6 +1529,24 @@ def goal_cmd(
                 planning_model_role=planning_model_role,
                 execution_model_role=execution_model_role,
             )
+            if background:
+                from magent.daemon import enqueue_task
+
+                queued = enqueue_task(
+                    _store(),
+                    "orchestrated_goal",
+                    {"id": result["plan"]["id"], "goal": goal},
+                    project=project,
+                )
+                result["queued"] = queued
+                result["goal"] = _store().update_item("goals", result["goal"]["id"], status="queued") or result["goal"]
+                result["plan"] = _store().update_item(
+                    "plans",
+                    result["plan"]["id"],
+                    status="queued",
+                    orchestration={**result["orchestration"], "status": "queued"},
+                ) or result["plan"]
+                result["orchestration"] = result["plan"]["orchestration"]
         if json_output:
             console.print_json(data=result)
             return
@@ -1539,10 +1557,13 @@ def goal_cmd(
         console.print(Panel(plan["plan_markdown"], title="Cached Master Plan"))
         console.print(f"[dim]Saved staged plan:[/dim] {plan['id']}")
         console.print(f"[dim]Cache key:[/dim] {orchestration['cache_key']}")
-        console.print("[dim]Run staged execution with:[/dim]")
-        console.print(
-            f"  magent goal {json.dumps(goal)} --project {json.dumps(str(Path(project).resolve()))} --orchestrated --run"
-        )
+        if result.get("queued"):
+            console.print(f"[dim]Queued background job:[/dim] {result['queued']['id']}")
+            console.print("[dim]Inspect with `magent jobs` and run due work with `magent daemon run-once`.[/dim]")
+        else:
+            console.print("[dim]Preview or run staged execution with:[/dim]")
+            console.print(f"  magent goal-run {plan['id']} --dry-run")
+            console.print(f"  magent goal-run {plan['id']}")
         return
 
     from magent.daily_driver import create_goal
@@ -1590,6 +1611,71 @@ def goal_cmd(
         console.print(f"  magent goal {json.dumps(goal)} --project {json.dumps(str(Path(project).resolve()))} --run")
         console.print("[dim]Or run the generated prompt directly:[/dim]")
         console.print(f"  magent ask {json.dumps(goal_item['prompt'])} --project {json.dumps(str(Path(project).resolve()))} --repair-attempts 2 --strict-audit")
+
+
+@app.command("goal-run", rich_help_panel="Everyday Agent Work")
+def goal_run_cmd(
+    plan_id: str = typer.Argument(..., help="Saved orchestrated plan id"),
+    project: str = typer.Option(".", "--project", "-p", help="Project directory fallback for provider execution."),
+    retry_step: int = typer.Option(0, "--retry-step", min=0, help="Rerun a specific 1-based step and following steps."),
+    dry_run: bool = typer.Option(False, "--dry-run/--run", help="Preview the next step packet without executing."),
+    provider: str | None = typer.Option(None, "--provider", help="Provider ID override."),
+    model: str | None = typer.Option(None, "--model", "-m", help="Model name override."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Resume, retry, or preview a saved orchestrated goal plan."""
+    from magent.goal_orchestrator import preview_orchestrated_plan, run_orchestrated_plan
+
+    store_obj = _store()
+    try:
+        preview = preview_orchestrated_plan(store_obj, plan_id, retry_step=retry_step)
+    except ValueError as exc:
+        preview = {"ok": False, "error": str(exc), "plan_id": plan_id}
+    if not preview.get("ok"):
+        if json_output:
+            console.print_json(data=preview)
+        else:
+            console.print(f"[red]{preview.get('error')}[/red]")
+        raise typer.Exit(1)
+    if dry_run:
+        if json_output:
+            console.print_json(data=preview)
+            return
+        _print_orchestrated_preview(preview)
+        return
+
+    username = _require_user()
+    cfg = load_config(username)
+    execution_role = preview["orchestration"]["execution_model_role"]
+    if provider is None and model is None:
+        try:
+            main_provider = build_provider_for_role(cfg, execution_role)
+        except ProviderCredentialError as exc:
+            console.print(f"[red]Execution model role not ready:[/red] {exc}")
+            raise typer.Exit(1) from exc
+    else:
+        main_provider = _build_provider(cfg, provider, model)
+    extract_provider = _build_extraction_provider(cfg)
+
+    async def _run_saved_orchestrated():
+        return await run_orchestrated_plan(
+            store_obj,
+            plan_id,
+            username=username,
+            provider=main_provider,
+            extraction_provider=extract_provider,
+            config=cfg,
+            retry_step=retry_step,
+            quiet=json_output,
+        )
+
+    result = asyncio.run(_run_saved_orchestrated())
+    if json_output:
+        console.print_json(data=result)
+        return
+    _print_orchestrated_run_result(result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
 
 
 @app.command("jobs", rich_help_panel="Everyday Agent Work")
@@ -1952,6 +2038,39 @@ def _print_jobs_summary(data: dict) -> None:
             json.dumps(payload)[:90],
         )
     console.print(table)
+
+
+def _print_orchestrated_preview(data: dict) -> None:
+    plan = data.get("plan") or {}
+    orchestration = data.get("orchestration") or {}
+    console.print(Panel(plan.get("plan_markdown", ""), title=f"Orchestrated Plan {plan.get('id', '')}"))
+    table = Table("Step", "Status", "Title")
+    for item in orchestration.get("step_statuses") or []:
+        table.add_row(str(item.get("step", "")), str(item.get("status", "")), str(item.get("title", ""))[:80])
+    console.print(table)
+    console.print(Panel(data.get("packet", ""), title=f"Next Step Packet {data.get('next_step')}"))
+
+
+def _print_orchestrated_run_result(data: dict) -> None:
+    plan = data.get("plan") or {}
+    orchestration = data.get("orchestration") or {}
+    status = data.get("status") or orchestration.get("status") or "unknown"
+    console.print(Panel.fit(f"[bold]{plan.get('id', '')}[/bold] {status}", title="Orchestrated Goal"))
+    table = Table("Step", "Status", "Title", "Evidence")
+    summaries = {int(item.get("step") or 0): item for item in data.get("completed_summaries") or []}
+    for item in orchestration.get("step_statuses") or []:
+        step_no = int(item.get("step") or 0)
+        summary = summaries.get(step_no, {})
+        evidence = summary.get("error") or summary.get("summary") or ""
+        table.add_row(
+            str(step_no),
+            str(item.get("status", "")),
+            str(item.get("title", ""))[:60],
+            str(evidence).replace("\n", " ")[:90],
+        )
+    console.print(table)
+    if not data.get("ok"):
+        console.print("[yellow]Resume with `magent goal-run <plan-id>` or retry a failed step with `magent goal-run <plan-id> --retry-step N`.[/yellow]")
 
 
 def _print_config_center(config, provider_display: str = "") -> None:
@@ -2385,6 +2504,20 @@ def model_doctor_cmd():
     from magent.config_ux import ux_doctor
 
     console.print_json(data={"ok": True, "model_roles": ux_doctor(get_current_user())["model_roles"]})
+
+
+@model_app.command("orchestration-doctor")
+def model_orchestration_doctor_cmd(
+    planning_role: str = typer.Option("review", "--planning-role"),
+    execution_role: str = typer.Option("coding", "--execution-role"),
+):
+    """Show planning/execution role readiness for orchestrated goals."""
+    from magent.config_ux import orchestration_role_doctor
+
+    result = orchestration_role_doctor(planning_role=planning_role, execution_role=execution_role)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
 
 
 @model_app.command("health")

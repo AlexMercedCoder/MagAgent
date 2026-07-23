@@ -13,6 +13,10 @@ Important command paths:
 - `magent goal "task"`: create a measurable goal loop with verifier/reviewer workflow scaffolding.
 - `magent goal "task" --orchestrated`: create a cached master plan with staged sub-agent step packets.
 - `magent goal "task" --orchestrated --run`: run the staged plan sequentially through focused sub-agents.
+- `magent goal "task" --orchestrated --background`: save the staged plan and queue it for the daemon.
+- `magent goal-run <plan-id> --dry-run`: preview the next staged packet without spending model quota.
+- `magent goal-run <plan-id>`: resume a saved orchestrated plan from the next incomplete step.
+- `magent goal-run <plan-id> --retry-step 2`: retry one failed step and continue from there.
 - `magent goal "task" --background`: queue the goal prompt in the daemon queue.
 - `magent jobs`: show background daemon jobs in a friendly table.
 - `magent jobs --json`: emit machine-readable daemon queue status.
@@ -83,6 +87,7 @@ Important command paths:
 - `magent model set-role <role> <model>`: configure a model role.
 - `magent model clear-role <role>`: clear a model role.
 - `magent model doctor`: show model role readiness.
+- `magent model orchestration-doctor`: show planning/execution role readiness for orchestrated goals.
 - `magent model health`: show model role provider/runtime health.
 - `magent model capabilities`: show inferred role capabilities such as text, tool calling, vision, and image generation.
 - `magent model recommend`: recommend a model from successful local health observations.

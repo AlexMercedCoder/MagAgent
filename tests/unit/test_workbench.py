@@ -7,7 +7,9 @@ from magent import workbench
 from magent.goal_orchestrator import (
     build_step_packet,
     create_orchestrated_goal,
+    preview_orchestrated_plan,
     run_orchestrated_goal,
+    run_orchestrated_plan,
 )
 from magent.ux_flows import init_project, list_profiles
 
@@ -261,6 +263,67 @@ def test_run_orchestrated_goal_uses_subagent_runner(tmp_path: Path, monkeypatch)
     assert result["completed_summaries"][0]["ok"] is True
     assert calls[0]["kwargs"]["quiet"] is True
     assert "MasterPlanCacheKey" in calls[1]["description"]
+
+
+def test_orchestrated_plan_preview_and_retry_resume(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = workbench.WorkbenchStore("alice")
+    created = create_orchestrated_goal(store, "Ship staged feature", project=tmp_path, max_steps=2)
+    calls = []
+
+    class FakeTask:
+        def __init__(self, result: str = "", error: str = ""):
+            self.result = result
+            self.error = error
+
+    class FakeRunner:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def spawn(self, task_id: str, description: str):
+            calls.append({"task_id": task_id, "description": description})
+            if len(calls) == 1:
+                return FakeTask("Summary:\n- Files changed: app.py")
+            if len(calls) == 2:
+                return FakeTask("", "verification failed")
+            return FakeTask("Summary:\n- Validation evidence: retry passed")
+
+    import magent.subagents as subagents
+
+    monkeypatch.setattr(subagents, "SubAgentRunner", FakeRunner)
+
+    import asyncio
+
+    first = asyncio.run(
+        run_orchestrated_plan(
+            store,
+            created["plan"]["id"],
+            username="alice",
+            provider=object(),
+            extraction_provider=object(),
+            config=object(),
+        )
+    )
+    assert first["status"] == "blocked"
+    assert first["orchestration"]["step_statuses"][1]["status"] == "failed"
+
+    preview = preview_orchestrated_plan(store, created["plan"]["id"], retry_step=2)
+    assert preview["next_step"] == 2
+    assert "Step 1: Summary:" in preview["packet"]
+
+    retry = asyncio.run(
+        run_orchestrated_plan(
+            store,
+            created["plan"]["id"],
+            username="alice",
+            provider=object(),
+            extraction_provider=object(),
+            config=object(),
+            retry_step=2,
+        )
+    )
+    assert retry["ok"] is True
+    assert retry["orchestration"]["step_statuses"][1]["status"] == "completed"
 
 
 def test_save_execution_plan_with_command(tmp_path: Path, monkeypatch) -> None:

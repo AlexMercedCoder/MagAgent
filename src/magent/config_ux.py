@@ -383,6 +383,38 @@ def model_role_health() -> dict[str, Any]:
     return {"ok": all(row["ok"] or not row["configured"] for row in rows), "roles": rows}
 
 
+def orchestration_role_doctor(
+    *,
+    planning_role: str = "review",
+    execution_role: str = "coding",
+) -> dict[str, Any]:
+    """Return readiness for model roles used by staged goal orchestration."""
+    cfg = magent_config.load_config(magent_config.get_current_user())
+    rows = []
+    env_vars = provider_env_vars()
+    for role, purpose in [(planning_role, "planning"), (execution_role, "execution")]:
+        provider_id, model = cfg.provider_and_model_for_role(role)
+        provider_cfg = cfg.provider_config(provider_id)
+        configured = bool(model)
+        rows.append(
+            {
+                "purpose": purpose,
+                "role": role,
+                "provider": provider_id,
+                "model": model,
+                "configured": configured,
+                "provider_known": bool(provider_cfg) or provider_id in PROVIDER_CATALOG,
+                "api_key_env": provider_cfg.get("api_key_env") or env_vars.get(provider_id, ""),
+                "ready_hint": (
+                    "ready if provider credentials are valid"
+                    if configured
+                    else f"set with `magent model set-role {role} provider/model`"
+                ),
+            }
+        )
+    return {"ok": all(item["configured"] and item["provider_known"] for item in rows), "roles": rows}
+
+
 def configure_memory(
     username: str,
     *,

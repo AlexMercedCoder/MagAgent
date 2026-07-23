@@ -56,8 +56,10 @@ so file caps, git-aware discovery, and ignored directories remain consistent.
 bounded step packets with validation criteria, records planning/execution model
 role intent, and can run the packets sequentially through `magent.subagents`.
 When staged execution runs without an explicit provider/model override, the CLI
-resolves the execution provider from the configured execution model role.
-Default goal loops do not use this path.
+resolves the execution provider from the configured execution model role. Saved
+plans are resumable through `magent goal-run`, retriable by step, previewable
+without model calls, and queueable through the daemon as `orchestrated_goal`
+tasks. Default goal loops do not use this path.
 
 `magent.agent_defs` loads built-in, user, project, and plugin-backed Markdown agent definitions. Manual `@review`, `@explore`, and `@docs` invocations are resolved before provider calls so specialist prompts can be reused from chat, one-shot tasks, and future sub-agent orchestration.
 

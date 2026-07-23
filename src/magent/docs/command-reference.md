@@ -106,6 +106,7 @@ Generated from the active Typer command tree.
 - `magent gateway`
 - `magent github`
 - `magent goal`
+- `magent goal-run`
 - `magent graph`
 - `magent hook`
 - `magent inbox`
@@ -293,6 +294,7 @@ Generated from the active Typer command tree.
 - `magent model doctor`
 - `magent model health`
 - `magent model image-wizard`
+- `magent model orchestration-doctor`
 - `magent model recommend`
 - `magent model roles`
 - `magent model set-role`

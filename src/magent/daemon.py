@@ -102,6 +102,8 @@ def _execute_item(item: dict[str, Any]) -> dict[str, Any]:
     project = item.get("project") or "."
     if kind == "recipe":
         command = ["magent", "recipe", "run", payload.get("name", ""), "--project", project]
+    elif kind == "orchestrated_goal":
+        command = ["magent", "goal-run", payload.get("id", ""), "--project", project, "--json"]
     elif kind == "plan":
         command = ["magent", "plan-apply", payload.get("id", ""), "--yes"]
     elif kind == "shell":

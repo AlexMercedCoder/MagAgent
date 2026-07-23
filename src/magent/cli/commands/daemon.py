@@ -20,7 +20,7 @@ def register_daemon_commands(daemon_app: typer.Typer) -> None:
         from magent.cli.command_context import store
         from magent.daemon import enqueue_task
 
-        payload_key = {"recipe": "name", "plan": "id", "shell": "command"}.get(kind, "task")
+        payload_key = {"recipe": "name", "plan": "id", "orchestrated_goal": "id", "shell": "command"}.get(kind, "task")
         console.print_json(data=enqueue_task(store(), kind, {payload_key: value}, project=project, run_at=run_at))
 
     @daemon_app.command("list")

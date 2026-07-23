@@ -29,6 +29,7 @@ magent docs doctor
 - [Background Worker](../src/magent/docs/daemon.md)
 - [Plugins](../src/magent/docs/plugins.md)
 - [Desktop Integration](../src/magent/docs/desktop-integration.md)
+- [Next Release Prep](RELEASE_PREP_NEXT.md)
 
 Common setup tasks now have CLI-first flows:
 

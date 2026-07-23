@@ -20,6 +20,9 @@ the daemon queue.
 ```bash
 magent goal "Implement the settings page until tests pass and review is clean"
 magent goal "Implement the settings page" --orchestrated
+magent goal-run plan_0001 --dry-run
+magent goal-run plan_0001
+magent goal-run plan_0001 --retry-step 2
 magent goal "Ship the landing page" --background
 magent jobs
 ```
@@ -44,6 +47,14 @@ persisted in the cache and step packets so future model-backed planning can
 route through the same configuration contract. This mode is intentionally
 opt-in; small one-shot tasks should keep using the default goal loop or
 `magent ask`.
+
+Saved staged plans are resumable with `magent goal-run <plan-id>`. Use
+`--dry-run` to inspect the next step packet before spending model quota, and
+use `--retry-step N` to rerun a failed step and continue through the remaining
+steps. `magent goal --orchestrated --background` stores the plan and queues an
+`orchestrated_goal` daemon task that calls `goal-run` when the worker runs.
+Before using different planning/execution roles, run
+`magent model orchestration-doctor` to check the resolved providers and models.
 
 ## Fix failing CI
 

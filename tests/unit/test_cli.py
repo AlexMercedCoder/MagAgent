@@ -653,6 +653,107 @@ def test_cli_goal_orchestrated_creates_staged_plan(tmp_path: Path, monkeypatch) 
     assert payload["orchestration"]["planning_model_role"] == "review"
 
 
+def test_cli_goal_orchestrated_background_and_goal_run_preview(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    store = WorkbenchStore("cli-user")
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+
+    result = runner.invoke(
+        cli_main.app,
+        [
+            "goal",
+            "Ship staged orchestration",
+            "--project",
+            str(project),
+            "--orchestrated",
+            "--orchestrated-steps",
+            "2",
+            "--background",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["queued"]["kind"] == "orchestrated_goal"
+    assert payload["plan"]["status"] == "queued"
+
+    manual = runner.invoke(cli_main.daemon_app, ["enqueue", "orchestrated_goal", payload["plan"]["id"], "--project", str(project)])
+    assert manual.exit_code == 0
+    assert json.loads(manual.output)["payload"]["id"] == payload["plan"]["id"]
+
+    preview = runner.invoke(cli_main.app, ["goal-run", payload["plan"]["id"], "--dry-run", "--json"])
+    assert preview.exit_code == 0
+    preview_payload = json.loads(preview.output)
+    assert preview_payload["next_step"] == 1
+    assert "MasterPlanCacheKey" in preview_payload["packet"]
+
+
+def test_cli_goal_run_executes_saved_plan_with_fake_runner(tmp_path: Path, monkeypatch) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    store = WorkbenchStore("cli-user")
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "goal",
+            "Ship staged orchestration",
+            "--project",
+            str(project),
+            "--orchestrated",
+            "--orchestrated-steps",
+            "1",
+            "--json",
+        ],
+    )
+    plan_id = json.loads(created.output)["plan"]["id"]
+
+    class FakeTask:
+        result = "Summary:\n- Files changed: README.md\n- Validation evidence: ok"
+        error = ""
+
+    class FakeRunner:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def spawn(self, task_id: str, description: str):
+            return FakeTask()
+
+    import magent.subagents as subagents
+
+    monkeypatch.setattr(subagents, "SubAgentRunner", FakeRunner)
+
+    run = runner.invoke(cli_main.app, ["goal-run", plan_id, "--provider", "ollama", "--model", "qwen2.5-coder:32b", "--json"])
+    assert run.exit_code == 0, run.output
+    payload = json.loads(run.output)
+    assert payload["status"] == "completed"
+    assert payload["orchestration"]["step_statuses"][0]["status"] == "completed"
+
+
+def test_cli_model_orchestration_doctor(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    config_ux.set_model_role("coding", "ollama/qwen2.5-coder:32b")
+    config_ux.set_model_role("review", "ollama/qwen2.5-coder:32b")
+
+    result = runner.invoke(cli_main.app, ["model", "orchestration-doctor"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert {item["purpose"] for item in payload["roles"]} == {"planning", "execution"}
+
+
 def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch) -> None:
     project = tmp_path / "project"
     (project / ".magent").mkdir(parents=True)
