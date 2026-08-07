@@ -24,12 +24,26 @@ MANIFEST
 
 # Virtual environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Local credentials / secrets
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cert
+secrets.*
+credentials.*
+*.secret
+*.secrets
 
 # Distribution / packaging
 *.tar.gz
