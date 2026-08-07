@@ -111,7 +111,7 @@ def test_cli_first_configuration_commands(tmp_path: Path, monkeypatch) -> None:
         ["provider", "set", "openai", "--model", "gpt-5", "--api-key-env", "OPENAI_API_KEY"],
     )
     detected = runner.invoke(cli_main.app, ["provider", "detect"])
-    roles = runner.invoke(cli_main.app, ["model", "set-role", "review", "anthropic/claude-sonnet-4-5"])
+    roles = runner.invoke(cli_main.app, ["model", "set-role", "review", "anthropic/claude-sonnet-5"])
     memory = runner.invoke(
         cli_main.app,
         ["memory", "configure", "--mode", "inbox-first", "--no-semantic", "--write-every", "2"],

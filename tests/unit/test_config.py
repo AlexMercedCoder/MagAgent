@@ -125,6 +125,27 @@ def test_model_role_resolution_supports_provider_prefixed_and_fallback_values() 
     assert cfg.provider_and_model_for_role("review") == ("ollama", "qwen2.5-coder:32b")
 
 
+def test_provider_env_aliases_are_detected_and_resolved(monkeypatch) -> None:
+    monkeypatch.delenv("NOUS_API_KEY", raising=False)
+    monkeypatch.setenv("NOUS_KEY", "alias-secret")
+
+    cfg = Config(
+        {
+            "defaults": {"provider": "nous-portal", "model": "deepseek/deepseek-v4-flash"},
+            "providers": {"nous-portal": {"api_key_env": "NOUS_API_KEY"}},
+        }
+    )
+    readiness = config_ux.provider_readiness("nous-portal", {"api_key_env": "NOUS_API_KEY"})
+    env_rows = {item["provider"]: item for item in config_ux.provider_env_status()["providers"]}
+
+    assert cfg.resolve_api_key("nous-portal") == "alias-secret"
+    assert readiness["ready"] is True
+    assert readiness["env_present_name"] == "NOUS_KEY"
+    assert env_rows["nous-portal"]["present"] is True
+    assert env_rows["nous-portal"]["present_env"] == "NOUS_KEY"
+    assert "NOUS_KEY" in env_rows["nous-portal"]["aliases"]
+
+
 def test_config_resolves_keyring_and_instruction_sources(monkeypatch) -> None:
     monkeypatch.setattr(auth_store, "load_keyring_secret", lambda provider_id: "key-from-ring")
     cfg = Config(
@@ -196,7 +217,7 @@ def test_config_ux_helpers_update_toml_without_manual_editing(tmp_path: Path, mo
 
     provider = config_ux.set_default_provider("openai", "gpt-5", api_key_env="OPENAI_API_KEY")
     codex = config_ux.set_default_provider("openai", "gpt-5", access_mode="codex")
-    role = config_ux.set_model_role("review", "anthropic/claude-sonnet-4-5")
+    role = config_ux.set_model_role("review", "anthropic/claude-sonnet-5")
     image_role = config_ux.set_model_role("image_maker", "openai/gpt-image-1")
     memory = config_ux.configure_memory("alice", mode="inbox-first", semantic=False, write_every=3)
     subagents = config_ux.configure_subagents(max_subagents=5, max_parallel=2, model_role="cheap")
@@ -205,7 +226,7 @@ def test_config_ux_helpers_update_toml_without_manual_editing(tmp_path: Path, mo
 
     assert provider["provider"] == "openai"
     assert codex["access_mode"] == "codex"
-    assert role["value"] == "anthropic/claude-sonnet-4-5"
+    assert role["value"] == "anthropic/claude-sonnet-5"
     assert image_role["value"] == "openai/gpt-image-1"
     assert memory["memory"]["inbox_first"] is True
     assert subagents["subagents"]["max_subagents"] == 5
@@ -343,7 +364,10 @@ def test_provider_readiness_accepts_inline_keys(tmp_path: Path, monkeypatch) -> 
     assert next(item for item in doctor["actions"] if item["key"] == "opencode_go")["ok"] is True
 
 
-def test_cli_provider_builder_requires_missing_api_key() -> None:
+def test_cli_provider_builder_requires_missing_api_key(monkeypatch) -> None:
+    monkeypatch.delenv("OPENCODE_ZEN_KEY", raising=False)
+    monkeypatch.delenv("OPENCODE_ZEN_API_KEY", raising=False)
+    monkeypatch.delenv("OPENCODE_KEY", raising=False)
     cfg = Config(
         {
             "defaults": {"provider": "opencode-zen", "model": "deepseek-v4-flash"},
@@ -355,7 +379,8 @@ def test_cli_provider_builder_requires_missing_api_key() -> None:
         build_provider(cfg, None, None)
     except ProviderCredentialError as exc:
         assert exc.provider_id == "opencode-zen"
-        assert exc.env_var == "OPENCODE_ZEN_KEY"
+        assert "OPENCODE_ZEN_KEY" in exc.env_var
+        assert "OPENCODE_KEY" in exc.env_var
         assert "magent configure" in str(exc)
     else:
         raise AssertionError("expected missing credential error")

@@ -43,7 +43,7 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
     "anthropic": {
         "label": "Anthropic (Claude)",
         "display": "Anthropic",
-        "default_model": "claude-sonnet-4-5",
+        "default_model": "claude-sonnet-5",
         "env": "ANTHROPIC_API_KEY",
         "access_mode": "api",
         "litellm": "anthropic",
@@ -69,7 +69,7 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
     "google": {
         "label": "Google Gemini",
         "display": "Google Gemini",
-        "default_model": "gemini-2.0-flash",
+        "default_model": "gemini-3.6-flash",
         "env": "GEMINI_API_KEY",
         "access_mode": "api",
         "litellm": "gemini",
@@ -199,6 +199,13 @@ OPENAI_COMPATIBLE_PROVIDERS = {
     if metadata.get("litellm") == "openai-compatible"
 }
 
+PROVIDER_ENV_ALIASES: dict[str, tuple[str, ...]] = {
+    "opencode-go": ("OPENCODE_KEY",),
+    "opencode-zen": ("OPENCODE_ZEN_API_KEY", "OPENCODE_KEY"),
+    "nous-portal": ("NOUS_KEY",),
+    "openrouter": ("OPENROUTER_KEY",),
+}
+
 
 def provider_metadata(provider_id: str) -> dict[str, Any]:
     return PROVIDER_CATALOG.get(provider_id, {})
@@ -230,6 +237,24 @@ def provider_env_vars() -> dict[str, str]:
         for provider_id, metadata in PROVIDER_CATALOG.items()
         if metadata.get("env")
     }
+
+
+def provider_env_aliases(provider_id: str) -> tuple[str, ...]:
+    return PROVIDER_ENV_ALIASES.get(provider_id, ())
+
+
+def provider_env_candidates(provider_id: str, configured_env: str = "") -> tuple[str, ...]:
+    """Return credential env vars in lookup order without duplicates."""
+    metadata = provider_metadata(provider_id)
+    candidates = [configured_env, metadata.get("env", ""), *provider_env_aliases(provider_id)]
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for candidate in candidates:
+        env_var = str(candidate or "").strip()
+        if env_var and env_var not in seen:
+            seen.add(env_var)
+            ordered.append(env_var)
+    return tuple(ordered)
 
 
 def default_access_modes() -> dict[str, str]:

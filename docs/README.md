@@ -40,7 +40,7 @@ magent provider recommend --goal coding
 magent provider test-matrix
 magent provider set openai --model gpt-5 --access codex
 magent provider cooldowns
-magent model set-role review anthropic/claude-sonnet-4-5
+magent model set-role review anthropic/claude-sonnet-5
 magent model set-role image_maker openai/gpt-image-1
 magent model health
 magent model capabilities

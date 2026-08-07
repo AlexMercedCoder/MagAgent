@@ -92,6 +92,22 @@ def _build_api_kwargs(
     return kwargs
 
 
+def _completion_request_params(provider_id: str, model: str, temperature: float, max_tokens: int) -> dict[str, Any]:
+    """Return provider-safe common completion parameters."""
+    params: dict[str, Any] = {"max_tokens": max_tokens}
+    default_temperature_only = (
+        (provider_id == "openai" and model.startswith("gpt-5"))
+        or (provider_id == "anthropic" and model.startswith("claude-sonnet-5"))
+        or (provider_id == "google" and model.startswith("gemini-3"))
+    )
+    if default_temperature_only:
+        if temperature == 1:
+            params["temperature"] = temperature
+        return params
+    params["temperature"] = temperature
+    return params
+
+
 class Provider:
     """Wraps LiteLLM for a specific provider/model."""
 
@@ -128,8 +144,7 @@ class Provider:
 
             response = await litellm.acompletion(
                 messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
+                **_completion_request_params(self.provider_id, self.model, temperature, max_tokens),
                 **(request_kwargs or self._base_kwargs),
             )
             return response.choices[0].message.content or ""
@@ -154,9 +169,8 @@ class Provider:
 
             response = await litellm.acompletion(
                 messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
                 stream=True,
+                **_completion_request_params(self.provider_id, self.model, temperature, max_tokens),
                 **(request_kwargs or self._base_kwargs),
             )
             async for chunk in response:
@@ -227,7 +241,7 @@ async def test_provider(provider: Provider) -> bool:
     try:
         response = await provider.complete(
             [{"role": "user", "content": "Say 'OK' and nothing else."}],
-            max_tokens=10,
+            max_tokens=50,
         )
         return bool(response.strip())
     except Exception:

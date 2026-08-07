@@ -399,9 +399,12 @@ class Config:
 
     def resolve_api_key(self, provider_id: str) -> str | None:
         cfg = self.provider_config(provider_id)
-        env_var = cfg.get("api_key_env")
-        if env_var:
-            return os.environ.get(env_var)
+        from magent.provider_catalog import provider_env_candidates
+
+        for env_var in provider_env_candidates(provider_id, cfg.get("api_key_env", "")):
+            value = os.environ.get(env_var)
+            if value:
+                return value
         if cfg.get("api_key_keyring"):
             from magent.auth_store import load_keyring_secret
 

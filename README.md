@@ -156,8 +156,9 @@ magent next
 MagAgent uses [LiteLLM](https://github.com/BerriAI/litellm) under the hood, supporting any OpenAI-compatible endpoint.
 
 Cloud provider credentials can be stored by the setup wizard or referenced via
-environment variables such as `OPENCODE_ZEN_KEY`, `NOUS_API_KEY`, and
-`OPENAI_API_KEY`. Config display commands redact saved keys.
+environment variables such as `OPENCODE_ZEN_KEY`, `OPENCODE_ZEN_API_KEY`,
+`NOUS_API_KEY`, and `OPENAI_API_KEY`. Config display commands redact saved
+keys.
 
 | Provider | Config ID | Notes |
 |---|---|---|
@@ -165,9 +166,9 @@ environment variables such as `OPENCODE_ZEN_KEY`, `NOUS_API_KEY`, and
 | **Nous Portal** | `nous-portal` | Hermes 4, 200+ curated models |
 | **OpenCode Zen** | `opencode-zen` | Coding-optimized models |
 | **OpenCode Go** | `opencode-go` | Fast, cost-efficient coding models |
-| **OpenAI** | `openai` | GPT-4o, GPT-4.1, o3 |
-| **Anthropic** | `anthropic` | Claude 3.5 Sonnet / Claude 4 |
-| **Google** | `google` | Gemini 2.0 / 2.5 Pro |
+| **OpenAI** | `openai` | GPT-5.x, GPT-4o, GPT-4.1, o3 |
+| **Anthropic** | `anthropic` | Claude Sonnet / Haiku |
+| **Google** | `google` | Gemini Flash |
 | **Groq** | `groq` | Ultra-fast inference |
 | **OpenRouter** | `openrouter` | 200+ model aggregator |
 | **LM Studio** | `lmstudio` | Local GUI-managed models |
@@ -208,6 +209,7 @@ Provider access modes are intentionally distinct:
 - OpenAI API: `magent provider set openai --access api --api-key-env OPENAI_API_KEY`
 - OpenAI Codex/ChatGPT plan: `magent provider set openai --access codex`, then run `codex login`
 - OpenCode Zen pay-as-you-go: `magent provider set opencode-zen --access payg --api-key-env OPENCODE_ZEN_KEY`
+  - `OPENCODE_ZEN_API_KEY` and `OPENCODE_KEY` are accepted aliases.
 - OpenCode Go subscription: `magent provider set opencode-go --access subscription --api-key-env OPENCODE_GO_KEY`
 
 Route different work to different models:
@@ -215,7 +217,7 @@ Route different work to different models:
 ```bash
 magent model roles
 magent model set-role coding openai/gpt-5
-magent model set-role review anthropic/claude-sonnet-4-5
+magent model set-role review anthropic/claude-sonnet-5
 magent model set-role memory ollama/qwen2.5:7b
 magent model set-role cheap openrouter/deepseek/deepseek-chat
 magent model set-role image_maker openai/gpt-image-1
@@ -771,7 +773,7 @@ Prefer the CLI for common changes:
 ```bash
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
 magent provider set openai --model gpt-5 --access codex
-magent model set-role review anthropic/claude-sonnet-4-5
+magent model set-role review anthropic/claude-sonnet-5
 magent memory configure --mode inbox-first --semantic --write-every 3
 magent memory wizard
 magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN"

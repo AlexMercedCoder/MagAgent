@@ -8,10 +8,10 @@ Generated from `magent.provider_catalog`.
 | Ollama (local) | `ollama` | `qwen2.5-coder:32b` | local |  | ollama |
 | LM Studio (local) | `lmstudio` | `local-model` | local |  | openai-compatible |
 | OpenAI | `openai` | `gpt-5` | api | `OPENAI_API_KEY` | openai |
-| Anthropic | `anthropic` | `claude-sonnet-4-5` | api | `ANTHROPIC_API_KEY` | anthropic |
+| Anthropic | `anthropic` | `claude-sonnet-5` | api | `ANTHROPIC_API_KEY` | anthropic |
 | Nous Portal | `nous-portal` | `deepseek/deepseek-v4-flash` | api | `NOUS_API_KEY` | openai-compatible |
 | OpenCode Zen | `opencode-zen` | `deepseek-v4-flash` | payg | `OPENCODE_ZEN_KEY` | openai-compatible |
-| Google Gemini | `google` | `gemini-2.0-flash` | api | `GEMINI_API_KEY` | gemini |
+| Google Gemini | `google` | `gemini-3.6-flash` | api | `GEMINI_API_KEY` | gemini |
 | Groq | `groq` | `llama-3.3-70b-versatile` | api | `GROQ_API_KEY` | groq |
 | OpenRouter | `openrouter` | `deepseek/deepseek-chat` | api | `OPENROUTER_API_KEY` | openrouter |
 | AWS Bedrock | `bedrock` | `anthropic.claude-3-5-sonnet-20240620-v1:0` | aws |  | bedrock |
@@ -27,8 +27,9 @@ Generated from `magent.provider_catalog`.
 
 Use `magent provider matrix`, `magent provider explain <provider>`, and `magent provider env` for live readiness details.
 
-`magent configure` can save a cloud provider key in local MagAgent config,
-reference an environment variable, or skip credentials for later. Saved keys are
-redacted in config output. Interactive sessions preflight credential readiness
-before opening the prompt so missing keys produce an actionable setup hint
-instead of a provider authentication traceback.
+MagAgent prefers the canonical environment variable shown in the table, but it also accepts common aliases. Diagnostics report which non-secret variable name was found.
+
+- `opencode-go` also accepts `OPENCODE_KEY`.
+- `nous-portal` also accepts `NOUS_KEY`.
+- `opencode-zen` also accepts `OPENCODE_ZEN_API_KEY`, `OPENCODE_KEY`.
+- `openrouter` also accepts `OPENROUTER_KEY`.

@@ -18,6 +18,8 @@ from magent.provider_catalog import (
     PROVIDER_ORDER,
     default_access_modes,
     default_models,
+    provider_env_aliases,
+    provider_env_candidates,
     provider_env_vars,
     provider_metadata,
     validate_provider_catalog,
@@ -132,12 +134,15 @@ def detect_provider_environment() -> list[dict[str, Any]]:
     for item in provider_choices():
         provider_id = item["id"]
         env_var = env_map.get(provider_id, "")
+        present_env = next((candidate for candidate in provider_env_candidates(provider_id) if os.environ.get(candidate)), "")
         access_modes = provider_access_modes(provider_id)
         detected.append(
             {
                 **item,
                 "api_key_env": env_var,
-                "env_present": bool(env_var and os.environ.get(env_var)),
+                "env_aliases": list(provider_env_aliases(provider_id)),
+                "env_present": bool(present_env),
+                "env_present_name": present_env,
                 "access_modes": access_modes,
                 "codex_cli": shutil.which("codex") if provider_id == "openai" else "",
                 "local": bool(provider_metadata(provider_id).get("local")) or provider_id == "custom",
@@ -155,7 +160,7 @@ def provider_matrix() -> dict[str, Any]:
     for provider_id in PROVIDER_ORDER:
         metadata = PROVIDER_CATALOG[provider_id]
         provider_cfg = providers.get(provider_id, {})
-        env_var = metadata.get("env", "")
+        env_var = provider_cfg.get("api_key_env") or metadata.get("env", "")
         readiness = provider_readiness(provider_id, provider_cfg)
         rows.append(
             {
@@ -171,6 +176,8 @@ def provider_matrix() -> dict[str, Any]:
                 "local": bool(metadata.get("local")) or provider_id == "custom",
                 "litellm": metadata["litellm"],
                 "configured": provider_id in providers,
+                "env_aliases": list(provider_env_aliases(provider_id)),
+                "env_present_name": readiness.get("env_present_name", ""),
                 "detected": detected.get(provider_id, {}),
             }
         )
@@ -210,11 +217,15 @@ def provider_env_status() -> dict[str, Any]:
     for provider_id in PROVIDER_ORDER:
         metadata = PROVIDER_CATALOG[provider_id]
         env_var = metadata.get("env", "")
+        candidates = provider_env_candidates(provider_id)
+        present_env = next((candidate for candidate in candidates if os.environ.get(candidate)), "")
         rows.append(
             {
                 "provider": provider_id,
                 "env": env_var,
-                "present": bool(env_var and os.environ.get(env_var)),
+                "aliases": list(provider_env_aliases(provider_id)),
+                "present": bool(present_env),
+                "present_env": present_env,
                 "required": bool(env_var),
                 "fix": f"export {env_var}=..." if env_var and not os.environ.get(env_var) else "",
             }
@@ -605,7 +616,13 @@ def doctor_actions(username: str | None = None) -> dict[str, Any]:
         )
     elif provider_cfg.get("api_key_env"):
         env = provider_cfg["api_key_env"]
-        add(f"{provider}_api_key", bool(os.environ.get(env)), f"Environment variable {env}", f"export {env}=...")
+        readiness = provider_readiness(provider, provider_cfg)
+        detail = (
+            f"Environment variable {readiness['env_present_name']}"
+            if readiness.get("env_present_name")
+            else f"Environment variable {env}"
+        )
+        add(f"{provider}_api_key", readiness["env_present"], detail, f"export {env}=...")
     elif provider_cfg.get("api_key"):
         add(f"{provider}_api_key", True, "Inline API key is configured.")
     if provider == "opencode-go":
@@ -677,7 +694,15 @@ def provider_readiness(provider_id: str, provider_cfg: dict[str, Any] | None = N
     metadata = PROVIDER_CATALOG.get(provider_id, {})
     access_mode = provider_cfg.get("access_mode") or metadata.get("access_mode", "api")
     env_var = provider_cfg.get("api_key_env") or metadata.get("env", "")
-    env_present = bool(env_var and os.environ.get(env_var))
+    env_present_name = next(
+        (
+            candidate
+            for candidate in provider_env_candidates(provider_id, provider_cfg.get("api_key_env", ""))
+            if os.environ.get(candidate)
+        ),
+        "",
+    )
+    env_present = bool(env_present_name)
     inline_key = bool(provider_cfg.get("api_key"))
     local = bool(metadata.get("local")) or access_mode == "local" or provider_id in {"custom", "ollama", "lmstudio"}
     aws = access_mode == "aws"
@@ -694,7 +719,7 @@ def provider_readiness(provider_id: str, provider_cfg: dict[str, Any] | None = N
     elif inline_key:
         reason = "inline API key configured"
     elif env_present:
-        reason = f"environment variable {env_var} is present"
+        reason = f"environment variable {env_present_name} is present"
     elif env_var:
         reason = f"environment variable {env_var} is missing"
     else:
@@ -703,7 +728,9 @@ def provider_readiness(provider_id: str, provider_cfg: dict[str, Any] | None = N
         "ready": ready,
         "credential_configured": credential_configured,
         "env": env_var,
+        "env_aliases": list(provider_env_aliases(provider_id)),
         "env_present": env_present,
+        "env_present_name": env_present_name,
         "access_mode": access_mode,
         "reason": reason,
     }

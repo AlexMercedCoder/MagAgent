@@ -13,7 +13,7 @@ import typer
 from rich.console import Console
 
 from magent.config import get_current_user
-from magent.provider_catalog import provider_metadata
+from magent.provider_catalog import provider_env_candidates, provider_metadata
 
 console = Console()
 
@@ -96,7 +96,8 @@ def _ensure_provider_credentials(provider_id: str, api_key: str | None, p_cfg: d
         return
     env_var = p_cfg.get("api_key_env") or metadata.get("env")
     if env_var or metadata.get("env"):
-        raise ProviderCredentialError(provider_id, env_var)
+        candidates = provider_env_candidates(provider_id, p_cfg.get("api_key_env", ""))
+        raise ProviderCredentialError(provider_id, " or ".join(candidates) if candidates else env_var)
 
 
 def known_command_names(app) -> list[str]:

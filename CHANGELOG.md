@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.32.14
+
+- Added provider environment aliases for common gateway setups: `NOUS_KEY`, `OPENROUTER_KEY`, `OPENCODE_KEY`, and `OPENCODE_ZEN_API_KEY`.
+- Fixed live request compatibility for newer OpenAI GPT-5.x models and Anthropic Sonnet 5 models that only accept default temperature.
+- Updated Anthropic and Gemini defaults to live-tested current models: `claude-sonnet-5` and `gemini-3.6-flash`.
+- Increased provider ping resilience for providers that need more than a tiny 10-token response budget.
+- Refreshed provider docs and tests around model defaults, credential aliases, and request-parameter compatibility.
+
+## 0.32.13
+
+- Added staged goal orchestration behind the feature flag so MagAgent can cache a high-level plan, execute step plans through subagents, and validate progress incrementally.
+- Updated CLI and desktop-facing documentation for the orchestrated goal workflow.
+- Prepared the desktop API surface for Command Center to inspect staged goal state.
+
 ## 0.32.12
 
 - Fixed the CI coverage gate so it uses a ratcheted floor matching the current measured unit-suite coverage instead of the stale 75% threshold that kept recent pushes red.

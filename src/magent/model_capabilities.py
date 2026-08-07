@@ -21,8 +21,8 @@ MODEL_CAPABILITY_HINTS: dict[tuple[str, str], dict[str, Any]] = {
         "cost_tier": "image",
     },
     ("openai", "gpt-5"): {"tools": True, "input": ["text", "image"], "output": ["text"], "context_tokens": 400000},
-    ("google", "gemini-2.0-flash"): {"tools": True, "input": ["text", "image"], "output": ["text"], "context_tokens": 1000000},
-    ("anthropic", "claude-sonnet-4-5"): {"tools": True, "input": ["text", "image"], "output": ["text"], "context_tokens": 200000},
+    ("google", "gemini-3.6-flash"): {"tools": True, "input": ["text", "image"], "output": ["text"], "context_tokens": 1000000},
+    ("anthropic", "claude-sonnet-5"): {"tools": True, "input": ["text", "image"], "output": ["text"], "context_tokens": 200000},
 }
 
 

@@ -42,10 +42,10 @@ PROFILE_PRESETS: dict[str, dict[str, Any]] = {
     },
     "review-heavy": {
         "description": "Bias model routing toward review and release checks.",
-        "provider": {"id": "anthropic", "model": "claude-sonnet-4-5", "access_mode": "api", "api_key_env": "ANTHROPIC_API_KEY"},
+        "provider": {"id": "anthropic", "model": "claude-sonnet-5", "access_mode": "api", "api_key_env": "ANTHROPIC_API_KEY"},
         "memory": {"mode": "inbox-first", "semantic": True, "write_every": 3},
         "subagents": {"max_subagents": 3, "max_parallel": 2, "model_role": "review"},
-        "models": {"coding": "anthropic/claude-sonnet-4-5", "review": "anthropic/claude-sonnet-4-5"},
+        "models": {"coding": "anthropic/claude-sonnet-5", "review": "anthropic/claude-sonnet-5"},
     },
     "memory-first": {
         "description": "Favor explicit memory review and semantic recall.",

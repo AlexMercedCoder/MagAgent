@@ -152,7 +152,7 @@ def render_command_reference(command_names: list[str]) -> str:
 
 def render_provider_reference() -> str:
     """Generate provider reference Markdown from the provider catalog."""
-    from magent.provider_catalog import PROVIDER_CATALOG, PROVIDER_ORDER
+    from magent.provider_catalog import PROVIDER_CATALOG, PROVIDER_ORDER, provider_env_aliases
 
     lines = [
         "# Provider Reference",
@@ -178,12 +178,28 @@ def render_provider_reference() -> str:
             )
             + " |"
         )
+    alias_lines = []
+    for provider_id in PROVIDER_ORDER:
+        aliases = provider_env_aliases(provider_id)
+        if aliases:
+            alias_lines.append(
+                f"- `{provider_id}` also accepts " + ", ".join(f"`{alias}`" for alias in aliases) + "."
+            )
     lines.extend(
         [
             "",
             "Use `magent provider matrix`, `magent provider explain <provider>`, and `magent provider env` for live readiness details.",
         ]
     )
+    if alias_lines:
+        lines.extend(
+            [
+                "",
+                "MagAgent prefers the canonical environment variable shown in the table, but it also accepts common aliases. Diagnostics report which non-secret variable name was found.",
+                "",
+                *alias_lines,
+            ]
+        )
     return "\n".join(lines).strip() + "\n"
 
 

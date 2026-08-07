@@ -53,7 +53,7 @@ magent provider clear-cooldown openai
 During `magent configure`, cloud providers offer three credential paths:
 
 - paste an API key and let MagAgent save it in local config
-- reference an environment variable such as `OPENCODE_ZEN_KEY`
+- reference an environment variable such as `OPENCODE_ZEN_KEY`, `OPENCODE_ZEN_API_KEY`, or `NOUS_API_KEY`
 - store an API key in the OS keyring with `magent auth add <provider>`
 - skip credentials and configure them later
 
@@ -168,7 +168,7 @@ Use model roles to route specific work to specialized or cheaper models:
 ```bash
 magent model roles
 magent model set-role coding openai/gpt-5
-magent model set-role review anthropic/claude-sonnet-4-5
+magent model set-role review anthropic/claude-sonnet-5
 magent model set-role memory ollama/qwen2.5:7b
 magent model set-role cheap openrouter/deepseek/deepseek-chat
 magent model set-role image_maker openai/gpt-image-1
