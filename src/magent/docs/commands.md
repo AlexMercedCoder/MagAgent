@@ -188,6 +188,9 @@ tools, prompts, resources, templates, cache freshness, and structured content.
 - `magent memory node <id>`: return one memory node and nearby traversal context as JSON.
 - `magent memory update-node <id> --preview --body-file node.md`: preview old/new body hashes and size changes.
 - `magent memory update-node <id> --body-file node.md`: update one memory node body.
+- `magent memory batch --operations-file changes.json --preview`: validate a reviewed memory batch.
+- `magent memory batch --operations-file changes.json`: apply reviewed update/suppress/unsuppress/merge operations.
+- `magent eval memory evals/memory.json`: measure recall precision, stale hits, explanation coverage, and context budget.
 - `magent memory index`: build semantic memory index.
 - `magent memory search <query>`: search memory.
 - `magent memory promote`: list workbench facts that can be promoted to memory.

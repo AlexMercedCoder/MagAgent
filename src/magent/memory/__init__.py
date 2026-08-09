@@ -69,6 +69,7 @@ class MemoryManager:
         semantic_enabled: bool = False,
         semantic_provider: str = "ollama",
         semantic_model: str = "nomic-embed-text",
+        project_slug: str | None = None,
     ):
         self.memory_dir = memory_dir
         self.budget_tokens = budget_tokens
@@ -77,6 +78,7 @@ class MemoryManager:
         self.semantic_enabled = semantic_enabled
         self.semantic_provider = semantic_provider
         self.semantic_model = semantic_model
+        self.project_slug = project_slug
         self.last_recall_stats: dict[str, int] = {"nodes": 0, "tokens": 0, "budget": budget_tokens}
         self._index = None
         self._semantic = None
@@ -278,21 +280,20 @@ class MemoryManager:
         if not self.available:
             return []
 
-        semantic_results: list[dict[str, Any]] = []
-        if self.semantic_enabled and self.username:
-            try:
-                semantic_results = self.semantic_search(query, max_results=max_anchors, mode="hybrid")
-            except Exception:
-                semantic_results = []
+        hybrid_results = self._hybrid_search(query, max_results=max_anchors)
+        if hybrid_results:
+            return hybrid_results
 
         native_results = self._native_search(query, max_results=max_anchors)
         if native_results:
-            return _merge_anchor_results(semantic_results, native_results, max_anchors)
+            return native_results
+        if hasattr(self._index, "search"):
+            return []
 
         try:
             all_ids = self._index.list_nodes()
         except Exception:
-            return _merge_anchor_results(semantic_results, [], max_anchors)
+            return []
 
         query_words = set(re.sub(r"[^\w\s]", " ", query.lower()).split())
         if not query_words:
@@ -324,7 +325,7 @@ class MemoryManager:
             {"id": nid, "type": "", "score": score, "matched": ["fallback_keyword"], "reason": "fallback keyword scan"}
             for score, nid in scored[:max_anchors]
         ]
-        return _merge_anchor_results(semantic_results, keyword_results, max_anchors)
+        return keyword_results[:max_anchors]
 
     # ─────────────────────────────────────────────
     # Post-task memory write
@@ -392,11 +393,26 @@ class MemoryManager:
                     self._refresh_changed_file(node_id)
                 elif hasattr(self._index, "create_memory_node"):
                     kind = self._memory_kind_for_item(item)
-                    self._index.create_memory_node(
+                    self._create_memory_node(
                         node_id,
                         kind=kind,
                         body=body,
                         links=links,
+                        context={
+                            "project": project_slug
+                            or item.get("project")
+                            or getattr(self, "project_slug", None),
+                            "source_task": item.get("source_task"),
+                            "source_session": item.get("source_session"),
+                            "source_tool": item.get("source_tool"),
+                            "extraction_method": item.get("extraction_method")
+                            or "agent_extraction",
+                            "confidence": item.get("confidence"),
+                            "valid_from": item.get("valid_from"),
+                            "valid_until": item.get("valid_until"),
+                            "supersedes": item.get("supersedes"),
+                            "canonical_id": item.get("canonical_id"),
+                        },
                     )
                     self._refresh_changed_file(node_id)
                 else:
@@ -420,7 +436,18 @@ class MemoryManager:
         with contextlib.suppress(Exception):
             body = f"# Session {session_id}\n\n{summary}\n"
             if hasattr(self._index, "create_memory_node"):
-                self._index.create_memory_node(node_id, kind="session_summary", body=body, links=[])
+                self._create_memory_node(
+                    node_id,
+                    kind="session_summary",
+                    body=body,
+                    links=[],
+                    context={
+                        "project": getattr(self, "project_slug", None),
+                        "source_session": session_id,
+                        "extraction_method": "session_summary",
+                        "confidence": 1.0,
+                    },
+                )
             else:
                 self._index.create_node(
                     node_id,
@@ -429,6 +456,32 @@ class MemoryManager:
                     links=[],
                 )
             self._refresh_changed_file(node_id)
+
+    def _create_memory_node(
+        self,
+        node_id: str,
+        *,
+        kind: str,
+        body: str,
+        links: list[str],
+        context: dict[str, Any],
+    ) -> Any:
+        kwargs = {key: value for key, value in context.items() if value is not None}
+        try:
+            return self._index.create_memory_node(
+                node_id,
+                kind=kind,
+                body=body,
+                links=links,
+                **kwargs,
+            )
+        except TypeError:
+            return self._index.create_memory_node(
+                node_id,
+                kind=kind,
+                body=body,
+                links=links,
+            )
 
     # ─────────────────────────────────────────────
     # Stats
@@ -542,7 +595,12 @@ class MemoryManager:
         if not self.available:
             return []
 
-        if mode in {"semantic", "hybrid"} and self.username:
+        if mode == "hybrid":
+            hybrid = self._hybrid_search(query, max_results=max_results)
+            if hybrid:
+                return hybrid
+
+        if mode == "semantic" and self.username:
             semantic = self.semantic_search(query, max_results=max_results, mode=mode)
             if semantic:
                 return semantic
@@ -550,6 +608,8 @@ class MemoryManager:
         native = self._native_search(query, max_results=max_results)
         if native:
             return native
+        if hasattr(self._index, "search"):
+            return []
 
         query_lower = query.lower()
         results: list[dict[str, Any]] = []
@@ -586,6 +646,48 @@ class MemoryManager:
                 data.setdefault("type", data.get("node_type", ""))
                 data["snippet"] = str(data.get("summary") or "").replace("\n", " ")
                 data["reason"] = _search_reason(data)
+                with contextlib.suppress(Exception):
+                    data["backlinks"] = self._index.backlinks(data["id"])
+                results.append(data)
+            return results
+        except Exception:
+            return []
+
+    def _hybrid_search(self, query: str, max_results: int = 10) -> list[dict[str, Any]]:
+        """Use MagGraph's explainable ranker with optional sidecar semantic scores."""
+        if not self.available or not hasattr(self._index, "hybrid_search"):
+            return []
+        semantic_scores: dict[str, float] = {}
+        if self.semantic_enabled and self.username:
+            with contextlib.suppress(Exception):
+                semantic_items = self._semantic_index().search(
+                    query,
+                    top_k=max(max_results * 3, 10),
+                    mode="semantic",
+                )
+                semantic_scores = {
+                    item.node_id: max(0.0, min(1.0, float(item.semantic_score)))
+                    for item in semantic_items
+                }
+        seed_ids = [
+            item["id"]
+            for item in self._native_search(query, max_results=min(max_results, 3))
+        ]
+        try:
+            results = []
+            for item in self._index.hybrid_search(
+                query=query,
+                project=getattr(self, "project_slug", None),
+                seed_ids=seed_ids,
+                semantic_scores=semantic_scores,
+                include_suppressed=False,
+                include_superseded=False,
+                limit=max_results,
+            ):
+                data = dict(item)
+                data["matched"] = list(data.get("reasons") or [])
+                data["reason"] = ", ".join(data["matched"]) or "hybrid graph search"
+                data["snippet"] = str(data.get("summary") or "").replace("\n", " ")
                 with contextlib.suppress(Exception):
                     data["backlinks"] = self._index.backlinks(data["id"])
                 results.append(data)
@@ -644,7 +746,9 @@ class MemoryManager:
             return None
         try:
             node = self._index.read_node(node_id)
+            metadata = dict(node.to_dict()) if hasattr(node, "to_dict") else {}
             return {
+                **metadata,
                 "id": node.id,
                 "type": node.node_type,
                 "body": node.body,
@@ -653,6 +757,35 @@ class MemoryManager:
             }
         except Exception:
             return None
+
+    def assess_candidate(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Detect provable duplicates and identity conflicts before promotion."""
+        candidate_id = str(item.get("id") or "").strip()
+        candidate_body = _normalize_memory_text(str(item.get("body") or ""))
+        candidate_canonical = str(item.get("canonical_id") or "").strip()
+        duplicates: list[str] = []
+        conflicts: list[str] = []
+        for node in self.export_json():
+            node_id = str(node.get("id") or "")
+            node_body = _normalize_memory_text(str(node.get("body") or ""))
+            node_canonical = str(node.get("canonical_id") or "").strip()
+            if candidate_body and candidate_body == node_body:
+                duplicates.append(node_id)
+                continue
+            same_identity = candidate_id and candidate_id == node_id
+            same_canonical = (
+                candidate_canonical
+                and node_canonical
+                and candidate_canonical == node_canonical
+            )
+            if (same_identity or same_canonical) and candidate_body != node_body:
+                conflicts.append(node_id)
+        return {
+            "ok": not duplicates and not conflicts,
+            "duplicates": sorted(set(duplicates)),
+            "conflicts": sorted(set(conflicts)),
+            "requires_review": bool(duplicates or conflicts),
+        }
 
     def update_node(
         self,
@@ -767,6 +900,22 @@ class MemoryManager:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def apply_batch(
+        self, operations: list[dict[str, str]], *, preview: bool = False
+    ) -> dict[str, Any]:
+        """Preview or apply reviewed memory operations through MagGraph."""
+        if not self.available:
+            return {"ok": False, "error": "Memory graph unavailable"}
+        if not hasattr(self._index, "apply_memory_batch"):
+            return {
+                "ok": False,
+                "error": "Installed MagGraph does not support reviewed memory batches",
+            }
+        try:
+            return dict(self._index.apply_memory_batch(operations, preview=preview))
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     def merge_preview(self, target_id: str, source_id: str) -> dict[str, Any]:
         """Preview a memory merge without changing the graph."""
         target = self.read_node(target_id)
@@ -871,22 +1020,8 @@ def _first_sentence_or_line(text: str) -> str:
     return sentence or compact.splitlines()[0]
 
 
-def _merge_anchor_results(
-    semantic_results: list[dict[str, Any]],
-    keyword_results: list[dict[str, Any]],
-    limit: int,
-) -> list[dict[str, Any]]:
-    merged: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for item in [*semantic_results, *keyword_results]:
-        node_id = item.get("id")
-        if not node_id or node_id in seen:
-            continue
-        seen.add(node_id)
-        merged.append(item)
-        if len(merged) >= limit:
-            break
-    return merged
+def _normalize_memory_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().lower()
 
 
 def _search_reason(item: dict[str, Any]) -> str:

@@ -21,6 +21,7 @@ class FakeIndex:
         self.updated: list[tuple[str, str]] = []
         self.deleted: list[str] = []
         self.created_memory: list[tuple[str, str, str, list[str]]] = []
+        self.created_contexts: list[dict[str, object]] = []
         self.updated_files: list[str] = []
         self.suppressed: list[tuple[str, str | None]] = []
         self.unsuppressed: list[str] = []
@@ -92,10 +93,12 @@ class FakeIndex:
         kind: str = "project_fact",
         body: str = "",
         links: list[str] | None = None,
+        **context: object,
     ) -> FakeNode:
         node = FakeNode(node_id, kind, body, links or [], f"{node_id}.md")
         self.nodes[node_id] = node
         self.created_memory.append((node_id, kind, body, links or []))
+        self.created_contexts.append(context)
         return node
 
     def update_file(self, path: str) -> str | None:
@@ -204,6 +207,112 @@ def test_write_memories_uses_maggraph_memory_node_helper() -> None:
     assert mgr._index.updated_files
 
 
+def test_write_memories_passes_scope_and_provenance_to_modern_maggraph() -> None:
+    mgr = fake_memory_manager({})
+    mgr.project_slug = "demo"
+
+    written = mgr.write_memories(
+        [
+            {
+                "id": "decision_runtime",
+                "type": "pattern",
+                "body": "Use durable tasks.",
+                "source_task": "task_42",
+                "source_session": "session_7",
+                "confidence": 0.9,
+                "canonical_id": "runtime-decision",
+            }
+        ]
+    )
+
+    assert written == 1
+    assert mgr._index.created_contexts[0] == {
+        "project": "demo",
+        "source_task": "task_42",
+        "source_session": "session_7",
+        "extraction_method": "agent_extraction",
+        "confidence": 0.9,
+        "canonical_id": "runtime-decision",
+    }
+
+
+def test_hybrid_search_routes_sidecar_scores_into_maggraph() -> None:
+    class HybridIndex(FakeIndex):
+        def __init__(self):
+            super().__init__({"pref": FakeNode("pref", "preference", "Use pytest.", [])})
+            self.hybrid_kwargs = {}
+
+        def hybrid_search(self, **kwargs):
+            self.hybrid_kwargs = kwargs
+            return [
+                {
+                    "id": "pref",
+                    "type": "preference",
+                    "score": 0.87,
+                    "signals": {"semantic": 0.8, "lexical": 0.6},
+                    "reasons": ["semantic match", "lexical match"],
+                    "summary": "Use pytest.",
+                }
+            ]
+
+    class SemanticItem:
+        node_id = "pref"
+        semantic_score = 0.8
+
+    class SemanticIndex:
+        def search(self, query: str, top_k: int, mode: str):
+            assert (query, mode) == ("pytest", "semantic")
+            assert top_k >= 10
+            return [SemanticItem()]
+
+    mgr = fake_memory_manager({})
+    mgr._index = HybridIndex()
+    mgr.username = "alice"
+    mgr.semantic_enabled = True
+    mgr.project_slug = "demo"
+    mgr._semantic = SemanticIndex()
+
+    results = mgr.search("pytest", mode="hybrid")
+
+    assert results[0]["reason"] == "semantic match, lexical match"
+    assert mgr._index.hybrid_kwargs["project"] == "demo"
+    assert mgr._index.hybrid_kwargs["semantic_scores"] == {"pref": 0.8}
+    assert mgr._index.hybrid_kwargs["seed_ids"] == ["pref"]
+
+
+def test_reviewed_batch_delegates_to_maggraph() -> None:
+    mgr = fake_memory_manager({})
+    operations = [{"op": "suppress", "id": "stale", "reason": "old"}]
+    calls = []
+
+    def apply_memory_batch(items, preview=False):
+        calls.append((items, preview))
+        return {"ok": True, "preview": preview, "operations": len(items)}
+
+    mgr._index.apply_memory_batch = apply_memory_batch
+
+    result = mgr.apply_batch(operations, preview=True)
+
+    assert result == {"ok": True, "preview": True, "operations": 1}
+    assert calls == [(operations, True)]
+
+
+def test_candidate_assessment_detects_duplicate_and_identity_conflict() -> None:
+    mgr = fake_memory_manager(
+        {
+            "same_body": FakeNode("same_body", "project_fact", "Use durable tasks.", []),
+            "decision": FakeNode("decision", "decision", "Use the old queue.", []),
+        }
+    )
+
+    duplicate = mgr.assess_candidate({"id": "new", "body": "  use durable   tasks. "})
+    conflict = mgr.assess_candidate({"id": "decision", "body": "Use task runtime."})
+
+    assert duplicate["duplicates"] == ["same_body"]
+    assert duplicate["requires_review"] is True
+    assert conflict["conflicts"] == ["decision"]
+
+
 def test_search_uses_maggraph_native_search_and_backlinks() -> None:
     mgr = fake_memory_manager(
         {
@@ -217,6 +326,16 @@ def test_search_uses_maggraph_native_search_and_backlinks() -> None:
     assert results[0]["id"] == "pref"
     assert results[0]["matched"] == ["body"]
     assert results[0]["backlinks"] == ["project"]
+
+
+def test_empty_native_search_does_not_leak_filtered_nodes_from_raw_scan() -> None:
+    mgr = fake_memory_manager(
+        {"stale": FakeNode("stale", "project_fact", "Hidden durable fact.", [])}
+    )
+    mgr._index.search = lambda **kwargs: []
+
+    assert mgr.search("durable") == []
+    assert mgr.recall("durable") == ""
 
 
 def test_recall_uses_bundle_backlinks_for_provenance() -> None:

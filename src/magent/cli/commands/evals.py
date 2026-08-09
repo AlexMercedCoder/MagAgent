@@ -42,3 +42,17 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
         from magent.evals import eval_report
 
         console.print_json(data={"ok": True, "runs": eval_report(store(), limit=limit)})
+
+    @eval_app.command("memory")
+    def eval_memory_cmd(
+        suite: str = typer.Argument(..., help="Labeled memory eval JSON file."),
+        user: str | None = typer.Option(None, "--user", "-u"),
+    ) -> None:
+        """Measure recall precision, stale hits, explanations, and context budget."""
+        from magent.config import get_current_user, user_memory_dir
+        from magent.memory import MemoryManager
+        from magent.memory_evals import run_memory_eval
+
+        username = user or get_current_user() or "default"
+        manager = MemoryManager(user_memory_dir(username), username=username)
+        console.print_json(data=run_memory_eval(manager, suite))

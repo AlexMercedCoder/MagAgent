@@ -277,6 +277,17 @@ def memory_update_node(
     return result
 
 
+def memory_apply_batch(
+    username: str,
+    operations: list[dict[str, str]],
+    *,
+    preview: bool = False,
+) -> dict[str, Any]:
+    """Preview or apply a reviewed set of memory graph operations."""
+    mgr = MemoryManager(user_memory_dir(username), username=username)
+    return mgr.apply_batch(operations, preview=preview)
+
+
 def sqlite_list(username: str) -> dict[str, Any]:
     return list_databases(username)
 

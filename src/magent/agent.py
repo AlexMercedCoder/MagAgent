@@ -177,6 +177,7 @@ class AgentSession:
             semantic_enabled=config.semantic_memory_enabled,
             semantic_provider=config.semantic_memory_provider,
             semantic_model=config.semantic_memory_model,
+            project_slug=self.project_slug,
         )
         self.repo_map = RepoMapCache(cwd)
         self.tools = ToolExecutor(

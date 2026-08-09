@@ -193,6 +193,7 @@ Generated from the active Typer command tree.
 
 - `magent eval init`
 - `magent eval list`
+- `magent eval memory`
 - `magent eval report`
 - `magent eval run`
 
@@ -276,6 +277,7 @@ Generated from the active Typer command tree.
 ## memory
 
 - `magent memory approve`
+- `magent memory batch`
 - `magent memory configure`
 - `magent memory delete`
 - `magent memory export`

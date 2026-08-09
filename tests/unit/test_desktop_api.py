@@ -95,6 +95,25 @@ def test_memory_update_node_preview_reports_hashes(monkeypatch, tmp_path: Path) 
     assert updated["before_hash"] != updated["after_hash"]
 
 
+def test_memory_batch_desktop_contract(monkeypatch, tmp_path: Path) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("alice")
+
+    class FakeManager:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def apply_batch(self, operations, *, preview=False):
+            return {"ok": True, "preview": preview, "operations": operations}
+
+    monkeypatch.setattr(desktop_api, "MemoryManager", FakeManager)
+    operations = [{"op": "suppress", "id": "stale", "reason": "old"}]
+
+    result = desktop_api.memory_apply_batch("alice", operations, preview=True)
+
+    assert result == {"ok": True, "preview": True, "operations": operations}
+
+
 def test_desktop_execution_task_contract(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
     magent_config.create_user("alice")

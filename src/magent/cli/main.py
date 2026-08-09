@@ -3494,6 +3494,7 @@ def memory_inbox_cmd(
     reason: str = typer.Option("", "--reason"),
     title: str = typer.Option("", "--title"),
     body: str = typer.Option("", "--body"),
+    force: bool = typer.Option(False, "--force", help="Accept after reviewing a duplicate/conflict warning."),
     json_output: bool = typer.Option(True, "--json/--no-json", help="Emit JSON output."),
 ):
     """Review, accept, reject, or edit pending memory candidates."""
@@ -3514,7 +3515,10 @@ def memory_inbox_cmd(
         raise typer.Exit(1)
     if normalized == "accept":
         mgr, _ = _get_memory_manager()
-        console.print_json(data=accept_candidate(store, mgr, candidate_id, project=project))
+        result = accept_candidate(store, mgr, candidate_id, project=project, force=force)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
         return
     if normalized == "reject":
         console.print_json(data=reject_candidate(store, candidate_id, reason=reason))
@@ -3791,6 +3795,29 @@ def memory_search(
             r.get("snippet", "")[:90],
         )
     console.print(t)
+
+
+@memory_app.command("batch")
+def memory_batch_cmd(
+    operations_json: str = typer.Option("", "--operations-json", help="JSON array of reviewed operations."),
+    operations_file: str = typer.Option("", "--operations-file", help="Read operations JSON from a file."),
+    preview: bool = typer.Option(False, "--preview", help="Validate without changing memory."),
+    user: str | None = typer.Option(None, "--user", "-u"),
+):
+    """Preview or apply reviewed memory update/suppress/merge operations."""
+    from pathlib import Path
+
+    from magent.desktop_api import memory_apply_batch, parse_json_value
+
+    raw = Path(operations_file).read_text(encoding="utf-8") if operations_file else operations_json
+    operations = parse_json_value(raw) if raw else None
+    if not isinstance(operations, list) or not all(isinstance(item, dict) for item in operations):
+        console.print_json(data={"ok": False, "error": "Provide a JSON array of operation objects"})
+        raise typer.Exit(1)
+    result = memory_apply_batch(user or _require_user(), operations, preview=preview)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
 
 
 @memory_app.command("index")

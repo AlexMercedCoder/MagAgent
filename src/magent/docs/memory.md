@@ -11,6 +11,11 @@ MagAgent requires `maggraph>=0.3.0` and uses MagGraph's native memory APIs. The 
 - Memory schema helpers for preferences, project facts, decisions, tasks, session summaries, bookmarks, and tool failures.
 - Durable merge, suppress, and unsuppress operations owned by MagGraph.
 - Incremental `update_file` refreshes and `changed_since` change-feed entries after writes and inbox promotion.
+- Explainable hybrid ranking combines MagGraph lexical, graph, recency, temporal,
+  suppression, supersession, and project signals with optional semantic scores from
+  MagAgent's local sidecar when the installed MagGraph supports it.
+- New memories carry project, source task/session/tool, extraction method, confidence,
+  validity, supersession, and canonical identity when supplied.
 
 Useful commands:
 
@@ -20,6 +25,8 @@ Useful commands:
 - `magent memory node <node-id>`
 - `magent memory update-node <node-id> --preview --body-file node.md`
 - `magent memory update-node <node-id> --body-file node.md`
+- `magent memory batch --operations-file reviewed-memory.json --preview`
+- `magent memory batch --operations-file reviewed-memory.json`
 - `magent memory traverse <node-id>`
 - `magent memory inbox`
 - `magent memory inbox accept <candidate-id>`
@@ -52,3 +59,33 @@ Use `magent memory inbox accept <candidate-id>` to write one candidate to MagGra
 Accepted inbox items are written through MagGraph's memory-node helpers. MagAgent refreshes the changed node with `update_file` and returns `changed_since` entries so UI and CLI callers can update cheaply.
 
 Desktop editors should use `magent memory update-node --preview` before applying edits. Preview mode reports old/new body hashes, character counts, and links without writing to the graph.
+
+For several reviewed changes, use `memory batch`. Operation objects support `update`
+(`id`, `body`), `suppress` (`id`, optional `reason`), `unsuppress` (`id`), and `merge`
+(`target_id`, `source_id`). MagGraph prevalidates the complete list and rolls back an
+applied batch if an operation fails. Older MagGraph installations return an actionable
+unsupported-capability error rather than applying a partial fallback batch.
+
+## Retrieval Evals
+
+Run `magent eval memory evals/memory.json` with labeled cases such as:
+
+```json
+{
+  "name": "project-memory",
+  "cases": [
+    {
+      "id": "current-release-decision",
+      "query": "how do we publish releases",
+      "expected_ids": ["release_process"],
+      "forbidden_ids": ["old_release_process"],
+      "limit": 5,
+      "max_context_tokens": 800
+    }
+  ]
+}
+```
+
+The report includes precision, recall, stale-hit rate, explanation coverage, average
+context tokens, and token-budget pass rate. It is local and deterministic except for
+the configured semantic embedding adapter.

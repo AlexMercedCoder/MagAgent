@@ -262,6 +262,16 @@ true mid-request suspension depends on provider transport support.
 **Goal:** Turn memory from a storage feature into the ecosystem's clearest competitive
 advantage while keeping recall explainable and token-efficient.
 
+**Progress (2026-08-09):** The hybrid-memory foundation is implemented on coordinated
+feature branches. MagGraph provides explainable lexical/semantic/graph/recency ranking,
+project and temporal validity, suppression and supersession filtering, canonical IDs,
+typed provenance, and rollback-capable reviewed batches. MagAgent routes optional local
+sidecar scores into that ranker, builds bounded recall bundles with reasons/backlinks,
+writes provenance when supported, prevents suppressed fallback leakage, guards inbox
+promotion on exact duplicates or identity conflicts, exposes CLI/desktop batch APIs,
+and ships deterministic precision/staleness/explanation/token-budget evals. The scalable
+Command Center memory studio and learned ranking from accumulated feedback remain.
+
 ### MagGraph retrieval engine
 
 - Add a native hybrid retrieval API combining lexical search, graph relationships,

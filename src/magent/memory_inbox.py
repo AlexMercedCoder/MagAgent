@@ -34,15 +34,33 @@ def memory_inbox(store: Any, project: str | Path = ".", limit: int = 30) -> dict
     return {"ok": True, "project": str(Path(project).resolve()), "candidates": candidates[:limit]}
 
 
-def accept_candidate(store: Any, memory_manager: Any, candidate_id: str, project: str | Path = ".") -> dict[str, Any]:
+def accept_candidate(
+    store: Any,
+    memory_manager: Any,
+    candidate_id: str,
+    project: str | Path = ".",
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
     """Write a pending inbox candidate to MagGraph memory."""
     candidate = find_candidate(store, candidate_id, project)
     if not candidate:
         return {"ok": False, "error": f"Memory inbox candidate not found: {candidate_id}"}
     record = PromotionCandidateRecord.from_mapping(candidate)
+    memory_item = record.to_memory_item()
+    assess = getattr(memory_manager, "assess_candidate", None)
+    assessment = assess(memory_item) if callable(assess) else {"ok": True}
+    if assessment.get("requires_review") and not force:
+        return {
+            "ok": False,
+            "review_required": True,
+            "candidate": memory_item,
+            "assessment": assessment,
+            "error": "Candidate duplicates or conflicts with durable memory; review or accept with force",
+        }
     since_unix = int(time.time()) - 1
     written = memory_manager.write_memories(
-        [record.to_memory_item()],
+        [memory_item],
         project_slug=_slug(Path(project).resolve().name),
     )
     _record_decision(store, candidate_id, status="accepted", written=written)
@@ -50,6 +68,7 @@ def accept_candidate(store: Any, memory_manager: Any, candidate_id: str, project
         "ok": written > 0,
         "written": written,
         "candidate": record.to_memory_item(),
+        "assessment": assessment,
         "changes": _memory_changes_since(memory_manager, since_unix),
     }
 
