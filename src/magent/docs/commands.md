@@ -64,6 +64,11 @@ Important command paths:
 - `magent permission propose "request"`: parse a permission request into a suggested action.
 - `magent events list`: list recent workbench events.
 - `magent events show <event-id>`: show one event record.
+- `magent execution create "task"`: create a queued durable execution task.
+- `magent execution list [--state running]`: list versioned execution task snapshots as JSON.
+- `magent execution show <task-id>`: show one execution task as JSON.
+- `magent execution events <task-id> --jsonl`: stream ordered append-only task events.
+- `magent execution pause|resume|cancel|retry <task-id>`: control a durable task lifecycle.
 - `magent profile list`: list guided provider/memory/subagent presets.
 - `magent profile apply <name>`: apply a guided preset.
 - `magent provider list`: list known providers and default models.

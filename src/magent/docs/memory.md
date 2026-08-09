@@ -4,7 +4,7 @@ MagAgent memory is powered by MagGraph. Each user gets a separate local graph:
 
 `~/.config/magent/users/<user>/memory/`
 
-MagAgent requires `maggraph>=0.2.5` and uses MagGraph's native memory APIs. The `0.2.5` floor includes Python 3.14-compatible PyO3 bindings, abi3 wheels, and a fixed Intel macOS wheel publish path, so users on current Python releases do not need to downgrade just to install MagAgent.
+MagAgent requires `maggraph>=0.3.0` and uses MagGraph's native memory APIs. The `0.3.0` floor includes Python 3.14-compatible abi3 wheels, atomic graph writes, crash-consistent deletes and merges, cached retrieval metadata, and stable downstream API contract tests.
 
 - Structured graph search over IDs, types, tags/frontmatter, body text, links, suppression state, and recency.
 - Recall bundles with compact Markdown, body excerpts, links, backlinks, metadata, and relevance reasons.

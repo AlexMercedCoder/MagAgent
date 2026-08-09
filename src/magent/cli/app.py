@@ -44,6 +44,7 @@ data_app = typer.Typer(help="Data workspace helpers", name="data")
 policy_app = typer.Typer(help="Policy profiles", name="policy")
 docs_app = typer.Typer(help="Built-in MagAgent documentation", name="docs")
 events_app = typer.Typer(help="Workbench event log", name="events")
+execution_app = typer.Typer(help="Durable agent execution tasks and event streams", name="execution")
 checkpoint_app = typer.Typer(help="File write checkpoints", name="checkpoint")
 code_app = typer.Typer(help="Code intelligence index", name="code")
 test_app = typer.Typer(help="Test intelligence helpers", name="test")
@@ -94,6 +95,7 @@ _HELP_PANELS = {
     "policy": "Setup & Configuration",
     "docs": "Help & Learning",
     "events": "Workbench & Productivity",
+    "execution": "Agents & Automation",
     "checkpoint": "Project Workflow",
     "code": "Code Intelligence & Testing",
     "test": "Code Intelligence & Testing",
@@ -139,6 +141,7 @@ for _name, _typer in [
     ("policy", policy_app),
     ("docs", docs_app),
     ("events", events_app),
+    ("execution", execution_app),
     ("checkpoint", checkpoint_app),
     ("code", code_app),
     ("test", test_app),
@@ -185,6 +188,7 @@ __all__ = [
     "daemon_app",
     "docs_app",
     "events_app",
+    "execution_app",
     "followup_app",
     "gateway_app",
     "eval_app",

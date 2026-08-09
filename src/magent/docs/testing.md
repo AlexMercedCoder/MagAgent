@@ -26,7 +26,7 @@ database connections are closed after every test, while production processes reg
 the same cleanup for shutdown. Semantic-memory SQLite operations use short-lived,
 transactional connections that always release their file handles.
 
-The current baseline is 404 passing tests and 64.30% branch coverage. The configured
+The current baseline is 410 passing tests and 64.57% branch coverage. The configured
 63% floor is a regression gate, not the end target; new extracted runtime modules
 should aim for at least 85% behavioral coverage.
 

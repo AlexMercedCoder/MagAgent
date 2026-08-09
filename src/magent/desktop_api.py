@@ -25,6 +25,7 @@ from magent.config import (
 )
 from magent.config_safety import redact_config_text
 from magent.memory import MemoryManager
+from magent.task_runtime import TaskRuntime, TaskRuntimeError, TaskState
 from magent.tools.db import db_list_tables, db_query, db_schema, list_databases
 
 CONFIG_SCHEMA: list[dict[str, Any]] = [
@@ -334,6 +335,49 @@ def session_message_review(
     from magent.session_messaging import review_held_message
 
     return review_held_message(username, session_id, message_id, decision)
+
+
+def execution_tasks(
+    username: str,
+    *,
+    state: TaskState | None = None,
+    project_id: str = "",
+    parent_task_id: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Return durable execution tasks for desktop clients."""
+    runtime = TaskRuntime(USERS_DIR / username / "workbench")
+    return {
+        "ok": True,
+        "tasks": runtime.list_tasks(
+            state=state,
+            project_id=project_id,
+            parent_task_id=parent_task_id,
+            limit=limit,
+        ),
+    }
+
+
+def execution_task(username: str, task_id: str, *, after: int = 0, limit: int = 500) -> dict[str, Any]:
+    """Return one task and its ordered event stream."""
+    runtime = TaskRuntime(USERS_DIR / username / "workbench")
+    task = runtime.get(task_id)
+    if task is None:
+        return {"ok": False, "error": f"Task not found: {task_id}"}
+    return {"ok": True, "task": task, "events": runtime.events(task_id, after=after, limit=limit)}
+
+
+def execution_task_action(username: str, task_id: str, action: str, *, reason: str = "") -> dict[str, Any]:
+    """Pause, resume, cancel, or retry a durable execution task."""
+    runtime = TaskRuntime(USERS_DIR / username / "workbench")
+    if action not in {"pause", "resume", "cancel", "retry"}:
+        return {"ok": False, "error": f"Unsupported task action: {action}"}
+    try:
+        operation = getattr(runtime, action)
+        task = operation(task_id, reason=reason or f"{action.title()} requested by desktop client")
+    except TaskRuntimeError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": True, "task": task}
 
 
 def parse_json_value(text: str) -> Any:

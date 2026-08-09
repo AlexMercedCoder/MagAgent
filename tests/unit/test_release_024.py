@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -12,6 +13,7 @@ from magent.daemon import enqueue_task, list_queue, run_once
 from magent.hooks import init_hooks, load_hooks, run_hooks
 from magent.lsp import lsp_definition, lsp_diagnostics, lsp_references, lsp_status, lsp_symbols
 from magent.plugins import install_plugin, list_plugins, set_plugin_enabled
+from magent.task_runtime import TaskRuntime
 
 runner = CliRunner()
 
@@ -69,7 +71,7 @@ def test_lsp_fallback_intelligence(tmp_path: Path) -> None:
 def test_daemon_queue_runs_shell_task(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = workbench.WorkbenchStore("alice")
-    enqueue_task(store, "shell", {"command": "python --version"}, project=tmp_path)
+    queued = enqueue_task(store, "shell", {"command": "python --version"}, project=tmp_path)
 
     listed = list_queue(store)
     ran = run_once(store)
@@ -77,6 +79,8 @@ def test_daemon_queue_runs_shell_task(tmp_path: Path, monkeypatch) -> None:
     assert listed["tasks"][0]["kind"] == "shell"
     assert ran["ran"] == 1
     assert ran["ok"] is True
+    execution = TaskRuntime(store).get(queued["execution_task_id"])
+    assert execution and execution["state"] == "completed"
 
 
 def test_plugin_install_enable_and_agent_discovery(tmp_path: Path, monkeypatch) -> None:
@@ -113,6 +117,15 @@ def test_cli_release_024_commands(tmp_path: Path, monkeypatch) -> None:
     queued = runner.invoke(cli_main.app, ["daemon", "enqueue", "shell", "python --version", "--project", str(tmp_path)])
     queue = runner.invoke(cli_main.app, ["daemon", "list"])
     plugins_list = runner.invoke(cli_main.app, ["plugin", "list"])
+    execution = runner.invoke(
+        cli_main.app,
+        ["execution", "create", "CLI task", "--project", str(tmp_path)],
+    )
+    execution_payload = json.loads(execution.output)
+    execution_events = runner.invoke(
+        cli_main.app,
+        ["execution", "events", execution_payload["task"]["id"], "--jsonl"],
+    )
 
     assert created.exit_code == 0
     assert agents.exit_code == 0
@@ -121,3 +134,5 @@ def test_cli_release_024_commands(tmp_path: Path, monkeypatch) -> None:
     assert queued.exit_code == 0
     assert queue.exit_code == 0
     assert plugins_list.exit_code == 0
+    assert execution.exit_code == 0
+    assert json.loads(execution_events.output)["type"] == "task_created"

@@ -102,6 +102,7 @@ Generated from the active Typer command tree.
 - `magent env-doctor`
 - `magent eval`
 - `magent events`
+- `magent execution`
 - `magent followup`
 - `magent gateway`
 - `magent github`
@@ -199,6 +200,17 @@ Generated from the active Typer command tree.
 
 - `magent events list`
 - `magent events show`
+
+## execution
+
+- `magent execution cancel`
+- `magent execution create`
+- `magent execution events`
+- `magent execution list`
+- `magent execution pause`
+- `magent execution resume`
+- `magent execution retry`
+- `magent execution show`
 
 ## followup
 

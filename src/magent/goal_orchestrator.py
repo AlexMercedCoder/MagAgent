@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from magent.task_runtime import TaskRuntime
 from magent.workbench import WorkbenchStore, build_plan, project_profile
 from magent.workbench_store import now_iso
 
@@ -25,7 +26,9 @@ def get_orchestrated_plan(store: WorkbenchStore, plan_id: str) -> dict[str, Any]
     return None
 
 
-def preview_orchestrated_plan(store: WorkbenchStore, plan_id: str, *, retry_step: int = 0) -> dict[str, Any]:
+def preview_orchestrated_plan(
+    store: WorkbenchStore, plan_id: str, *, retry_step: int = 0
+) -> dict[str, Any]:
     """Return a dry-run preview for a saved orchestrated plan."""
     plan = get_orchestrated_plan(store, plan_id)
     if not plan:
@@ -75,6 +78,16 @@ def create_orchestrated_goal(
 ) -> dict[str, Any]:
     """Create a durable staged plan and cached step packets for a goal."""
     root = Path(project).resolve()
+    runtime = TaskRuntime(store)
+    runtime_task = runtime.create(
+        "orchestrated_goal",
+        goal,
+        project=root,
+        planning_role=planning_model_role,
+        execution_role=execution_model_role,
+        state="planning",
+        metadata={"verify": verify, "review": review},
+    )
     profile = project_profile(root)
     steps = _build_steps(goal, profile, verify=verify, review=review, max_steps=max_steps)
     cache_key = _cache_key(goal, root, steps, planning_model_role, execution_model_role)
@@ -113,6 +126,7 @@ def create_orchestrated_goal(
             "planning_model_role": planning_model_role,
             "execution_model_role": execution_model_role,
             "cache_key": cache_key,
+            "execution_task_id": runtime_task["id"],
             "created_at": now_iso(),
         },
     )
@@ -125,6 +139,7 @@ def create_orchestrated_goal(
             "status": "pending",
             "mode": "orchestrated-goal",
             "goal_id": goal_record["id"],
+            "execution_task_id": runtime_task["id"],
             "steps": [step["title"] for step in steps],
             "checks": _likely_checks(profile),
             "plan_markdown": master_plan,
@@ -141,9 +156,16 @@ def create_orchestrated_goal(
                 "completed_summaries": [],
                 "current_step": 0,
                 "status": "planned",
+                "execution_task_id": runtime_task["id"],
             },
         },
     )
+    runtime.record_event(
+        runtime_task["id"],
+        "master_plan_cached",
+        detail={"cache_key": cache_key, "plan_id": plan["id"], "steps": len(steps)},
+    )
+    runtime.transition(runtime_task["id"], "waiting", reason="Master plan is ready for execution")
     return {"ok": True, "goal": goal_record, "plan": plan, "orchestration": plan["orchestration"]}
 
 
@@ -206,6 +228,31 @@ async def run_orchestrated_plan(
     orchestration = _normalize_orchestration(plan)
     start_index = _start_index(orchestration, retry_step=retry_step)
     root = Path(plan.get("root") or ".").resolve()
+    runtime = TaskRuntime(store)
+    execution_task_id = str(
+        plan.get("execution_task_id") or orchestration.get("execution_task_id") or ""
+    )
+    runtime_task = runtime.get(execution_task_id) if execution_task_id else None
+    if runtime_task is None:
+        runtime_task = runtime.create(
+            "orchestrated_goal",
+            _goal_text(plan),
+            project=root,
+            planning_role=orchestration["planning_model_role"],
+            execution_role=orchestration["execution_model_role"],
+            metadata={"plan_id": plan_id, "migrated": True},
+        )
+        execution_task_id = runtime_task["id"]
+        plan["execution_task_id"] = execution_task_id
+        orchestration["execution_task_id"] = execution_task_id
+    if runtime_task["state"] in {"completed", "failed", "cancelled"}:
+        runtime.retry(execution_task_id, reason="Orchestrated plan retry")
+    current_task = runtime.get(execution_task_id)
+    if current_task and current_task["state"] != "running":
+        if current_task["state"] in {"waiting", "blocked"}:
+            runtime.resume(execution_task_id, reason="Orchestrated plan execution started")
+        else:
+            runtime.transition(execution_task_id, "running")
     runner = SubAgentRunner(username, provider, extraction_provider, str(root), config, quiet=quiet)
     completed: list[dict[str, Any]] = _prior_summaries(orchestration, start_index)
     step_statuses = _step_statuses(orchestration)
@@ -242,16 +289,55 @@ async def run_orchestrated_plan(
                 "completed_summaries": completed,
             },
         )
-        task = await runner.spawn(f"{plan['id']}_step_{index + 1}", packet)
+        child = runtime.create(
+            "orchestrated_step",
+            step["title"],
+            project=root,
+            parent_task_id=execution_task_id,
+            planning_role=orchestration["planning_model_role"],
+            execution_role=orchestration["execution_model_role"],
+            metadata={"plan_id": plan_id, "step": index + 1},
+        )
+        runtime.transition(child["id"], "running", detail={"step": index + 1})
+        runtime.record_event(
+            execution_task_id,
+            "child_task_started",
+            detail={"child_task_id": child["id"], "step": index + 1, "title": step["title"]},
+        )
+        try:
+            task = await runner.spawn(f"{plan['id']}_step_{index + 1}", packet)
+            task_result = task.result
+            task_error = task.error
+        except Exception as exc:
+            task_result = ""
+            task_error = str(exc)
         summary = {
             "step": index + 1,
             "title": step["title"],
-            "ok": not bool(task.error),
-            "summary": task.result[:1600],
-            "error": task.error,
+            "ok": not bool(task_error),
+            "summary": task_result[:1600],
+            "error": task_error,
             "completed_at": now_iso(),
         }
         completed.append(summary)
+        runtime.update_context(
+            child["id"],
+            final_audit={
+                "ok": summary["ok"],
+                "summary": summary["summary"],
+                "error": summary["error"],
+            },
+        )
+        runtime.transition(
+            child["id"],
+            "completed" if summary["ok"] else "failed",
+            detail={"step": index + 1},
+        )
+        runtime.record_event(
+            execution_task_id,
+            "child_task_finished",
+            detail={"child_task_id": child["id"], "step": index + 1, "ok": summary["ok"]},
+        )
         step_statuses[index] = {
             **step_statuses[index],
             "status": "completed" if summary["ok"] else "failed",
@@ -259,9 +345,13 @@ async def run_orchestrated_plan(
             "error": summary["error"],
             "completed_at": summary["completed_at"],
         }
-        if task.error:
+        if task_error:
             break
-    status = "completed" if len(completed) == len(orchestration["steps"]) and all(item["ok"] for item in completed) else "blocked"
+    status = (
+        "completed"
+        if len(completed) == len(orchestration["steps"]) and all(item["ok"] for item in completed)
+        else "blocked"
+    )
     final_orchestration = {
         **orchestration,
         "completed_summaries": completed,
@@ -270,10 +360,28 @@ async def run_orchestrated_plan(
         "status": status,
     }
     store.update_item("plans", plan["id"], status=status, orchestration=final_orchestration)
+    runtime.update_context(
+        execution_task_id,
+        final_audit={
+            "ok": status == "completed",
+            "status": status,
+            "completed_steps": len(completed),
+        },
+        metadata={"plan_id": plan_id},
+    )
+    if status == "completed":
+        runtime.transition(execution_task_id, "validating", reason="All staged steps completed")
+        runtime.transition(execution_task_id, "completed", reason="Orchestrated goal completed")
+    else:
+        runtime.transition(execution_task_id, "blocked", reason="A staged step failed")
     updated_goal = None
     if plan.get("goal_id"):
         updated_goal = store.update_item("goals", plan["goal_id"], status=status)
-    updated_plan = get_orchestrated_plan(store, plan_id) or {**plan, "status": status, "orchestration": final_orchestration}
+    updated_plan = get_orchestrated_plan(store, plan_id) or {
+        **plan,
+        "status": status,
+        "orchestration": final_orchestration,
+    }
     return {
         "ok": status == "completed",
         "status": status,
@@ -331,7 +439,9 @@ def build_step_packet(
     )
 
 
-def _build_steps(goal: str, profile: dict[str, Any], *, verify: bool, review: bool, max_steps: int) -> list[dict[str, Any]]:
+def _build_steps(
+    goal: str, profile: dict[str, Any], *, verify: bool, review: bool, max_steps: int
+) -> list[dict[str, Any]]:
     steps = [
         {
             "title": "Orient to the project and refine scope",
@@ -461,7 +571,13 @@ def _likely_checks(profile: dict[str, Any]) -> list[str]:
     return [str(command) for command in commands[:4] if str(command).strip()]
 
 
-def _cache_key(goal: str, root: Path, steps: list[dict[str, Any]], planning_model_role: str, execution_model_role: str) -> str:
+def _cache_key(
+    goal: str,
+    root: Path,
+    steps: list[dict[str, Any]],
+    planning_model_role: str,
+    execution_model_role: str,
+) -> str:
     payload = {
         "goal": goal,
         "root": str(root),
@@ -477,8 +593,13 @@ def _normalize_orchestration(plan: dict[str, Any]) -> dict[str, Any]:
     steps = list(orchestration.get("steps") or [])
     completed = list(orchestration.get("completed_summaries") or [])
     orchestration.setdefault("cache_key", str(plan.get("cache_key") or ""))
-    orchestration.setdefault("planning_model_role", str(plan.get("planning_model_role") or "review"))
-    orchestration.setdefault("execution_model_role", str(plan.get("execution_model_role") or "coding"))
+    orchestration.setdefault(
+        "planning_model_role", str(plan.get("planning_model_role") or "review")
+    )
+    orchestration.setdefault(
+        "execution_model_role", str(plan.get("execution_model_role") or "coding")
+    )
+    orchestration.setdefault("execution_task_id", str(plan.get("execution_task_id") or ""))
     orchestration["steps"] = steps
     orchestration.setdefault("step_packets", [])
     orchestration["completed_summaries"] = completed
@@ -493,7 +614,9 @@ def _step_statuses(orchestration: dict[str, Any]) -> list[dict[str, Any]]:
     existing = list(orchestration.get("step_statuses") or [])
     statuses: list[dict[str, Any]] = []
     for index, step in enumerate(steps):
-        current = existing[index] if index < len(existing) and isinstance(existing[index], dict) else {}
+        current = (
+            existing[index] if index < len(existing) and isinstance(existing[index], dict) else {}
+        )
         statuses.append(
             {
                 "step": index + 1,

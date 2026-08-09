@@ -3,7 +3,7 @@
 > Canonical direction for MagAgent, MagGraph, and Mag Command Center.
 >
 > Last audited: 2026-08-09
-> Current releases: MagAgent 0.33.0, MagGraph 0.2.5, Mag Command Center 0.1.7
+> Current releases: MagAgent 0.33.0, MagGraph 0.3.0, Mag Command Center 0.1.7
 
 ## Purpose
 
@@ -42,8 +42,8 @@ The product thesis for the next several releases is:
 - **Release engineering is mature for the project age.** All three projects have
   automated builds or tests, and the desktop app produces native installers across
   supported platforms.
-- **Current functional baselines are healthy.** The audit ran 404 passing MagAgent
-  tests, 117 passing MagGraph workspace tests plus 3 doc tests, and 10 passing
+- **Current functional baselines are healthy.** The audit ran 410 passing MagAgent
+  tests, 122 passing MagGraph workspace tests plus 3 doc tests, and 10 passing
   Command Center tests. The Command Center production web build also completed.
 
 ### Risks and gaps
@@ -57,7 +57,7 @@ The product thesis for the next several releases is:
   390-line lifecycle and dispatch facade backed by focused capability modules.
 - **The MagAgent coverage gate should keep ratcheting upward.** The checkout-isolation
   guard, fatal resource warnings, and connection cleanup are now in place, and the
-  suite reaches 64.30% against the 63% floor. High-blast-radius agent, gateway,
+  suite reaches 64.57% against the 63% floor. High-blast-radius agent, gateway,
   sandbox, and UI paths remain the next coverage targets.
 - **Command Center test depth is low.** Ten utility/integration tests do not exercise
   its chat lifecycle, cancellation, project/session switching, setup flows, memory
@@ -68,9 +68,10 @@ The product thesis for the next several releases is:
 - **Desktop state is mostly browser-local.** Chat and project state stored in
   `localStorage` is convenient for an MVP but weak for migrations, larger histories,
   concurrent work, recovery, and parity with CLI sessions.
-- **MagGraph planning docs mix history and current direction.** Several documents
-  still frame work around v0.1 or v0.2 even though 0.2.5 is published. They should be
-  archived or rewritten around current API guarantees and future memory workloads.
+- **MagGraph's current contract is documented and benchmarked.** Version 0.3.0 now
+  has a current support matrix, crash-consistency guarantees, downstream Python API
+  contract tests, and measured 1K/10K/100K retrieval benchmarks. Hybrid retrieval,
+  temporal validity, and transactional graph-edit batches remain roadmap work.
 - **Provider breadth creates a conformance burden.** A provider being configurable
   does not prove streaming, tool calls, retries, caching telemetry, context limits,
   structured output, and cancellation behave consistently.
@@ -103,8 +104,8 @@ workflow depends on a monolithic module.
 
 **Progress (2026-08-09):** The first MagAgent confidence unit is complete. Pytest now
 imports the checkout explicitly, resource leaks fail the suite, cached user databases
-have deterministic shutdown, semantic-memory connections close correctly, and 404
-tests pass with 64.30% branch coverage against the 63% gate.
+have deterministic shutdown, semantic-memory connections close correctly, and 410
+tests pass with 64.57% branch coverage against the 63% gate.
 
 The first modularization unit is also complete: document, diagram, and image tools now
 live in a strictly typed `magent.tools.artifacts` capability module. The public
@@ -194,6 +195,14 @@ lifecycle, selection, dispatch, progress, and output budgeting.
 
 **Goal:** Make interactive chat, one-shot asks, goals, recipes, gateways, daemon jobs,
 and desktop sessions use the same durable execution model.
+
+**Progress (2026-08-09):** The first shared-runtime unit is implemented on the future
+release branch. `magent.task_runtime` provides transactional SQLite task snapshots,
+legal state transitions, parent/child relationships, append-only ordered events,
+event cursors, execution evidence, and pause/resume/cancel/retry operations. Daemon
+jobs and orchestrated goals now produce this contract, while `magent execution` and
+desktop API helpers expose it without terminal scraping. Interactive ask/chat,
+recipes, gateways, direct subagents, and process-level controls remain to migrate.
 
 ### Shared task model
 

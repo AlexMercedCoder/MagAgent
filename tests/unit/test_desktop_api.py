@@ -4,6 +4,7 @@ from pathlib import Path
 
 from magent import config as magent_config
 from magent import desktop_api
+from magent.task_runtime import TaskRuntime
 from magent.tools import db as db_tools
 
 
@@ -92,3 +93,19 @@ def test_memory_update_node_preview_reports_hashes(monkeypatch, tmp_path: Path) 
     assert preview["preview"] is True
     assert preview["before_hash"] != preview["after_hash"]
     assert updated["before_hash"] != updated["after_hash"]
+
+
+def test_desktop_execution_task_contract(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("alice")
+    runtime = TaskRuntime(magent_config.USERS_DIR / "alice" / "workbench")
+    task = runtime.create("ask", "Desktop task", project=tmp_path)
+    runtime.transition(task["id"], "running")
+
+    listed = desktop_api.execution_tasks("alice")
+    detail = desktop_api.execution_task("alice", task["id"])
+    cancelled = desktop_api.execution_task_action("alice", task["id"], "cancel")
+
+    assert listed["tasks"][0]["schema_version"] == "magent.task.v1"
+    assert detail["events"][0]["type"] == "task_created"
+    assert cancelled["task"]["state"] == "cancelled"

@@ -11,6 +11,7 @@ from magent.goal_orchestrator import (
     run_orchestrated_goal,
     run_orchestrated_plan,
 )
+from magent.task_runtime import TaskRuntime
 from magent.ux_flows import init_project, list_profiles
 
 
@@ -188,6 +189,8 @@ def test_orchestrated_goal_creates_cached_step_packets(tmp_path: Path, monkeypat
     assert result["goal"]["mode"] == "orchestrated"
     assert result["plan"]["mode"] == "orchestrated-goal"
     assert result["orchestration"]["cache_key"]
+    execution_task_id = result["plan"]["execution_task_id"]
+    assert TaskRuntime(store).get(execution_task_id)["state"] == "waiting"
     assert len(result["orchestration"]["step_packets"]) == 3
     assert "MasterPlanCacheKey" in result["orchestration"]["step_packets"][0]
 
@@ -261,6 +264,10 @@ def test_run_orchestrated_goal_uses_subagent_runner(tmp_path: Path, monkeypatch)
     assert result["ok"] is True
     assert result["status"] == "completed"
     assert result["completed_summaries"][0]["ok"] is True
+    execution_task_id = result["plan"]["execution_task_id"]
+    runtime = TaskRuntime(store)
+    assert runtime.get(execution_task_id)["state"] == "completed"
+    assert runtime.list_tasks(parent_task_id=execution_task_id)[0]["state"] == "completed"
     assert calls[0]["kwargs"]["quiet"] is True
     assert "MasterPlanCacheKey" in calls[1]["description"]
 
@@ -324,6 +331,43 @@ def test_orchestrated_plan_preview_and_retry_resume(tmp_path: Path, monkeypatch)
     )
     assert retry["ok"] is True
     assert retry["orchestration"]["step_statuses"][1]["status"] == "completed"
+
+
+def test_orchestrated_runner_exception_blocks_durable_parent_and_child(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = workbench.WorkbenchStore("alice")
+    created = create_orchestrated_goal(store, "Ship safely", project=tmp_path, max_steps=1)
+
+    class FailingRunner:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def spawn(self, task_id: str, description: str):
+            raise RuntimeError("provider disconnected")
+
+    import magent.subagents as subagents
+
+    monkeypatch.setattr(subagents, "SubAgentRunner", FailingRunner)
+
+    import asyncio
+
+    result = asyncio.run(
+        run_orchestrated_plan(
+            store,
+            created["plan"]["id"],
+            username="alice",
+            provider=object(),
+            extraction_provider=object(),
+            config=object(),
+        )
+    )
+    runtime = TaskRuntime(store)
+    parent_id = created["plan"]["execution_task_id"]
+
+    assert result["status"] == "blocked"
+    assert result["completed_summaries"][0]["error"] == "provider disconnected"
+    assert runtime.get(parent_id)["state"] == "blocked"
+    assert runtime.list_tasks(parent_task_id=parent_id)[0]["state"] == "failed"
 
 
 def test_save_execution_plan_with_command(tmp_path: Path, monkeypatch) -> None:

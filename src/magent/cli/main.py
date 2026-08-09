@@ -36,6 +36,7 @@ from magent.cli.app import (
     docs_app,
     eval_app,
     events_app,
+    execution_app,
     followup_app,
     gateway_app,
     github_app,
@@ -85,6 +86,7 @@ from magent.cli.commands.daemon import register_daemon_commands
 from magent.cli.commands.docs import register_docs_commands
 from magent.cli.commands.evals import register_eval_commands
 from magent.cli.commands.events import register_event_commands
+from magent.cli.commands.execution import register_execution_commands
 from magent.cli.commands.github import register_github_commands
 from magent.cli.commands.hooks import register_hook_commands
 from magent.cli.commands.lsp import register_lsp_commands
@@ -115,6 +117,7 @@ register_daemon_commands(daemon_app)
 register_docs_commands(docs_app, known_command_names=lambda: known_command_names(app))
 register_eval_commands(eval_app, store=store)
 register_event_commands(events_app)
+register_execution_commands(execution_app, store=store, console=console)
 register_github_commands(github_app)
 register_hook_commands(hook_app)
 register_lsp_commands(lsp_app)

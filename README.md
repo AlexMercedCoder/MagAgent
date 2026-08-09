@@ -9,7 +9,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-404%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-410%20passing-brightgreen.svg)](tests/)
 
 [Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Roadmap](ROADMAP.md) · [Docs](docs/)
 
@@ -617,6 +617,9 @@ When you message the bot:
 - **Channel restriction** — optionally limit to specific channels
 - **Rate limiting** — configurable per-user request limit (default 10/min)
 - **Task timeout** — configurable max execution time (default 5 min)
+- **Durable execution runtime** — versioned task states, parent/child work, ordered
+  event cursors, audit evidence, and pause/resume/cancel/retry controls shared by
+  daemon jobs, staged goals, CLI clients, and desktop integrations
 
 ### Setup Guides
 

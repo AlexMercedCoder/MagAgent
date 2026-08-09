@@ -160,6 +160,12 @@ commands. Expensive actions belong behind explicit button endpoints such as
 
 `magent.sandbox` owns isolated plan and recipe execution in worktree, copy, and Docker container modes.
 
+`magent.task_runtime` owns the versioned durable execution contract. It stores task
+snapshots and append-only ordered events in per-user SQLite, validates lifecycle
+transitions, and models parent/child work. Daemon jobs and orchestrated goals use it
+today; other execution surfaces migrate behind compatibility adapters. CLI and
+desktop consumers read the same JSON-shaped snapshots and event records.
+
 `magent.evals` owns local JSON eval suites and run reports.
 
 `magent.browser` owns optional Playwright-backed browser snapshot and screenshot helpers.

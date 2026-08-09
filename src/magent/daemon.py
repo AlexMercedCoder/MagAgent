@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from magent.task_runtime import TaskRuntime
+
 QUEUE_STORE = "daemon_queue"
 
 
@@ -19,7 +21,13 @@ def enqueue_task(
     project: str | Path = ".",
     run_at: str = "",
 ) -> dict[str, Any]:
-    return store.append(
+    runtime_task = TaskRuntime(store).create(
+        kind,
+        _task_title(kind, payload),
+        project=project,
+        metadata={"source": "daemon", "run_at": run_at},
+    )
+    item: dict[str, Any] = store.append(
         QUEUE_STORE,
         {
             "kind": kind,
@@ -28,8 +36,10 @@ def enqueue_task(
             "run_at": run_at,
             "status": "pending",
             "attempts": 0,
+            "execution_task_id": runtime_task["id"],
         },
     )
+    return item
 
 
 def list_queue(store: Any, status: str = "") -> dict[str, Any]:
@@ -41,19 +51,44 @@ def list_queue(store: Any, status: str = "") -> dict[str, Any]:
 
 def run_once(store: Any, *, limit: int = 1) -> dict[str, Any]:
     items = store.read(QUEUE_STORE, [])
+    runtime = TaskRuntime(store)
     now = datetime.now(UTC)
-    results = []
+    results: list[dict[str, Any]] = []
     for item in items:
         if len(results) >= limit:
             break
         if item.get("status") != "pending" or not _due(item, now):
             continue
+        execution_task_id = str(item.get("execution_task_id") or "")
+        runtime_task = runtime.get(execution_task_id) if execution_task_id else None
+        if runtime_task and runtime_task["state"] in {"cancelled", "waiting"}:
+            continue
+        if not runtime_task:
+            runtime_task = runtime.create(
+                str(item.get("kind") or "ask"),
+                _task_title(str(item.get("kind") or "ask"), item.get("payload") or {}),
+                project=item.get("project") or ".",
+                metadata={"source": "daemon", "legacy_queue_id": item.get("id", "")},
+            )
+            execution_task_id = runtime_task["id"]
+            item["execution_task_id"] = execution_task_id
         item["status"] = "running"
         item["attempts"] = int(item.get("attempts") or 0) + 1
+        runtime.transition(execution_task_id, "running", detail={"queue_id": item.get("id", "")})
         result = _execute_item(item)
         item["status"] = "done" if result.get("ok") else "failed"
         item["result"] = result
         item["updated_at"] = datetime.now(UTC).isoformat()
+        runtime.update_context(
+            execution_task_id,
+            final_audit={"ok": bool(result.get("ok")), "returncode": result.get("returncode")},
+            metadata={"queue_status": item["status"]},
+        )
+        runtime.transition(
+            execution_task_id,
+            "completed" if result.get("ok") else "failed",
+            detail={"queue_id": item.get("id", "")},
+        )
         results.append({"task": item, "result": result})
     store.write(QUEUE_STORE, items)
     return {"ok": all(item["result"].get("ok") for item in results), "ran": len(results), "results": results}
@@ -141,3 +176,11 @@ def _run_command(command: list[str], project: str | Path) -> dict[str, Any]:
         }
     except Exception as e:
         return {"ok": False, "command": " ".join(command), "error": str(e)}
+
+
+def _task_title(kind: str, payload: dict[str, Any]) -> str:
+    for key in ("task", "name", "command", "id"):
+        value = str(payload.get(key) or "").strip()
+        if value:
+            return value[:500]
+    return f"Background {kind} task"
