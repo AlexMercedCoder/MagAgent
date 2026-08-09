@@ -354,6 +354,8 @@ def _run_one_shot(
 ):
     """Run a single non-interactive agent task."""
     from magent.agent import AgentSession
+    from magent.session_controls import session_usage
+    from magent.task_runtime import TaskRuntime
     from magent.tui import print_response
 
     session = AgentSession(
@@ -365,6 +367,31 @@ def _run_one_shot(
         interactive_permissions=False,
         permission_mode_override=permission_mode_override,
     )
+    runtime = TaskRuntime(_store())
+    runtime_task = runtime.create(
+        "ask",
+        task,
+        project=cwd,
+        session_id=session.session_id,
+        execution_role="coding",
+        permission_policy=permission_mode_override or config.permission_mode,
+        metadata={
+            "provider": getattr(main_provider, "provider_id", ""),
+            "model": getattr(main_provider, "model", ""),
+            "source": "cli.ask",
+        },
+    )
+    execution_task_id = runtime_task["id"]
+    logger = getattr(session, "logger", None)
+    if logger and hasattr(logger, "set_event_callback"):
+        logger.set_event_callback(
+            lambda record: runtime.record_event(
+                execution_task_id,
+                f"session.{record.get('event', 'activity')}",
+                detail={key: value for key, value in record.items() if key not in {"event", "session", "user"}},
+            )
+        )
+    runtime.transition(execution_task_id, "running", reason="One-shot task started")
 
     from magent.ask_audit import audit_one_shot_task, render_audit_note
 
@@ -399,7 +426,37 @@ def _run_one_shot(
         finally:
             await session.end_session()
 
-    response = asyncio.run(_run())
+    try:
+        response = asyncio.run(_run())
+    except BaseException as exc:
+        runtime.update_context(
+            execution_task_id,
+            final_audit={"ok": False, "error": str(exc)},
+            metadata={"failure_type": type(exc).__name__},
+        )
+        runtime.transition(execution_task_id, "failed", reason=str(exc) or type(exc).__name__)
+        raise
+    runtime.transition(execution_task_id, "validating", reason="One-shot completion audit started")
+    usage = session_usage(logger.path) if logger and hasattr(logger, "path") else {}
+    runtime.update_context(
+        execution_task_id,
+        usage={
+            key: usage[key]
+            for key in ("prompt_tokens", "completion_tokens", "total_tokens", "cached_tokens", "cost_usd")
+            if key in usage
+        },
+        files_changed=[str(path) for path in session.scratchpad.get("files_touched", [])],
+        final_audit=final_audit,
+        metadata={
+            "commands_run": session.scratchpad.get("commands_run", []),
+            "permission_failures": session.scratchpad.get("permission_failures", []),
+        },
+    )
+    runtime.transition(
+        execution_task_id,
+        "completed" if final_audit.get("ok", True) else "blocked",
+        reason="One-shot audit passed" if final_audit.get("ok", True) else "One-shot audit needs attention",
+    )
     if json_output:
         payload = {
             "ok": bool(final_audit.get("ok", True)),
@@ -411,6 +468,7 @@ def _run_one_shot(
                 "permission_failures": session.scratchpad.get("permission_failures", []),
             },
             "session_id": session.session_id,
+            "execution_task_id": execution_task_id,
         }
         if events_output:
             payload["events"] = _one_shot_events(task, response, final_audit, session)

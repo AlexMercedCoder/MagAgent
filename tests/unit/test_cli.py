@@ -10,6 +10,7 @@ from magent import agent as magent_agent
 from magent import config as magent_config
 from magent import config_ux, workbench, workbench_store
 from magent.cli import main as cli_main
+from magent.task_runtime import TaskRuntime
 from magent.workbench import WorkbenchStore
 
 runner = CliRunner()
@@ -494,7 +495,47 @@ def test_cli_ask_json_outputs_audit_payload(tmp_path: Path, monkeypatch) -> None
     assert payload["ok"] is True
     assert payload["audit"]["missing_requested_files"] == []
     assert payload["session_id"] == "session-json"
+    assert payload["execution_task_id"]
     assert [item["type"] for item in payload["events"]][-1] == "assistant_message"
+    execution = TaskRuntime(WorkbenchStore("cli-user")).get(payload["execution_task_id"])
+    assert execution and execution["state"] == "completed"
+    assert execution["files_changed"] == [str(tmp_path / "hello.txt")]
+
+
+def test_cli_ask_failure_closes_durable_execution_task(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+    magent_config.save_global_config(
+        {
+            "defaults": {"provider": "ollama", "model": "qwen2.5-coder:32b"},
+            "memory": {"extraction_provider": "ollama", "extraction_model": "qwen2.5:7b"},
+            "providers": {},
+        }
+    )
+
+    class FailingSession:
+        session_id = "session-failed"
+
+        def __init__(self, **kwargs):
+            self.scratchpad = {"files_touched": [], "commands_run": [], "permission_failures": []}
+
+        async def chat(self, prompt: str) -> str:
+            raise RuntimeError("provider unavailable")
+
+        async def end_session(self) -> None:
+            return None
+
+    monkeypatch.setattr(magent_agent, "AgentSession", FailingSession)
+    result = runner.invoke(
+        cli_main.app,
+        ["ask", "--project", str(tmp_path), "--json", "Fail cleanly"],
+    )
+    tasks = TaskRuntime(WorkbenchStore("cli-user")).list_tasks()
+
+    assert result.exit_code == 1
+    assert tasks[0]["state"] == "failed"
+    assert tasks[0]["final_audit"]["error"] == "provider unavailable"
 
 
 def test_cli_research_command_defaults_to_readable_output_and_can_write(monkeypatch, tmp_path: Path) -> None:

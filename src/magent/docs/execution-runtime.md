@@ -56,9 +56,12 @@ helpers are `execution_tasks`, `execution_task`, and `execution_task_action`.
   completion/failure, return-code audit, and legacy queue identity.
 - Orchestrated goals create one parent execution task. Every staged subagent step is
   a child task with ordered start/finish events and a final audit.
+- `magent ask` records live session logger events, token/cost totals, changed files,
+  commands, permission failures, and completion-audit evidence. JSON output includes
+  `execution_task_id` so clients can reconnect to the durable stream.
 - Command Center can list, reconnect to, pause, resume, cancel, and retry tasks
   without parsing terminal output.
 
-Interactive chat, one-shot asks, recipes, gateways, direct subagents, tool activity,
-and process-level cancellation will migrate to this contract incrementally. Existing
-workbench JSON records remain readable during that migration.
+Interactive chat, recipes, gateways, direct subagents, and process-level cancellation
+will migrate to this contract incrementally. Existing workbench JSON records remain
+readable during that migration.

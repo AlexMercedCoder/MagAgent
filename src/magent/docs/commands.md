@@ -8,7 +8,7 @@ Important command paths:
 - `magent ask --yes "task"`: run one task with YOLO-style non-interactive approvals.
 - `magent ask --repair-attempts 1 "task"`: retry obvious missing-file task audit failures once.
 - `magent ask --strict-audit "task"`: exit nonzero when the final task audit is incomplete.
-- `magent ask --json "task"`: emit a machine-readable response, audit, and tool summary.
+- `magent ask --json "task"`: emit a machine-readable response, audit, tool summary, and durable execution task ID.
 - `magent ask --json --events "task"`: include coarse structured desktop timeline events.
 - `magent goal "task"`: create a measurable goal loop with verifier/reviewer workflow scaffolding.
 - `magent goal "task" --orchestrated`: create a cached master plan with staged sub-agent step packets.

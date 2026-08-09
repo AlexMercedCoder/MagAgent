@@ -17,7 +17,8 @@ def test_human_bytes_formats_units() -> None:
 def test_session_logger_writes_and_lists_events(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(magent_logging, "LOGS_DIR", tmp_path / "logs")
 
-    logger = SessionLogger("sess1", "alice")
+    forwarded = []
+    logger = SessionLogger("sess1", "alice", event_callback=forwarded.append)
     logger.log_session_start("openai", "gpt", "/repo")
     logger.log_user_turn(1, "x" * 600)
     logger.log_assistant_turn(1, "response", tool_calls=2)
@@ -49,6 +50,7 @@ def test_session_logger_writes_and_lists_events(tmp_path, monkeypatch) -> None:
     assert listed[0]["session"] == "sess1"
     assert listed[0]["ended"] != "active"
     assert listed[0]["events"] == 9
+    assert [record["event"] for record in forwarded] == [record["event"] for record in records]
     stream = session_event_stream(logger.path)
     stream_types = [item["type"] for item in stream["events"]]
     assert "tool_finished" in stream_types

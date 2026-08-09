@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,12 +15,22 @@ from magent.config import LOGS_DIR
 class SessionLogger:
     """Writes structured JSONL event logs for a session."""
 
-    def __init__(self, session_id: str, username: str):
+    def __init__(
+        self,
+        session_id: str,
+        username: str,
+        event_callback: Callable[[dict[str, Any]], None] | None = None,
+    ):
         self.session_id = session_id
         self.username = username
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
         self._path = LOGS_DIR / f"{session_id}.jsonl"
         self._f = self._path.open("a", encoding="utf-8")
+        self._event_callback = event_callback
+
+    def set_event_callback(self, callback: Callable[[dict[str, Any]], None] | None) -> None:
+        """Set a best-effort sink for live machine-readable session records."""
+        self._event_callback = callback
 
     def _write(self, event_type: str, data: dict[str, Any]) -> None:
         record = {
@@ -31,6 +42,9 @@ class SessionLogger:
         }
         self._f.write(json.dumps(record, default=str) + "\n")
         self._f.flush()
+        if self._event_callback:
+            with contextlib.suppress(Exception):
+                self._event_callback(record)
 
     def log_session_start(self, provider: str, model: str, cwd: str) -> None:
         self._write(
