@@ -110,6 +110,12 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "sandbox_mode": "",
     },
     "mcp": {},
+    "session_messaging": {
+        "enabled": True,
+        "name": "",
+        "policy": "accept",
+        "headless_accept": False,
+    },
 }
 
 DEFAULT_USER_PROFILE: dict[str, Any] = {

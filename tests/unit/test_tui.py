@@ -16,6 +16,7 @@ def test_context_line_compacts_home_path() -> None:
         "ask",
         model="llama",
         git_branch="main",
+        session_name="demo-1234",
     )
 
     assert "alex" in line
@@ -23,6 +24,7 @@ def test_context_line_compacts_home_path() -> None:
     assert "llama" in line
     assert "main" in line
     assert "~/projects/magagent" in line
+    assert "demo-1234" in line
 
 
 def test_print_banner_renders_compact_session_context(monkeypatch) -> None:

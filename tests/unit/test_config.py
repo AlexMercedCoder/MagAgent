@@ -147,6 +147,7 @@ def test_provider_env_aliases_are_detected_and_resolved(monkeypatch) -> None:
 
 
 def test_config_resolves_keyring_and_instruction_sources(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr(auth_store, "load_keyring_secret", lambda provider_id: "key-from-ring")
     cfg = Config(
         {

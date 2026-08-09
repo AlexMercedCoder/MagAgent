@@ -9,11 +9,9 @@ from magent.tools import db as db_tools
 @pytest.fixture(autouse=True)
 def isolated_databases(tmp_path, monkeypatch):
     monkeypatch.setattr(db_tools, "USERS_DIR", tmp_path / "users")
-    db_tools._connection_cache.clear()
+    db_tools.close_database_connections()
     yield
-    for conn in db_tools._connection_cache.values():
-        conn.close()
-    db_tools._connection_cache.clear()
+    db_tools.close_database_connections()
 
 
 def test_db_execute_query_schema_and_list_tables() -> None:
@@ -57,6 +55,19 @@ def test_db_path_sanitizes_database_name(tmp_path) -> None:
 
     assert path.name == "proddb.db"
     assert path.parent == tmp_path / "users" / "alice" / "databases"
+
+
+def test_close_database_connections_can_filter_cached_handles() -> None:
+    db_tools._get_db("alice", "one")
+    db_tools._get_db("alice", "two")
+    db_tools._get_db("bob", "one")
+
+    assert db_tools.close_database_connections("alice", "one") == 1
+    assert set(db_tools._connection_cache) == {"alice::two", "bob::one"}
+    assert db_tools.close_database_connections("alice") == 1
+    assert set(db_tools._connection_cache) == {"bob::one"}
+    assert db_tools.close_database_connections() == 1
+    assert db_tools._connection_cache == {}
 
 
 @pytest.mark.asyncio

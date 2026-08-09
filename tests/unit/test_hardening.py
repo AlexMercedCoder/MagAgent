@@ -51,3 +51,4 @@ def test_deep_diagnostics_reports_provider_and_artifacts(tmp_path: Path, monkeyp
 
     assert result["ok"] is False
     assert any(item["key"] == "artifact_contract" for item in result["checks"])
+    assert any(item["key"] == "session_messaging" for item in result["checks"])

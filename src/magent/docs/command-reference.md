@@ -253,8 +253,12 @@ Generated from the active Typer command tree.
 
 ## mcp
 
+- `magent mcp catalog`
+- `magent mcp complete`
 - `magent mcp init`
 - `magent mcp list`
+- `magent mcp prompt`
+- `magent mcp resource`
 - `magent mcp test`
 
 ## memory
@@ -405,7 +409,16 @@ Generated from the active Typer command tree.
 
 ## session
 
+- `magent session accept`
+- `magent session doctor`
 - `magent session events`
+- `magent session inbox`
+- `magent session peers`
+- `magent session policy`
+- `magent session receipts`
+- `magent session refuse`
+- `magent session retry`
+- `magent session send`
 - `magent session timeline`
 
 ## skill

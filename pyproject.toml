@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mag-agent"
-version = "0.32.14"
+version = "0.33.0"
 description = "MagAgent — CLI AI coding agent with persistent MagGraph memory. Like the Magpie: intelligent, tool-using, and never forgets."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -93,7 +93,7 @@ gateway = [
     "python-telegram-bot>=21.0",
 ]
 mcp = [
-    "mcp[cli]>=1.0",
+    "mcp[cli]>=2.0,<3",
 ]
 browser = [
     "playwright>=1.45.0",
@@ -129,6 +129,11 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+pythonpath = ["src"]
+filterwarnings = [
+    "error::ResourceWarning",
+    "error::pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.coverage.run]
 branch = true

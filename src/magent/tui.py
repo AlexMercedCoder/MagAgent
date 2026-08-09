@@ -53,6 +53,8 @@ def context_line(
     *,
     model: str | None = None,
     git_branch: str | None = None,
+    session_name: str | None = None,
+    session_id: str | None = None,
 ) -> str:
     """Return a compact one-line session context summary."""
     parts = [
@@ -64,6 +66,13 @@ def context_line(
     parts.append(f"[{THEME.muted}]mode[/{THEME.muted}] [{THEME.mode}]{mode}[/{THEME.mode}]")
     if git_branch:
         parts.append(f"[{THEME.muted}]git[/{THEME.muted}] [bold]{git_branch}[/bold]")
+    if session_name:
+        session_label = session_name
+        if session_id:
+            session_label += f" ({session_id})"
+        parts.append(
+            f"[{THEME.muted}]session[/{THEME.muted}] [bold cyan]{session_label}[/bold cyan]"
+        )
     parts.append(f"[{THEME.muted}]cwd[/{THEME.muted}] [{THEME.path}]{_compact_path(cwd)}[/{THEME.path}]")
     return "  ".join(parts)
 
@@ -77,6 +86,8 @@ def print_banner(
     version: str = "",
     model: str | None = None,
     git_branch: str | None = None,
+    session_name: str | None = None,
+    session_id: str | None = None,
 ) -> None:
     """Print a compact startup banner that adapts to terminal width."""
     title = f"{LOGO} {version}".strip()
@@ -90,6 +101,8 @@ def print_banner(
                     mode,
                     model=model,
                     git_branch=git_branch,
+                    session_name=session_name,
+                    session_id=session_id,
                 ),
                 title=f"[{THEME.accent}]{title}[/{THEME.accent}]",
                 border_style=THEME.border,
@@ -105,7 +118,16 @@ def print_banner(
     table.add_row(
         MAGPIE_PET,
         f"[{THEME.accent}]{title}[/{THEME.accent}]",
-        context_line(username, provider, cwd, mode, model=model, git_branch=git_branch),
+        context_line(
+            username,
+            provider,
+            cwd,
+            mode,
+            model=model,
+            git_branch=git_branch,
+            session_name=session_name,
+            session_id=session_id,
+        ),
     )
     console.print(Panel(table, border_style=THEME.border, box=box.ROUNDED, padding=(1, 2)))
 

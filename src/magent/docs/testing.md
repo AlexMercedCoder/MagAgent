@@ -16,6 +16,20 @@ magent provider test-matrix
 magent provider tool-smoke <provider> --model <cheap-model>
 ```
 
+Pytest is configured with `src/` first on its import path, and the suite refuses to
+start if it resolves `magent` from a globally installed package instead of the current
+checkout. This keeps local coverage and release validation tied to the code under
+review without requiring developers to alter their global MagAgent installation.
+
+Resource warnings and pytest unraisable-exception warnings are errors. Cached user
+database connections are closed after every test, while production processes register
+the same cleanup for shutdown. Semantic-memory SQLite operations use short-lived,
+transactional connections that always release their file handles.
+
+The current baseline is 404 passing tests and 64.30% branch coverage. The configured
+63% floor is a regression gate, not the end target; new extracted runtime modules
+should aim for at least 85% behavioral coverage.
+
 High-confidence coverage focuses on:
 
 - agent loop tool dispatch and provider failure handling
@@ -23,6 +37,7 @@ High-confidence coverage focuses on:
 - memory quality controls and semantic memory
 - provider routing and config loading
 - SQLite data tools and tool result shaping
+- system, clipboard, notification, image-inspection, and archive safety contracts
 - packaged docs coverage and local UI endpoints
 - terminal UI rendering and streaming behavior
 - context maps and explicit workbench-to-memory promotion

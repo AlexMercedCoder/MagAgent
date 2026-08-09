@@ -574,6 +574,72 @@ def _print_recent_insights(data: dict) -> None:
         console.print(table)
 
 
+def _print_session_peers(peers: list[dict]) -> None:
+    if not peers:
+        console.print("[dim]No other live local sessions.[/dim]")
+        return
+    table = Table("Session ID", "Name", "Project", "Policy", "PID", "State")
+    for peer in peers:
+        table.add_row(
+            str(peer.get("session_id") or ""),
+            str(peer.get("name") or ""),
+            str(peer.get("project") or ""),
+            str(peer.get("policy") or ""),
+            str(peer.get("pid") or ""),
+            "live" if peer.get("live", True) else "stale",
+        )
+    console.print(table)
+
+
+def _print_session_receipt(result: dict) -> None:
+    color = "green" if result.get("ok") else "yellow"
+    console.print(
+        f"[{color}]{result.get('status', 'unknown')}[/{color}] "
+        f"message {result.get('message_id', '')} to {result.get('target_id', '')}"
+    )
+    if result.get("reason"):
+        console.print(f"[dim]{result['reason']}[/dim]")
+    if result.get("cross_project"):
+        console.print(
+            f"[yellow]Cross-project delivery:[/yellow] "
+            f"{result.get('source_project')} -> {result.get('target_project')}. "
+            "Check worktree ownership before editing shared files."
+        )
+
+
+def _print_session_inbox(items: list[dict], *, held: bool = False) -> None:
+    if not items:
+        label = "held" if held else "accepted"
+        console.print(f"[dim]No {label} peer messages.[/dim]")
+        return
+    table = Table("Message ID", "From", "Project", "Received", "Message")
+    for item in items:
+        table.add_row(
+            str(item.get("message_id") or ""),
+            str(item.get("sender_name") or item.get("sender_id") or ""),
+            str(item.get("project") or ""),
+            str(item.get("received_at") or "")[:19],
+            str(item.get("message") or "")[:100],
+        )
+    console.print(table)
+
+
+def _print_session_receipts(items: list[dict]) -> None:
+    if not items:
+        console.print("[dim]No delivery receipts for this session.[/dim]")
+        return
+    table = Table("Time", "Message ID", "Target", "Status", "Reason")
+    for item in items:
+        table.add_row(
+            str(item.get("ts") or "")[:19],
+            str(item.get("message_id") or ""),
+            str(item.get("target_id") or ""),
+            str(item.get("status") or ""),
+            str(item.get("reason") or "")[:80],
+        )
+    console.print(table)
+
+
 def _write_research_report(result: dict, *, out: str | None = None) -> Path:
     path = Path(out).expanduser() if out else Path.cwd() / f"{_slugify_filename(str(result.get('topic') or 'research'))}.md"
     path = path.resolve(strict=False)
@@ -633,14 +699,22 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
     from magent.agent import AgentSession
     from magent.tui import print_banner, print_streaming_response
 
-    print_banner(username, main_provider.display_name, cwd, config.permission_mode, version=__version__)
-
     session = AgentSession(
         username=username,
         config=config,
         provider=main_provider,
         extraction_provider=extract_provider,
         cwd=cwd,
+    )
+    session._ensure_messaging_started()
+    session_name = session.messaging.name if session.messaging else "messaging-disabled"
+    print_banner(
+        username,
+        main_provider.display_name,
+        cwd,
+        config.permission_mode,
+        version=__version__,
+        session_name=session_name,
     )
 
     loop = asyncio.new_event_loop()
@@ -738,6 +812,13 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 "  [cyan]/statusline[/cyan]      — Preview statusline payload\n"
                 "  [cyan]/usage[/cyan]           — Show token/tool/timing usage for this session\n"
                 "  [cyan]/insights[/cyan]        — Show recent session diagnostics\n"
+                "  [cyan]/session[/cyan]         — Show this session's durable identity\n"
+                "  [cyan]/peers[/cyan]           — List other live local sessions\n"
+                "  [cyan]/send <peer> <text>[/cyan] — Send a local coordination message\n"
+                "  [cyan]/inbox [held][/cyan]    — Inspect accepted or held peer messages\n"
+                "  [cyan]/accept <id>[/cyan]     — Accept a held peer message\n"
+                "  [cyan]/refuse <id>[/cyan]     — Refuse a held peer message\n"
+                "  [cyan]/receipts[/cyan]        — Show this session's delivery receipts\n"
                 "  [cyan]/memory[/cyan]          — Show memory stats\n"
                 "  [cyan]/skills[/cyan]          — List active skills\n"
                 "  [cyan]/model[/cyan]           — Show current model\n"
@@ -751,6 +832,71 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 title="[bold cyan]MagAgent Help[/bold cyan]",
             )
         )
+        return True
+
+    if command == "/session":
+        messaging = getattr(session, "messaging", None)
+        if not messaging:
+            console.print("[yellow]Local session messaging is disabled or unavailable.[/yellow]")
+            return True
+        console.print(
+            Panel(
+                f"[bold]Name:[/bold] {messaging.name}\n"
+                f"[bold]Session ID:[/bold] {session.session_id}\n"
+                f"[bold]Project:[/bold] {session.project_slug or ''}\n"
+                f"[bold]Policy:[/bold] {messaging.policy}",
+                title="Local Session Identity",
+            )
+        )
+        return True
+
+    if command == "/peers":
+        session._ensure_messaging_started()
+        messaging = getattr(session, "messaging", None)
+        if not messaging:
+            console.print("[yellow]Local session messaging is disabled or unavailable.[/yellow]")
+            return True
+        _print_session_peers(messaging.peers())
+        return True
+
+    if command == "/send":
+        target_and_message = arg.split(maxsplit=1)
+        if len(target_and_message) != 2:
+            console.print("[yellow]Usage: /send <session-id-or-name> <message>[/yellow]")
+            return True
+        session._ensure_messaging_started()
+        messaging = getattr(session, "messaging", None)
+        if not messaging:
+            console.print("[yellow]Local session messaging is disabled or unavailable.[/yellow]")
+            return True
+        target, message = target_and_message
+        result = messaging.send(target, message)
+        _print_session_receipt(result)
+        return True
+
+    if command == "/inbox":
+        from magent.session_messaging import session_inbox
+
+        held = arg.strip().lower() == "held"
+        items = session_inbox(session.username, session.session_id, held=held)
+        _print_session_inbox(items, held=held)
+        return True
+
+    if command in {"/accept", "/refuse"}:
+        if not arg.strip():
+            console.print(f"[yellow]Usage: {command} <message-id>[/yellow]")
+            return True
+        from magent.session_messaging import review_held_message
+
+        decision = "accept" if command == "/accept" else "refuse"
+        result = review_held_message(session.username, session.session_id, arg.strip(), decision)
+        console.print_json(data=result)
+        return True
+
+    if command == "/receipts":
+        from magent.session_messaging import session_receipts
+
+        _print_session_receipts(session_receipts(session.username, session.session_id))
         return True
 
     if command == "/goal":
@@ -2965,6 +3111,140 @@ def session_events_cmd(
     console.print_json(data=session_event_stream(target, limit=limit, event_types=event_type))
 
 
+@session_app.command("peers")
+def session_peers_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+    include_stale: bool = typer.Option(False, "--include-stale"),
+):
+    """List reachable local MagAgent sessions."""
+    from magent.session_messaging import list_sessions
+
+    peers = list_sessions(_require_user(), include_stale=include_stale)
+    if json_output:
+        console.print_json(data={"ok": True, "sessions": peers, "count": len(peers)})
+        return
+    _print_session_peers(peers)
+
+
+@session_app.command("send")
+def session_send_cmd(
+    target: str = typer.Argument(..., help="Durable session ID or unambiguous name."),
+    message: str = typer.Argument(..., help="Plain-text coordination message."),
+    task_id: str = typer.Option("", "--task"),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Send a message to a live local session."""
+    from magent.session_messaging import register_ephemeral_sender, send_session_message
+
+    username = _require_user()
+    sender_id, cleanup = register_ephemeral_sender(username, cwd=os.getcwd())
+    try:
+        result = send_session_message(username, sender_id, target, message, task_id=task_id)
+    finally:
+        cleanup()
+    if json_output:
+        console.print_json(data=result)
+    else:
+        _print_session_receipt(result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@session_app.command("inbox")
+def session_inbox_cmd(
+    session_id: str = typer.Argument(...),
+    held: bool = typer.Option(False, "--held", help="Show messages awaiting review."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Inspect a session's accepted or held local messages."""
+    from magent.session_messaging import session_inbox
+
+    items = session_inbox(_require_user(), session_id, held=held)
+    if json_output:
+        console.print_json(data={"ok": True, "messages": items, "count": len(items)})
+        return
+    _print_session_inbox(items, held=held)
+
+
+def _review_session_message(session_id: str, message_id: str, decision: str) -> None:
+    from magent.session_messaging import review_held_message
+
+    result = review_held_message(_require_user(), session_id, message_id, decision)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@session_app.command("accept")
+def session_accept_cmd(session_id: str = typer.Argument(...), message_id: str = typer.Argument(...)):
+    """Move a held peer message into the accepted inbox."""
+    _review_session_message(session_id, message_id, "accept")
+
+
+@session_app.command("refuse")
+def session_refuse_cmd(session_id: str = typer.Argument(...), message_id: str = typer.Argument(...)):
+    """Discard a held peer message."""
+    _review_session_message(session_id, message_id, "refuse")
+
+
+@session_app.command("policy")
+def session_policy_cmd(
+    policy: str = typer.Argument(..., help="accept, hold, or refuse"),
+    headless_accept: bool = typer.Option(False, "--headless-accept/--no-headless-accept"),
+):
+    """Configure the default receiving policy for future sessions."""
+    from magent.config import load_global_config, save_global_config
+    from magent.session_messaging import VALID_POLICIES
+
+    if policy not in VALID_POLICIES:
+        console.print("[red]Policy must be accept, hold, or refuse.[/red]")
+        raise typer.Exit(2)
+    cfg = load_global_config()
+    settings = cfg.setdefault("session_messaging", {})
+    settings["policy"] = policy
+    settings["headless_accept"] = headless_accept
+    save_global_config(cfg)
+    console.print_json(data={"ok": True, "session_messaging": settings})
+
+
+@session_app.command("receipts")
+def session_receipts_cmd(
+    sender_id: str = typer.Argument(...),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Show delivery receipts for a session sender."""
+    from magent.session_messaging import session_receipts
+
+    items = session_receipts(_require_user(), sender_id)
+    if json_output:
+        console.print_json(data={"ok": True, "receipts": items, "count": len(items)})
+        return
+    _print_session_receipts(items)
+
+
+@session_app.command("retry")
+def session_retry_cmd(sender_id: str = typer.Argument(...)):
+    """Retry unreachable messages from a live session's durable outbox."""
+    from magent.session_messaging import retry_outbox
+
+    result = retry_outbox(_require_user(), sender_id)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@session_app.command("doctor")
+def session_doctor_cmd():
+    """Check local session messaging policy, storage, roster, and queues."""
+    from magent.session_messaging import messaging_diagnostics
+
+    username = _require_user()
+    result = messaging_diagnostics(username, load_config(username))
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
 @app.command("stats", rich_help_panel="Performance & Diagnostics")
 def stats_cmd():
     """Show approximate local usage and token stats."""
@@ -4089,18 +4369,29 @@ EXAMPLE_MCP_CONFIG = """
 # Add to ~/.config/magent/config.toml:
 
 [mcp.servers.github]
+transport = "stdio"
+protocol_mode = "auto" # auto | modern | legacy
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-github"]
 env = { GITHUB_TOKEN = "ghp_your_token_here" }
 
 [mcp.servers.filesystem]
+transport = "stdio"
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"]
 
 [mcp.servers.postgres]
+transport = "stdio"
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
 timeout = 60
+
+# Modern Streamable HTTP configuration:
+# [mcp.servers.remote]
+# transport = "streamable-http"
+# protocol_mode = "modern"
+# url = "https://example.com/mcp"
+# headers = { Authorization = "Bearer ${MCP_TOKEN}" }
 
 # Browse more servers: https://github.com/modelcontextprotocol/servers
 """
@@ -4134,12 +4425,20 @@ def mcp_list(
         for server_info in manager.list_servers():
             name = server_info["name"]
             ok = server_info["connected"]
-            cmd = server_info["command"]
-            args_str = " ".join(server_info["args"])
+            endpoint = server_info["endpoint"]
+            transport = server_info["transport"]
+            configured_mode = server_info["protocol_mode"]
+            selected_era = server_info["selected_era"] or "-"
+            protocol_version = server_info["protocol_version"] or "-"
             tools = server_info["tools"]
+            error = server_info["error"]
 
             icon = "[green]●[/green]" if ok else "[red]●[/red]"
-            console.print(f"\n  {icon} [bold]{name}[/bold]  [dim]{cmd} {args_str}[/dim]")
+            console.print(f"\n  {icon} [bold]{name}[/bold]  [dim]{endpoint}[/dim]")
+            console.print(
+                f"    [dim]transport={transport} configured={configured_mode} "
+                f"selected={selected_era} version={protocol_version}[/dim]"
+            )
 
             if ok and tools:
                 table = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 2))
@@ -4154,9 +4453,7 @@ def mcp_list(
                     )
                 console.print(table)
             elif not ok:
-                console.print(
-                    "    [dim red]Failed — check config and that the command is installed[/dim red]"
-                )
+                console.print(f"    [red]{error or 'Connection failed'}[/red]")
             else:
                 console.print("    [dim](no tools)[/dim]")
 
@@ -4183,23 +4480,29 @@ def mcp_test(
         raise typer.Exit(1)
 
     async def _test() -> None:
-        from magent.mcp import MCPClient
+        from magent.mcp import MCPClient, MCPConfigError, MCPServerProfile
 
         srv_cfg = mcp_servers[server]
-        client = MCPClient(
-            server_name=server,
-            command=srv_cfg["command"],
-            args=srv_cfg.get("args", []),
-            env=srv_cfg.get("env"),
-            timeout=srv_cfg.get("timeout", 30.0),
-        )
+        try:
+            profile = MCPServerProfile.from_config(server, srv_cfg)
+        except MCPConfigError as exc:
+            console.print(f"[red]Invalid MCP configuration: {exc}[/red]")
+            raise typer.Exit(1) from exc
+        client = MCPClient.from_profile(profile)
         console.print(f"\nConnecting to [bold]{server}[/bold]...")
+        console.print(
+            f"[dim]transport={profile.transport.value} "
+            f"protocol_mode={profile.protocol_mode.value} endpoint={profile.public_endpoint}[/dim]"
+        )
         ok = await client.connect()
         if not ok:
-            console.print("[red]✗ Connection failed.[/red]")
+            console.print(f"[red]✗ {client.last_error or 'Connection failed.'}[/red]")
             raise typer.Exit(1)
 
-        console.print(f"[green]✓ Connected — {len(client.tools)} tools:[/green]")
+        console.print(
+            f"[green]✓ Connected using {client.selected_era} MCP "
+            f"({client.selected_protocol_version}) — {len(client.tools)} tools:[/green]"
+        )
         for tool in client.tools:
             console.print(f"  [bold]{tool.name}[/bold] — {tool.description}")
             console.print(f"    [dim]{tool.qualified_name}[/dim]")
@@ -4207,6 +4510,243 @@ def mcp_test(
         console.print("\n[dim]Connection closed.[/dim]")
 
     asyncio.run(_test())
+
+
+@mcp_app.command("catalog")
+def mcp_catalog(
+    server: str | None = typer.Argument(None, help="Optional configured server name"),
+    refresh: bool = typer.Option(False, "--refresh", help="Bypass cached MCP catalogs"),
+) -> None:
+    """Browse MCP prompts and resources with cache freshness."""
+    username = get_current_user()
+    if not username:
+        console.print("[red]No active user.[/red]")
+        raise typer.Exit(1)
+    cfg = load_config(username)
+    mcp_servers = cfg.get("mcp", "servers", default={}) or {}
+    if server and server not in mcp_servers:
+        console.print(f"[red]Server '{server}' not found in config.[/red]")
+        raise typer.Exit(1)
+
+    async def _catalog() -> None:
+        from magent.mcp import MCPManager
+
+        manager = MCPManager(mcp_servers)
+        await manager.start_all()
+        try:
+            prompts = await manager.list_prompts(server, refresh=refresh)
+            resources = await manager.list_resources(server, refresh=refresh)
+
+            prompt_table = Table("Server", "Prompt", "Arguments", "Description", title="Prompts")
+            for prompt in prompts:
+                arguments = ", ".join(
+                    str(item.get("name")) for item in prompt.arguments if item.get("name")
+                )
+                prompt_table.add_row(
+                    prompt.server_name,
+                    prompt.name,
+                    arguments or "-",
+                    prompt.description or "-",
+                )
+            console.print(prompt_table if prompts else "[dim]No prompts advertised.[/dim]")
+
+            resource_table = Table(
+                "Server", "Resource", "URI / Template", "Type", title="Resources"
+            )
+            for resource in resources:
+                resource_table.add_row(
+                    resource.server_name,
+                    resource.name or "-",
+                    resource.uri,
+                    "template" if resource.template else (resource.mime_type or "resource"),
+                )
+            console.print(resource_table if resources else "[dim]No resources advertised.[/dim]")
+
+            for name, catalogs in manager.catalog_status().items():
+                if server and name != server:
+                    continue
+                console.print(f"\n[bold]{name} freshness[/bold]")
+                for kind, status in catalogs.items():
+                    freshness = status.get("freshness") or {}
+                    state = "fresh" if freshness.get("fresh") else "stale/unclaimed"
+                    ttl = freshness.get("ttl_ms", 0)
+                    error = status.get("error")
+                    detail = f"{status['count']} items, {state}, ttl={ttl}ms"
+                    if error:
+                        detail += f", {error}"
+                    console.print(f"  {kind}: {detail}", markup=False)
+        finally:
+            await manager.stop_all()
+
+    asyncio.run(_catalog())
+
+
+@mcp_app.command("resource")
+def mcp_resource(
+    server: str = typer.Argument(..., help="Configured MCP server name"),
+    uri: str = typer.Argument(..., help="Resource URI"),
+    refresh: bool = typer.Option(False, "--refresh", help="Bypass the resource cache"),
+) -> None:
+    """Read one MCP resource in a terminal-friendly format."""
+    username = get_current_user()
+    if not username:
+        console.print("[red]No active user.[/red]")
+        raise typer.Exit(1)
+    cfg = load_config(username)
+    mcp_servers = cfg.get("mcp", "servers", default={}) or {}
+    if server not in mcp_servers:
+        console.print(f"[red]Server '{server}' not found in config.[/red]")
+        raise typer.Exit(1)
+
+    async def _resource() -> None:
+        from rich.text import Text
+
+        from magent.mcp import MCPManager
+
+        manager = MCPManager({server: mcp_servers[server]})
+        await manager.start_all()
+        try:
+            result = await manager.read_resource(server, uri, refresh=refresh)
+            if not result.get("ok"):
+                console.print(f"[red]{result.get('error', 'Resource read failed')}[/red]")
+                return
+            console.print(f"\n[bold]{uri}[/bold]")
+            for content in result.get("contents") or []:
+                if not isinstance(content, dict):
+                    continue
+                mime = content.get("mime_type") or content.get("mimeType") or "unknown"
+                console.print(f"[dim]{mime}[/dim]")
+                if isinstance(content.get("text"), str):
+                    console.print(Text(content["text"]))
+                elif isinstance(content.get("blob"), str):
+                    console.print(f"[dim]Binary resource: {len(content['blob'])} base64 characters[/dim]")
+            if result.get("truncated"):
+                console.print("[yellow]Resource output was truncated at the safety limit.[/yellow]")
+            cache = result.get("cache") or {}
+            console.print(
+                f"[dim]cache={cache.get('cache_scope', 'private')} "
+                f"ttl={cache.get('ttl_ms', 0)}ms[/dim]"
+            )
+        finally:
+            await manager.stop_all()
+
+    asyncio.run(_resource())
+
+
+@mcp_app.command("prompt")
+def mcp_prompt(
+    server: str = typer.Argument(..., help="Configured MCP server name"),
+    name: str = typer.Argument(..., help="Prompt name"),
+    arguments_json: str = typer.Option("{}", "--arguments", help="Prompt arguments as JSON"),
+) -> None:
+    """Render one MCP prompt while clearly identifying it as untrusted content."""
+    username = get_current_user()
+    if not username:
+        console.print("[red]No active user.[/red]")
+        raise typer.Exit(1)
+    cfg = load_config(username)
+    mcp_servers = cfg.get("mcp", "servers", default={}) or {}
+    if server not in mcp_servers:
+        console.print(f"[red]Server '{server}' not found in config.[/red]")
+        raise typer.Exit(1)
+    try:
+        raw_arguments = json.loads(arguments_json)
+        if not isinstance(raw_arguments, dict) or not all(
+            isinstance(key, str) and isinstance(value, str)
+            for key, value in raw_arguments.items()
+        ):
+            raise ValueError("arguments must be a JSON object with string values")
+    except (json.JSONDecodeError, ValueError) as exc:
+        console.print(f"[red]Invalid --arguments: {exc}[/red]")
+        raise typer.Exit(2) from exc
+
+    async def _prompt() -> None:
+        from rich.text import Text
+
+        from magent.mcp import MCPManager
+
+        manager = MCPManager({server: mcp_servers[server]})
+        await manager.start_all()
+        try:
+            result = await manager.get_prompt(server, name, raw_arguments)
+            if not result.get("ok"):
+                console.print(f"[red]{result.get('error', 'Prompt request failed')}[/red]")
+                return
+            console.print("[yellow]Untrusted MCP prompt content[/yellow]")
+            if result.get("description"):
+                console.print(Text(str(result["description"]), style="dim"))
+            for message in result.get("messages") or []:
+                if not isinstance(message, dict):
+                    continue
+                console.print(f"\n[bold]{message.get('role', 'message')}[/bold]")
+                content = message.get("content") or {}
+                if isinstance(content, dict) and isinstance(content.get("text"), str):
+                    console.print(Text(content["text"]))
+                else:
+                    console.print_json(data=content)
+        finally:
+            await manager.stop_all()
+
+    asyncio.run(_prompt())
+
+
+@mcp_app.command("complete")
+def mcp_complete(
+    server: str = typer.Argument(..., help="Configured MCP server name"),
+    reference: str = typer.Argument(..., help="Prompt name or resource-template URI"),
+    name: str = typer.Option(..., "--name", help="Argument name being completed"),
+    value: str = typer.Option("", "--value", help="Partial argument value"),
+    resource: bool = typer.Option(False, "--resource", help="Complete a resource template"),
+    context_json: str = typer.Option("{}", "--context", help="Other arguments as JSON"),
+) -> None:
+    """Complete a prompt or resource-template argument through MCP."""
+    username = get_current_user()
+    if not username:
+        console.print("[red]No active user.[/red]")
+        raise typer.Exit(1)
+    cfg = load_config(username)
+    mcp_servers = cfg.get("mcp", "servers", default={}) or {}
+    if server not in mcp_servers:
+        console.print(f"[red]Server '{server}' not found in config.[/red]")
+        raise typer.Exit(1)
+    try:
+        context = json.loads(context_json)
+        if not isinstance(context, dict) or not all(
+            isinstance(key, str) and isinstance(item, str) for key, item in context.items()
+        ):
+            raise ValueError("context must be a JSON object with string values")
+    except (json.JSONDecodeError, ValueError) as exc:
+        console.print(f"[red]Invalid --context: {exc}[/red]")
+        raise typer.Exit(2) from exc
+
+    async def _complete() -> None:
+        from magent.mcp import MCPManager
+
+        manager = MCPManager({server: mcp_servers[server]})
+        await manager.start_all()
+        try:
+            result = await manager.complete(
+                server,
+                reference,
+                {"name": name, "value": value},
+                reference_type="resource" if resource else "prompt",
+                context_arguments=context,
+            )
+            if not result.get("ok"):
+                console.print(f"[red]{result.get('error', 'Completion failed')}[/red]")
+                return
+            completion = result.get("completion") or {}
+            values = completion.get("values") or []
+            for item in values:
+                console.print(str(item), markup=False, highlight=False)
+            if not values:
+                console.print("[dim]No completions returned.[/dim]")
+            if completion.get("has_more") or completion.get("hasMore"):
+                console.print("[dim]The server has additional completions.[/dim]")
+        finally:
+            await manager.stop_all()
+
+    asyncio.run(_complete())
 
 
 @mcp_app.command("init")

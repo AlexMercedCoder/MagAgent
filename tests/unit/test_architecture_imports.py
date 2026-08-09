@@ -1,16 +1,24 @@
 from __future__ import annotations
 
 import magent.tools as tools
+import magent.tools.shell as shell_tools
+import magent.tools.web as web_tools
 from magent import memory_inbox, playbook, recipes, tool_packs, ui_actions
 from magent.cli import app as cli_app
 from magent.cli import command_context
 from magent.cli import main as cli_main
 from magent.cli.commands import browser, docs, evals, github
 from magent.records import PlanRecord, PromotionCandidateRecord, TaskRecord
+from magent.tools.artifacts import ArtifactToolsMixin
 from magent.tools.catalog import built_in_tool_definitions, select_tool_definitions_for_message
+from magent.tools.data import DataToolsMixin
 from magent.tools.executor import ToolExecutor as ExecutorImpl
+from magent.tools.files import FileToolsMixin
 from magent.tools.registry import tool_def
+from magent.tools.shell import ShellToolsMixin
+from magent.tools.system import SystemToolsMixin
 from magent.tools.types import DEFAULT_TOOL_BUDGETS, ToolResult
+from magent.tools.web import WebToolsMixin
 from magent.workbench import WorkbenchStore as WorkbenchStoreCompat
 from magent.workbench import now_iso as now_iso_compat
 from magent.workbench_domains import checkpoints, code_intel, patches, plans, project, release
@@ -19,6 +27,56 @@ from magent.workbench_store import WorkbenchStore, now_iso
 
 def test_tool_executor_public_import_remains_compatible() -> None:
     assert tools.ToolExecutor is ExecutorImpl
+    assert issubclass(ExecutorImpl, ArtifactToolsMixin)
+    assert ExecutorImpl.create_docx.__module__ == "magent.tools.artifacts"
+    assert ExecutorImpl.create_pptx.__module__ == "magent.tools.artifacts"
+    assert ExecutorImpl.create_svg.__module__ == "magent.tools.artifacts"
+    assert ExecutorImpl.create_diagram.__module__ == "magent.tools.artifacts"
+    assert ExecutorImpl.create_image.__module__ == "magent.tools.artifacts"
+    assert ExecutorImpl.generate_image.__module__ == "magent.tools.artifacts"
+    assert issubclass(ExecutorImpl, ShellToolsMixin)
+    assert ExecutorImpl.run_shell.__module__ == "magent.tools.shell"
+    assert ExecutorImpl.run_python.__module__ == "magent.tools.shell"
+    assert ExecutorImpl.install_package.__module__ == "magent.tools.shell"
+    assert ExecutorImpl.search_codebase.__module__ == "magent.tools.shell"
+    assert callable(shell_tools.execute_plan_sandbox)
+    assert callable(shell_tools.sandbox_plan_preview)
+    assert issubclass(ExecutorImpl, WebToolsMixin)
+    assert ExecutorImpl.web_search.__module__ == "magent.tools.web"
+    assert ExecutorImpl.web_fetch.__module__ == "magent.tools.web"
+    assert ExecutorImpl.deep_research.__module__ == "magent.tools.web"
+    assert ExecutorImpl.http_request.__module__ == "magent.tools.web"
+    assert ExecutorImpl.browser_snapshot.__module__ == "magent.tools.web"
+    assert ExecutorImpl.browser_screenshot.__module__ == "magent.tools.web"
+    assert callable(web_tools.browser_snapshot)
+    assert callable(web_tools.browser_screenshot)
+    assert issubclass(ExecutorImpl, FileToolsMixin)
+    assert ExecutorImpl.read_file.__module__ == "magent.tools.files"
+    assert ExecutorImpl.read_file_range.__module__ == "magent.tools.files"
+    assert ExecutorImpl.outline_file.__module__ == "magent.tools.files"
+    assert ExecutorImpl.write_file.__module__ == "magent.tools.files"
+    assert ExecutorImpl.edit_file.__module__ == "magent.tools.files"
+    assert ExecutorImpl.delete_file.__module__ == "magent.tools.files"
+    assert ExecutorImpl.list_dir.__module__ == "magent.tools.files"
+    assert ExecutorImpl.diff_files.__module__ == "magent.tools.files"
+    assert ExecutorImpl.compress.__module__ == "magent.tools.files"
+    assert ExecutorImpl.extract.__module__ == "magent.tools.files"
+    assert ExecutorImpl.magent_docs_search.__module__ == "magent.tools.files"
+    assert issubclass(ExecutorImpl, DataToolsMixin)
+    assert ExecutorImpl.json_query.__module__ == "magent.tools.data"
+    assert ExecutorImpl.db_query.__module__ == "magent.tools.data"
+    assert ExecutorImpl.db_execute.__module__ == "magent.tools.data"
+    assert ExecutorImpl.db_list_tables.__module__ == "magent.tools.data"
+    assert ExecutorImpl.db_schema.__module__ == "magent.tools.data"
+    assert ExecutorImpl.db_list_databases.__module__ == "magent.tools.data"
+    assert issubclass(ExecutorImpl, SystemToolsMixin)
+    assert ExecutorImpl.system_info.__module__ == "magent.tools.system"
+    assert ExecutorImpl.notify.__module__ == "magent.tools.system"
+    assert ExecutorImpl.clipboard_read.__module__ == "magent.tools.system"
+    assert ExecutorImpl.clipboard_write.__module__ == "magent.tools.system"
+    assert ExecutorImpl.open_file.__module__ == "magent.tools.system"
+    assert ExecutorImpl.read_image.__module__ == "magent.tools.system"
+    assert ExecutorImpl.git_op.__module__ == "magent.tools.shell"
     assert hasattr(tools, "asyncio")
     assert hasattr(tools, "shutil")
 

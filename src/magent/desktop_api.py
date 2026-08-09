@@ -96,6 +96,23 @@ CONFIG_SCHEMA: list[dict[str, Any]] = [
         "choices": ["light", "dark", "system"],
         "description": "Preferred MagAgent interface theme.",
     },
+    {
+        "path": "session_messaging.policy",
+        "label": "Session message policy",
+        "type": "enum",
+        "scope": "global",
+        "category": "agents",
+        "choices": ["accept", "hold", "refuse"],
+        "description": "Default policy for local messages from other MagAgent sessions.",
+    },
+    {
+        "path": "session_messaging.headless_accept",
+        "label": "Allow headless session messages",
+        "type": "boolean",
+        "scope": "global",
+        "category": "agents",
+        "description": "Allow non-interactive sessions to accept peer text without inbox review.",
+    },
 ]
 
 
@@ -273,6 +290,50 @@ def sqlite_table_schema(username: str, table: str, db_name: str = "default") -> 
 
 def sqlite_query(username: str, sql: str, db_name: str = "default", params: list[Any] | None = None) -> dict[str, Any]:
     return db_query(username, sql, params=params, db_name=db_name)
+
+
+def session_messaging_state(
+    username: str,
+    *,
+    session_id: str = "",
+    held: bool = False,
+) -> dict[str, Any]:
+    """Return desktop-friendly peer and optional inbox state."""
+    from magent.session_messaging import list_sessions, session_inbox
+
+    peers = list_sessions(username)
+    messages = session_inbox(username, session_id, held=held) if session_id else []
+    return {"ok": True, "sessions": peers, "messages": messages, "held": held}
+
+
+def session_message_send(
+    username: str,
+    target: str,
+    message: str,
+    *,
+    task_id: str = "",
+    cwd: str = "",
+) -> dict[str, Any]:
+    """Send a desktop-originated message without exposing a capability."""
+    from magent.session_messaging import register_ephemeral_sender, send_session_message
+
+    sender_id, cleanup = register_ephemeral_sender(username, name="command-center", cwd=cwd)
+    try:
+        return send_session_message(username, sender_id, target, message, task_id=task_id)
+    finally:
+        cleanup()
+
+
+def session_message_review(
+    username: str,
+    session_id: str,
+    message_id: str,
+    decision: str,
+) -> dict[str, Any]:
+    """Accept or refuse a held message from a desktop client."""
+    from magent.session_messaging import review_held_message
+
+    return review_held_message(username, session_id, message_id, decision)
 
 
 def parse_json_value(text: str) -> Any:

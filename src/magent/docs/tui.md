@@ -4,7 +4,7 @@ MagAgent's interactive terminal UI is built with Rich and is designed to stay re
 
 ## Session Banner
 
-Interactive sessions start with a compact `MagAgent` banner. The banner adapts to terminal width and shows the active user, provider, model when available, permission mode, optional git branch, and compact current path.
+Interactive sessions start with a compact `MagAgent` banner. The banner adapts to terminal width and shows the active user, provider, model when available, permission mode, local session name, optional git branch, and compact current path. Use `/session` when you need the full durable session ID.
 
 ## Response Rendering
 
@@ -35,6 +35,10 @@ Interactive sessions include daily-driver slash commands:
 - `/insights` summarizes recent session logs.
 - `/mode <silent|balanced|paranoid|yolo>` changes the live permission mode for the current session.
 - `/goal <task>` runs a strengthened goal-loop prompt with implementation, verification, review, and artifact-existence stop conditions.
+- `/session` shows the active local messaging identity and receiving policy.
+- `/peers` lists other live local sessions; `/send <peer> <text>` sends coordination text.
+- `/inbox held`, `/accept <message-id>`, and `/refuse <message-id>` manage held peer input.
+- `/receipts` shows delivery outcomes from the active session.
 
 When the model supplies tool `activity` metadata, the TUI prints a short
 `intent:` line before the tool runs. This is only status/diagnostic context and

@@ -11,8 +11,10 @@ WAL mode is always enabled for performance and concurrent reads.
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -21,13 +23,14 @@ from magent.config import USERS_DIR
 
 # Per-connection cache (username+db_name → connection)
 _connection_cache: dict[str, sqlite3.Connection] = {}
+_connection_lock = threading.RLock()
 
 
 def _db_path(username: str, db_name: str = "default") -> Path:
     """Resolve the database file path for a user + database name."""
     # Sanitise name: alphanumeric, hyphens, underscores only
     safe_name = "".join(c for c in db_name if c.isalnum() or c in "-_").strip("_-") or "default"
-    db_dir = USERS_DIR / username / "databases"
+    db_dir = Path(USERS_DIR) / username / "databases"
     db_dir.mkdir(parents=True, exist_ok=True)
     return db_dir / f"{safe_name}.db"
 
@@ -35,40 +38,61 @@ def _db_path(username: str, db_name: str = "default") -> Path:
 def _get_db(username: str, db_name: str = "default") -> sqlite3.Connection:
     """Open (or return cached) WAL-mode SQLite connection."""
     cache_key = f"{username}::{db_name}"
-    if cache_key in _connection_cache:
-        return _connection_cache[cache_key]
+    with _connection_lock:
+        if cache_key in _connection_cache:
+            return _connection_cache[cache_key]
 
-    path = _db_path(username, db_name)
-    conn = sqlite3.connect(str(path), check_same_thread=False)
-    conn.row_factory = sqlite3.Row
+        path = _db_path(username, db_name)
+        conn = sqlite3.connect(str(path), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
 
-    conn.executescript("""
-        PRAGMA journal_mode = WAL;
-        PRAGMA synchronous = NORMAL;
-        PRAGMA temp_store = MEMORY;
-        PRAGMA cache_size = -32000;
-        PRAGMA foreign_keys = ON;
-    """)
+        conn.executescript("""
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA temp_store = MEMORY;
+            PRAGMA cache_size = -32000;
+            PRAGMA foreign_keys = ON;
+        """)
 
-    # Bootstrap metadata table
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS _meta (
-            key   TEXT PRIMARY KEY,
-            value TEXT
+        # Bootstrap metadata table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS _meta (
+                key   TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        conn.execute(
+            "INSERT OR IGNORE INTO _meta VALUES ('created_at', ?)",
+            (str(int(time.time())),),
         )
-    """)
-    conn.execute(
-        "INSERT OR IGNORE INTO _meta VALUES ('created_at', ?)",
-        (str(int(time.time())),),
-    )
-    conn.execute(
-        "INSERT OR IGNORE INTO _meta VALUES ('db_name', ?)",
-        (db_name,),
-    )
-    conn.commit()
+        conn.execute(
+            "INSERT OR IGNORE INTO _meta VALUES ('db_name', ?)",
+            (db_name,),
+        )
+        conn.commit()
 
-    _connection_cache[cache_key] = conn
-    return conn
+        _connection_cache[cache_key] = conn
+        return conn
+
+
+def close_database_connections(username: str | None = None, db_name: str | None = None) -> int:
+    """Close cached database connections, optionally limited to one user or database."""
+    closed = 0
+    with _connection_lock:
+        for cache_key, conn in list(_connection_cache.items()):
+            cached_username, cached_db_name = cache_key.split("::", 1)
+            if username is not None and cached_username != username:
+                continue
+            if db_name is not None and cached_db_name != db_name:
+                continue
+            _connection_cache.pop(cache_key, None)
+            with contextlib.suppress(sqlite3.Error):
+                conn.close()
+            closed += 1
+    return closed
+
+
+atexit.register(close_database_connections)
 
 
 def _rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
@@ -77,7 +101,7 @@ def _rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
 
 def list_databases(username: str) -> dict[str, Any]:
     """List all databases for a user."""
-    db_dir = USERS_DIR / username / "databases"
+    db_dir = Path(USERS_DIR) / username / "databases"
     if not db_dir.exists():
         return {"ok": True, "databases": []}
 
@@ -94,7 +118,7 @@ def list_databases(username: str) -> dict[str, Any]:
 
 
 def db_query(
-    username: str, sql: str, params: list | None = None, db_name: str = "default"
+    username: str, sql: str, params: list[Any] | None = None, db_name: str = "default"
 ) -> dict[str, Any]:
     """
     Execute a SELECT query and return rows as JSON.
@@ -125,7 +149,7 @@ def db_query(
 
 
 def db_execute(
-    username: str, sql: str, params: list | None = None, db_name: str = "default"
+    username: str, sql: str, params: list[Any] | None = None, db_name: str = "default"
 ) -> dict[str, Any]:
     """
     Execute a write statement: INSERT, UPDATE, DELETE, CREATE TABLE, etc.

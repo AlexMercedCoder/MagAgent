@@ -52,3 +52,19 @@ Queries are read-only through `sqlite-query`.
 - `magent plugin mcp import <path> --name <name>`
 
 Plugin action payloads include `ok`, `plugin`, `name`, `enabled` when applicable, and `error` on failure.
+
+## Session Coordination
+
+- `magent session peers --json`
+- `magent session send <target> <message> --json`
+- `magent session inbox <session-id> --json`
+- `magent session inbox <session-id> --held --json`
+- `magent session accept <session-id> <message-id>`
+- `magent session refuse <session-id> <message-id>`
+- `magent session receipts <sender-id> --json`
+- `magent session doctor`
+
+Python hosts can use `desktop_api.session_messaging_state`,
+`desktop_api.session_message_send`, and `desktop_api.session_message_review`. These
+facades never expose roster capabilities and keep desktop clients out of transport
+internals.

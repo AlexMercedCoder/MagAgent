@@ -116,21 +116,32 @@ Promotion is intentionally explicit:
 
 ### Tools
 
-`magent.tools` is the public tool API. The implementation lives in `magent.tools.executor`, and the package initializer re-exports `ToolExecutor` for compatibility.
+`magent.tools` is the public tool API. `magent.tools.executor.ToolExecutor` is the
+stable permission, lifecycle, and dispatch facade, and the package initializer
+re-exports it for compatibility. Capability implementations can live in focused
+modules inherited by that facade.
 
 Shared tool support code lives in:
 
 - `magent.tools.types` for `ToolResult` and tool budgets
 - `magent.tools.registry` for OpenAI-compatible tool schema helpers
 - `magent.tools.archive` for archive extraction safety
+- `magent.tools.artifacts` for Word, PowerPoint, SVG, Mermaid, raster-image, and
+  generated-image creation
+- `magent.tools.data` for JSON queries and permission-aware named SQLite facades
+- `magent.tools.files` for path-safe reads, outlines, writes, edits, deletes,
+  directory listing, diffs, built-in docs search, compression, and safe extraction
+- `magent.tools.shell` for trust-pattern handling, shell and Python subprocesses,
+  package installation, subprocess-backed code search, and Git delegation
+- `magent.tools.system` for system metrics, notifications, clipboard access,
+  platform file opening, and image inspection
+- `magent.tools.web` for ranked web search, readable fetches, research packets,
+  generic HTTP requests, and Playwright browser delegation
 
-Future tool modules should split by capability:
-
-- file and archive tools
-- shell and process tools
-- web and HTTP tools
-- data and document tools
-- registry/schema helpers
+The capability split is complete. `ToolExecutor` retains shared path and permission
+policy, process/task cancellation, tool selection, argument normalization, dispatch,
+progress reporting, and output budgeting. New tools should be implemented in the
+matching capability module and registered through `magent.tools.catalog`.
 
 `magent.tool_packs` groups runtime tools into files, shell, web, data, db, and desktop capability packs. The CLI exposes `magent tools list`, `magent tools explain`, `magent tools enable`, and `magent tools disable`; the executor filters advertised tools through that setting.
 
@@ -159,6 +170,35 @@ commands. Expensive actions belong behind explicit button endpoints such as
 
 `magent.plugins` owns installable extension pack metadata and enabled state. Plugin packs can carry agents, recipes, skills, tool bundles, and MCP config. Enabled plugin agent directories participate directly in agent discovery, and enabled plugin MCP configs contribute collision-safe runtime MCP servers. Compatibility importers convert OpenCode, Claude, Codex skill, and MCP config shapes into MagAgent-native packs.
 
+`magent.mcp.profile` is the SDK-independent MCP configuration boundary. It normalizes
+transport and protocol-era preferences, rejects ambiguous or unsafe configurations,
+and emits redacted diagnostics. `magent.mcp.client` owns a private JSON-lines bridge
+process; `magent.mcp.bridge` keeps the Python SDK v2 connection in one root coroutine
+and adapts stdio, Streamable HTTP, and explicitly enabled legacy SSE transports.
+Profiles and credentials cross the process boundary through stdin rather than command
+arguments. `magent.mcp.manager` owns concurrent connections, tool namespacing, and
+dispatch without depending on SDK lifecycle details. `magent.mcp.catalog` owns typed
+prompt/resource descriptors and TTL/scope/freshness state. Catalogs load lazily,
+resource bodies are explicit and bounded, and tool mutations plus classic notifications
+and modern subscription events share one invalidation path. The bridge also owns MCP
+completion and consent-gated MRTR callbacks so SDK lifecycle and sensitive host input
+never leak into the model-facing tool schema.
+
+### Local Session Messaging
+
+`magent.session_messaging` owns the local peer roster, owner-only runtime endpoints,
+rotating capabilities, bounded envelopes, policy enforcement, durable inbox/held/
+outbox queues, receipts, retry, expiry, deduplication, hop limits, and rate limits.
+`magent.tools.messaging` is the narrow agent-facing adapter. `AgentSession` registers
+and stops its endpoint and drains accepted messages into a clearly delimited untrusted
+system context at a safe turn boundary. Peer text never enters conversation history as
+a user message and carries no permission, MCP, configuration, or tool authority.
+
+The transport is Unix-domain sockets on macOS/Linux with OS-peer checks where the
+platform exposes them. Windows uses authenticated loopback as the owner-local
+equivalent. Durable state remains below `~/.config/magent/messaging`; cross-machine
+delivery is outside this contract.
+
 ## Compatibility Rule
 
 Public imports should remain stable unless a major version explicitly changes them:
@@ -178,5 +218,6 @@ The safest future order is:
 
 1. Move CLI command groups into focused registration modules that use `magent.cli.command_context`.
 2. Continue extracting `magent.workbench` domains behind the existing facade and domain modules.
-3. Split `magent.tools.executor` by capability while keeping `ToolExecutor` public.
-4. Add architecture docs whenever module boundaries change.
+3. Keep `magent.tools.executor` as the stable lifecycle/dispatch facade; add new
+   behavior to focused capability modules.
+4. Add architecture docs and ownership tests whenever module boundaries change.

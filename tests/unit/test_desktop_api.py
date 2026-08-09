@@ -17,7 +17,7 @@ def redirect_config(monkeypatch, root: Path) -> None:
     monkeypatch.setattr(desktop_api, "GLOBAL_CONFIG", cfg_dir / "config.toml")
     monkeypatch.setattr(desktop_api, "USERS_DIR", cfg_dir / "users")
     monkeypatch.setattr(db_tools, "USERS_DIR", cfg_dir / "users")
-    db_tools._connection_cache.clear()
+    db_tools.close_database_connections()
 
 
 def test_system_info_and_config_get_set_are_redacted(tmp_path: Path, monkeypatch) -> None:
@@ -46,6 +46,7 @@ def test_config_schema_reports_guided_fields(tmp_path: Path, monkeypatch) -> Non
     assert schema["ok"] is True
     assert provider["value"] == "openai"
     assert provider["category"] == "provider"
+    assert any(item["path"] == "session_messaging.policy" for item in schema["fields"])
 
 
 def test_sqlite_desktop_helpers_list_query_and_schema(tmp_path: Path, monkeypatch) -> None:

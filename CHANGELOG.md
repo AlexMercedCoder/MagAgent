@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.33.0
+
+- Added dual-era MCP SDK v2 support for classic protocol revisions through `2025-11-25` and modern `2026-07-28` servers over stdio and Streamable HTTP.
+- Added MCP prompt, resource, template, completion, cache, subscription, structured-content, and consent-gated MRTR support with redacted diagnostics and explicit trust boundaries.
+- Added authenticated local session-to-session messaging with peer discovery, receiving policies, durable queues, delivery receipts, retry, CLI and agent tools, safe turn-boundary injection, and a Command Center machine facade.
+- Split the former tool executor monolith into focused file, shell, web, data, system, artifact, and messaging capability modules while retaining the stable `ToolExecutor` facade.
+- Hardened checkout test isolation, resource-warning handling, SQLite cleanup, semantic-memory connection lifecycle, archive extraction, shell safety, and desktop API coverage.
+- Updated the README, roadmap, architecture, CLI reference, configuration, desktop integration, MCP, messaging, testing, and TUI documentation.
+
 ## 0.32.14
 
 - Added provider environment aliases for common gateway setups: `NOUS_KEY`, `OPENROUTER_KEY`, `OPENCODE_KEY`, and `OPENCODE_ZEN_API_KEY`.

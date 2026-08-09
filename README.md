@@ -9,9 +9,9 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-312%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-404%20passing-brightgreen.svg)](tests/)
 
-[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Docs](docs/)
+[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Roadmap](ROADMAP.md) · [Docs](docs/)
 
 </div>
 
@@ -57,6 +57,8 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Queues background asks, recipes, plans, shell tasks, followups, and gateway tasks through `magent daemon`
 - Installs local extension packs for agents, recipes, skills, tools, and MCP configuration through `magent plugin`
 - Imports MCP, Claude, OpenCode, and Codex skill packs into MagAgent-native plugins with normalized registry metadata
+- Connects dual-era MCP servers over stdio or Streamable HTTP, with cache-aware tool,
+  prompt, and resource catalogs, live invalidation, completion, and consent-gated MRTR
 - Reads project playbooks from `.magent/playbook.toml` for command routines, release checklists, review rules, and context defaults
 - Runs saved plans and recipes in worktree, copied, or Docker-backed sandboxes
 - Provides local eval suite scaffolding for repeatable repo tasks
@@ -77,6 +79,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Supports patch-first coding workflows, workspace status reports, project command roles, and release readiness checks
 - Supports executable plan records, session-level undo, command learning, saved reviews, and CI repair plans
 - Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, static dashboards, and a live local UI
+- Coordinates live local agents with authenticated session-to-session messages, explicit receiving policies, durable outboxes, receipts, and strict untrusted-input boundaries
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
 
 Every session, MagAgent extracts facts, preferences, and patterns from your conversation and writes them into a MagGraph knowledge graph. Next session, it reads that graph to understand your tech stack, coding style, project context, and recurring patterns — without you having to repeat yourself.
@@ -475,6 +478,7 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Artifact registry** — `magent artifact add/list/show/open/checksum`
 - **Data/API/notes** — `magent data inspect`, `magent api save/list`, `magent notes`
 - **Session and usage** — `magent session timeline`, `magent stats`, `magent dashboard`, `magent dashboard --serve`, `magent ui`
+- **Session coordination** — `magent session peers/send/inbox/accept/refuse/policy/receipts/retry`
 
 Workbench files are plain JSON in `~/.config/magent/users/<username>/workbench/`.
 
@@ -738,6 +742,13 @@ magent --version       # Show version
 | `/statusline` | Preview compact statusline output |
 | `/usage` | Show token, tool, cost, and slow-step diagnostics for this session |
 | `/insights` | Summarize recent session logs |
+| `/session` | Show this session's durable ID, display name, project, and receiving policy |
+| `/peers` | List other live local MagAgent sessions |
+| `/send <peer> <text>` | Send an authenticated local coordination message |
+| `/inbox [held]` | Inspect accepted or held peer messages |
+| `/accept <message-id>` | Accept a held peer message |
+| `/refuse <message-id>` | Refuse a held peer message |
+| `/receipts` | Show this session's delivery receipts |
 | `/memory` | Memory graph stats |
 | `/skills` | Loaded skills list |
 | `/model` | Current model / change model |
@@ -867,6 +878,8 @@ bot_token = "..."
 | [docs/gateway/setup-slack.md](docs/gateway/setup-slack.md) | Slack gateway setup (Socket Mode) |
 | [docs/gateway/setup-discord.md](docs/gateway/setup-discord.md) | Discord gateway setup |
 | [docs/gateway/setup-telegram.md](docs/gateway/setup-telegram.md) | Telegram gateway setup |
+| [src/magent/docs/mcp.md](src/magent/docs/mcp.md) | MCP configuration, compatibility, diagnostics, and skills status |
+| [src/magent/docs/session-messaging.md](src/magent/docs/session-messaging.md) | Authenticated local agent coordination, policies, receipts, recovery, and security |
 
 ---
 
@@ -914,7 +927,13 @@ src/magent/
 ├── subagents/        # Sub-agent runner
 ├── tokens.py         # Lightweight token budgeting helpers
 ├── tools/            # 40 built-in tools (file, web/browser, db, system, image)
-│   ├── executor.py   # ToolExecutor implementation
+│   ├── executor.py   # Stable ToolExecutor dispatch facade
+│   ├── artifacts.py  # Document, diagram, and image capability tools
+│   ├── data.py       # JSON query and named SQLite facade tools
+│   ├── files.py      # File, directory, diff, docs, and archive tools
+│   ├── shell.py      # Shell, Python, package, and code-search tools
+│   ├── system.py     # System, clipboard, notification, and image tools
+│   ├── web.py        # Search, research, HTTP, and browser tools
 │   └── db.py         # SQLite named database tools
 ├── context.py        # Context map and memory promotion bridge
 ├── workbench.py      # Local productivity ledgers and workflow helpers
@@ -927,7 +946,7 @@ docs/
 ├── gateway/          # Gateway setup guides
 └── skills/           # Built-in skill SKILL.md files
 tests/
-└── unit/             # 176 unit tests (all mocked, no credentials needed)
+└── unit/             # Fast automated tests (no credentials needed)
 ```
 
 ---

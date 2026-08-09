@@ -11,6 +11,8 @@ import sqlite3
 import urllib.request
 from array import array
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -69,7 +71,7 @@ class SemanticMemoryIndex:
         self._init_db()
 
     def _init_db(self) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS memory_embeddings (
@@ -94,13 +96,23 @@ class SemanticMemoryIndex:
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(str(self.db_path))
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        """Open a transactional connection and always release its file handle."""
+        conn = self._connect()
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+
     def reset(self) -> None:
         if self.db_path.exists():
             self.db_path.unlink()
         self._init_db()
 
     def status(self) -> dict[str, Any]:
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute("SELECT COUNT(*), COUNT(DISTINCT node_id) FROM memory_embeddings").fetchone()
             models = conn.execute(
                 "SELECT embedding_model, COUNT(*) FROM memory_embeddings GROUP BY embedding_model"
@@ -124,7 +136,7 @@ class SemanticMemoryIndex:
         indexed = 0
         skipped = 0
 
-        with self._connect() as conn:
+        with self._connection() as conn:
             for node_id in ids:
                 try:
                     node = maggraph_index.read_node(node_id)
@@ -186,7 +198,7 @@ class SemanticMemoryIndex:
         query_terms = _terms(query)
 
         rows: list[tuple[str, int, str, str, bytes, int]] = []
-        with self._connect() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 "SELECT node_id, chunk_id, node_type, text, embedding, embedding_dim FROM memory_embeddings"
             ).fetchall()

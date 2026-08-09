@@ -151,7 +151,17 @@ def run_doctor() -> None:
         )
         try:
             importlib.import_module("mcp")
-            checks.append(("MCP SDK", True, "installed"))
+            from importlib.metadata import version
+
+            sdk_version = version("mcp")
+            sdk_major = int(sdk_version.split(".", maxsplit=1)[0])
+            checks.append(
+                (
+                    "MCP SDK",
+                    sdk_major == 2,
+                    f"{sdk_version} installed (MagAgent requires 2.x)",
+                )
+            )
         except ImportError:
             checks.append(("MCP SDK", not mcp_cfg, "install with: pip install 'mag-agent[mcp]'"))
 

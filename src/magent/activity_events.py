@@ -14,6 +14,8 @@ AgentEventType = Literal[
     "permission_requested",
     "artifact_audit",
     "assistant_message",
+    "session_message_received",
+    "session_message_sent",
 ]
 
 

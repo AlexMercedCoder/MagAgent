@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
 from types import SimpleNamespace
+
+import pytest
 
 from magent.semantic_memory import SemanticMemoryIndex, chunk_text, local_hash_embedding
 
@@ -55,3 +58,14 @@ def test_semantic_index_reindex_and_search(tmp_path, monkeypatch):
     matches = index.search("refresh token expires", mode="hybrid")
     assert matches
     assert matches[0].node_id == "jwt_refresh_bug"
+
+
+def test_semantic_index_connection_closes_after_transaction(tmp_path, monkeypatch):
+    monkeypatch.setattr("magent.semantic_memory.USERS_DIR", tmp_path)
+    index = SemanticMemoryIndex("alice", tmp_path / "memory", provider="local-hash")
+
+    with index._connection() as conn:
+        assert conn.execute("SELECT 1").fetchone() == (1,)
+
+    with pytest.raises(sqlite3.ProgrammingError, match="closed database"):
+        conn.execute("SELECT 1")

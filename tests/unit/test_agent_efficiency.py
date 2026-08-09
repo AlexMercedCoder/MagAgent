@@ -1,6 +1,17 @@
 from __future__ import annotations
 
+import pytest
+
+from magent.agent import _coerce_mcp_form_value
 from magent.tools import ToolExecutor
+
+
+def test_mcp_form_values_are_coerced_without_model_inference():
+    assert _coerce_mcp_form_value("42", "integer") == 42
+    assert _coerce_mcp_form_value("yes", "boolean") is True
+    assert _coerce_mcp_form_value("a, b", "array") == ["a", "b"]
+    with pytest.raises(ValueError):
+        _coerce_mcp_form_value("maybe", "boolean")
 
 
 def test_selective_tools_keeps_default_set_smaller(tmp_path):

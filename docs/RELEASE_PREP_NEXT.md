@@ -1,31 +1,37 @@
-# MagAgent 0.32.14 Release Prep
+# MagAgent 0.33.0 Release Prep
 
 ## Scope
 
-- Resumable orchestrated goals with `magent goal-run <plan-id>`.
-- Dry-run packet preview with `magent goal-run <plan-id> --dry-run`.
-- Failed-step retry with `magent goal-run <plan-id> --retry-step N`.
-- Background staged plans through `magent goal --orchestrated --background` and daemon task kind `orchestrated_goal`.
-- Planning/execution model-role readiness with `magent model orchestration-doctor`.
-- Updated CLI, packaged docs, README, daemon docs, architecture notes, and test coverage.
+- Dual-era MCP SDK v2 negotiation and typed tools, prompts, resources, completion,
+  caching, subscriptions, and consent-gated MRTR support.
+- Authenticated local session coordination with policies, durable delivery, receipts,
+  retry, CLI/agent tools, and a desktop-facing machine API.
+- Completed `ToolExecutor` capability modularization while preserving its public facade.
+- Test isolation, resource lifecycle, SQLite cleanup, archive safety, and shell-policy
+  hardening.
+- Updated GitHub and built-in MCP, messaging, architecture, configuration, testing,
+  desktop integration, command, and TUI documentation.
 
 ## Validation Before Release
 
 ```bash
 PYTHONPATH=src python -m ruff check src tests
-PYTHONPATH=src python -m pytest tests/unit -q
-PYTHONPATH=src python -m pytest tests/unit --cov=magent --cov-report= --cov-fail-under=63 -q
+PYTHONPATH=src python -m pytest -q
+PYTHONPATH=src python -m pytest --cov=magent --cov-report= --cov-fail-under=63 -q
 PYTHONPATH=src python -m magent.cli.main docs generate-reference --check
 PYTHONPATH=src python -m magent.cli.main docs doctor --json
+python -m mypy --strict --follow-imports=skip src/magent/mcp src/magent/session_messaging.py src/magent/tools/messaging.py
 python -m build --outdir /tmp/magent-dist-next
+python -m twine check /tmp/magent-dist-next/*
 ```
 
 ## Manual Smoke
 
 ```bash
-magent goal "Ship a small staged task" --orchestrated --orchestrated-steps 2
-magent goal-run plan_0001 --dry-run
-magent model orchestration-doctor
+magent mcp list
+magent mcp test <configured-server>
+magent session doctor
+magent session peers
 ```
 
-Run a live `magent goal-run plan_0001` smoke only when provider quota is acceptable.
+Run a real two-session delivery smoke and an MCP fixture smoke before publishing.

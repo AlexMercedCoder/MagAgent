@@ -1,681 +1,653 @@
-# MagAgent Roadmap
-
-> Recommended enhancements for MagAgent — organized by phase, priority, and implementation detail.
-> Each item includes what to build, why it matters, and how to approach it.
-
----
-
-## Phase 0 — Token Efficiency (Do First)
-
-These improvements reduce token spend on every single interaction, regardless of the model. They compound with every feature built after them — fewer tokens wasted means cheaper sessions, longer effective context windows, and faster responses.
-
----
-
-### 0.1 · Tool Output Budgets (Token Caps Per Tool)
-
-**Status:** Expanded in v0.7.0. Large file reads are previewed, exact range reads are available, agent-side tool results are compressed before context injection, and dispatch-level per-tool output budgets now cap oversized results with `raw=true` as an escape hatch.
-
-**Why:** The biggest single source of token waste is uncapped tool output. A `read_file` on a 2,000-line file burns thousands of tokens even when the agent only needed 10 lines. A `web_fetch` on a documentation page can return 15,000 tokens of boilerplate. These cost money and crowd out useful context.
-
-**What to build:**
-- Add `max_output_tokens` cap to every tool's return value — truncate with a clear `[truncated at N tokens — use offset/path params to read more]` notice
-- Per-tool configurable limits in `config.toml`:
-
-```toml
-[tool_budgets]
-read_file = 8000         # chars, not tokens — fast to compute
-web_fetch = 6000
-run_shell = 4000
-run_python = 4000
-search_codebase = 3000
-http_request = 8000
-db_query = 4000          # cap rows returned
-```
-
-- New tool: `read_file_range(path, start_line, end_line)` — so the agent can surgically read just the relevant lines after seeing a truncated result
-- `search_codebase` already uses ripgrep; add `--max-count` to avoid giant match floods
-- For `db_query`, add automatic `LIMIT 100` if no LIMIT clause is present
-
-**Implementation:** Wrap every tool return in a `_budget_output(result, tool_name)` function in `ToolExecutor` that truncates at the configured limit.
-
----
-
-### 0.2 · Selective Tool Injection
-
-**Why:** The standard OpenAI function-calling schema for 31 tools costs thousands of prompt tokens *on every LLM call* — even simple conversational questions that don't need most tools. That's wasted on every turn.
-
-**What to build:**
-- Tool classifier: given the user's message, use a small fast model (or keyword heuristics) to predict which tool categories are relevant
-- Tool categories:
-  - `file_ops` — read_file, write_file, edit_file, delete_file, list_dir
-  - `code_exec` — run_shell, run_python, install_package
-  - `web` — web_search, web_fetch, http_request
-  - `data` — db_*, json_query
-  - `system` — system_info, notify, clipboard_*, open_file
-  - `docs` — always inject (small definitions, rarely called)
-- Always inject the 8 most-used tools; inject the rest only when the category is predicted relevant
-- Config: `selective_tools = true` (default off for predictability)
-- Fallback: if the agent attempts a tool not in the injected set, re-run with the full tool set
-
-**Expected savings:** 40–60% reduction in tool-definition tokens on conversational turns.
-
----
-
-### 0.3 · Prompt Caching Awareness
-
-**Why:** Anthropic (Claude) and OpenAI both offer prompt caching — if the beginning of a prompt is identical across calls, the cached portion is billed at 10% of the normal rate. MagAgent can structure its prompts to maximize cache hits.
-
-**What to build:**
-- Move the **static** parts of the system prompt (tool definitions, base agent instructions) to the front — they never change across turns
-- Move the **dynamic** parts (memory context, skill context, which change per-turn) to the end
-- For Anthropic: add `cache_control: {"type": "ephemeral"}` breakpoints after the static section using LiteLLM's `extra_headers` or message metadata
-- For OpenAI: structure messages so the first N tokens are identical across all calls in the session
-- Track cache hit rate in session logs: `{"event": "cache", "cached_tokens": 1800, "saved_usd": 0.0016}`
-- Config: `prompt_caching = true` (auto-detect provider support)
-
-**Expected savings:** 50–90% cost reduction on cached portions for Claude and GPT-4o users.
-
----
-
-### 0.4 · Smart File Reading (Partial Reads + Outline Mode)
-
-**Status:** Shipped in v0.3.0. `read_file_range` and `outline_file` are available, `read_file` previews large files, and the system prompt nudges targeted file reads.
-
-**Why:** The agent often reads entire files to find one function. A smarter read strategy can give the agent what it needs with 90% fewer tokens.
-
-**What to build:**
-- `read_file` gains `start_line`/`end_line` params (already planned in 0.1, expand here)
-- New tool: `outline_file(path)` — returns a compact structural overview using simple AST parsing:
-  ```
-  src/auth.py (312 lines)
-    L1-20   imports
-    L22     class AuthManager:
-    L35       def login(self, user, password)  → L35-67
-    L69       def logout(self, token)          → L69-82
-    L85     def hash_password(pwd: str)        → L85-95
-  ```
-- Agent calls `outline_file` first, then `read_file` with the exact line range it needs
-- Modify the system prompt to instruct the agent to always `outline_file` before `read_file` on any file over 100 lines
-- Add `search_codebase` result format that includes line numbers so agents can read targeted ranges
-
-**Expected savings:** 60–80% token reduction on large file reads.
-
----
-
-### 0.5 · Stale Tool Result Pruning
-
-**Why:** The conversation history sent to the LLM includes every tool call and its result from the entire session. A file that was read 20 turns ago and then rewritten is sending stale, irrelevant content on every subsequent call — paying for context that actively misleads the model.
-
-**What to build:**
-- Track which files have been written/edited after being read in the conversation
-- Prune stale `read_file` tool results from the conversation history when a newer write to the same path exists
-- Mark tool results as `[pruned — file was modified at turn N]` placeholder to preserve conversation flow
-- Similarly prune: duplicate `web_search` results for the same query, `system_info` results older than 10 turns
-- Config: `prune_stale_tool_results = true` (default: true)
-- Track pruning savings in session logs
-
-**Implementation:** `ConversationPruner` class that runs after each tool-result append, O(N) pass over recent history.
-
-**Expected savings:** 20–40% reduction in conversation history tokens in long sessions.
-
----
-
-### 0.6 · Tool Response Compression
-
-**Status:** Partially shipped in v0.3.0. Agent-side tool results are compressed/truncated before entering conversation context. Fine-grained raw/debug controls remain future work.
-
-**Why:** Many tool results include verbose JSON, full error tracebacks, or redundant metadata that the model doesn't need but still pays for. Compressing results to the signal reduces token consumption.
-
-**What to build:**
-- `compress_tool_result(tool_name, result)` post-processor that:
-  - `list_dir`: removes `__pycache__`, `.git`, `node_modules` entries and summarizes them as `[+247 hidden build/cache files]`
-  - `run_shell`/`run_python`: trims repeated lines (e.g. 50 identical warning messages → `[first warning] × 50`)
-  - `web_search`: strips duplicate result descriptions, trims URL clutter
-  - `db_query`: if >20 rows, show first 10 + `[... N more rows]`
-  - `run_shell` with `git log`: strip hash detail, keep just message + author + date
-- Apply compression before appending to conversation, always preserving `ok` and `error` fields
-- Add `raw=true` param to any tool to bypass compression for debugging
-
-**Expected savings:** 15–30% reduction on tool-heavy sessions.
-
----
-
-### 0.7 · Memory Token Budget Enforcement
-
-**Status:** Shipped in v0.3.0 for local recall. Memory recall now reports an approximate budget, injects compact matches before excerpts, and truncates individual node bodies.
-
-**Why:** The memory recall injected into every system prompt can balloon unchecked. If the user has 500 memory nodes, a naive recall might inject 10,000 tokens of context — more than the response itself.
-
-**What to build:**
-- `MemoryManager.recall()` already accepts `budget_tokens` — make it actively enforce this:
-  - Rank recalled nodes by relevance score (keyword match density)
-  - Fill the budget greedily from highest-ranked nodes
-  - Truncate individual node bodies at `max_node_tokens` (default: 200 tokens)
-  - Report `[Memory: N nodes, M tokens used of budget]` in debug mode
-- Config:
-```toml
-[memory]
-recall_budget_tokens = 2000    # max tokens injected per turn
-max_node_tokens = 200          # truncate individual nodes
-max_nodes_recalled = 15        # hard cap on nodes recalled
-```
-- In-session: `/memory` shows current recall budget usage
-
-**Expected savings:** Predictable, bounded memory injection — never more than configured budget regardless of graph size.
-
----
-
-## Phase 1 — Core Robustness (Near-term)
-
-These improvements harden the current feature set and fix the most impactful gaps before adding new capabilities.
-
----
-
-### 1.1 · Model Context Protocol (MCP) Support
-
-**Why:** MCP is fast becoming the standard for AI tool extensibility. Claude Code, Cline, OpenCode, and Cursor all support it. Adding MCP support lets MagAgent instantly tap into a universe of pre-built integrations — GitHub, Jira, Postgres, Notion, Figma, and hundreds more — without writing any adapter code.
-
-**What to build:**
-- `MCPClient` class wrapping the MCP spec (`mcp` Python SDK or direct JSON-RPC over stdio/HTTP)
-- Config section `[mcp.servers.<name>]` with `command`, `args`, `env` per server
-- MCP tool discovery: on session start, query each configured server for its tool list and inject them into the agent's tool definitions alongside built-ins
-- MCP tool dispatch: route calls to the appropriate server process
-- CLI: `magent mcp list` (show all MCP servers + tools), `magent mcp add <name> <command>`
-
-**Config example:**
-```toml
-[mcp.servers.github]
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-github"]
-env = { GITHUB_TOKEN = "${GITHUB_TOKEN}" }
-
-[mcp.servers.postgres]
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
-```
-
-**Packages:** `mcp>=1.0` (official Python SDK)
-
----
-
-### 1.2 · Codebase Repo-Map (Semantic Awareness)
-
-**Status:** MVP shipped in v0.9.0. `magent code index` builds a lightweight Python symbol/import/test index, `magent code symbols` searches saved symbols, and `magent code related` reports likely tests and import peers. Broader tree-sitter language coverage and prompt-time repo-map injection remain future work.
-
-**v0.10.0 update:** Test intelligence now covers common Python, JS/TS, Go, and Rust test naming patterns, includes `magent test explain`, and can use project-local `{tests}` command templates for targeted runs.
-
-**v0.12.0 update:** Added `magent ui`, a live read-only local operations dashboard over workspace state, project doctor, patches, checkpoints, memory quality, docs search, and release checks.
-
-**v0.11.0 update:** Added project command roles, project doctor, workspace status, patch preview/explain, release checks, and scriptable review failure thresholds.
-
-**v0.13.0 update:** Polished the Rich TUI with a compact adaptive banner, shared theme styles, Markdown response panels, reusable status lines, and quieter non-duplicating streaming output.
-
-**v0.14.0 update:** Added `magent context map` and `magent memory promote` to make the relationship between MagGraph memory and workbench state explicit.
-
-**v0.14.1 update:** Added compatibility-safe modular hygiene by extracting tool execution and workbench storage primitives, plus packaged architecture boundary docs.
-
-**v0.14.2 update:** Extracted CLI app composition into `magent.cli.app` so command registration is separate from command implementation behavior.
-
-**v0.14.3 update:** Added command context helpers, workbench domain modules, tool helper modules, and typed record wrappers to continue compatibility-safe modularization.
-
-**v0.15.0 update:** Added workflow recipes, memory inbox review, tool capability packs, project playbooks, and actionable local UI handlers for release checks, patch previews, checkpoint diffs, and memory promotion.
-
-**v0.16.0 update:** Added sandboxed plan/recipe execution, local eval suites, Playwright browser helpers, GitHub PR/issue commands, a cockpit-oriented UI state, comparison docs, and repo demo assets.
-
-**v0.18.0 update:** Added CLI-first setup commands for providers, model roles, memory behavior, gateway platforms, and sub-agent orchestration caps so most common configuration can happen through guided commands instead of direct TOML edits.
-
-**v0.19.0 update:** Added guided onboarding, provider/model/memory/subagent wizards, project initialization, profile presets, doctor fix suggestions, next-action recommendations, and explicit OpenAI API vs Codex subscription plus OpenCode Zen vs Go access-mode distinctions.
-
-**v0.20.0 update:** Added a shared provider catalog and first-class setup/runtime UX for LM Studio, AWS Bedrock, Mistral AI, DeepSeek, xAI, Perplexity, Cerebras, Together AI, Fireworks AI, and DeepInfra.
-
-**v0.21.0 update:** Added provider matrix/recommend/explain/env UX, config backup/diff/restore commands, generated provider docs, broader project command detection, provider catalog validation, and the first focused CLI command registration modules.
-
-**Why:** The agent currently reads files reactively when the model asks. A proactive repo-map gives the model a bird's-eye view of the entire codebase — file names, class/function signatures, import graphs — so it can navigate multi-file tasks without hallucinating about what exists. This is the single biggest quality-of-life improvement for coding tasks.
-
-**What to build:**
-- `RepoMap` class using `tree-sitter` to parse Python, JS/TS, Go, Rust, Ruby, Java into an AST
-- Extract: file path, top-level classes, functions, their signatures, and docstrings
-- Build a compact token-efficient text representation (like Aider's repo-map)
-- Inject a truncated repo-map into the system prompt when `--project` is specified
-- Rebuild incrementally on file changes (watch `.git/index` for changes)
-- Store repo-map snapshot in the project's SQLite database for fast re-use
-
-**Config:**
-```toml
-[project]
-repo_map = true
-repo_map_max_tokens = 4000
-repo_map_languages = ["python", "typescript", "go"]
-```
-
-**Packages:** `tree-sitter>=0.23`, language grammar wheels (`tree-sitter-python`, `tree-sitter-typescript`, etc.)
-
----
-
-### 1.3 · Checkpoint & Undo System
-
-**Status:** Expanded in v0.8.0. MagAgent snapshots files before writes/edits/deletes, lists and restores checkpoints, shows checkpoint diffs, restores the latest checkpoint, and can diff/restore all checkpoints for an agent session.
-
-**Why:** Before any file write, edit, or delete, snapshot the affected files. Users can then `/undo` the last N operations and restore exactly. This is the #1 trust-building feature — Cline's human-in-the-loop proved it decisively.
-
-**What to build:**
-- `CheckpointManager`: before every `write_file`, `edit_file`, `delete_file` tool call, snapshot the file content to a per-session checkpoint store (SQLite BLOB or git stash)
-- `/undo [N]` slash command: restore the last N file operations
-- `/undo list`: show checkpoint history with timestamps and file paths
-- CLI: `magent undo` (undo last session's changes)
-- Integration point: wrap `ToolExecutor` dispatch to call checkpoint before any write-tier tool
-
-**Storage:** Append-only SQLite table per session:
-```sql
-CREATE TABLE checkpoints (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    step INTEGER NOT NULL,
-    tool_name TEXT NOT NULL,
-    file_path TEXT NOT NULL,
-    original_content BLOB,     -- NULL if file didn't exist
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
----
-
-### 1.4 · Context Window Management & Conversation Summarization
-
-**Status:** Partially shipped in v0.3.0. MagAgent now performs deterministic conversation compaction using recent-turn retention and compacted session state. LLM-authored summaries and token/cost telemetry remain future work.
-
-**Why:** Long sessions hit model context limits and quality degrades. The agent needs to gracefully manage conversation history — summarizing old turns rather than truncating them blindly.
-
-**What to build:**
-- Track token count of the conversation using `litellm.token_counter()`
-- When approaching the model's context limit (configurable threshold, default 80%), trigger an automatic summarization pass:
-  - Send the last N turns to the extraction model: *"Summarize this conversation as a bullet list of: decisions made, code written, problems solved, and open items"*
-  - Replace those turns in the conversation with a single `[Summary]` system message
-  - Write summary to memory graph as a `session_summary` node
-- Config: `context_window_threshold = 0.8`, `summarize_every_n_turns = 20`
-- Visual indicator in the REPL when a summarization pass occurs
-
----
-
-### 1.5 · Cost & Token Tracking
-
-**Why:** Developers using paid APIs have no visibility into what sessions cost. A lightweight cost tracker lets users optimize their model usage.
-
-**What to build:**
-- Extract token usage from LiteLLM response objects (`usage.prompt_tokens`, `usage.completion_tokens`)
-- Log to session JSONL: `{"event": "token_usage", "prompt": 1200, "completion": 400, "model": "...", "cost_usd": 0.0018}`
-- Store aggregate stats in the user's `default` SQLite database (`_token_usage` table)
-- CLI: `magent stats` — show total tokens used, estimated cost by model, by day
-- In-session: `/cost` shows current session spend
-- Use LiteLLM's `completion_cost()` for pricing — it has a built-in model cost database
-
----
-
-## Phase 2 — Power Features (Medium-term)
-
-Capabilities that significantly expand what MagAgent can do autonomously.
-
----
-
-### 2.1 · Browser Automation via Playwright
-
-**Why:** Web automation is a massive use case — scraping dynamic pages, testing web UIs, filling forms, taking screenshots for debugging. The current `web_fetch` tool can't handle JavaScript-rendered pages.
-
-**What to build:**
-- `BrowserTool` class wrapping `playwright-python`
-- New tools exposed to the agent:
-  - `browser_open(url)` — navigate to URL, wait for load
-  - `browser_screenshot(path)` — capture current page as PNG
-  - `browser_click(selector)` — click a CSS/XPath selector
-  - `browser_type(selector, text)` — type into an input
-  - `browser_extract(selector)` — extract text from matching elements
-  - `browser_scroll(pixels)` — scroll the page
-  - `browser_close()` — close browser session
-- Persistent browser session within a conversation (one `Page` object reused)
-- Permission tier: CONFIRM for `browser_open` (since it makes network requests), SILENT for screenshot/extract
-
-**Optional skill:** `docs/skills/browser-automation/SKILL.md` with Playwright patterns
-
-**Packages:** `playwright>=1.44` (requires `playwright install chromium`)
-
----
-
-### 2.2 · Plan Mode (Draft Before Execute)
-
-**Status:** MVP expanded in v0.8.0. `magent plan --save` stores durable plans, `magent plan-run` creates pending plan records with diff/review context, `magent plan-exec` buffers current diffs and shell commands as executable operations, `magent plan-preview` inspects them, `magent plan-discard` discards them, and `magent plan-apply` executes buffered operations and optional checks. Full intercepted live tool execution remains future work.
-
-**Why:** For complex multi-file tasks, show the user a complete plan with diff previews before applying any changes. This reduces mistakes on large refactors.
-
-**What to build:**
-- `--plan` flag on the CLI: `magent --plan "Refactor auth to use JWTs"`
-- In plan mode, all `write_file`, `edit_file`, `delete_file`, `run_shell` calls are intercepted and stored as a `Plan` object instead of executed
-- After the agent's tool loop completes, display a rich diff summary:
-  - Files to be created/modified/deleted
-  - Shell commands to be run
-  - Unified diffs for each file change
-- User sees: `Apply this plan? [y/N/edit]`
-  - `y` → execute all buffered operations in order
-  - `N` → discard
-  - `edit` → open interactive editor to remove specific steps
-- Slash command: `/plan <task>` (same from REPL)
-
----
-
-### 2.3 · Vector Memory Search (Semantic Similarity)
-
-**Status:** Shipped in v0.5.0 as a local SQLite semantic sidecar. `magent memory index` builds embeddings from MagGraph nodes, `magent memory search` defaults to hybrid search, and `magent memory semantic status/reset` manages the sidecar. Ollama embeddings are used when available with deterministic offline vectors as fallback.
-
-**Why:** The current memory search is keyword-based (ripgrep over Markdown). Semantic similarity search would let MagAgent surface memories like *"you solved a similar auth bug 3 months ago"* even if the exact words don't match.
-
-**What shipped:**
-- Rebuildable per-user SQLite vector index under `~/.config/magent/users/<user>/workbench/vector/`.
-- MagGraph remains the source of truth; vectors are disposable derived cache.
-- Hybrid search combines semantic similarity and keyword overlap, then falls back to keyword if the sidecar is empty.
-- Agent recall can use semantic anchors before BFS traversal.
-- CLI: `magent memory index`, `magent memory search --semantic "jwt refresh token bug"`, `magent memory search --keyword "jwt"`.
-
-**Config:**
-```toml
-[memory]
-semantic_enabled = true
-semantic_model = "nomic-embed-text"
-semantic_provider = "ollama"
-```
-
-**Packages:** no additional runtime dependency; uses stdlib SQLite and optional local Ollama HTTP.
-
----
-
-### 2.4 · Workspace / Project Profiles
-
-**Status:** Expanded in v0.8.0. Project profiles discover commands from package manifests, Makefiles, Justfiles, language manifests, and project-local `.magent/config.toml`; diagnostics records command outcomes; `magent project command-history` and `magent project command-promote` support command learning.
-
-**Why:** Different projects have different rules — different linters, different shell commands to trust, different models to use. A per-project `.magent/config.toml` file lets the agent adapt automatically.
-
-**What to build:**
-- On session start with `--project <dir>`, check for `.magent/config.toml` in that directory
-- Deep-merge project config over user config (project config wins on conflicts)
-- Per-project config can specify: default model, permission overrides, trusted shell patterns, project-local skills directory, system prompt additions
-- CLI: `magent project init` — scaffold `.magent/config.toml` in the current directory
-- CLI: `magent project info` — show the merged effective config for the current project
-
-**Example `.magent/config.toml`:**
-```toml
-[project]
-name = "ecommerce-api"
-description = "FastAPI e-commerce backend"
-
-[defaults]
-model = "anthropic/claude-3-5-sonnet-20241022"
-
-[permissions]
-allowed_shell_patterns = ["pytest *", "ruff *", "alembic *", "docker compose *"]
-
-[memory]
-write_every_n_turns = 3
-
-[context]
-system_prompt_extra = """
-This is a FastAPI project using PostgreSQL, SQLAlchemy 2.0, and Alembic.
-Always use async patterns. Follow existing patterns in src/api/.
-"""
-```
-
----
-
-### 2.5 · Custom Agent Personas
-
-**Why:** Different tasks benefit from different agent personalities. A "Security Auditor" persona focuses on finding vulnerabilities; a "Code Reviewer" focuses on readability and best practices; a "DevOps Engineer" focuses on deployment and infra.
-
-**What to build:**
-- `personas/` directory: `~/.config/magent/personas/<name>.toml`
-- Persona defines: system prompt suffix, default model, tool restrictions, memory query bias
-- CLI: `magent --persona security-auditor "Review src/auth.py for vulnerabilities"`
-- Built-in personas shipped with MagAgent:
-  - `default` — balanced generalist coding assistant
-  - `code-reviewer` — focused on readability, patterns, test coverage
-  - `security-auditor` — focused on OWASP, injection, auth flaws
-  - `devops` — focused on Docker, CI/CD, IaC
-  - `refactor` — focused on reducing complexity, improving architecture
-  - `documenter` — focused on generating docstrings, READMEs, API docs
-- `/persona <name>` in-session command to switch
-
----
-
-### 2.6 · Task Queue & Background Execution
-
-**Why:** Developers want to queue up multiple tasks ("fix all TODO comments", "add docstrings to every function", "write tests for every module") and let MagAgent work through them overnight without babysitting.
-
-**What to build:**
-- `TaskQueue` backed by the user's SQLite database (`_task_queue` table)
-- CLI: `magent task add "Write unit tests for src/api/*.py"`
-- CLI: `magent task list` — show pending/running/complete tasks
-- CLI: `magent task run` — start processing queue (runs each task as an AgentSession, writes results to JSONL)
-- CLI: `magent task run --daemon` — background mode with PID file
-- Each task gets its own session log; on completion, sends a desktop notification
-- Per-task timeout, retry count, and priority level
-
----
-
-## Phase 3 — Ecosystem (Long-term)
-
-Larger investments that position MagAgent as a platform rather than just a tool.
-
----
-
-### 3.0 · Local Productivity Workbench
-
-**Status:** Shipped in v0.4.0. MagAgent now includes durable local JSON-backed ledgers for tasks, artifacts, project profiles, inboxes, routines, follow-ups, knowledge notes, API bookmarks, patch queues, session timelines, policy profiles, and static dashboard export.
-
----
-
-### 3.1 · Local Web Dashboard
-
-**Status:** MVP expanded in v0.12.0. `magent dashboard` exports a local HTML dashboard, `magent dashboard --serve` serves it on localhost, and `magent ui` provides a live read-only local operations dashboard.
-
-**Why:** A local web UI makes memory visualization, session history browsing, and task management accessible without memorizing CLI commands — especially useful for non-developer users and for debugging the memory graph visually.
-
-**What to build:**
-- Lightweight FastAPI server: `magent dashboard` — launches at `http://localhost:7820`
-- Pages:
-  - **Memory Graph** — interactive node/edge visualization (D3.js force graph)
-  - **Sessions** — searchable session log history with full transcript replay
-  - **Databases** — SQLite browser (table list, row viewer, query editor)
-  - **Skills** — installed skills list, toggle active/inactive, SKILL.md viewer
-  - **Providers** — test connections, show latency, token usage charts
-  - **Gateway** — real-time gateway log tail, start/stop controls
-- Read-only by default; write operations require a local auth token
-- Auto-opens browser on `magent dashboard --open`
-
-**Packages:** `fastapi>=0.111`, `uvicorn>=0.30`, `jinja2` (already installed)
-
----
-
-### 3.2 · VS Code Extension
-
-**Why:** Developers spend most of their time in VS Code. A lightweight extension that surfaces MagAgent's memory and tools without leaving the editor would dramatically increase daily usage.
-
-**What to build:**
-- VS Code extension (`vscode-magent`) communicating with a local MagAgent API server
-- Features:
-  - **Inline chat** in the editor — select code, right-click → "Ask MagAgent"
-  - **Memory sidebar** — view/search the memory graph alongside your editor
-  - **Terminal integration** — `magent` terminal spawns pre-configured in VS Code terminal
-  - **File watcher** — notify MagAgent when files change for context-aware suggestions
-  - **Status bar** — show active user, model, memory node count
-
-**Architecture:** MagAgent runs an HTTP API server (`magent serve --port 7821`) that the extension calls. The extension itself is a thin TypeScript client.
-
----
-
-### 3.3 · Plugin / Extension System
-
-**Why:** A formal plugin system lets the community extend MagAgent with new tools, skills, and provider adapters — similar to how VS Code extensions work.
-
-**What to build:**
-- Plugin spec: a Python package with an `entry_points` group `magent.plugins`
-- Each plugin declares: new tools, new skills, new provider configs, new CLI commands, system prompt extensions
-- CLI: `magent plugin install <package>`, `magent plugin list`, `magent plugin remove`
-- Plugin sandbox: plugins run in the same process but tool calls still go through the permission system
-- Plugin manifest validation on install
-- Official plugin index (a curated GitHub repo listing verified plugins)
-
-**Example community plugins to seed:**
-  - `magent-plugin-aws` — AWS CLI tools (S3, EC2, Lambda, CloudFormation)
-  - `magent-plugin-docker` — Docker/Compose lifecycle management
-  - `magent-plugin-linear` — Linear issue management via MCP
-  - `magent-plugin-obsidian` — Read/write Obsidian vault notes
-
----
-
-### 3.4 · Multi-Agent Orchestration
-
-**Why:** Complex software projects need specialized agents working in parallel — an architect agent that designs the solution, a coder agent that implements it, a reviewer agent that critiques the result. This is the trajectory of the field.
-
-**What to build:**
-- `Orchestrator` class: takes a high-level goal, decomposes it into sub-tasks using a "planner" model
-- Each sub-task is assigned to a `SubAgentSession` with a focused persona and tool subset
-- Agents communicate through the shared memory graph and a shared SQLite coordination table
-- Result synthesis: orchestrator collects sub-agent results and produces a unified output
-- CLI: `magent orchestrate "Build a full CRUD REST API for a blog with tests and documentation"`
-- Visual progress tree in the terminal showing each agent's status
-
-**Coordination schema:**
-```sql
-CREATE TABLE orchestration_tasks (
-    id TEXT PRIMARY KEY,
-    parent_id TEXT,
-    goal TEXT NOT NULL,
-    persona TEXT,
-    status TEXT DEFAULT 'pending',  -- pending/running/done/failed
-    result TEXT,
-    assigned_agent TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-```
-
----
-
-### 3.5 · Voice Interface
-
-**Why:** Hands-free coding is genuinely useful — while reading documentation, reviewing a design on a whiteboard, or when your hands are occupied. Voice input also lowers the barrier for less technical users.
-
-**What to build:**
-- STT (Speech-to-Text): `faster-whisper` for local transcription (no cloud, works offline, fast)
-- TTS (Text-to-Speech): `pyttsx3` for system TTS or `kokoro-onnx` for high-quality local synthesis
-- `magent --voice` flag: activates push-to-talk mode (hold Space to record, release to send)
-- Configurable wake word (optional): say "Hey Mag" to activate without key press
-- TTS output toggleable: agent's responses can be read aloud or just displayed
-- Visual waveform indicator in terminal during recording
-
-**Config:**
-```toml
-[voice]
-enabled = false
-stt_model = "base.en"       # faster-whisper model size
-tts_engine = "pyttsx3"      # or "kokoro"
-push_to_talk_key = "space"
-```
-
-**Packages:** `faster-whisper>=1.0` (optional extra), `pyttsx3>=2.9` (optional)
-
----
-
-### 3.6 · E2B / Docker Sandboxed Code Execution
-
-**Why:** The current `run_python` tool executes code in the same process as MagAgent. For untrusted code or production-like testing, a proper sandboxed execution environment is essential.
-
-**What to build:**
-- Abstract `CodeSandbox` interface with two implementations:
-  - `DockerSandbox`: spin up a `python:3.12-slim` container, mount a temp workspace, exec code, capture output, destroy container
-  - `E2BSandbox`: use [E2B](https://e2b.dev) cloud micro-VMs for ephemeral, internet-accessible environments with package install support
-- Automatic fallback: if Docker is available use it; otherwise use local subprocess; E2B if configured
-- Each sandbox session is scoped to a conversation (reuse the same container/VM for the session, destroy on exit)
-- New tool `run_sandboxed(code, packages=[])` that auto-installs packages in the sandbox before running
-
-**Config:**
-```toml
-[sandbox]
-backend = "docker"    # docker | e2b | local
-e2b_api_key = ""
-docker_image = "python:3.12-slim"
-timeout_seconds = 60
-```
-
----
-
-### 3.7 · Built-In Documentation and Self-Help
-
-**Status:** Expanded in v0.9.0. MagAgent ships packaged Markdown docs, recipes, and a built-in `magent tutorial`; exposes `magent docs list/show/search/doctor/generate-reference`; includes an internal `magent_docs_search` tool; and has tests around docs packaging/search.
-
-**v0.10.0 update:** Added packaged testing/reliability documentation, changelog, and expanded docs for dry-run plan apply, test explanations, and safer memory maintenance.
-
-**v0.11.0 update:** Added packaged patch workflow docs and expanded release-readiness recipes.
-
-**Why:** MagAgent should be able to explain itself without requiring the user to leave the terminal, open the README, or guess command syntax. A competitive general-use agent needs robust internal documentation for its own commands, configuration, workflows, memory model, safety model, and troubleshooting paths.
-
-**What to build:**
-- Add a versioned internal documentation bundle shipped inside the package, for example `magent/docs/`.
-- Add `magent docs` commands:
-  - `magent docs list` — list built-in topics
-  - `magent docs show memory` — render a focused topic
-  - `magent docs search "semantic memory"` — search packaged docs locally
-  - `magent docs doctor` — report stale or missing generated docs
-- Add an in-session help tool so the agent can retrieve its own docs before answering questions about MagAgent features.
-- Generate command reference pages from Typer metadata during release so CLI docs stay in sync with the executable.
-- Include troubleshooting docs for providers, permissions, MagGraph memory, semantic indexing, MCP, gateway setup, PyPI/install issues, and common project diagnostics.
-- Add examples and recipes for real workflows: coding task, memory audit, patch queue, CI repair, local dashboard, remote gateway, and productivity workbench.
-- Add tests that fail when documented commands disappear or when new commands ship without docs.
-
-**Implementation:** Keep author-written guides as Markdown, generate command references into Markdown during release, and expose both through a tiny local search index. Reuse the semantic memory sidecar pattern for docs search if useful, but keep keyword search as the always-available baseline.
-
----
-
-## Implementation Priority Matrix
-
-| Enhancement | Impact | Effort | Priority |
-|---|---|---|---|
-| **Tool Output Budgets** | 🔥🔥🔥🔥🔥 | Low | **P0** |
-| **Stale Result Pruning** | 🔥🔥🔥🔥 | Low | **P0** |
-| **Memory Token Budget** | 🔥🔥🔥🔥 | Low | **P0** |
-| **Smart File Reading** | 🔥🔥🔥🔥 | Low | **P0** |
-| **Tool Response Compression** | 🔥🔥🔥 | Low | **P0** |
-| **Prompt Caching** | 🔥🔥🔥🔥🔥 | Low | **P0** |
-| **Selective Tool Injection** | 🔥🔥🔥🔥 | Medium | **P0** |
-| MCP Support | 🔥🔥🔥🔥🔥 | Medium | **P1** |
-| Checkpoint/Undo | 🔥🔥🔥🔥 | Low | **P1** |
-| Repo-Map | 🔥🔥🔥🔥 | Medium | **P1** |
-| Context Window Mgmt | 🔥🔥🔥🔥 | Low | **P1** |
-| Cost Tracking | 🔥🔥🔥 | Low | **P1** |
-| Built-In Documentation | 🔥🔥🔥🔥 | Medium | **P1** |
-| Project Profiles | 🔥🔥🔥🔥 | Low | **P2** |
-| Plan Mode | 🔥🔥🔥🔥 | Medium | **P2** |
-| Vector Memory Search | 🔥🔥🔥 | Medium | **P2** |
-| Browser Automation | 🔥🔥🔥🔥 | Medium | **P2** |
-| Custom Personas | 🔥🔥🔥 | Low | **P2** |
-| Task Queue | 🔥🔥🔥 | Medium | **P2** |
-| Web Dashboard | 🔥🔥🔥 | High | **P3** |
-| Plugin System | 🔥🔥🔥🔥🔥 | High | **P3** |
-| Multi-Agent Orchestration | 🔥🔥🔥🔥🔥 | High | **P3** |
-| VS Code Extension | 🔥🔥🔥🔥 | High | **P3** |
-| Voice Interface | 🔥🔥🔥 | Medium | **P3** |
-| E2B/Docker Sandbox | 🔥🔥🔥 | Medium | **P3** |
-
----
-
-## Recommended First Sprint
-
-If implementing today, start with these — highest impact, lowest effort:
-
-1. **Tool Output Budgets** — Wrap `_budget_output()` around every tool return. One afternoon of work, immediate savings on every session.
-2. **Stale Result Pruning** — One `ConversationPruner` class, applied after each tool append. Prevents long sessions from becoming expensive.
-3. **Memory Token Budget** — Shipped in v0.3.0 for local recall; semantic reranking remains future work.
-4. **Smart File Reading** — Shipped in v0.3.0 with `read_file_range`, `outline_file`, and large-file previews.
-5. **Prompt Caching** — Restructure system prompt (static first, dynamic last). Zero-code-change for most providers.
-6. **MCP Support** — After efficiency is solid, open the ecosystem. One `MCPClient` class + config section.
-
-Implementing items 1–5 first means every subsequent session — including all the new features built after them — automatically runs leaner. The compounding effect is significant.
-
----
-
-> *"The Magpie collects. The Magpie remembers. The Magpie improves."*
+# Mag Ecosystem Roadmap
+
+> Canonical direction for MagAgent, MagGraph, and Mag Command Center.
+>
+> Last audited: 2026-08-09
+> Current releases: MagAgent 0.33.0, MagGraph 0.2.5, Mag Command Center 0.1.7
+
+## Purpose
+
+The Mag ecosystem already covers an unusually broad surface: a terminal coding and
+productivity agent, durable graph memory, provider and model routing, subagents,
+orchestrated goals, MCP and plugin compatibility, browser and document tools,
+background work, and a cross-platform desktop application.
+
+The next stage should not be driven by adding more isolated commands. It should make
+the existing system more dependable, easier to understand, measurably better at real
+tasks, and consistent across the CLI and desktop application.
+
+The product thesis for the next several releases is:
+
+> Mag should be the local-first agent ecosystem where execution is inspectable,
+> memory is genuinely useful, and every capability is available through one stable
+> machine interface shared by the CLI and desktop app.
+
+## Audit Snapshot
+
+### Strengths
+
+- **MagAgent has a broad, coherent feature set.** It supports 20 provider options,
+  model roles, persistent MagGraph memory, specialist agents, subagents, hooks,
+  recipes, playbooks, permissions, checkpoints, MCP, plugin imports, LSP helpers,
+  browser automation, research, document and visual artifacts, a daemon, and staged
+  goal execution.
+- **MagGraph is a useful differentiator.** Markdown-native storage, Git-friendly
+  history, structured search, backlinks, incremental updates, recall bundles,
+  memory schemas, and suppression/merge operations give MagAgent durable memory
+  without hiding user knowledge in an opaque hosted service.
+- **Mag Command Center is already a real cross-platform client.** It covers setup,
+  project switching, chat, configuration, memory, SQLite, plugins, research, and
+  workbench actions, with release artifacts for Linux, Intel and Apple Silicon macOS,
+  and Windows.
+- **Release engineering is mature for the project age.** All three projects have
+  automated builds or tests, and the desktop app produces native installers across
+  supported platforms.
+- **Current functional baselines are healthy.** The audit ran 404 passing MagAgent
+  tests, 117 passing MagGraph workspace tests plus 3 doc tests, and 10 passing
+  Command Center tests. The Command Center production web build also completed.
+
+### Risks and gaps
+
+- **Reliability is not yet measured end to end.** MagAgent has a local eval scaffold,
+  but there is no maintained corpus of representative coding, research, document,
+  memory, permission, and provider tasks with version-over-version scores.
+- **MagAgent still has concentrated modules.** `cli/main.py` is about 4,760 lines,
+  `agent.py` about 1,950, and `workbench.py` about 1,760. These files still increase
+  regression risk and slow focused testing. `tools/executor.py` is now a roughly
+  390-line lifecycle and dispatch facade backed by focused capability modules.
+- **The MagAgent coverage gate should keep ratcheting upward.** The checkout-isolation
+  guard, fatal resource warnings, and connection cleanup are now in place, and the
+  suite reaches 64.30% against the 63% floor. High-blast-radius agent, gateway,
+  sandbox, and UI paths remain the next coverage targets.
+- **Command Center test depth is low.** Ten utility/integration tests do not exercise
+  its chat lifecycle, cancellation, project/session switching, setup flows, memory
+  edits, SQLite pagination, plugin actions, accessibility, or native command bridge.
+- **Command Center has its own concentration point.** `App.tsx` is about 900 lines and
+  owns most application state and orchestration. The Tauri bridge is also a broad
+  process wrapper rather than a narrow typed client for a versioned MagAgent API.
+- **Desktop state is mostly browser-local.** Chat and project state stored in
+  `localStorage` is convenient for an MVP but weak for migrations, larger histories,
+  concurrent work, recovery, and parity with CLI sessions.
+- **MagGraph planning docs mix history and current direction.** Several documents
+  still frame work around v0.1 or v0.2 even though 0.2.5 is published. They should be
+  archived or rewritten around current API guarantees and future memory workloads.
+- **Provider breadth creates a conformance burden.** A provider being configurable
+  does not prove streaming, tool calls, retries, caching telemetry, context limits,
+  structured output, and cancellation behave consistently.
+- **MCP core interoperability is dual-era, but experimental surfaces remain.** The
+  SDK v2 bridge now negotiates classic MCP through `2025-11-25` and modern
+  `2026-07-28`, over stdio and Streamable HTTP. Tools, prompts, resources, completion,
+  cache invalidation, subscriptions, and consent-gated MRTR are implemented. Tasks,
+  OAuth, sandboxed Apps rendering, remote Skills, and formal conformance remain.
+
+## Product Boundaries
+
+Each repository should have a clear responsibility:
+
+| Project | Owns | Should not own |
+| --- | --- | --- |
+| MagGraph | Durable graph data, indexing, retrieval, provenance, memory lifecycle, graph performance | Agent prompts, provider routing, UI workflows |
+| MagAgent | Agent execution, tools, permissions, providers, orchestration, workbench state, stable machine API | Desktop-only state and presentation |
+| Mag Command Center | Native setup and updates, project/session UX, streamed activity, visual memory and data management | Reimplementations of MagAgent or MagGraph business rules |
+
+New behavior should first land in the lowest appropriate domain, then be exposed by
+MagAgent's machine API, and finally consumed by Command Center. The desktop app should
+not reproduce CLI parsing or edit MagAgent-owned files directly when a domain command
+or API exists.
+
+## Phase 1: Confidence and Architecture Baseline
+
+**Goal:** Make the current capability set safe to evolve. This phase is complete when
+all three repositories have trustworthy local and CI quality gates and no critical
+workflow depends on a monolithic module.
+
+**Progress (2026-08-09):** The first MagAgent confidence unit is complete. Pytest now
+imports the checkout explicitly, resource leaks fail the suite, cached user databases
+have deterministic shutdown, semantic-memory connections close correctly, and 404
+tests pass with 64.30% branch coverage against the 63% gate.
+
+The first modularization unit is also complete: document, diagram, and image tools now
+live in a strictly typed `magent.tools.artifacts` capability module. The public
+`ToolExecutor` facade and all existing dispatch contracts remain unchanged, with
+architecture tests pinning the new ownership boundary.
+
+The second modularization unit moves shell trust rules, subprocess execution, Python
+snippets, package installation, and code search into the strictly typed
+`magent.tools.shell` capability module. Process cancellation remains centralized in
+the facade, and compatibility tests pin all inherited public methods to their owner.
+
+The third modularization unit moves ranked search, readable web fetches, deep-research
+packets, generic HTTP requests, and browser delegation into the strictly typed
+`magent.tools.web` capability module. Existing browser helper exports and all
+`ToolExecutor` dispatch names remain compatible.
+
+The fourth modularization unit moves path-safe file operations, outlines, diffs,
+built-in docs search, compression, and safe archive extraction into the strictly typed
+`magent.tools.files` capability module. The facade continues to own path policy and
+checkpoints, while an end-to-end regression test rejects ZIP traversal attempts.
+
+The fifth modularization unit completes the tool split. JSON and named SQLite facades
+live in `magent.tools.data`; system metrics, notifications, clipboard operations,
+platform file opening, and image inspection live in `magent.tools.system`; and Git
+delegation lives with shell execution. `ToolExecutor` is now limited to shared policy,
+lifecycle, selection, dispatch, progress, and output budgeting.
+
+### MagAgent
+
+- Make tests fail if `magent.__file__` is outside the checkout during development or
+  CI. Standardize an editable-install or `src`-layout test command.
+- Restore and ratchet coverage above the current 63% floor. Prioritize behavior with
+  high blast radius: the agent loop, artifact recovery, memory writes, permissions,
+  daemon jobs, setup, gateway routing, and provider error handling.
+- Close SQLite connections deterministically and turn resource warnings into test
+  failures on at least one CI job.
+- Continue moving command groups out of `cli/main.py`; keep only app composition,
+  the root callback, and interactive-session entry points there.
+- Keep the completed `ToolExecutor` capability split stable. New tools belong in
+  focused modules while the existing `ToolExecutor` remains the public dispatch facade.
+- Extract the provider/tool loop, artifact lifecycle, session lifecycle, and context
+  assembly from `agent.py` behind typed interfaces.
+- Move workbench domain implementations out of `workbench.py`; keep re-exports for
+  compatibility and add import-contract tests before each move.
+- Add static type checking to CI for the extracted core modules, then broaden it as
+  legacy surfaces are cleaned up.
+
+### MagGraph
+
+- Refresh or archive v0.1-oriented status and backlog documents. Maintain one current
+  support matrix for Rust, Python, CLI, UI, and release artifacts.
+- Add explicit API stability tests for the Python methods MagAgent consumes.
+- Add realistic index benchmarks for 1K, 10K, and 100K nodes, including incremental
+  update, search, backlinks, recall bundles, suppression, and merge operations.
+- Record benchmark history in CI and fail on statistically meaningful regressions,
+  not only the current small traversal threshold.
+- Define crash-consistency tests for node writes, index updates, and interrupted
+  merge operations.
+
+### Mag Command Center
+
+- Break `App.tsx` into project, session, setup, configuration, memory, SQLite, and
+  workbench controllers/hooks with a small composition shell.
+- Introduce a typed MagAgent client and normalize command errors, progress events,
+  cancellation, and version negotiation in one place.
+- Add component tests for chat, setup, memory, SQLite, and plugin workflows.
+- Add native bridge tests for allowed commands, path handling, concurrent streams,
+  process cleanup, and cancellation.
+- Add Playwright end-to-end tests for first run, opening two projects, switching chat
+  sessions, running a streamed task, editing memory, and browsing SQLite data.
+- Add automated accessibility checks and keyboard-navigation coverage in both themes.
+
+### Exit criteria
+
+- All required checks pass from a fresh clone on supported Python versions and major
+  desktop operating systems.
+- MagAgent coverage is at least 70% overall, with 85% or better on newly extracted
+  runtime modules.
+- Command Center has at least 50 meaningful frontend tests and six critical-path E2E
+  scenarios.
+- No core orchestration module exceeds roughly 1,000 lines without a documented
+  reason; facades may remain larger only when they contain little implementation.
+- Baseline latency, memory, token, and success-rate reports are checked into release
+  artifacts.
+
+## Phase 2: One Execution Contract
+
+**Goal:** Make interactive chat, one-shot asks, goals, recipes, gateways, daemon jobs,
+and desktop sessions use the same durable execution model.
+
+### Shared task model
+
+- Define a versioned task state machine: `queued`, `planning`, `running`, `waiting`,
+  `blocked`, `validating`, `completed`, `failed`, and `cancelled`.
+- Give every run a durable task ID, project ID, session ID, parent/child relationship,
+  timestamps, selected model roles, permission policy, token/cost counters, files
+  changed, checkpoints, and final audit.
+- Store append-only structured events for model activity, tool intent, tool progress,
+  permission decisions, artifacts, validation, retries, subagents, and completion.
+- Expose a versioned JSON/JSONL API through MagAgent. Keep terminal rendering and
+  desktop rendering as consumers of the same event stream.
+- Support cancellation, pause/resume, retry-from-step, and reconnect without orphaning
+  child processes or losing the final result.
+
+### Reliable agent execution
+
+- Make tool intent a first-class optional field with bounded length and redaction.
+- Validate tool arguments locally before dispatch and give models a compact,
+  machine-readable correction packet when an argument is missing or malformed.
+- Turn artifact requirements into durable contracts with path, type, minimum content,
+  verification method, and completion state. Prevent placeholder or filename-only
+  output from satisfying a task.
+- Make goal loops evidence-based: a goal may complete only when declared validation
+  criteria pass or the user explicitly accepts an exception.
+- Use the planning role for the cached master plan, the execution role for bounded
+  steps, and inexpensive reviewer/verifier roles where configured.
+- Add provider capability negotiation so unsupported temperature, reasoning,
+  structured output, tool-choice, or caching options are omitted predictably.
+
+### Command Center integration
+
+- Replace ad hoc command-specific parsing with the versioned MagAgent event protocol.
+- Render planning, tool activity, permissions, files, validation, and subagent work in
+  the chat flow, with advanced diagnostics available in a collapsed inspector.
+- Keep the UI responsive while tasks run; allow project/session switching and parallel
+  background work without cancelling unrelated tasks.
+- Add native notifications for blocked permissions and completed background tasks.
+
+### Exit criteria
+
+- The same test task produces equivalent lifecycle events in CLI interactive mode,
+  `magent ask`, an orchestrated goal, the daemon, and Command Center.
+- Every task can be cancelled within two seconds and resumed or retried without stale
+  permission prompts or duplicate writes.
+- Artifact-heavy evals reach at least a 95% verified-write success rate on the primary
+  supported tool-calling models.
+- No terminal or desktop workflow must scrape human-formatted output.
+
+## Phase 3: Memory That Improves the Work
+
+**Goal:** Turn memory from a storage feature into the ecosystem's clearest competitive
+advantage while keeping recall explainable and token-efficient.
+
+### MagGraph retrieval engine
+
+- Add a native hybrid retrieval API combining lexical search, graph relationships,
+  recency, node type, project scope, suppression state, and optional embeddings.
+- Keep embeddings pluggable and optional. Support a local embedding model first, with
+  provider-backed adapters only when users opt in.
+- Add persisted retrieval indexes with schema/version metadata and incremental rebuilds.
+- Add temporal validity (`valid_from`, `valid_until`, `supersedes`) and canonical node
+  identity so old facts can remain auditable without being recalled as current truth.
+- Make provenance first class: source session/task/tool, parent memory, extraction
+  method, confidence, edits, merges, and supporting backlinks.
+- Add transaction-like batches for multi-node edits and merge operations so Command
+  Center can preview and safely apply graph changes.
+
+### MagAgent memory policy
+
+- Separate automatic candidates from durable accepted memory and make promotion rules
+  configurable by node type and project.
+- Add contradiction and duplicate detection before promotion.
+- Learn retrieval quality from explicit accept, reject, suppress, edit, and “not useful”
+  feedback without silently changing user-authored memory.
+- Build context packets against a strict token budget and explain every recalled item:
+  lexical match, semantic match, backlink, project fact, preference, or recent decision.
+- Add memory evals for recall precision, stale-fact avoidance, cross-session continuity,
+  provenance, and token cost.
+
+### Command Center memory studio
+
+- Replace the preview graph with an interactive, scalable graph/table split view.
+- Add side-by-side diff and batch review for inbox candidates, merges, rewrites,
+  contradictions, stale facts, and orphaned nodes.
+- Let users chat about a selected subgraph while showing exactly which nodes are in
+  context and how many tokens they consume.
+- Add undoable memory operations and a history view backed by MagGraph provenance/Git.
+
+### Exit criteria
+
+- Retrieval benchmarks show better precision than lexical-only search at the same or
+  lower context-token budget.
+- Every recalled memory has a human-readable reason and navigable provenance.
+- Memory writes and batches survive interruption without partial graph corruption.
+- A user can inspect, modify, undo, and explain all durable memory from either CLI or
+  Command Center.
+
+## Phase 4: Daily-Driver Desktop Product
+
+**Goal:** Move Mag Command Center from a capable cockpit to the easiest way for most
+people to use MagAgent across several projects.
+
+### Core experience
+
+- Make chat the default workspace, with project and session navigation always
+  available but visually quiet.
+- Persist projects, sessions, task events, drafts, view state, and saved queries in a
+  versioned local SQLite store instead of relying on `localStorage`.
+- Support multiple concurrent tasks across projects with clear running, waiting,
+  failed, and completed indicators.
+- Add rich artifact previews for Markdown, code diffs, HTML, images, SVG, diagrams,
+  documents, presentations, and PDFs.
+- Add checkpoint comparison, selective rollback, and “open changed files” actions.
+- Provide searchable command history and task diagnostics without exposing raw JSON
+  unless the user opens the inspector.
+
+### Installation and lifecycle
+
+- Ship a first-run flow that can install MagAgent in an isolated managed environment,
+  detect Python compatibility, import existing configuration, and test a provider.
+- Add signed application updates and a compatibility check between Command Center,
+  MagAgent, and MagGraph versions.
+- Make upgrades transactional with rollback when provider/config migrations fail.
+- Add crash recovery for active streams and unfinished tasks.
+- Keep credentials in OS-native secure storage or environment references; never copy
+  secret values into project files, logs, task events, or desktop local storage.
+
+### Product polish
+
+- Complete keyboard-first navigation, screen-reader labels, reduced-motion support,
+  focus management, and contrast checks for light and dark themes.
+- Add concise in-app onboarding around projects, permission modes, model roles,
+  memory review, and background tasks.
+- Add an opt-in diagnostics bundle that redacts secrets and packages versions, recent
+  errors, task events, provider capabilities, and performance timings for bug reports.
+- Track local performance budgets for startup, project switching, first activity,
+  memory search, large tables, and long chat histories.
+
+### Exit criteria
+
+- Fresh installation to first successful task takes less than five minutes on macOS,
+  Windows, and Linux without manual config-file editing.
+- The app remains interactive during long model and tool calls and can manage at least
+  four simultaneous project tasks.
+- Critical workflows meet WCAG 2.2 AA expectations and pass automated plus manual
+  keyboard checks.
+- A 10,000-event session and a 100,000-node memory graph remain navigable within the
+  documented performance budgets.
+
+## Phase 5: Ecosystem and 1.0 Readiness
+
+**Goal:** Establish a trusted extension ecosystem and stable public contracts, then
+release 1.0 only when quality is demonstrated by data.
+
+### Extension ecosystem
+
+- Publish a versioned plugin SDK and manifest schema for agents, skills, recipes,
+  hooks, tools, MCP servers, and UI-safe metadata.
+- Add a registry index with compatibility ranges, permissions, checksums, signatures,
+  source URLs, maintainers, trust state, and automated security scans.
+- Run plugins with least-privilege capability grants and clear per-project/user scope.
+- Maintain import compatibility for Codex skills, Claude plugins/instructions,
+  OpenCode agents/commands, Gemini extensions where practical, and standard MCP
+  server configurations.
+- Add a plugin conformance kit and sample packs that exercise every supported surface.
+
+### Dual-era MCP and portable skills
+
+MCP `2026-07-28` is a new protocol era, not a transparent revision of classic MCP.
+The modern protocol removes `initialize`, protocol sessions, and `Mcp-Session-Id`;
+puts protocol version, identity, and capabilities on each request; and adds formal
+extension negotiation. The specification calls `2025-11-25` and earlier **legacy**
+and implementations supporting both eras **dual-era**. MagAgent should preserve the
+large classic server ecosystem while making modern MCP the preferred path.
+
+**Progress (2026-08-08):** The first compatibility unit is complete. Typed profiles,
+redacted diagnostics, strict `modern`/`legacy` modes, automatic negotiation, stdio,
+Streamable HTTP, and explicitly enabled legacy SSE now route through an SDK v2 bridge.
+The bridge keeps SDK lifecycle ownership in one root coroutine and receives profiles
+and credentials over stdin. Wire-independent interoperability tests prove modern,
+legacy, and automatic stdio discovery/tool calls on Python 3.11 and 3.14; the optional
+integration suite repeats those checks whenever the MCP extra is installed.
+
+The SDK v2 high-level server's externally spawned stdio fixture did not answer in the
+migration environment even though its in-process transport did. Keep official SDK
+server and conformance-suite interoperability as an acceptance gate; MagAgent's wire
+fixture intentionally shares no MCP implementation code with the client.
+
+**Progress (2026-08-09):** The second compatibility unit adds lazy, deterministic
+prompt, resource, and resource-template catalogs; explicit prompt rendering and
+bounded resource reads; SDK cache-mode integration; TTL/scope/freshness diagnostics;
+and conservative invalidation after tool calls. Modern, legacy, and automatic wire
+tests cover every new primitive. Normalized list-changed events now share one
+invalidation seam; live legacy notifications and modern `subscriptions/listen`
+consumption remain the next increment.
+
+**Progress (2026-08-09, third compatibility unit):** Core dual-era client work is now
+complete for the surfaces implemented by Python SDK v2. MagAgent consumes classic
+notifications and modern `subscriptions/listen`, reports honored filters and stream
+failures, routes both through deterministic cache invalidation, exposes prompt and
+resource-template completion, preserves tool output schemas/annotations/extension
+metadata, and handles legacy callbacks plus modern MRTR elicitation through an
+explicit host-consent boundary. Sampling is never silently delegated and project-root
+disclosure requires separate confirmation. Modern/legacy/automatic real-process tests
+cover negotiation, tools, prompts, resources, completion, caching, and reconnect-safe
+cleanup. Tasks and remote Skills remain experimental upstream; MagAgent must not
+advertise them until a compatible SDK adapter and conformance fixture exist.
+
+**Current MagAgent baseline**
+
+- Keep the existing local and project `SKILL.md` registry, relevance matching,
+  context budgets, lockfile, and Codex-style skill importer. MagAgent already supports
+  file-based skills; the missing surface is discovery and consumption of skills
+  delivered by an MCP server.
+- Treat the current MCP implementation as dual-era core catalog support: it negotiates
+  modern or classic peers through SDK v2; discovers and calls tools; and explicitly
+  browses prompts/resources, completes arguments, consumes notifications, and handles
+  consent-gated MRTR input. It preserves MCP Apps metadata with a safe textual fallback
+  but does not render Apps or activate experimental Tasks/Skills extensions.
+- Keep the optional SDK on the compatible v2 major line and run the wire-independent
+  migration fixture whenever the optional extra is installed.
+
+**Compatibility architecture**
+
+- Introduce a typed MCP connection abstraction separating transport, protocol era,
+  authentication, discovered capabilities, catalog caching, and MagAgent adaptation.
+  Keep `MCPManager` as orchestration rather than embedding SDK-version details in it.
+- Support `stdio` and Streamable HTTP for both eras. Retain deprecated HTTP+SSE only
+  as an explicitly enabled compatibility adapter with a warning and removal date; do
+  not select it for new configurations.
+- Add `protocol_mode = "auto" | "modern" | "legacy"` per server, defaulting to
+  `auto`. Record the selected era, exact protocol revision, transport, server identity,
+  extensions, and fallback reason in diagnostics without logging credentials.
+- Follow the official dual-era algorithm. On stdio, probe `server/discover` and fall
+  back to `initialize` only for a non-modern error or timeout. On HTTP, try a modern
+  request and inspect an unrecognized `4xx` response before falling back. A recognized
+  `UnsupportedProtocolVersionError` identifies a modern server and should trigger a
+  retry with the highest mutually supported revision, not legacy fallback.
+- Cache era detection for a stdio process or HTTP origin and invalidate it after a
+  protocol failure or configuration change. Test modern/modern, modern/legacy,
+  legacy/modern, legacy/legacy, and both dual-era combinations.
+
+**Modern `2026-07-28` client support**
+
+- Upgrade through the Python SDK v2 `Client` API so each request carries
+  `io.modelcontextprotocol/protocolVersion`, client capabilities, and client identity.
+  Add required HTTP `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` headers.
+- Consume `server/discover`, including supported versions, server capabilities,
+  extension settings, instructions, identity, `ttlMs`, and `cacheScope`. Treat server
+  identity and instructions as untrusted display/model context, never authorization
+  policy.
+- Cache deterministically ordered `tools/list`, `prompts/list`, `resources/list`, and
+  safe `resources/read` responses according to server cache hints. Invalidate through
+  `subscriptions/listen` when supported, and expose cache/freshness data in diagnostics.
+- Preserve structured tool content instead of flattening everything to text: text,
+  images, audio, embedded resources, resource links, structured content, annotations,
+  and tool execution errors must map into MagAgent's typed result and permission model.
+- Implement Multi Round-Trip Requests for `input_required` results using MagAgent's
+  existing approval/form UX. Never answer elicitation from hidden context without
+  explicit user consent, and redact sensitive answers from logs and memory promotion.
+- Add opt-in extension handlers, beginning with `io.modelcontextprotocol/tasks` for
+  durable long-running calls. Map task handles, polling, updates, cancellation, and
+  reconnect recovery into MagAgent's durable queue. Surface MCP Apps only through a
+  sandboxed, permission-aware Command Center renderer; the CLI should provide a safe
+  textual fallback.
+- Implement modern OAuth requirements for remote servers: protected-resource and
+  authorization-server discovery, issuer validation, Resource Indicators, incremental
+  consent, Client ID Metadata Documents, secure token storage, and origin validation.
+  Keep Dynamic Client Registration only as a visibly deprecated compatibility path.
+
+**Skills over MCP**
+
+- Track the official Skills over MCP extension separately from core protocol support.
+  As of 2026-08-08, the working group's resources-based SEP-2640 and reference
+  implementation are still in review, so ship interoperability behind an experimental
+  feature flag until the extension identifier and schemas are final.
+- Adapt remote skill descriptors into the existing `Skill` model with explicit
+  provenance: server, URI, version, content hash, declared tools, trust state, fetched
+  time, expiry, and protocol/extension revision. Preserve local `SKILL.md` as the
+  canonical offline format rather than replacing it with an MCP-only representation.
+- Use progressive disclosure: fetch compact skill metadata first, match it against the
+  current request, then read full instructions only for selected skills within the
+  existing skill token budget. Cache content using MCP hints and permit users to pin a
+  reviewed snapshot in `skills.lock` for reproducible/offline sessions.
+- Require explicit trust before activating a remote skill that requests tools,
+  scripts, external resources, or broader permissions. A skill is instruction content,
+  not permission to execute; all referenced MCP and built-in tools continue through
+  MagAgent's normal capability and approval policies.
+- Add `magent mcp skills list/show/trust/pin/refresh` plus readable `/skills` provenance
+  in interactive sessions. Detect name/version collisions across local, project,
+  plugin, and remote sources, with project policy deciding precedence rather than
+  silently shadowing a skill.
+- Test round trips with the MCP experimental reference implementation and Agent Skills
+  compatible `SKILL.md` fixtures. Cover lazy loading, stale/offline cache, hash changes,
+  malicious instructions, oversized content, missing required tools, server removal,
+  and extension fallback when the peer does not advertise Skills over MCP.
+
+**Conformance and delivery gates**
+
+- Run the official MCP conformance suite in CI against pinned legacy and modern SDK
+  versions, plus fixture servers for stdio, Streamable HTTP, authentication, MRTR,
+  Tasks, catalog caching, and Skills over MCP. Network-dependent interoperability tests
+  should be scheduled or opt-in so ordinary pull requests remain fast and deterministic.
+- Publish a generated support matrix listing protocol revisions, transports, core
+  primitives, extensions, authentication modes, SDK versions, deprecations, and tested
+  server implementations. `magent mcp test` should identify negotiation and extension
+  failures with actionable remediation.
+- Do not declare modern MCP complete until legacy stdio configurations pass unchanged,
+  modern stateless tool calls pass conformance, fallback cannot downgrade a recognized
+  modern server, credentials stay redacted, and remote skills cannot bypass permission
+  or context-budget controls.
+
+Research basis: the official [2026-07-28 specification](https://modelcontextprotocol.io/specification/2026-07-28),
+[version compatibility rules](https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning),
+[release changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog),
+[Python SDK v2 notes](https://github.com/modelcontextprotocol/python-sdk/blob/main/docs/whats-new.md),
+and [Skills over MCP working-group charter](https://modelcontextprotocol.io/community/working-groups/skills-over-mcp).
+
+### Stable platform contracts
+
+- Version the MagAgent machine API, event protocol, plugin manifest, MagGraph Python
+  API, graph schema, configuration schema, and migration format.
+- Publish support windows and deprecation rules before 1.0.
+- Add generated API documentation and compatibility matrices to each release.
+- Introduce coordinated ecosystem releases only when a cross-project contract changes;
+  otherwise release projects independently to control CI cost and user churn.
+
+### Session-to-session messaging
+
+**Implemented in MagAgent 0.33.0.** Local peer discovery,
+authenticated delivery, receiving policies, bounded durable queues, receipts, retry,
+agent tools, CLI workflows, safe context injection, and security tests are complete.
+Command Center visualization and any encrypted cross-machine relay remain future work.
+
+The design borrows the useful safety properties of Claude Code v2.1.224 without
+coupling MagAgent to Claude's supervisor implementation.
+
+- Add `list_sessions` and `send_session_message` agent tools plus readable
+  `magent session peers` and `magent session send` commands. Address durable session
+  IDs first; names are display aliases and must fail closed when ambiguous or reused.
+- Register each eligible live session in a per-user local roster and bind a per-session
+  Unix-domain socket on macOS/Linux. Use an owner-only named-pipe equivalent on Windows.
+  Authenticate the OS user and rotate an unguessable session capability at restart.
+- Send a bounded plain-text envelope containing sender ID/name, reply address,
+  project/worktree, related task ID, timestamp, nonce, and provenance. Never transfer
+  conversation history, files, hidden context, credentials, or permission state.
+- Deliver messages only at safe turn boundaries. An idle receiver is notified and
+  queues the message for its next turn; an active receiver receives it after the
+  current tool boundary. Persist an undelivered local outbox so restarts do not
+  silently lose coordination.
+- Give each receiving session `accept`, `hold`, and `refuse` policy with user, project,
+  and managed-setting precedence. Held messages require explicit user review and
+  expire; headless sessions may accept only through an explicit configuration policy.
+- Treat peer text as untrusted agent input, never user authority. It cannot approve a
+  permission, answer an MCP elicitation, change configuration/instructions, widen tool
+  access, or execute slash commands. The receiving session's own sandbox and approval
+  rules govern every resulting action.
+- Return delivery receipts (`delivered`, `held`, `refused`, `expired`, `unreachable`)
+  when the sender is reachable. Add loop protection with per-peer rate limits,
+  duplicate-message suppression, hop counts, bounded inbox/outbox sizes, and audit
+  events that store redacted summaries rather than hidden reasoning.
+- Surface peers, unread/held messages, delivery state, and reply controls in Command
+  Center's project/session navigation. Cross-project sends should visibly identify both
+  roots and warn when worktrees may conflict.
+- Keep cross-machine delivery out of the first release. A later opt-in relay must be
+  end-to-end encrypted, device-bound, explicit about which peers are reachable, and
+  default to reply-only until the user grants broader initiation rights.
+- Test same-user isolation, spoofed roster entries, stale sockets, name collisions,
+  supervisor restart, active-turn ordering, headless policy, permission laundering,
+  loops, duplicate delivery, queue overflow, worktree conflicts, and Windows parity.
+
+Research basis: Anthropic's official
+[cross-session messaging guide](https://code.claude.com/docs/en/cross-session-messaging),
+[parallel agents overview](https://code.claude.com/docs/en/agents), and
+[Claude Code changelog](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md).
+
+### Optional collaboration
+
+- Keep the default experience local-first. Add encrypted, opt-in graph sync and team
+  workspaces only after local reliability and permission boundaries are proven.
+- Separate personal preferences from project/team knowledge with explicit sharing
+  policies and provenance.
+- Provide redacted task exports and reproducible eval bundles for teams that cannot
+  share source code.
+
+### 1.0 gates
+
+- A maintained eval suite covers coding, research, artifacts, memory, permissions,
+  providers, goals, plugins, and desktop workflows, with published release trends.
+- No open critical security or data-loss defects; recovery and migration tests pass on
+  all supported platforms.
+- Provider conformance tests pass for every provider advertised as fully supported.
+- Public contracts have migration tests and at least one release of deprecation notice
+  before incompatible changes.
+- Documentation includes a five-minute quickstart, task-oriented guides, architecture,
+  extension authoring, troubleshooting, security, privacy, and a tested upgrade path.
+- MagAgent and MagGraph are ready for stable 1.0 APIs; Command Center can advance on
+  its own product version while declaring compatible runtime ranges.
+
+## Cross-Project Delivery Order
+
+For work spanning repositories, use this sequence:
+
+1. **Define the contract and acceptance test.** Decide the event, schema, graph API,
+   or task behavior before implementation.
+2. **Implement MagGraph primitives** when durable graph behavior is required.
+3. **Expose behavior through MagAgent** with a typed Python API and versioned JSON.
+4. **Integrate Command Center** through the machine API rather than shell-output
+   interpretation or direct file mutation.
+5. **Run ecosystem smoke tests** against released artifacts in clean environments.
+6. **Document and release from the bottom up:** MagGraph, MagAgent, then Command Center
+   only when downstream dependency changes require it.
+
+## Metrics to Publish Per Release
+
+| Category | Measures |
+| --- | --- |
+| Agent reliability | Task success, verified artifact success, tool argument failures, retries, duplicate writes |
+| Model efficiency | Input/output/cache tokens, cost, time to first activity, time per model round |
+| Safety | Permission prompts, blocked actions, approval reuse, rollback success, secret-redaction tests |
+| Memory | Recall precision, stale recall rate, context tokens, promotion acceptance, duplicate rate |
+| Performance | CLI startup, project scan, memory search, event throughput, desktop startup and interaction latency |
+| Quality | Test count, branch coverage, E2E pass rate, provider conformance, open regressions |
+
+Metrics should be local and anonymous by default. Release reports can be generated from
+maintainer-run evals without adding product telemetry.
+
+## What Not to Prioritize Yet
+
+- A hosted account system or cloud control plane before local task recovery and stable
+  APIs are complete.
+- More providers without an automated provider conformance contract.
+- More top-level commands when the behavior belongs in an existing workflow or can be
+  discovered through chat/configuration UX.
+- Autonomous memory writes without review, provenance, and undo.
+- A public plugin marketplace before signatures, permissions, compatibility, and
+  trust metadata are enforced.
+- A VS Code extension before the machine API and task event protocol are stable; once
+  stable, an editor client becomes much cheaper to build correctly.
+
+## Recommended Immediate Release Sequence
+
+1. **MagAgent 0.33.0 (complete):** test isolation, coverage repair, SQLite cleanup,
+   tool modularization, dual-era MCP, and authenticated local session coordination.
+2. **MagGraph 0.3.x (next):** current planning refresh, API contract tests, realistic index
+   benchmarks, crash consistency, and the first hybrid retrieval interfaces.
+3. **MagAgent 0.34.x:** versioned task/event protocol, durable lifecycle, cancellation,
+   artifact contracts, and unified execution surfaces.
+4. **Mag Command Center 0.2.x:** typed client, state/controller extraction, persistent
+   desktop state, event-native chat, cancellation, and critical-path E2E coverage.
+5. **Ecosystem beta milestone:** publish the first cross-project eval report and freeze
+   candidate 1.0 contracts for feedback.
+
+This order deliberately builds confidence first, then shared execution, then memory
+quality, then desktop polish. It turns the breadth already present in Mag into a
+dependable product advantage instead of continuing to increase its maintenance load.

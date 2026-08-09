@@ -9,7 +9,9 @@ from types import SimpleNamespace
 import pytest
 
 import magent.tools as tools_module
-import magent.tools.executor as executor_module
+import magent.tools.shell as shell_module
+import magent.tools.system as system_module
+import magent.tools.web as web_module
 from magent.permissions import RiskTier, classify_file_op, classify_shell_command
 from magent.tools import ToolExecutor
 
@@ -60,18 +62,19 @@ def test_network_fetch_mutation_or_download_still_requires_confirmation() -> Non
     assert classify_shell_command("wget https://example.com -O page.html") == RiskTier.CONFIRM
 
 
-def test_macos_shell_rewrites_prefer_python3(monkeypatch) -> None:
-    monkeypatch.setattr(executor_module, "sys", SimpleNamespace(platform="darwin"))
-
+def test_macos_shell_rewrites_prefer_python3() -> None:
     assert (
-        executor_module._prefer_platform_python_command("pip install python-pptx")
+        shell_module._prefer_platform_python_command("pip install python-pptx", platform="darwin")
         == "python3 -m pip install python-pptx"
     )
     assert (
-        executor_module._prefer_platform_python_command("pip list | grep docx")
+        shell_module._prefer_platform_python_command("pip list | grep docx", platform="darwin")
         == "python3 -m pip list | grep docx"
     )
-    assert executor_module._prefer_platform_python_command("python -c 'print(1)'") == "python3 -c 'print(1)'"
+    assert (
+        shell_module._prefer_platform_python_command("python -c 'print(1)'", platform="darwin")
+        == "python3 -c 'print(1)'"
+    )
 
 
 def test_shell_control_blocks_dangerous_segment_even_if_allowlisted() -> None:
@@ -252,8 +255,8 @@ async def test_visual_artifact_tools_create_svg_diagram_and_image(tmp_path: Path
 
     from PIL import Image
 
-    rendered = Image.open(tmp_path / "orange.png")
-    assert rendered.size == (240, 140)
+    with Image.open(tmp_path / "orange.png") as rendered:
+        assert rendered.size == (240, 140)
 
 
 @pytest.mark.asyncio
@@ -298,6 +301,7 @@ async def test_file_tools_read_write_edit_list_diff_and_range(tmp_path: Path) ->
     (tmp_path / "notes" / "b.txt").write_text("one\nTWO\nfour\n", encoding="utf-8")
     diff = await tools.diff_files("notes/a.txt", "notes/b.txt")
     listed = await tools.list_dir("notes")
+    deleted = await tools.delete_file("notes/b.txt")
 
     assert written["ok"] is True
     assert read["lines"] == 3
@@ -305,6 +309,8 @@ async def test_file_tools_read_write_edit_list_diff_and_range(tmp_path: Path) ->
     assert edited["ok"] is True
     assert diff["changed"] is True
     assert {entry["name"] for entry in listed["entries"]} == {"a.txt", "b.txt"}
+    assert deleted["ok"] is True
+    assert not (tmp_path / "notes" / "b.txt").exists()
 
 
 @pytest.mark.asyncio
@@ -447,6 +453,69 @@ async def test_deep_research_collects_sources(monkeypatch, tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
+async def test_http_request_uses_web_capability_client(monkeypatch, tmp_path: Path) -> None:
+    class FakeResponse:
+        is_success = True
+        status_code = 201
+        headers = {"content-type": "application/json"}
+        text = '{"created": true}'
+
+        def json(self):
+            return {"created": True}
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def request(self, method, url, **kwargs):
+            assert method == "POST"
+            assert url == "https://example.com/items"
+            assert kwargs["json"] == {"name": "demo"}
+            return FakeResponse()
+
+    monkeypatch.setattr(web_module.httpx, "AsyncClient", FakeClient)
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    result = await tools.http_request(
+        "post",
+        "https://example.com/items",
+        body={"name": "demo"},
+    )
+
+    assert result["ok"] is True
+    assert result["status"] == 201
+    assert result["body_json"] == {"created": True}
+
+
+@pytest.mark.asyncio
+async def test_browser_tools_delegate_through_web_capability(monkeypatch, tmp_path: Path) -> None:
+    async def fake_snapshot(url: str, wait_ms: int = 500):
+        return {"ok": True, "url": url, "wait_ms": wait_ms}
+
+    async def fake_screenshot(url: str, path: str, wait_ms: int = 500):
+        return {"ok": True, "url": url, "path": path, "wait_ms": wait_ms}
+
+    monkeypatch.setattr(web_module, "browser_snapshot", fake_snapshot)
+    monkeypatch.setattr(web_module, "browser_screenshot", fake_screenshot)
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    snapshot = await tools.browser_snapshot("https://example.com", wait_ms=250)
+    screenshot = await tools.browser_screenshot(
+        "https://example.com",
+        "capture.png",
+        wait_ms=750,
+    )
+
+    assert snapshot == {"ok": True, "url": "https://example.com", "wait_ms": 250}
+    assert screenshot["ok"] is True
+    assert screenshot["path"] == str(tmp_path / "capture.png")
+    assert screenshot["wait_ms"] == 750
+
+
+@pytest.mark.asyncio
 async def test_archive_tools_roundtrip_zip(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "demo.txt").write_text("hello", encoding="utf-8")
@@ -459,6 +528,19 @@ async def test_archive_tools_roundtrip_zip(tmp_path: Path) -> None:
     assert zipfile.is_zipfile(tmp_path / "archive.zip")
     assert extracted["ok"] is True
     assert (tmp_path / "out" / "src" / "demo.txt").read_text(encoding="utf-8") == "hello"
+
+
+@pytest.mark.asyncio
+async def test_archive_tools_reject_zip_path_traversal(tmp_path: Path) -> None:
+    with zipfile.ZipFile(tmp_path / "unsafe.zip", "w") as archive:
+        archive.writestr("../escaped.txt", "not allowed")
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    result = await tools.extract("unsafe.zip", "out")
+
+    assert result["ok"] is False
+    assert "unsafe archive member" in result["error"]
+    assert not (tmp_path / "escaped.txt").exists()
 
 
 @pytest.mark.asyncio
@@ -478,7 +560,7 @@ async def test_run_python_and_search_codebase(tmp_path: Path, monkeypatch) -> No
     async def fake_create_exec_process(*argv, cwd):
         return FakeProc()
 
-    monkeypatch.setattr(executor_module, "_create_exec_process", fake_create_exec_process)
+    monkeypatch.setattr(shell_module, "_create_exec_process", fake_create_exec_process)
 
     python = await tools.run_python("print('hello from python')")
     search = await tools.search_codebase("needle")
@@ -511,7 +593,7 @@ async def test_run_shell_expands_bash_brace_directories(tmp_path: Path, monkeypa
         (Path(cwd) / "teal-blog" / "src" / "content" / "blog").mkdir(parents=True)
         return FakeProc()
 
-    monkeypatch.setattr(executor_module, "_create_shell_process", fake_create_shell_process)
+    monkeypatch.setattr(shell_module, "_create_shell_process", fake_create_shell_process)
 
     result = await tools.run_shell(command)
 
@@ -580,3 +662,76 @@ async def test_json_query_and_docs_search(tmp_path: Path) -> None:
     assert query == {"ok": True, "result": "Ada"}
     assert docs["ok"] is True
     assert docs["results"]
+
+
+@pytest.mark.asyncio
+async def test_system_clipboard_notification_and_image_tools(monkeypatch, tmp_path: Path) -> None:
+    clipboard = {"value": "initial"}
+    notifications: list[dict] = []
+    fake_psutil = SimpleNamespace(
+        cpu_percent=lambda interval: 12.5,
+        virtual_memory=lambda: SimpleNamespace(
+            total=8_000_000_000,
+            used=3_000_000_000,
+            percent=37.5,
+        ),
+        disk_usage=lambda path: SimpleNamespace(
+            total=100_000_000_000,
+            used=40_000_000_000,
+            free=60_000_000_000,
+        ),
+    )
+    fake_pyperclip = SimpleNamespace(
+        paste=lambda: clipboard["value"],
+        copy=lambda value: clipboard.update(value=value),
+    )
+    fake_notification = SimpleNamespace(notify=lambda **kwargs: notifications.append(kwargs))
+    monkeypatch.setitem(sys.modules, "psutil", fake_psutil)
+    monkeypatch.setitem(sys.modules, "pyperclip", fake_pyperclip)
+    monkeypatch.setitem(sys.modules, "plyer", SimpleNamespace(notification=fake_notification))
+
+    from PIL import Image
+
+    Image.new("RGB", (32, 24), "#336699").save(tmp_path / "sample.png")
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    info = await tools.system_info()
+    written = await tools.clipboard_write("updated")
+    read = await tools.clipboard_read()
+    notified = await tools.notify("Done", "Task complete")
+    image = await tools.read_image("sample.png")
+
+    assert info["ok"] is True
+    assert info["cpu_percent"] == 12.5
+    assert written == {"ok": True, "length": 7}
+    assert read["content"] == "updated"
+    assert notified["ok"] is True
+    assert notifications[0]["title"] == "Done"
+    assert image["metadata"]["size"] == (32, 24)
+    assert image["base64"]
+
+
+@pytest.mark.asyncio
+async def test_open_file_and_git_delegate_to_shell(monkeypatch, tmp_path: Path) -> None:
+    (tmp_path / "notes.txt").write_text("hello", encoding="utf-8")
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+    commands: list[str] = []
+
+    async def fake_run_shell(command: str, timeout: int = 60):
+        commands.append(command)
+        return {"ok": True, "command": command}
+
+    monkeypatch.setattr(
+        system_module.shutil,
+        "which",
+        lambda name: "/usr/bin/xdg-open" if name == "xdg-open" else None,
+    )
+    monkeypatch.setattr(tools, "run_shell", fake_run_shell)
+
+    opened = await tools.open_file("notes.txt")
+    git = await tools.git_op("status", "--short")
+
+    assert opened["ok"] is True
+    assert commands[0] == f"/usr/bin/xdg-open {tmp_path / 'notes.txt'}"
+    assert git["ok"] is True
+    assert commands[1] == "git status --short"

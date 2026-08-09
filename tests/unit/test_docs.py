@@ -31,6 +31,7 @@ def test_docs_topics_are_packaged():
     assert "ui" in topics
     assert "tui" in topics
     assert "context" in topics
+    assert "mcp" in topics
 
 
 def test_docs_search_finds_semantic_memory():

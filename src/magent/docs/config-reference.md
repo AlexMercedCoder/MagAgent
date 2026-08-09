@@ -9,7 +9,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'0.32.14'`
+- `agent.version` default: `'0.33.0'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 - `agent.max_model_rounds_per_turn` default: `16`
@@ -89,6 +89,12 @@ Stored at `~/.config/magent/config.toml`.
 - `subagents.sandbox_mode` default: `''`
 ### `mcp`
 
+### `session_messaging`
+
+- `session_messaging.enabled` default: `True`
+- `session_messaging.name` default: `''`
+- `session_messaging.policy` default: `'accept'`
+- `session_messaging.headless_accept` default: `False`
 
 ## User Profile
 

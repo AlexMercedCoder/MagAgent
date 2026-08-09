@@ -6,6 +6,7 @@ All tests mock the mcp SDK so no external processes are needed.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,6 +14,7 @@ import pytest
 
 from magent.mcp.client import MCPClient, MCPTool, _extract_text
 from magent.mcp.manager import MCPManager
+from magent.mcp.profile import MCPProtocolMode, MCPServerProfile
 
 # ─────────────────────────────────────────────
 # MCPTool
@@ -147,6 +149,51 @@ def _make_mock_session(
     return session
 
 
+class _FakeReader:
+    def __init__(self, *messages: dict[str, Any]):
+        self.messages = [json.dumps(item).encode() + b"\n" for item in messages]
+
+    async def readline(self) -> bytes:
+        return self.messages.pop(0) if self.messages else b""
+
+
+class _FakeWriter:
+    def __init__(self) -> None:
+        self.lines: list[dict[str, Any]] = []
+
+    def write(self, value: bytes) -> None:
+        self.lines.append(json.loads(value))
+
+    async def drain(self) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
+
+class _FakeProcess:
+    def __init__(self, *messages: dict[str, Any]):
+        self.stdin = _FakeWriter()
+        self.stdout = _FakeReader(*messages)
+        self.stderr = _FakeReader()
+        self.returncode: int | None = None
+
+    async def wait(self) -> int:
+        self.returncode = 0
+        return 0
+
+    def terminate(self) -> None:
+        self.returncode = -15
+
+
+class _ExitedDuringTerminateProcess(_FakeProcess):
+    async def wait(self) -> int:
+        raise TimeoutError
+
+    def terminate(self) -> None:
+        raise ProcessLookupError
+
+
 class TestMCPClientConnect:
     @pytest.mark.asyncio
     async def test_connect_success_lists_tools(self) -> None:
@@ -236,6 +283,264 @@ class TestMCPClientConnect:
         assert not client.connected
         assert client._session is None
 
+    @pytest.mark.asyncio
+    async def test_disconnect_tolerates_process_exit_before_terminate(self) -> None:
+        client = MCPClient("srv", "echo", timeout=0.01)
+        process = _ExitedDuringTerminateProcess()
+        client._process = process
+
+        await client.disconnect()
+
+        assert client._process is None
+
+    @pytest.mark.asyncio
+    async def test_modern_mode_connects_through_bridge(self) -> None:
+        process = _FakeProcess(
+            {
+                "ok": True,
+                "event": "ready",
+                "selected_era": "modern",
+                "protocol_version": "2026-07-28",
+                "capabilities": {"tools": {}},
+                "server_info": {"name": "fixture"},
+                "tools": [{"name": "echo", "description": "Echo", "input_schema": {}}],
+            }
+        )
+        client = MCPClient("srv", "echo", protocol_mode=MCPProtocolMode.MODERN)
+
+        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=process)) as spawn:
+            assert await client.connect() is True
+
+        assert client.selected_era == "modern"
+        assert client.selected_protocol_version == "2026-07-28"
+        assert client.tools[0].qualified_name == "mcp__srv__echo"
+        assert process.stdin.lines[0]["protocol_mode"] == "modern"
+        assert str(spawn.call_args.args[1]).endswith("magent/mcp/bridge.py")
+
+    @pytest.mark.asyncio
+    async def test_http_profile_is_sent_over_stdin_and_redacted_publicly(self) -> None:
+        process = _FakeProcess(
+            {
+                "ok": True,
+                "event": "ready",
+                "selected_era": "modern",
+                "protocol_version": "2026-07-28",
+                "tools": [],
+            }
+        )
+        client = MCPClient(
+            "remote",
+            "",
+            transport="streamable-http",
+            url="https://example.test/mcp",
+            headers={"Authorization": "Bearer secret"},
+        )
+
+        with patch("asyncio.create_subprocess_exec", new=AsyncMock(return_value=process)) as spawn:
+            assert await client.connect() is True
+
+        assert process.stdin.lines[0]["headers"] == {"Authorization": "Bearer secret"}
+        assert "secret" not in str(client.public_status())
+        assert "secret" not in str(spawn.call_args)
+
+    def test_from_profile_and_public_status_redact_secrets(self) -> None:
+        profile = MCPServerProfile.from_config(
+            "srv",
+            {"command": "echo", "env": {"TOKEN": "secret"}},
+        )
+        client = MCPClient.from_profile(profile)
+
+        status = client.public_status()
+        assert status["transport"] == "stdio"
+        assert status["protocol_mode"] == "auto"
+        assert "secret" not in str(status)
+
+    def test_public_status_hides_sensitive_command_arguments(self) -> None:
+        client = MCPClient("db", "server", ["postgres://user:secret@localhost/db"])
+
+        assert client.public_status()["endpoint"] == "server (1 args)"
+
+    @pytest.mark.asyncio
+    async def test_bridge_stderr_redacts_explicit_credentials(self) -> None:
+        process = _FakeProcess()
+        process.stderr = _FakeReader.__new__(_FakeReader)
+        process.stderr.messages = [b"request failed with Bearer secret-token\n", b""]
+        client = MCPClient(
+            "remote",
+            "",
+            headers={"Authorization": "Bearer secret-token"},
+        )
+        client._process = process
+
+        await client._drain_stderr()
+
+        assert client._stderr_tail == ["request failed with [redacted]"]
+
+    @pytest.mark.asyncio
+    async def test_prompt_catalog_uses_ttl_then_refreshes_after_invalidation(self) -> None:
+        client = MCPClient("srv", "echo")
+        client._connected = True
+        client._request = AsyncMock(
+            side_effect=[
+                {
+                    "ok": True,
+                    "prompts": [
+                        {"name": "zeta", "description": "Z"},
+                        {"name": "alpha", "description": "A"},
+                    ],
+                    "meta": {
+                        "fetched_at": "2099-01-01T00:00:00+00:00",
+                        "ttl_ms": 60_000,
+                        "cache_scope": "private",
+                    },
+                },
+                {
+                    "ok": True,
+                    "prompts": [{"name": "alpha", "description": "Updated"}],
+                    "meta": {"ttl_ms": 0},
+                },
+            ]
+        )
+
+        assert [item.name for item in await client.list_prompts()] == ["alpha", "zeta"]
+        assert [item.name for item in await client.list_prompts()] == ["alpha", "zeta"]
+        assert client._request.await_count == 1
+
+        client.apply_catalog_event("prompts/list_changed")
+        prompts = await client.list_prompts()
+        assert prompts[0].description == "Updated"
+        assert client._request.await_args.kwargs["refresh"] is True
+
+        client.apply_catalog_event("resources/list_changed")
+        assert client.catalog_status()["resources"]["reads_stale"] is True
+
+    @pytest.mark.asyncio
+    async def test_resource_catalog_read_and_errors(self) -> None:
+        client = MCPClient("srv", "echo")
+        client._connected = True
+        client._request = AsyncMock(
+            side_effect=[
+                {
+                    "ok": True,
+                    "resources": [
+                        {"uri": "memory://b", "name": "Beta"},
+                        {"uri": "memory://a", "name": "Alpha"},
+                    ],
+                    "meta": {"ttl_ms": 0},
+                },
+                {
+                    "ok": True,
+                    "resource_templates": [
+                        {"uri_template": "memory://{name}", "name": "Item"}
+                    ],
+                    "meta": {"ttl_ms": 1000},
+                },
+                {
+                    "ok": True,
+                    "result": {
+                        "contents": [{"uri": "memory://a", "text": "content"}],
+                        "truncated": False,
+                    },
+                    "meta": {"ttl_ms": 5000, "cache_scope": "private"},
+                },
+                {"ok": False, "error": "not supported"},
+            ]
+        )
+
+        assert [item.uri for item in await client.list_resources()] == [
+            "memory://a",
+            "memory://b",
+        ]
+        assert (await client.list_resource_templates())[0].template is True
+        assert (await client.read_resource("memory://a"))["contents"][0]["text"] == "content"
+        assert await client.list_prompts() == []
+        assert client.catalog_errors["prompts"] == "not supported"
+
+    @pytest.mark.asyncio
+    async def test_get_prompt_preserves_structured_messages(self) -> None:
+        client = MCPClient("srv", "echo")
+        client._connected = True
+        client._request = AsyncMock(
+            return_value={
+                "ok": True,
+                "result": {
+                    "description": "Review",
+                    "messages": [{"role": "user", "content": {"type": "text", "text": "Hi"}}],
+                },
+            }
+        )
+
+        result = await client.get_prompt("review", {"path": "app.py"})
+        assert result["ok"] is True
+        assert result["messages"][0]["content"]["text"] == "Hi"
+
+    @pytest.mark.asyncio
+    async def test_complete_preserves_completion_metadata(self) -> None:
+        client = MCPClient("srv", "echo")
+        client._connected = True
+        client._request = AsyncMock(
+            return_value={
+                "ok": True,
+                "result": {"completion": {"values": ["app.py"], "has_more": False}},
+            }
+        )
+
+        result = await client.complete("review", {"name": "path", "value": "app"})
+
+        assert result["completion"]["values"] == ["app.py"]
+        client._request.assert_awaited_once_with(
+            "complete",
+            reference="review",
+            reference_type="prompt",
+            argument={"name": "path", "value": "app"},
+            context_arguments={},
+        )
+
+    def test_subscription_events_invalidate_catalogs_and_update_status(self) -> None:
+        client = MCPClient("srv", "echo")
+        client._set_catalog_meta("tools", {"ttl_ms": 60_000})
+        client._apply_bridge_event(
+            {
+                "event": "subscription_status",
+                "status": "active",
+                "honored": {"tools_list_changed": True},
+            }
+        )
+        client._apply_bridge_event(
+            {
+                "event": "subscription_event",
+                "payload": {"type": "tools_list_changed"},
+            }
+        )
+
+        assert client.subscription["status"] == "active"
+        assert client.subscription["events"] == 1
+        assert client.catalog_status()["tools"]["freshness"]["stale"] is True
+
+    @pytest.mark.asyncio
+    async def test_bridge_input_request_uses_explicit_host_handler(self) -> None:
+        handler = AsyncMock(return_value={"action": "accept", "content": {"choice": "yes"}})
+        client = MCPClient("srv", "echo", input_handler=handler)
+        client._process = _FakeProcess(
+            {
+                "event": "input_request",
+                "token": "input-1",
+                "kind": "elicitation",
+                "payload": {"message": "Choose", "requested_schema": {}},
+            },
+            {"ok": True, "id": 1, "result": {}},
+        )
+
+        response = await client._request("call_tool", name="choose", arguments={})
+
+        assert response["ok"] is True
+        handler.assert_awaited_once()
+        assert client._process.stdin.lines[1] == {
+            "op": "input_response",
+            "token": "input-1",
+            "result": {"action": "accept", "content": {"choice": "yes"}},
+        }
+
 
 # ─────────────────────────────────────────────
 # MCPManager
@@ -323,6 +628,23 @@ class TestMCPManager:
         assert len(servers) == 1
         assert servers[0]["name"] == "github"
         assert servers[0]["connected"] is False  # not connected yet
+        assert servers[0]["transport"] == "stdio"
+        assert servers[0]["protocol_mode"] == "auto"
+
+    @pytest.mark.asyncio
+    async def test_invalid_config_is_reported_without_crashing_other_servers(self) -> None:
+        manager = MCPManager(
+            {
+                "good": {"command": "echo"},
+                "bad": {"transport": "streamable-http"},
+            }
+        )
+        with patch("magent.mcp.client.MCPClient.connect", new=AsyncMock(return_value=False)):
+            status = await manager.start_all()
+
+        assert status == {"bad": False, "good": False}
+        rows = {row["name"]: row for row in manager.list_servers()}
+        assert "requires url" in rows["bad"]["error"]
 
     def test_connected_count_and_total_tools(self) -> None:
         tool = MCPTool("t", "", {}, "s")
@@ -334,3 +656,37 @@ class TestMCPManager:
         manager._clients = {"s": client}
         assert manager.connected_count == 1
         assert manager.total_tools == 2
+
+    @pytest.mark.asyncio
+    async def test_manager_aggregates_catalogs_and_reads_resource(self) -> None:
+        from magent.mcp.catalog import MCPPrompt, MCPResource
+
+        client = MagicMock(spec=MCPClient)
+        client.connected = True
+        client.list_prompts = AsyncMock(
+            return_value=[MCPPrompt("review", "", (), "srv")]
+        )
+        client.list_resources = AsyncMock(
+            return_value=[MCPResource("memory://project", "Project", "", "", "srv")]
+        )
+        client.list_resource_templates = AsyncMock(return_value=[])
+        client.read_resource = AsyncMock(return_value={"ok": True, "contents": []})
+        manager = MCPManager()
+        manager._clients = {"srv": client}
+
+        assert (await manager.list_prompts())[0].name == "review"
+        assert (await manager.list_resources())[0].uri == "memory://project"
+        assert (await manager.read_resource("srv", "memory://project"))["ok"] is True
+
+    @pytest.mark.asyncio
+    async def test_manager_routes_completion(self) -> None:
+        client = MagicMock(spec=MCPClient)
+        client.connected = True
+        client.complete = AsyncMock(return_value={"ok": True, "completion": {"values": []}})
+        manager = MCPManager()
+        manager._clients = {"srv": client}
+
+        result = await manager.complete("srv", "review", {"name": "path", "value": "a"})
+
+        assert result["ok"] is True
+        client.complete.assert_awaited_once()

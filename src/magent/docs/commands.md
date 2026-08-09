@@ -104,6 +104,15 @@ Important command paths:
 - `magent docs generate-reference`: generate command reference Markdown from the live CLI.
 - `magent docs generate-providers`: generate provider reference Markdown from the provider catalog.
 - `magent docs generate-config`: generate config reference Markdown from packaged defaults.
+- `magent session peers`: list reachable local sessions and their receiving policies.
+- `magent session send <target> <message>`: send authenticated local coordination text.
+- `magent session inbox <session-id> [--held]`: inspect accepted or held messages.
+- `magent session accept <session-id> <message-id>`: approve a held message for delivery.
+- `magent session refuse <session-id> <message-id>`: discard a held message.
+- `magent session policy <accept|hold|refuse>`: configure receiving policy for new sessions.
+- `magent session receipts <sender-id>`: inspect durable delivery receipts.
+- `magent session retry <sender-id>`: retry unreachable messages from a live sender outbox.
+- `magent session doctor`: validate receiving policy, owner-only storage, roster, and queues.
 - `magent data sqlite-list`: list MagAgent SQLite databases for the current user.
 - `magent data sqlite-tables --db <name>`: list tables and row counts.
 - `magent data sqlite-schema <table> --db <name>`: show a table schema.
@@ -135,6 +144,27 @@ Important command paths:
 - `magent plugin import claude <path>`: import Claude-style project instructions, agents, commands, and MCP config.
 - `magent plugin import codex-skill <path>`: import a Codex-style `SKILL.md` pack.
 - `magent plugin import gemini <path>`: import Gemini CLI-style extensions, commands, skills, and MCP config.
+
+MCP runtime inspection:
+
+- `magent mcp init`: print stdio and modern Streamable HTTP configuration examples.
+- `magent mcp list`: validate configured servers, connect supported profiles, and show
+  redacted transport, configured mode, selected protocol era/revision, and tools.
+- `magent mcp test <server>`: test one profile with an actionable configuration,
+  dependency, transport, protocol, or process error.
+- `magent mcp catalog [server] [--refresh]`: browse prompt, resource, and resource
+  template catalogs with item counts, TTLs, freshness, and redacted errors.
+- `magent mcp resource <server> <uri> [--refresh]`: explicitly read and render one
+  bounded text or binary resource.
+- `magent mcp prompt <server> <name> [--arguments JSON]`: render one server prompt,
+  clearly labeled as untrusted content.
+- `magent mcp complete <server> <reference> --name <argument> [--value <prefix>]`:
+  request prompt or resource-template argument completions.
+
+The SDK v2 bridge supports strict legacy, strict modern `2026-07-28`, and automatic
+dual-era negotiation. Stdio and Streamable HTTP are supported; deprecated HTTP+SSE
+requires an explicit compatibility opt-in. Current runtime exposure covers server
+tools, prompts, resources, templates, cache freshness, and structured content.
 - `magent browser snapshot <url>`: capture page title and visible text with Playwright.
 - `magent browser screenshot <url>`: capture a page screenshot with Playwright.
 - `magent eval init`: create a starter local eval suite.

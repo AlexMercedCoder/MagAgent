@@ -8,8 +8,10 @@ from typing import Any
 from magent.artifact_contracts import infer_expected_artifacts, verify_expected_artifacts
 from magent.config_ux import provider_matrix
 from magent.hooks import load_hooks
+from magent.mcp.profile import normalize_mcp_servers
 from magent.permission_ux import permission_status
 from magent.plugins import list_plugins
+from magent.session_messaging import messaging_diagnostics
 from magent.workbench import project_diagnostics
 
 
@@ -25,24 +27,35 @@ def deep_diagnostics(
     root = Path(project).resolve()
     base = project_diagnostics(root, store=store)
     mcp_servers = config.get("mcp", "servers", default={})
+    mcp_profiles, mcp_errors = normalize_mcp_servers(mcp_servers)
     hooks = load_hooks(root)
     plugins = list_plugins()
     permissions = permission_status(username)
     provider_rows = provider_matrix().get("providers", [])
-    provider = next((item for item in provider_rows if item.get("id") == config.default_provider), {})
+    provider: dict[str, Any] = next(
+        (item for item in provider_rows if item.get("id") == config.default_provider),
+        {},
+    )
     artifact_paths = infer_expected_artifacts(prompt, cwd=root) if prompt else []
     artifact_audit = verify_expected_artifacts(artifact_paths)
+    messaging = messaging_diagnostics(username, config)
     checks = [
         {"key": "project", "ok": all(item.get("ok", True) for item in base), "detail": base},
         {"key": "provider", "ok": bool(provider.get("ready")), "detail": provider},
         {
             "key": "mcp",
-            "ok": isinstance(mcp_servers, dict),
-            "detail": {"configured": sorted(mcp_servers) if isinstance(mcp_servers, dict) else []},
+            "ok": isinstance(mcp_servers, dict) and not mcp_errors,
+            "detail": {
+                "configured": [profile.public_summary() for profile in mcp_profiles.values()],
+                "errors": mcp_errors,
+                "runtime": "dual-era-sdk-v2-bridge",
+                "transports": ["stdio", "streamable-http", "legacy-sse"],
+            },
         },
         {"key": "hooks", "ok": True, "detail": hooks},
         {"key": "plugins", "ok": bool(plugins.get("ok", True)), "detail": plugins},
         {"key": "permissions", "ok": True, "detail": permissions},
+        {"key": "session_messaging", "ok": bool(messaging.get("ok")), "detail": messaging},
     ]
     if prompt:
         checks.append({"key": "artifact_contract", "ok": artifact_audit["ok"], "detail": artifact_audit})
@@ -59,6 +72,10 @@ def _next_actions(checks: list[dict[str, Any]]) -> list[str]:
     actions = []
     if "provider" in failed:
         actions.append("magent provider wizard")
+    if "mcp" in failed:
+        actions.append("magent mcp list --verbose")
     if "artifact_contract" in failed:
         actions.append("Retry with explicit filenames and inspect the artifact verification note.")
+    if "session_messaging" in failed:
+        actions.append("magent session doctor")
     return actions or ["No critical local diagnostics failed."]

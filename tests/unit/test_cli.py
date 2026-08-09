@@ -61,6 +61,12 @@ def test_cli_docs_doctor() -> None:
     assert payload["missing_commands"] == []
 
 
+def test_mcp_catalog_command_help() -> None:
+    for command in ("catalog", "resource", "prompt"):
+        result = runner.invoke(cli_main.app, ["mcp", command, "--help"])
+        assert result.exit_code == 0
+
+
 def test_cli_cache_commands_and_compose_slash(monkeypatch) -> None:
     doctor = runner.invoke(cli_main.app, ["cache", "doctor", "--provider", "openai", "--model", "gpt-5", "--json"])
     assert doctor.exit_code == 0
@@ -93,6 +99,50 @@ def test_cli_cache_commands_and_compose_slash(monkeypatch) -> None:
         loop.close()
     assert handled is True
     assert calls == ["line 1\nline 2"]
+
+
+def test_interactive_session_messaging_slash_commands() -> None:
+    import asyncio
+
+    sent = []
+
+    class FakeMessaging:
+        name = "demo-session"
+        policy = "accept"
+
+        def peers(self):
+            return []
+
+        def send(self, target, message):
+            sent.append((target, message))
+            return {
+                "ok": True,
+                "status": "delivered",
+                "target_id": target,
+                "message_id": "m1",
+            }
+
+    class FakeSession:
+        messaging = FakeMessaging()
+        session_id = "session-123"
+        project_slug = "demo"
+
+        def _ensure_messaging_started(self):
+            pass
+
+    loop = asyncio.new_event_loop()
+    try:
+        assert cli_main._handle_slash_command("/session", FakeSession(), None, None, loop) is True
+        assert cli_main._handle_slash_command("/peers", FakeSession(), None, None, loop) is True
+        assert (
+            cli_main._handle_slash_command(
+                "/send reviewer please check", FakeSession(), None, None, loop
+            )
+            is True
+        )
+    finally:
+        loop.close()
+    assert sent == [("reviewer", "please check")]
 
 
 async def _drain(stream):
