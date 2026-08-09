@@ -39,7 +39,7 @@ dependencies = [
     # LLM providers
     "litellm>=1.40.0",
     # Memory graph
-    "maggraph>=0.4.0",
+    "maggraph>=0.4.1",
     # Config
     "tomli>=2.0.0; python_version < '3.11'",
     "tomli-w>=1.0.0",

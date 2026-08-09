@@ -3,7 +3,7 @@
 > Canonical direction for MagAgent, MagGraph, and Mag Command Center.
 >
 > Last audited: 2026-08-09
-> Current releases: MagAgent 0.34.0, MagGraph 0.4.0, Mag Command Center 0.2.0
+> Current releases: MagAgent 0.34.0, MagGraph 0.4.1, Mag Command Center 0.2.0
 
 ## Purpose
 
@@ -701,7 +701,7 @@ maintainer-run evals without adding product telemetry.
 
 1. **MagAgent 0.33.0 (released):** test isolation, coverage repair, SQLite cleanup,
    tool modularization, dual-era MCP, and authenticated local session coordination.
-2. **MagGraph 0.4.0 (release prepared):** API contract tests, scale benchmarks,
+2. **MagGraph 0.4.1 (release prepared):** API contract tests, scale benchmarks,
    crash-safe atomic updates, hybrid retrieval, temporal/provenance fields, and reviewed batches.
 3. **MagAgent 0.34.0 (release prepared):** versioned task/event protocol, durable lifecycle, cancellation,
    artifact contracts, and unified execution surfaces.
