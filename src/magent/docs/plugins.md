@@ -44,7 +44,7 @@ my-pack/
 name = "my-pack"
 version = "1.0.0"
 api_version = "1"
-magent = ">=0.33.0"
+magent = ">=0.34.0"
 description = "Project workflow helpers"
 source_url = "https://example.com/my-pack"
 compatibility = ["magent", "mcp"]

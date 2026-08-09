@@ -567,7 +567,7 @@ def _write_manifest(path: Path, metadata: dict[str, Any]) -> None:
     normalized = {
         "api_version": "1",
         "version": "0.1.0",
-        "magent": ">=0.33.0",
+        "magent": ">=0.34.0",
         **metadata,
     }
     with (path / "magent-plugin.toml").open("wb") as f:

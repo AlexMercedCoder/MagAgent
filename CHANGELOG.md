@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.34.0
+
+- Added a unified durable task runtime for interactive, one-shot, goal, daemon, gateway, and desktop execution with versioned task and event contracts.
+- Added cancellation, parent/child work, artifact tracking, checkpoint-aware recovery, and preattached desktop task execution.
+- Integrated MagGraph 0.4 hybrid retrieval, global/project recall, backlink explanations, provenance, and crash-safe reviewed memory batches.
+- Added `magent system ecosystem-report` for deterministic local contract, documentation, graph, provider-catalog, and desktop readiness evidence with external gates reported separately.
+- Expanded MCP compatibility, session coordination, plugin, provider, and desktop machine contracts while keeping terminal and JSON/JSONL behavior aligned.
+- Updated the roadmap, architecture, testing, memory, configuration, desktop integration, command, and built-in documentation for the coordinated ecosystem release.
+
 ## 0.33.0
 
 - Added dual-era MCP SDK v2 support for classic protocol revisions through `2025-11-25` and modern `2026-07-28` servers over stdio and Streamable HTTP.

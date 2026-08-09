@@ -158,7 +158,7 @@ def platform_contracts() -> dict[str, Any]:
             "provider_support": {"version": "magent.provider-support.v1", "status": "beta"},
             "ecosystem_readiness": {"version": "mag.ecosystem-readiness.v1", "status": "beta"},
             "config_schema": {"version": "1", "status": "beta"},
-            "memory_batch": {"version": "1", "status": "beta", "requires": "maggraph>=0.3.0"},
+            "memory_batch": {"version": "1", "status": "beta", "requires": "maggraph>=0.4.0"},
             "mcp": {
                 "status": "dual-era-core",
                 "legacy_through": "2025-11-25",
