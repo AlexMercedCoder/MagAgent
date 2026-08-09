@@ -83,6 +83,7 @@ Important command paths:
 - `magent provider tool-smoke <provider>`: run a tiny live `write_file` smoke test.
 - `magent provider tool-smoke <provider> --timeout 60`: cap live smoke runtime.
 - `magent provider smoke-all`: run tiny tool-use smokes for configured ready providers.
+- `magent provider support-report [-o provider-support.json]`: generate the credential-free provider compatibility artifact used by release reviews.
 - `magent provider doctor`: show provider and configuration readiness.
 - `magent provider cooldowns`: show providers temporarily paused after rate-limit errors.
 - `magent provider clear-cooldown <provider>`: clear a saved provider cooldown.
@@ -102,6 +103,8 @@ Important command paths:
 - `magent auth add <provider>`: store a provider API key in the OS keyring when available.
 - `magent auth remove <provider>`: remove a provider key from the OS keyring.
 - `magent system info`: return machine-readable install, path, platform, and user info.
+- `magent system contracts`: return versioned platform contracts, compatibility levels, and support policy.
+- Checkpoint list, diff, session-list, and session-diff commands accept `--json` for desktop and automation clients.
 - `magent docs list`: list built-in documentation topics.
 - `magent docs show <topic>`: render a built-in documentation topic.
 - `magent docs search <query>`: search packaged docs.
@@ -143,6 +146,11 @@ Important command paths:
 - `magent plugin enable <name>`: enable an installed pack.
 - `magent plugin disable <name>`: disable an installed pack.
 - `magent plugin metadata <path>`: normalize plugin metadata from native or foreign manifests.
+- `magent plugin validate <path> [--compatibility]`: run SDK v1 manifest, contribution, and permission checks.
+- `magent plugin verify <path>`: verify deterministic content integrity.
+- `magent plugin grant <name> --scope project|user --permissions <csv>`: record reviewed grants.
+- `magent plugin schema [-o file]`: emit the plugin manifest JSON Schema.
+- `magent plugin registry-index <paths...> [-o file]`: generate registry metadata without installing packs.
 - `magent plugin mcp import <file-or-dir>`: import MCP server configs as a plugin pack.
 - `magent plugin mcp apply <name>`: apply an installed plugin's MCP servers into `config.toml`.
 - `magent plugin import opencode <path>`: import OpenCode-style agents, commands, and MCP config.

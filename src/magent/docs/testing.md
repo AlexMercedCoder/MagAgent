@@ -26,7 +26,7 @@ database connections are closed after every test, while production processes reg
 the same cleanup for shutdown. Semantic-memory SQLite operations use short-lived,
 transactional connections that always release their file handles.
 
-The current baseline is 411 passing tests and 64.61% branch coverage. The configured
+The current baseline is 432 passing tests. The configured
 63% floor is a regression gate, not the end target; new extracted runtime modules
 should aim for at least 85% behavioral coverage.
 
@@ -55,6 +55,10 @@ YOLO-style approval is acceptable.
 Use `magent provider test-matrix` to verify lightweight provider pings, then
 `magent provider tool-smoke` for the more realistic check that a configured
 provider can perform a minimal tool call and create `smoke.txt`.
+Generate the static release artifact with `magent provider support-report -o
+provider-support.json`. It records provider IDs, adapters, credential variable names,
+and conformance state, never credential values. Full-support release qualification
+still requires maintainer-run completion and tool-use checks for that release.
 Use `magent provider models <provider> --refresh` when a provider changes model
 IDs, and `magent model health` to review recent smoke outcomes.
 

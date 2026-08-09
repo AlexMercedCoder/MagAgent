@@ -182,6 +182,14 @@ def system_info_cmd(json_output: bool = typer.Option(True, "--json/--no-json")):
     console.print(table)
 
 
+@system_app.command("contracts")
+def system_contracts_cmd() -> None:
+    """Return versioned machine APIs and compatibility policy."""
+    from magent.desktop_api import platform_contracts
+
+    console.print_json(data=platform_contracts())
+
+
 @cache_app.command("doctor")
 def cache_doctor_cmd(
     provider: str | None = typer.Option(None, "--provider", "-p"),
@@ -3350,12 +3358,19 @@ def ui_cmd(
 
 
 @checkpoint_app.command("list")
-def checkpoint_list_cmd(limit: int = typer.Option(20, "--limit", "-n")):
+def checkpoint_list_cmd(
+    limit: int = typer.Option(20, "--limit", "-n"),
+    json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+):
     """List recent file checkpoints."""
     from magent.workbench import list_checkpoints
 
+    items = list_checkpoints(_store(), limit=limit)
+    if json_output:
+        console.print_json(data={"ok": True, "checkpoints": items, "count": len(items)})
+        return
     table = Table("ID", "Operation", "Status", "Path")
-    for item in list_checkpoints(_store(), limit=limit):
+    for item in items:
         table.add_row(
             item.get("id", ""),
             item.get("operation", ""),
@@ -3378,7 +3393,10 @@ def checkpoint_show_cmd(checkpoint_id: str = typer.Argument(...)):
 
 
 @checkpoint_app.command("diff")
-def checkpoint_diff_cmd(checkpoint_id: str = typer.Argument(...)):
+def checkpoint_diff_cmd(
+    checkpoint_id: str = typer.Argument(...),
+    json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+):
     """Show a diff from checkpoint contents to current file contents."""
     from magent.workbench import checkpoint_diff
 
@@ -3386,6 +3404,9 @@ def checkpoint_diff_cmd(checkpoint_id: str = typer.Argument(...)):
     if not result.get("ok"):
         console.print_json(data=result)
         raise typer.Exit(1)
+    if json_output:
+        console.print_json(data=result)
+        return
     console.print(result.get("diff") or "[dim]No diff.[/dim]")
 
 
@@ -3417,12 +3438,18 @@ def checkpoint_restore_last_cmd(yes: bool = typer.Option(False, "--yes", "-y")):
 
 
 @checkpoint_app.command("session-list")
-def checkpoint_session_list_cmd():
+def checkpoint_session_list_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+):
     """List checkpoint sessions."""
     from magent.workbench import checkpoint_sessions
 
+    items = checkpoint_sessions(_store())
+    if json_output:
+        console.print_json(data={"ok": True, "sessions": items, "count": len(items)})
+        return
     table = Table("Session", "Count", "Last", "Paths")
-    for item in checkpoint_sessions(_store()):
+    for item in items:
         table.add_row(
             item.get("session_id", ""),
             str(item.get("count", 0)),
@@ -3433,11 +3460,17 @@ def checkpoint_session_list_cmd():
 
 
 @checkpoint_app.command("session-diff")
-def checkpoint_session_diff_cmd(session_id: str = typer.Argument(...)):
+def checkpoint_session_diff_cmd(
+    session_id: str = typer.Argument(...),
+    json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
+):
     """Show combined diffs for a checkpoint session."""
     from magent.workbench import checkpoint_session_diff
 
     result = checkpoint_session_diff(_store(), session_id)
+    if json_output:
+        console.print_json(data=result)
+        return
     console.print(result.get("diff") or "[dim]No diff.[/dim]")
 
 

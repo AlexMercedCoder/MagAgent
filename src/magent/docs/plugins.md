@@ -9,6 +9,11 @@ Plugins are installable local extension packs for MagAgent.
 - `magent plugin enable my-pack`
 - `magent plugin disable my-pack`
 - `magent plugin metadata ./my-pack`
+- `magent plugin validate ./my-pack`
+- `magent plugin verify ./my-pack`
+- `magent plugin grant my-pack --scope project --project . --permissions files,web`
+- `magent plugin schema --output magent-plugin-v1.json`
+- `magent plugin registry-index ./pack-one ./pack-two --output registry.json`
 - `magent plugin mcp import ./mcp.toml --name filesystem`
 - `magent plugin mcp apply filesystem`
 - `magent plugin import opencode ./opencode-pack`
@@ -38,13 +43,38 @@ my-pack/
 [plugin]
 name = "my-pack"
 version = "1.0.0"
+api_version = "1"
+magent = ">=0.33.0"
 description = "Project workflow helpers"
 source_url = "https://example.com/my-pack"
 compatibility = ["magent", "mcp"]
 capabilities = ["agents", "recipes", "mcp"]
 permissions = ["external_process"]
 trust = "local"
+maintainers = ["your-github-handle"]
 ```
+
+## Plugin SDK v1
+
+`magent-plugin.toml` is the stable authoring surface for SDK v1. `plugin validate`
+checks required fields, known capabilities and permissions, contribution layouts,
+MCP and hook TOML, file-size limits, symbolic links, and whether declared permissions
+cover the pack's inferred behavior. Compatibility mode warns for omissions in older
+packs; newly installed native packs must pass strict validation.
+
+MagAgent calculates one deterministic SHA-256 digest over contribution paths and
+contents. Installed/imported packs record that checksum in the manifest. `plugin
+verify` detects edits before a pack is enabled. A signature is metadata only until a
+trusted signing-root implementation lands; MagAgent never labels an unsigned local
+pack as cryptographically verified.
+
+Plugin instructions do not grant authority. `plugin grant` records reviewed
+permissions at user or canonical project scope. Built-in tool permissions and MCP
+approval policies still apply at execution time. Registry indexes contain source,
+compatibility, capability, permission, trust, and digest metadata; they do not install
+or execute remote code.
+
+The complete reference pack is in `examples/plugin-sdk/review-pack`.
 
 ## Compatibility Imports
 

@@ -2,6 +2,10 @@
 
 MagAgent is a terminal-native coding and productivity agent with local-first memory.
 
+Machine clients should inspect `magent system contracts` and the built-in
+`support-policy` documentation before using versioned task, event, plugin,
+configuration, memory, or MCP surfaces.
+
 Core ideas:
 
 - `magent ask "..."` runs a one-shot task.

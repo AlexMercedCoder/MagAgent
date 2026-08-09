@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -60,6 +62,23 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
         from magent.config_ux import provider_catalog_doctor
 
         result = provider_catalog_doctor()
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @provider_app.command("support-report")
+    def provider_support_report_cmd(
+        output: str | None = typer.Option(None, "--output", "-o", help="Write the JSON report to this path."),
+    ) -> None:
+        """Generate the credential-free provider compatibility report."""
+        from magent.provider_catalog import provider_support_report
+
+        result = provider_support_report()
+        if output:
+            target = Path(output).expanduser()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+            result = {**result, "saved_to": str(target)}
         console.print_json(data=result)
         if not result.get("ok"):
             raise typer.Exit(1)

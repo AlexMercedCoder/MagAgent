@@ -47,7 +47,10 @@ def list_plugins() -> dict[str, Any]:
     state = _state()
     for path in sorted(PLUGIN_DIR.glob("*")) if PLUGIN_DIR.exists() else []:
         if path.is_dir():
+            from magent.plugin_sdk import verify_plugin
+
             manifest = normalize_plugin_metadata(path)
+            verification = verify_plugin(path)
             plugins.append(
                 {
                     "name": manifest.get("name", path.name),
@@ -56,6 +59,10 @@ def list_plugins() -> dict[str, Any]:
                     "path": str(path),
                     "packs": _pack_paths(path),
                     "metadata": manifest,
+                    "integrity": verification.get("integrity", "unrecorded"),
+                    "valid": verification.get("ok", False),
+                    "digest": verification.get("digest", ""),
+                    "grants": state.get(path.name, {}).get("grants", {}),
                 }
             )
     return {"ok": True, "plugins": plugins}
@@ -81,6 +88,12 @@ def install_plugin(source: str | Path, *, name: str = "", force: bool = False) -
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(src, target)
     _write_manifest(target, {**manifest, "name": plugin_name})
+    from magent.plugin_sdk import validate_plugin
+
+    validation = validate_plugin(target, strict=True)
+    if not validation["ok"]:
+        shutil.rmtree(target)
+        return {"ok": False, "error": "Plugin conformance failed", "validation": validation}
     return {
         "ok": True,
         "plugin": plugin_name,
@@ -89,6 +102,7 @@ def install_plugin(source: str | Path, *, name: str = "", force: bool = False) -
         "path": str(target),
         "packs": _pack_paths(target),
         "metadata": normalize_plugin_metadata(target),
+        "validation": validation,
     }
 
 
@@ -99,10 +113,52 @@ def set_plugin_enabled(name: str, enabled: bool) -> dict[str, Any]:
     exists = target_result["path"].exists()
     if not exists:
         return {"ok": False, "plugin": name, "name": name, "enabled": enabled, "error": f"Plugin not installed: {name}"}
+    if enabled:
+        from magent.plugin_sdk import verify_plugin
+
+        verification = verify_plugin(target_result["path"])
+        if not verification["ok"]:
+            return {
+                "ok": False,
+                "plugin": name,
+                "name": name,
+                "enabled": False,
+                "error": "Plugin integrity or conformance check failed",
+                "verification": verification,
+            }
     state = _state()
     state.setdefault(name, {})["enabled"] = enabled
     _write_state(state)
     return {"ok": True, "plugin": name, "name": name, "enabled": enabled}
+
+
+def set_plugin_grant(
+    name: str,
+    *,
+    scope: str,
+    permissions: list[str],
+    project: str = "",
+) -> dict[str, Any]:
+    """Record reviewed capability grants without treating instructions as authority."""
+    from magent.plugin_sdk import KNOWN_PERMISSIONS
+
+    target_result = _plugin_target(name)
+    if not target_result["ok"] or not target_result["path"].exists():
+        return {"ok": False, "error": f"Plugin not installed: {name}"}
+    if scope not in {"user", "project"}:
+        return {"ok": False, "error": "scope must be user or project"}
+    requested = sorted(set(str(item) for item in permissions))
+    unknown = sorted(set(requested) - KNOWN_PERMISSIONS)
+    if unknown:
+        return {"ok": False, "error": f"Unknown permissions: {', '.join(unknown)}"}
+    scope_key = "user" if scope == "user" else str(Path(project).expanduser().resolve())
+    if scope == "project" and not project:
+        return {"ok": False, "error": "project scope requires --project"}
+    state = _state()
+    plugin_state = state.setdefault(name, {})
+    plugin_state.setdefault("grants", {})[scope_key] = requested
+    _write_state(state)
+    return {"ok": True, "plugin": name, "scope": scope, "scope_key": scope_key, "permissions": requested}
 
 
 def enabled_plugin_paths() -> list[Path]:
@@ -161,6 +217,7 @@ def import_mcp_plugin(
         },
     )
     _write_mcp_servers(target / "mcp.toml", servers)
+    _write_manifest(target, normalize_plugin_metadata(target))
     result: dict[str, Any] = {
         "ok": True,
         "plugin": plugin_name,
@@ -507,8 +564,19 @@ def _write_manifest(path: Path, metadata: dict[str, Any]) -> None:
     import tomli_w
 
     path.mkdir(parents=True, exist_ok=True)
+    normalized = {
+        "api_version": "1",
+        "version": "0.1.0",
+        "magent": ">=0.33.0",
+        **metadata,
+    }
     with (path / "magent-plugin.toml").open("wb") as f:
-        tomli_w.dump({"plugin": metadata}, f)
+        tomli_w.dump({"plugin": normalized}, f)
+    from magent.plugin_sdk import plugin_digest
+
+    normalized["checksum"] = plugin_digest(path)
+    with (path / "magent-plugin.toml").open("wb") as f:
+        tomli_w.dump({"plugin": normalized}, f)
 
 
 def _write_mcp_servers(path: Path, servers: dict[str, Any]) -> None:
@@ -522,7 +590,7 @@ def _write_mcp_servers(path: Path, servers: dict[str, Any]) -> None:
 def _infer_permissions(path: Path) -> list[str]:
     permissions = []
     if (path / "mcp.toml").exists() or _mcp_servers_from_source(path):
-        permissions.append("external_process")
+        permissions.extend(["external_process", "network"])
     if (path / "tools").exists():
         permissions.append("tools")
     return sorted(set(permissions))

@@ -1,0 +1,41 @@
+# Platform Support and Deprecation Policy
+
+MagAgent's machine contracts are available through `magent system contracts`. The
+command is the source of truth for Command Center and third-party clients.
+
+## Supported runtime
+
+- Python 3.11 through 3.14 are tested release targets.
+- MagGraph 0.3.x is the current memory API family.
+- Task snapshots use `magent.task.v1`; task events use `magent.task-event.v1`.
+- Plugin manifests use SDK API version `1`.
+- Provider compatibility reports use `magent.provider-support.v1`.
+- Core MCP support is dual-era through legacy `2025-11-25` and modern `2026-07-28`.
+
+## Compatibility levels
+
+- **stable**: additive fields may appear, consumers must tolerate unknown fields,
+  and removals require at least one prior minor release with a deprecation notice.
+- **beta**: behavior is tested and documented, but incompatible changes may occur in
+  a minor release before 1.0 with migration notes.
+- **experimental**: disabled or explicitly opt-in and not a supported release claim.
+
+Task and event state names or required identity fields will not change within v1.
+Renderers must ignore unknown event types and detail keys. Plugin manifests reject an
+unknown API version rather than guessing compatibility.
+
+Offline provider catalog validation and live completion/tool-use validation are
+separate results. This prevents a missing credential, exhausted quota, or temporary
+network failure from being misreported as an adapter contract defect.
+
+## Deprecations
+
+Deprecations are documented in release notes, command help, and the generated support
+matrix. A stable contract receives at least one minor release of notice. Security or
+data-loss fixes may disable unsafe behavior immediately, with an explicit migration
+path whenever one exists.
+
+Classic MCP stdio and Streamable HTTP remain supported while the ecosystem migrates.
+Deprecated HTTP+SSE is opt-in only. Experimental MCP Tasks, remote Skills, and Apps
+rendering are not advertised as supported until their upstream schemas, SDK adapters,
+and conformance fixtures pass the roadmap acceptance gates.

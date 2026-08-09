@@ -1,0 +1,12 @@
+[plugin]
+name = "review-pack"
+version = "1.0.0"
+api_version = "1"
+magent = ">=0.33.0"
+description = "Reference plugin SDK pack with a review subagent and skill."
+source_url = "https://github.com/AlexMercedCoder/MagAgent"
+capabilities = ["agents", "skills"]
+permissions = []
+compatibility = ["magent"]
+trust = "reviewed"
+maintainers = ["AlexMercedCoder"]

@@ -141,6 +141,38 @@ def system_info() -> dict[str, Any]:
     }
 
 
+def platform_contracts() -> dict[str, Any]:
+    """Return stable machine interfaces and their compatibility status."""
+    from magent.task_runtime import EVENT_SCHEMA_VERSION, TASK_SCHEMA_VERSION
+
+    return {
+        "ok": True,
+        "schema": "magent.platform-contracts.v1",
+        "magent_version": __version__,
+        "contracts": {
+            "desktop_cli": {"version": "1", "status": "beta", "transport": "json/jsonl"},
+            "task": {"version": TASK_SCHEMA_VERSION, "status": "stable"},
+            "task_event": {"version": EVENT_SCHEMA_VERSION, "status": "stable"},
+            "plugin_manifest": {"version": "1", "status": "stable"},
+            "plugin_registry": {"version": "magent.plugin-registry.v1", "status": "beta"},
+            "provider_support": {"version": "magent.provider-support.v1", "status": "beta"},
+            "config_schema": {"version": "1", "status": "beta"},
+            "memory_batch": {"version": "1", "status": "beta", "requires": "maggraph>=0.3.0"},
+            "mcp": {
+                "status": "dual-era-core",
+                "legacy_through": "2025-11-25",
+                "modern": "2026-07-28",
+                "experimental": ["tasks", "remote-skills", "apps-rendering"],
+            },
+        },
+        "support": {
+            "python": ["3.11", "3.12", "3.13", "3.14"],
+            "deprecation_notice_minor_releases": 1,
+            "breaking_changes_before_1_0": "minor-version only with migration notes",
+        },
+    }
+
+
 def config_get(username: str | None = None, *, include_raw: bool = False) -> dict[str, Any]:
     """Return global, user, and merged config without exposing secrets."""
     username = username or get_current_user() or "default"

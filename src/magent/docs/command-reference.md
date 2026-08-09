@@ -346,6 +346,7 @@ Generated from the active Typer command tree.
 
 - `magent plugin disable`
 - `magent plugin enable`
+- `magent plugin grant`
 - `magent plugin import`
 - `magent plugin import claude`
 - `magent plugin import codex-skill`
@@ -357,6 +358,10 @@ Generated from the active Typer command tree.
 - `magent plugin mcp apply`
 - `magent plugin mcp import`
 - `magent plugin metadata`
+- `magent plugin registry-index`
+- `magent plugin schema`
+- `magent plugin validate`
+- `magent plugin verify`
 
 ## policy
 
@@ -397,6 +402,7 @@ Generated from the active Typer command tree.
 - `magent provider recommend-model`
 - `magent provider set`
 - `magent provider smoke-all`
+- `magent provider support-report`
 - `magent provider test`
 - `magent provider test-matrix`
 - `magent provider tool-smoke`
@@ -450,6 +456,7 @@ Generated from the active Typer command tree.
 
 ## system
 
+- `magent system contracts`
 - `magent system info`
 
 ## task

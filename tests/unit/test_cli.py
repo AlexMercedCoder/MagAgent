@@ -1116,3 +1116,27 @@ def test_cli_memory_quality(monkeypatch) -> None:
     assert json.loads(preview.output)["source"] == "b"
     assert unsuppress.exit_code == 0
     assert json.loads(unsuppress.output)["id"] == "a"
+
+
+def test_checkpoint_commands_offer_machine_readable_output(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    store = WorkbenchStore("checkpoint-cli")
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    target = tmp_path / "example.txt"
+    target.write_text("before\n", encoding="utf-8")
+    checkpoint = workbench.create_checkpoint("checkpoint-cli", tmp_path, target, "edit_file", session_id="session-1")
+    target.write_text("after\n", encoding="utf-8")
+
+    listed = runner.invoke(cli_main.app, ["checkpoint", "list", "--json"])
+    diffed = runner.invoke(cli_main.app, ["checkpoint", "diff", checkpoint["id"], "--json"])
+    sessions = runner.invoke(cli_main.app, ["checkpoint", "session-list", "--json"])
+    session_diff = runner.invoke(cli_main.app, ["checkpoint", "session-diff", "session-1", "--json"])
+
+    assert listed.exit_code == 0
+    assert json.loads(listed.output)["checkpoints"][0]["id"] == checkpoint["id"]
+    assert diffed.exit_code == 0
+    assert "after" in json.loads(diffed.output)["diff"]
+    assert sessions.exit_code == 0
+    assert json.loads(sessions.output)["sessions"][0]["session_id"] == "session-1"
+    assert session_diff.exit_code == 0
+    assert "after" in json.loads(session_diff.output)["diff"]

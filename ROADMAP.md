@@ -328,14 +328,16 @@ Command Center memory studio and learned ranking from accumulated feedback remai
 **Goal:** Move Mag Command Center from a capable cockpit to the easiest way for most
 people to use MagAgent across several projects.
 
-**Progress (2026-08-09):** The first daily-driver unit is implemented on the desktop
-feature branch. Chat uses durable task tabs and remains event-driven during long
-commands; native cancellation and reconnectable task history are available; projects,
-sessions, chat history, command history, setup preferences, and saved queries persist
-in native SQLite; and the memory studio exposes hybrid-retrieval evidence plus reviewed
-transactional batches. Component tests now cover these workflows. Rich artifact
-previews, notifications, updater signing, accessibility E2E, and four-task performance
-validation remain.
+**Progress (2026-08-09):** The locally implementable daily-driver runtime is complete
+on the desktop feature branch. Chat uses durable task tabs and remains interactive
+during concurrent project work; native cancellation, restart recovery, notifications,
+rich path-safe artifact previews, native SQLite state, hybrid-memory evidence, reviewed
+memory batches, selective checkpoint compare/restore, and policy-governed local session
+messaging are available. Redacted diagnostics include local-only performance budgets,
+and component/contract/axe tests cover critical workflows. Signed updater delivery,
+manual three-OS WCAG review, and hardware-scale 4-task/100K-node acceptance runs remain
+release gates because they require signing credentials, packaged OS builds, and the
+maintainer benchmark environment.
 
 ### Core experience
 
@@ -400,6 +402,22 @@ release 1.0 only when quality is demonstrated by data.
   OpenCode agents/commands, Gemini extensions where practical, and standard MCP
   server configurations.
 - Add a plugin conformance kit and sample packs that exercise every supported surface.
+
+**Progress (2026-08-09):** Plugin SDK v1 now defines a machine-readable manifest
+schema, deterministic content digests, strict/compatibility conformance reports,
+permission inference, project/user grant records, registry index generation, tamper
+checks before enablement, and a reference agent/skill pack. Registry hosting,
+cryptographic signing roots, security-scan infrastructure, and least-privilege runtime
+enforcement for executable third-party tool modules remain delivery work.
+
+**Progress (2026-08-09, contracts):** `magent system contracts` publishes task, event,
+plugin, memory, provider-report, and dual-era MCP compatibility levels plus Python and
+deprecation support windows. `magent provider support-report` generates a secret-free
+release artifact and keeps offline catalog, live completion, and live tool-use status
+separate. Checkpoint JSON contracts and a reference plugin pack/conformance suite are
+consumed by Command Center. Hosted registry operations, trusted signing roots,
+automated third-party security scanning, and real-provider qualification remain
+operational release gates rather than local code TODOs.
 
 ### Dual-era MCP and portable skills
 
@@ -620,6 +638,10 @@ Research basis: Anthropic's official
 - Provide redacted task exports and reproducible eval bundles for teams that cannot
   share source code.
 
+This section is intentionally deferred. Cross-machine sync is not required for the
+local-first roadmap to be code-complete and must not begin until signing, recovery,
+permission, and stable-contract acceptance gates above are met.
+
 ### 1.0 gates
 
 - A maintained eval suite covers coding, research, artifacts, memory, permissions,
@@ -679,14 +701,16 @@ maintainer-run evals without adding product telemetry.
 
 1. **MagAgent 0.33.0 (complete):** test isolation, coverage repair, SQLite cleanup,
    tool modularization, dual-era MCP, and authenticated local session coordination.
-2. **MagGraph 0.3.x (next):** current planning refresh, API contract tests, realistic index
-   benchmarks, crash consistency, and the first hybrid retrieval interfaces.
-3. **MagAgent 0.34.x:** versioned task/event protocol, durable lifecycle, cancellation,
+2. **MagGraph 0.3.x (development complete):** API contract tests, scale benchmarks,
+   crash-safe atomic updates, hybrid retrieval, temporal/provenance fields, and reviewed batches.
+3. **MagAgent 0.34.x (development complete):** versioned task/event protocol, durable lifecycle, cancellation,
    artifact contracts, and unified execution surfaces.
-4. **Mag Command Center 0.2.x:** typed client, state/controller extraction, persistent
-   desktop state, event-native chat, cancellation, and critical-path E2E coverage.
-5. **Ecosystem beta milestone:** publish the first cross-project eval report and freeze
-   candidate 1.0 contracts for feedback.
+4. **Mag Command Center 0.2.x (development complete):** typed client, controller extraction,
+   persistent native state, event-native concurrent chat, cancellation, recovery,
+   checkpoint/session workbench, artifact previews, diagnostics, and accessibility checks.
+5. **Ecosystem beta milestone (release operations next):** run real-provider and packaged
+   three-OS acceptance matrices, configure signing, publish the first cross-project eval
+   report, and freeze candidate 1.0 contracts for feedback.
 
 This order deliberately builds confidence first, then shared execution, then memory
 quality, then desktop polish. It turns the breadth already present in Mag into a

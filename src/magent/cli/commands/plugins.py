@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import typer
 from rich.console import Console
 
@@ -61,6 +63,77 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
         from magent.plugins import normalize_plugin_metadata
 
         console.print_json(data=normalize_plugin_metadata(path))
+
+    @plugin_app.command("validate")
+    def plugin_validate_cmd(
+        path: str = typer.Argument(...),
+        compatibility: bool = typer.Option(False, "--compatibility", help="Warn instead of failing for legacy manifest omissions."),
+    ) -> None:
+        """Run the plugin SDK manifest, permission, and contribution checks."""
+        from magent.plugin_sdk import validate_plugin
+
+        result = validate_plugin(path, strict=not compatibility)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @plugin_app.command("verify")
+    def plugin_verify_cmd(path: str = typer.Argument(...)) -> None:
+        """Verify a plugin's deterministic content checksum and conformance."""
+        from magent.plugin_sdk import verify_plugin
+
+        result = verify_plugin(path)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @plugin_app.command("grant")
+    def plugin_grant_cmd(
+        name: str = typer.Argument(...),
+        permissions: str = typer.Option(..., "--permissions", help="Comma-separated reviewed permissions."),
+        scope: str = typer.Option("project", "--scope", help="project or user"),
+        project: str = typer.Option(".", "--project", "-p"),
+    ) -> None:
+        """Grant reviewed plugin permissions at project or user scope."""
+        from magent.plugins import set_plugin_grant
+
+        result = set_plugin_grant(
+            name,
+            scope=scope,
+            permissions=[item.strip() for item in permissions.split(",") if item.strip()],
+            project=project,
+        )
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @plugin_app.command("schema")
+    def plugin_schema_cmd(output: str = typer.Option("", "--output", "-o")) -> None:
+        """Print or write the versioned MagAgent plugin manifest schema."""
+        from magent.plugin_sdk import MANIFEST_SCHEMA, write_schema
+
+        if output:
+            target = write_schema(output)
+            console.print_json(data={"ok": True, "path": str(target), "schema": MANIFEST_SCHEMA["$id"]})
+            return
+        console.print_json(data=MANIFEST_SCHEMA)
+
+    @plugin_app.command("registry-index")
+    def plugin_registry_index_cmd(
+        paths: list[str], output: str = typer.Option("", "--output", "-o")
+    ) -> None:
+        """Build deterministic registry metadata from local reviewed plugin packs."""
+        from magent.plugin_sdk import build_registry_index
+
+        result = build_registry_index(paths)
+        if output:
+            from pathlib import Path
+
+            target = Path(output)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+            result = {**result, "output": str(target)}
+        console.print_json(data=result)
 
     @mcp_app.command("import")
     def plugin_mcp_import_cmd(

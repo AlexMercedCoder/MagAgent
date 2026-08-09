@@ -289,3 +289,34 @@ def validate_provider_catalog() -> dict[str, Any]:
     for provider_id in extra:
         issues.append({"provider": provider_id, "field": "order", "error": "provider missing from PROVIDER_ORDER"})
     return {"ok": not issues, "providers": len(PROVIDER_ORDER), "issues": issues}
+
+
+def provider_support_report() -> dict[str, Any]:
+    """Return a credential-free provider contract report for docs and release gates."""
+    validation = validate_provider_catalog()
+    providers = []
+    for provider_id in PROVIDER_ORDER:
+        metadata = PROVIDER_CATALOG[provider_id]
+        providers.append(
+            {
+                "id": provider_id,
+                "display": metadata["display"],
+                "default_model": metadata["default_model"],
+                "access_mode": metadata["access_mode"],
+                "adapter": metadata["litellm"],
+                "local": bool(metadata.get("local")),
+                "credential_env": metadata.get("env", ""),
+                "credential_aliases": list(provider_env_aliases(provider_id)),
+                "catalog_conformance": "passed" if not any(issue["provider"] == provider_id for issue in validation["issues"]) else "failed",
+                "live_conformance": "not-run",
+            }
+        )
+    return {
+        "schema": "magent.provider-support.v1",
+        "ok": validation["ok"],
+        "provider_count": len(providers),
+        "providers": providers,
+        "live_test_command": "magent provider test-matrix",
+        "tool_test_command": "magent provider smoke-all",
+        "policy": "Catalog conformance is offline. Full support requires maintainer-run ping and tool-use reports for the release.",
+    }
