@@ -9,6 +9,18 @@ MagAgent exposes stable machine-readable CLI commands for desktop shells such as
 - `magent ask --json --events --project <path> "task"`
 - `magent research "topic" --question "focus" --max-sources 8`
 
+For live desktop asks, create the durable task first and attach the child process:
+
+```bash
+magent execution create "task" --kind ask --project <path> --session <session-id>
+magent ask --json --events --project <path> --execution-task-id <task-id> "task"
+```
+
+`--execution-task-id` is a machine-client option. It lets the desktop poll task
+events immediately instead of waiting for the final ask payload. The client remains
+responsible for terminating its spawned process when a user requests immediate
+cancellation, then recording the durable `execution cancel` transition.
+
 ## Config
 
 - `magent config get`
@@ -28,6 +40,8 @@ MagAgent exposes stable machine-readable CLI commands for desktop shells such as
 - `magent memory merge <target> <source> --preview`
 - `magent memory merge <target> <source>`
 - `magent memory inbox --json`
+- `magent memory batch --operations-json '[...]' --preview`
+- `magent memory batch --operations-json '[...]'`
 
 `memory update-node --preview` returns old/new body hashes and char counts without writing. Use that before applying desktop edits.
 

@@ -247,6 +247,13 @@ true mid-request suspension depends on provider transport support.
   background work without cancelling unrelated tasks.
 - Add native notifications for blocked permissions and completed background tasks.
 
+**Progress (2026-08-09):** Command Center now consumes the versioned task contract
+through a typed client. It pre-creates and attaches one-shot asks, polls append-only
+events by cursor, renders task state in chat, and exposes pause/resume/cancel/retry.
+Tauri tracks streamed children so cancellation terminates the native process. Desktop
+state moved from browser-only storage to a WAL-backed, versioned SQLite store with
+migration fallbacks.
+
 ### Exit criteria
 
 - The same test task produces equivalent lifecycle events in CLI interactive mode,
@@ -320,6 +327,15 @@ Command Center memory studio and learned ranking from accumulated feedback remai
 
 **Goal:** Move Mag Command Center from a capable cockpit to the easiest way for most
 people to use MagAgent across several projects.
+
+**Progress (2026-08-09):** The first daily-driver unit is implemented on the desktop
+feature branch. Chat uses durable task tabs and remains event-driven during long
+commands; native cancellation and reconnectable task history are available; projects,
+sessions, chat history, command history, setup preferences, and saved queries persist
+in native SQLite; and the memory studio exposes hybrid-retrieval evidence plus reviewed
+transactional batches. Component tests now cover these workflows. Rich artifact
+previews, notifications, updater signing, accessibility E2E, and four-task performance
+validation remain.
 
 ### Core experience
 

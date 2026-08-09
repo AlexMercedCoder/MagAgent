@@ -314,6 +314,12 @@ def ask_cmd(
         "--events",
         help="Include structured desktop event records in JSON output.",
     ),
+    execution_task_id: str = typer.Option(
+        "",
+        "--execution-task-id",
+        hidden=True,
+        help="Attach this run to a pre-created durable execution task.",
+    ),
 ):
     """Run a one-shot MagAgent task."""
     username = _require_user()
@@ -336,6 +342,7 @@ def ask_cmd(
         strict_audit=strict_audit,
         json_output=json_output,
         events_output=events,
+        execution_task_id=execution_task_id,
     )
 
 
@@ -351,6 +358,7 @@ def _run_one_shot(
     strict_audit: bool = False,
     json_output: bool = False,
     events_output: bool = False,
+    execution_task_id: str = "",
 ):
     """Run a single non-interactive agent task."""
     from magent.agent import AgentSession
@@ -374,6 +382,7 @@ def _run_one_shot(
         project=cwd,
         permission_policy=permission_mode_override or config.permission_mode,
         provider=main_provider,
+        task_id=execution_task_id,
         metadata={"source": "cli.ask"},
     )
     execution_task_id = bridge.task_id

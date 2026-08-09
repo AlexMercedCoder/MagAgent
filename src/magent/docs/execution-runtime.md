@@ -62,6 +62,9 @@ helpers are `execution_tasks`, `execution_task`, and `execution_task_action`.
 - `magent ask` records live session logger events, token/cost totals, changed files,
   commands, permission failures, and completion-audit evidence. JSON output includes
   `execution_task_id` so clients can reconnect to the durable stream.
+- Machine clients may pre-create a task and pass its ID to `magent ask` with
+  `--execution-task-id`. This avoids a period where live work has no discoverable
+  task identity and is the preferred Command Center launch sequence.
 - Interactive sessions use the same event bridge and retain one task ID until the
   session ends. Direct subagents inherit the parent task ID; orchestrated steps attach
   their child session to the step task that the master plan already created.
