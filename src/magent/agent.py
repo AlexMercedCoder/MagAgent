@@ -1687,6 +1687,7 @@ class AgentSession:
                 extraction_provider=self.extraction_provider,
                 cwd=self.cwd,
                 config=self.config,
+                parent_task_id=str(getattr(self, "execution_task_id", "")),
             )
         task = await self._subagent_runner.spawn(task_id, description)
         return task.result if task.done and not task.error else f"[sub-agent error: {task.error}]"

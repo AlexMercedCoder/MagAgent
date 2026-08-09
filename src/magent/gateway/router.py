@@ -154,6 +154,7 @@ class MessageRouter:
             f"[bold]{msg.username}[/bold]: {msg.text[:80]}"
         )
 
+        bridge = None
         try:
             approval_result = self._handle_approval_command(msg)
             if approval_result is not None:
@@ -168,11 +169,35 @@ class MessageRouter:
                     {"task": msg.text, "source": f"{msg.platform}/{msg.channel_id}"},
                     project=".",
                 )
-                return f"Queued background task {task['id']}"
+                return (
+                    f"Queued background task {task['id']} "
+                    f"(execution {task['execution_task_id']})"
+                )
             session = self._get_session(msg.channel_id)
+            from magent.execution_bridge import SessionTaskBridge
+            from magent.workbench_store import WorkbenchStore
+
+            bridge = SessionTaskBridge(
+                WorkbenchStore(self._username),
+                session,
+                kind="gateway_message",
+                title=msg.text[:500],
+                project=session.cwd,
+                permission_policy="headless",
+                provider=session.provider,
+                metadata={
+                    "platform": msg.platform,
+                    "channel_id": msg.channel_id,
+                    "gateway_user_id": msg.user_id,
+                },
+            )
             response = await session.chat(msg.text)
+            bridge.complete({"ok": True, "response_chars": len(response)})
             return response
         except Exception as e:
+            if bridge is not None:
+                with contextlib.suppress(Exception):
+                    bridge.fail(e)
             console.print(f"[red]Gateway session error: {e}[/red]")
             return f"❌ Agent error: {e}"
 

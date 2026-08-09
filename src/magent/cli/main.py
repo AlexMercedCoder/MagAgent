@@ -354,8 +354,7 @@ def _run_one_shot(
 ):
     """Run a single non-interactive agent task."""
     from magent.agent import AgentSession
-    from magent.session_controls import session_usage
-    from magent.task_runtime import TaskRuntime
+    from magent.execution_bridge import SessionTaskBridge
     from magent.tui import print_response
 
     session = AgentSession(
@@ -367,31 +366,17 @@ def _run_one_shot(
         interactive_permissions=False,
         permission_mode_override=permission_mode_override,
     )
-    runtime = TaskRuntime(_store())
-    runtime_task = runtime.create(
-        "ask",
-        task,
+    bridge = SessionTaskBridge(
+        _store(),
+        session,
+        kind="ask",
+        title=task,
         project=cwd,
-        session_id=session.session_id,
-        execution_role="coding",
         permission_policy=permission_mode_override or config.permission_mode,
-        metadata={
-            "provider": getattr(main_provider, "provider_id", ""),
-            "model": getattr(main_provider, "model", ""),
-            "source": "cli.ask",
-        },
+        provider=main_provider,
+        metadata={"source": "cli.ask"},
     )
-    execution_task_id = runtime_task["id"]
-    logger = getattr(session, "logger", None)
-    if logger and hasattr(logger, "set_event_callback"):
-        logger.set_event_callback(
-            lambda record: runtime.record_event(
-                execution_task_id,
-                f"session.{record.get('event', 'activity')}",
-                detail={key: value for key, value in record.items() if key not in {"event", "session", "user"}},
-            )
-        )
-    runtime.transition(execution_task_id, "running", reason="One-shot task started")
+    execution_task_id = bridge.task_id
 
     from magent.ask_audit import audit_one_shot_task, render_audit_note
 
@@ -429,34 +414,9 @@ def _run_one_shot(
     try:
         response = asyncio.run(_run())
     except BaseException as exc:
-        runtime.update_context(
-            execution_task_id,
-            final_audit={"ok": False, "error": str(exc)},
-            metadata={"failure_type": type(exc).__name__},
-        )
-        runtime.transition(execution_task_id, "failed", reason=str(exc) or type(exc).__name__)
+        bridge.fail(exc)
         raise
-    runtime.transition(execution_task_id, "validating", reason="One-shot completion audit started")
-    usage = session_usage(logger.path) if logger and hasattr(logger, "path") else {}
-    runtime.update_context(
-        execution_task_id,
-        usage={
-            key: usage[key]
-            for key in ("prompt_tokens", "completion_tokens", "total_tokens", "cached_tokens", "cost_usd")
-            if key in usage
-        },
-        files_changed=[str(path) for path in session.scratchpad.get("files_touched", [])],
-        final_audit=final_audit,
-        metadata={
-            "commands_run": session.scratchpad.get("commands_run", []),
-            "permission_failures": session.scratchpad.get("permission_failures", []),
-        },
-    )
-    runtime.transition(
-        execution_task_id,
-        "completed" if final_audit.get("ok", True) else "blocked",
-        reason="One-shot audit passed" if final_audit.get("ok", True) else "One-shot audit needs attention",
-    )
+    bridge.complete(final_audit)
     if json_output:
         payload = {
             "ok": bool(final_audit.get("ok", True)),
@@ -758,6 +718,7 @@ def _one_shot_events(task: str, response: str, audit: dict, session) -> list[dic
 def _run_repl(username, config, main_provider, extract_provider, cwd):
     """Run the interactive REPL with streaming output."""
     from magent.agent import AgentSession
+    from magent.execution_bridge import SessionTaskBridge
     from magent.tui import print_banner, print_streaming_response
 
     session = AgentSession(
@@ -766,6 +727,16 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
         provider=main_provider,
         extraction_provider=extract_provider,
         cwd=cwd,
+    )
+    bridge = SessionTaskBridge(
+        _store(),
+        session,
+        kind="interactive_session",
+        title=f"Interactive session in {Path(cwd).name or cwd}",
+        project=cwd,
+        permission_policy=config.permission_mode,
+        provider=main_provider,
+        metadata={"source": "cli.interactive"},
     )
     session._ensure_messaging_started()
     session_name = session.messaging.name if session.messaging else "messaging-disabled"
@@ -835,16 +806,22 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
                 loop,
             )
         except KeyboardInterrupt:
+            bridge.event("turn_interrupted", {"turn": session.turn_count})
             with contextlib.suppress(Exception):
                 loop.run_until_complete(session.cancel_active_work())
             console.print("\n[dim]Interrupted.[/dim]")
         except Exception as e:
+            bridge.event("turn_failed", {"turn": session.turn_count, "error": str(e)})
             console.print(f"[red]Error: {e}[/red]")
 
     try:
         console.print("\n[dim]Writing session memories...[/dim]")
         _shutdown()
+        bridge.complete({"ok": True, "turns": session.turn_count})
         console.print("[dim green]Session ended. Goodbye![/dim green]")
+    except BaseException as exc:
+        bridge.fail(exc)
+        raise
     finally:
         asyncio.set_event_loop(None)
         loop.close()

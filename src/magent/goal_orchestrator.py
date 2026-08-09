@@ -253,7 +253,15 @@ async def run_orchestrated_plan(
             runtime.resume(execution_task_id, reason="Orchestrated plan execution started")
         else:
             runtime.transition(execution_task_id, "running")
-    runner = SubAgentRunner(username, provider, extraction_provider, str(root), config, quiet=quiet)
+    runner = SubAgentRunner(
+        username,
+        provider,
+        extraction_provider,
+        str(root),
+        config,
+        quiet=quiet,
+        parent_task_id=execution_task_id,
+    )
     completed: list[dict[str, Any]] = _prior_summaries(orchestration, start_index)
     step_statuses = _step_statuses(orchestration)
     if retry_step:
@@ -305,6 +313,7 @@ async def run_orchestrated_plan(
             detail={"child_task_id": child["id"], "step": index + 1, "title": step["title"]},
         )
         try:
+            runner._execution_task_id = child["id"]
             task = await runner.spawn(f"{plan['id']}_step_{index + 1}", packet)
             task_result = task.result
             task_error = task.error

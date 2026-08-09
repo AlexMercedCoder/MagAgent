@@ -162,9 +162,10 @@ commands. Expensive actions belong behind explicit button endpoints such as
 
 `magent.task_runtime` owns the versioned durable execution contract. It stores task
 snapshots and append-only ordered events in per-user SQLite, validates lifecycle
-transitions, and models parent/child work. Daemon jobs and orchestrated goals use it
-today; other execution surfaces migrate behind compatibility adapters. CLI and
-desktop consumers read the same JSON-shaped snapshots and event records.
+transitions, and models parent/child work. `magent.execution_bridge` adapts live agent
+sessions without coupling the provider/tool loop to SQLite. Interactive sessions,
+asks, recipes, gateways, daemon jobs, goals, and subagents now use the contract. CLI
+and desktop consumers read the same JSON-shaped snapshots and event records.
 
 `magent.evals` owns local JSON eval suites and run reports.
 

@@ -8,6 +8,7 @@ the parent's memory graph (read-only by default).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 
 from rich.console import Console
@@ -38,6 +39,7 @@ class SubAgentRunner:
         cwd: str,
         config,
         quiet: bool = False,
+        parent_task_id: str = "",
     ):
         self.username = username
         self.provider = provider
@@ -45,13 +47,19 @@ class SubAgentRunner:
         self.cwd = cwd
         self.config = config
         self.quiet = quiet
+        self.parent_task_id = parent_task_id
+        self._execution_task_id = ""
         self._tasks: dict[str, SubAgentTask] = {}
 
-    async def spawn(self, task_id: str, description: str) -> SubAgentTask:
+    async def spawn(
+        self, task_id: str, description: str, *, execution_task_id: str = ""
+    ) -> SubAgentTask:
         """
         Spawn a sub-agent to complete a focused task.
         Returns a SubAgentTask that gets populated as the agent runs.
         """
+        execution_task_id = execution_task_id or self._execution_task_id
+        self._execution_task_id = ""
         task = SubAgentTask(task_id=task_id, description=description)
         max_subagents = int(getattr(self.config, "max_subagents", 3))
         if max_subagents <= 0 or len(self._tasks) >= max_subagents:
@@ -73,6 +81,8 @@ class SubAgentRunner:
 
         try:
             from magent.agent import AgentSession
+            from magent.execution_bridge import SessionTaskBridge
+            from magent.workbench_store import WorkbenchStore
 
             session = AgentSession(
                 username=self.username,
@@ -82,9 +92,29 @@ class SubAgentRunner:
                 cwd=self.cwd,
                 project_slug=None,
             )
+            bridge = SessionTaskBridge(
+                WorkbenchStore(self.username),
+                session,
+                kind="subagent",
+                title=description[:500],
+                project=self.cwd,
+                permission_policy=str(getattr(self.config, "permission_mode", "balanced")),
+                provider=self.provider,
+                task_id=execution_task_id,
+                parent_task_id=self.parent_task_id,
+                metadata={"subagent_id": task_id},
+            )
 
             # Single-turn sub-agent: send task, get result
-            response = await session.chat(description)
+            try:
+                response = await session.chat(description)
+                await session.end_session()
+                bridge.complete({"ok": True, "response_chars": len(response)})
+            except Exception as exc:
+                with contextlib.suppress(Exception):
+                    await session.end_session()
+                bridge.fail(exc)
+                raise
             task.result = response
             task.done = True
 

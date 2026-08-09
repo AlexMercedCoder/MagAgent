@@ -142,10 +142,19 @@ def run_recipe(store: Any, name: str, project: str | Path = ".") -> dict[str, An
     recipe = get_recipe(store, name, project)
     if not recipe:
         return {"ok": False, "error": f"Recipe not found: {name}"}
+    from magent.task_runtime import TaskRuntime
     from magent.workbench_domains.plans import save_execution_plan
 
     root = Path(project).resolve()
     goal = f"Run recipe: {recipe['name']}"
+    runtime = TaskRuntime(store)
+    runtime_task = runtime.create(
+        "recipe",
+        goal,
+        project=root,
+        state="planning",
+        metadata={"recipe": recipe["name"]},
+    )
     plan = save_execution_plan(store, root, goal, commands=recipe.get("commands", []), include_diff=False)
     updated = store.update_item(
         "plans",
@@ -153,8 +162,20 @@ def run_recipe(store: Any, name: str, project: str | Path = ".") -> dict[str, An
         recipe=recipe,
         steps=recipe.get("steps", []),
         status="pending",
+        execution_task_id=runtime_task["id"],
     )
-    return {"ok": True, "recipe": recipe, "plan": updated or plan}
+    runtime.record_event(
+        runtime_task["id"],
+        "recipe_materialized",
+        detail={"recipe": recipe["name"], "plan_id": plan["id"]},
+    )
+    runtime.transition(runtime_task["id"], "waiting", reason="Recipe plan is ready")
+    return {
+        "ok": True,
+        "recipe": recipe,
+        "plan": updated or plan,
+        "execution_task_id": runtime_task["id"],
+    }
 
 
 def _normalize_name(name: str) -> str:

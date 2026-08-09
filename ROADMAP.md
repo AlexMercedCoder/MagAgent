@@ -203,8 +203,11 @@ event cursors, execution evidence, and pause/resume/cancel/retry operations. Dae
 jobs and orchestrated goals now produce this contract, while `magent execution` and
 desktop API helpers expose it without terminal scraping. One-shot `magent ask` now
 records live session events, usage, changed files, permission failures, and audit
-evidence under the same task ID. Interactive chat, recipes, gateways, direct
-subagents, and process-level controls remain to migrate.
+evidence under the same task ID. Interactive chat, recipes, foreground and background
+gateways, direct subagents, and orchestrated subagents now share the same lifecycle.
+Daemon workers poll durable controls and stop child commands promptly on pause or
+cancel. Provider requests remain cooperatively cancellable at request/tool boundaries;
+true mid-request suspension depends on provider transport support.
 
 ### Shared task model
 

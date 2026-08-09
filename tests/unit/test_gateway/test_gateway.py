@@ -131,11 +131,20 @@ class TestMessageRouterHandle:
         assert "⛔" in result
 
     @pytest.mark.asyncio
-    async def test_dispatches_to_session_on_auth_pass(self):
+    async def test_dispatches_to_session_on_auth_pass(self, tmp_path, monkeypatch):
+        import magent.workbench_store as workbench_store
+
+        monkeypatch.setattr(workbench_store, "USERS_DIR", tmp_path / "users")
         router = MessageRouter({"username": "testuser"})
         # Mock the session so we don't need a real LLM
         mock_session = AsyncMock()
         mock_session.chat = AsyncMock(return_value="Hello from agent!")
+        mock_session.session_id = "gateway-session"
+        mock_session.cwd = str(tmp_path)
+        mock_session.provider = MagicMock(provider_id="test", model="test")
+        mock_session.logger = None
+        mock_session.scratchpad = {}
+        mock_session.turn_count = 1
         router._session_cache["chan1"] = mock_session
 
         msg = _make_msg()
@@ -157,10 +166,19 @@ class TestMessageRouterHandle:
         assert mock_session.tools.session_shell_patterns == ["npm install"]
 
     @pytest.mark.asyncio
-    async def test_returns_error_string_on_session_exception(self):
+    async def test_returns_error_string_on_session_exception(self, tmp_path, monkeypatch):
+        import magent.workbench_store as workbench_store
+
+        monkeypatch.setattr(workbench_store, "USERS_DIR", tmp_path / "users")
         router = MessageRouter({"username": "testuser"})
         mock_session = AsyncMock()
         mock_session.chat = AsyncMock(side_effect=RuntimeError("LLM exploded"))
+        mock_session.session_id = "gateway-session"
+        mock_session.cwd = str(tmp_path)
+        mock_session.provider = MagicMock(provider_id="test", model="test")
+        mock_session.logger = None
+        mock_session.scratchpad = {}
+        mock_session.turn_count = 1
         router._session_cache["chan1"] = mock_session
 
         msg = _make_msg()

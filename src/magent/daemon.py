@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import shlex
 import subprocess
+import tempfile
+import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -75,8 +78,18 @@ def run_once(store: Any, *, limit: int = 1) -> dict[str, Any]:
         item["status"] = "running"
         item["attempts"] = int(item.get("attempts") or 0) + 1
         runtime.transition(execution_task_id, "running", detail={"queue_id": item.get("id", "")})
-        result = _execute_item(item)
-        item["status"] = "done" if result.get("ok") else "failed"
+        result = _execute_item(
+            item,
+            control_state=lambda task_id=execution_task_id: str(
+                (runtime.get(task_id) or {}).get("state", "")
+            ),
+        )
+        if result.get("cancelled"):
+            item["status"] = "cancelled"
+        elif result.get("paused"):
+            item["status"] = "pending"
+        else:
+            item["status"] = "done" if result.get("ok") else "failed"
         item["result"] = result
         item["updated_at"] = datetime.now(UTC).isoformat()
         runtime.update_context(
@@ -84,11 +97,12 @@ def run_once(store: Any, *, limit: int = 1) -> dict[str, Any]:
             final_audit={"ok": bool(result.get("ok")), "returncode": result.get("returncode")},
             metadata={"queue_status": item["status"]},
         )
-        runtime.transition(
-            execution_task_id,
-            "completed" if result.get("ok") else "failed",
-            detail={"queue_id": item.get("id", "")},
-        )
+        if not result.get("cancelled") and not result.get("paused"):
+            runtime.transition(
+                execution_task_id,
+                "completed" if result.get("ok") else "failed",
+                detail={"queue_id": item.get("id", "")},
+            )
         results.append({"task": item, "result": result})
     store.write(QUEUE_STORE, items)
     return {"ok": all(item["result"].get("ok") for item in results), "ran": len(results), "results": results}
@@ -131,7 +145,9 @@ def _time_due(raw: str, now: datetime) -> bool:
     return value <= now
 
 
-def _execute_item(item: dict[str, Any]) -> dict[str, Any]:
+def _execute_item(
+    item: dict[str, Any], *, control_state: Callable[[], str] | None = None
+) -> dict[str, Any]:
     kind = item.get("kind")
     payload = item.get("payload", {})
     project = item.get("project") or "."
@@ -142,38 +158,74 @@ def _execute_item(item: dict[str, Any]) -> dict[str, Any]:
     elif kind == "plan":
         command = ["magent", "plan-apply", payload.get("id", ""), "--yes"]
     elif kind == "shell":
-        return _run_shell(payload.get("command", ""), project)
+        return _run_shell(payload.get("command", ""), project, control_state=control_state)
     else:
         command = ["magent", "ask", payload.get("task", ""), "--project", project]
-    return _run_command(command, project)
+    return _run_command(command, project, control_state=control_state)
 
 
-def _run_shell(command: str, project: str | Path) -> dict[str, Any]:
+def _run_shell(
+    command: str,
+    project: str | Path,
+    *,
+    control_state: Callable[[], str] | None = None,
+) -> dict[str, Any]:
     if not command:
         return {"ok": False, "error": "Empty shell task"}
     try:
         argv = shlex.split(command)
     except ValueError as e:
         return {"ok": False, "command": command, "error": str(e)}
-    return _run_command(argv, project)
+    return _run_command(argv, project, control_state=control_state)
 
 
-def _run_command(command: list[str], project: str | Path) -> dict[str, Any]:
+def _run_command(
+    command: list[str],
+    project: str | Path,
+    *,
+    control_state: Callable[[], str] | None = None,
+) -> dict[str, Any]:
     try:
-        result = subprocess.run(
-            command,
-            cwd=project,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-        return {
-            "ok": result.returncode == 0,
-            "command": " ".join(command),
-            "returncode": result.returncode,
-            "stdout": result.stdout[-8000:],
-            "stderr": result.stderr[-4000:],
-        }
+        with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+            process = subprocess.Popen(
+                command,
+                cwd=project,
+                stdout=stdout,
+                stderr=stderr,
+                start_new_session=True,
+            )
+            started = time.monotonic()
+            requested = ""
+            while process.poll() is None:
+                state = str(control_state() if control_state else "")
+                if state in {"cancelled", "waiting"}:
+                    requested = state
+                    process.terminate()
+                    try:
+                        process.wait(timeout=1.0)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                    break
+                if time.monotonic() - started >= 600:
+                    process.kill()
+                    requested = "timeout"
+                    break
+                time.sleep(0.1)
+            returncode = process.wait()
+            stdout.seek(0)
+            stderr.seek(0)
+            output = stdout.read().decode("utf-8", errors="replace")[-8000:]
+            errors = stderr.read().decode("utf-8", errors="replace")[-4000:]
+            return {
+                "ok": returncode == 0 and not requested,
+                "command": " ".join(command),
+                "returncode": returncode,
+                "stdout": output,
+                "stderr": errors,
+                "cancelled": requested == "cancelled",
+                "paused": requested == "waiting",
+                "timed_out": requested == "timeout",
+            }
     except Exception as e:
         return {"ok": False, "command": " ".join(command), "error": str(e)}
 
