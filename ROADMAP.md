@@ -708,7 +708,9 @@ maintainer-run evals without adding product telemetry.
 4. **Mag Command Center 0.2.x (development complete):** typed client, controller extraction,
    persistent native state, event-native concurrent chat, cancellation, recovery,
    checkpoint/session workbench, artifact previews, diagnostics, and accessibility checks.
-5. **Ecosystem beta milestone (release operations next):** run real-provider and packaged
+5. **Ecosystem beta milestone (local evidence complete; release operations next):**
+   `mag.ecosystem-readiness.v1` now aggregates component contracts, graph benchmark
+   evidence, packaged docs, and explicit external gates. Run real-provider and packaged
    three-OS acceptance matrices, configure signing, publish the first cross-project eval
    report, and freeze candidate 1.0 contracts for feedback.
 

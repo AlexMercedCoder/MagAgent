@@ -457,6 +457,7 @@ Generated from the active Typer command tree.
 ## system
 
 - `magent system contracts`
+- `magent system ecosystem-report`
 - `magent system info`
 
 ## task

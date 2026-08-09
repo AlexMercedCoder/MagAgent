@@ -37,6 +37,11 @@ automation surfaces such as hooks, sandbox execution, and update helpers.
 provider readiness, MCP config, hooks, plugins, permissions, and artifact
 contracts.
 
+`magent.ecosystem_readiness` composes versioned MagAgent contracts, provider catalog
+validation, packaged docs, MagGraph source/installed capabilities, and Command Center
+source metadata into `mag.ecosystem-readiness.v1`. It keeps deterministic local checks
+separate from release-operations evidence such as signing and paid provider smokes.
+
 `magent.ux_flows` owns guided onboarding behavior: profile presets, project initialization, safe doctor fixes, and next-action recommendations. It composes config, workbench, memory inbox, and playbook helpers without making those lower-level modules depend on UX prompts.
 
 `magent.provider_catalog` is the shared source of truth for provider metadata: setup labels, default models, environment variables, access modes, display names, LiteLLM routing modes, and OpenAI-compatible base URLs. Provider additions should start there, then add focused tests for runtime model routing and config detection.

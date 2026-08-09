@@ -26,7 +26,7 @@ database connections are closed after every test, while production processes reg
 the same cleanup for shutdown. Semantic-memory SQLite operations use short-lived,
 transactional connections that always release their file handles.
 
-The current baseline is 432 passing tests. The configured
+The current baseline is 434 passing tests. The configured
 63% floor is a regression gate, not the end target; new extracted runtime modules
 should aim for at least 85% behavioral coverage.
 
@@ -64,6 +64,8 @@ IDs, and `magent model health` to review recent smoke outcomes.
 
 For release readiness, run `magent release check`. For scriptable reviews, use
 `magent review --fail-on P1`.
+For a cross-project artifact, run `magent system ecosystem-report --root <workspace>
+--output ecosystem-readiness.json`; review every `external_gates` entry separately.
 
 Use `magent ui` for a live read-only view of workspace status, project doctor,
 patches, checkpoints, memory quality, docs search, and release checks while

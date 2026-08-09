@@ -104,6 +104,7 @@ Important command paths:
 - `magent auth remove <provider>`: remove a provider key from the OS keyring.
 - `magent system info`: return machine-readable install, path, platform, and user info.
 - `magent system contracts`: return versioned platform contracts, compatibility levels, and support policy.
+- `magent system ecosystem-report [--root path] [-o report.json]`: aggregate deterministic local component evidence and list external release gates without calling paid providers.
 - Checkpoint list, diff, session-list, and session-diff commands accept `--json` for desktop and automation clients.
 - `magent docs list`: list built-in documentation topics.
 - `magent docs show <topic>`: render a built-in documentation topic.

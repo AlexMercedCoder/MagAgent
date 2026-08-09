@@ -190,6 +190,22 @@ def system_contracts_cmd() -> None:
     console.print_json(data=platform_contracts())
 
 
+@system_app.command("ecosystem-report")
+def system_ecosystem_report_cmd(
+    root: str = typer.Option(".", "--root", help="Mag ecosystem workspace or MagAgent checkout."),
+    output: str | None = typer.Option(None, "--output", "-o", help="Write the JSON report to this path."),
+) -> None:
+    """Generate deterministic local evidence and list external release gates."""
+    from magent.ecosystem_readiness import ecosystem_readiness, write_ecosystem_report
+
+    report = ecosystem_readiness(root)
+    if output:
+        report["saved_to"] = str(write_ecosystem_report(report, output))
+    console.print_json(data=report)
+    if not report.get("ok"):
+        raise typer.Exit(1)
+
+
 @cache_app.command("doctor")
 def cache_doctor_cmd(
     provider: str | None = typer.Option(None, "--provider", "-p"),

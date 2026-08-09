@@ -137,4 +137,5 @@ def test_platform_contracts_publish_stable_task_and_plugin_versions() -> None:
     assert result["contracts"]["task"]["version"] == "magent.task.v1"
     assert result["contracts"]["task_event"]["version"] == "magent.task-event.v1"
     assert result["contracts"]["plugin_manifest"]["version"] == "1"
+    assert result["contracts"]["ecosystem_readiness"]["version"] == "mag.ecosystem-readiness.v1"
     assert "remote-skills" in result["contracts"]["mcp"]["experimental"]
