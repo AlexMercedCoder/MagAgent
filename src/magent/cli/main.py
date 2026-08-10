@@ -622,7 +622,7 @@ def _one_shot_events(task: str, response: str, audit: dict, session) -> list[dic
     return events
 
 
-def _run_repl(username, config, main_provider, extract_provider, cwd):
+def _run_repl(username, config, main_provider, extract_provider, cwd, resume=None):
     """Run the interactive REPL with streaming output."""
     from magent.agent import AgentSession
     from magent.execution_bridge import SessionTaskBridge
@@ -635,6 +635,11 @@ def _run_repl(username, config, main_provider, extract_provider, cwd):
         extraction_provider=extract_provider,
         cwd=cwd,
     )
+    if resume and resume.get("conversation"):
+        # Restore the prior thread so the model has the context the user
+        # remembers having.
+        session.conversation.extend(resume["conversation"])
+        session.turn_count = int(resume.get("turns") or 0)
     bridge = SessionTaskBridge(
         _store(),
         session,
@@ -1828,6 +1833,66 @@ def jobs_cmd(
         console.print_json(data=data)
         return
     _print_jobs_summary(data)
+
+
+@app.command("resume", rich_help_panel="Everyday Agent Work")
+def resume_cmd(
+    session_id: str = typer.Argument("", help="Session id; omit for the most recent."),
+    list_sessions: bool = typer.Option(False, "--list", "-l", help="List resumable sessions."),
+    max_turns: int = typer.Option(40, "--max-turns", help="Most recent exchanges to restore."),
+    json_output: bool = typer.Option(False, "--json"),
+):
+    """Resume a previous conversation.
+
+    Conversations used to live only in memory, so closing the terminal lost the
+    thread even though every turn had been logged.
+    """
+    from magent.session_resume import list_resumable_sessions, load_session_transcript
+
+    if list_sessions:
+        sessions = list_resumable_sessions(user=get_current_user())
+        if json_output:
+            console.print_json(data={"ok": True, "sessions": sessions})
+            return
+        if not sessions:
+            console.print("[dim]No resumable sessions yet.[/dim]")
+            return
+        table = Table("Session", "Started", "Turns", "Opening message")
+        for item in sessions:
+            table.add_row(item["session"][:26], str(item["started"])[:19], str(item["turns"]), item["preview"])
+        console.print(table)
+        return
+
+    result = load_session_transcript(session_id, max_turns=max_turns)
+    if json_output:
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+        return
+
+    if not result.get("ok"):
+        console.print(f"[red]{result.get('error')}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[green]Resuming session {result['session']}[/green] ({result['turns']} turns)")
+    if result.get("lossy"):
+        console.print(
+            "[yellow]This session predates full transcripts; turns are restored from "
+            "logged previews and may be truncated.[/yellow]"
+        )
+    if result.get("truncated"):
+        console.print(f"[dim]Only the last {max_turns} exchanges were restored.[/dim]")
+
+    username = _require_user()
+    config = load_config(username)
+    _run_repl(
+        username,
+        config,
+        _build_provider(config, None, None),
+        _build_extraction_provider(config),
+        os.getcwd(),
+        resume=result,
+    )
 
 
 @app.command("statusline", rich_help_panel="Setup & Configuration")
@@ -3584,16 +3649,51 @@ def gateway_stop():
 
 
 @gateway_app.command("status")
-def gateway_status():
+def gateway_status(
+    sessions: bool = typer.Option(False, "--sessions", help="Show configured access and live session state."),
+    json_output: bool = typer.Option(False, "--json"),
+):
     """Show whether the gateway is running and on which platforms."""
     from magent.gateway import GATEWAY_LOG_FILE, is_gateway_running
 
     running, pid = is_gateway_running()
+    payload: dict[str, Any] = {"running": running, "pid": pid, "log": str(GATEWAY_LOG_FILE)}
+
+    if sessions:
+        # The gateway runs in its own process, so its live sessions are not
+        # reachable from here; report the access posture, which is what an
+        # operator needs to answer "who can drive this?".
+        from magent.gateway import read_gateway_config
+        from magent.gateway.router import MessageRouter
+
+        try:
+            config = load_config(get_current_user() or "default")
+            router = MessageRouter(read_gateway_config(config.raw() if hasattr(config, "raw") else {}))
+            payload["access"] = router.session_report()
+        except Exception as error:
+            payload["access"] = {"ok": False, "error": str(error)}
+
+    if json_output:
+        console.print_json(data=payload)
+        return
+
     if running:
         console.print(f"[bold green]● Gateway running[/bold green] (PID {pid})")
         console.print(f"[dim]Logs: {GATEWAY_LOG_FILE}[/dim]")
     else:
         console.print("[dim]○ Gateway is not running.[/dim]")
+
+    access = payload.get("access")
+    if access and access.get("ok"):
+        allowed = access.get("allowed_user_ids") or []
+        console.print(
+            "[dim]access:[/dim] "
+            + (f"{len(allowed)} allow-listed user(s)" if allowed else "[red]no allowlist[/red]")
+            + (" [red](allow_anyone)[/red]" if access.get("allow_anyone") else "")
+            + (" · require_mention" if access.get("require_mention") else "")
+        )
+    elif access:
+        console.print(f"[yellow]access: {access.get('error')}[/yellow]")
 
 
 @gateway_app.command("init")

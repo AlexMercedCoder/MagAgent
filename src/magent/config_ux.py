@@ -638,6 +638,18 @@ def doctor_actions(username: str | None = None) -> dict[str, Any]:
         add("model_roles", False, "No model roles are configured.", "magent model wizard", True)
     else:
         add("model_roles", True, "At least one model role is configured.", "magent model roles")
+    # Secrets hygiene: plaintext keys, loose file permissions, an open gateway.
+    from magent.secrets_hygiene import secrets_hygiene_report
+
+    hygiene = secrets_hygiene_report(username)
+    for finding in hygiene.get("findings", []):
+        add(
+            f"secrets_{finding['key']}",
+            finding["ok"],
+            finding["detail"],
+            finding.get("command", ""),
+        )
+
     add(
         "memory",
         bool(summary["memory"].get("semantic_enabled") or summary["memory"].get("inbox_first")),

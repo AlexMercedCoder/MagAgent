@@ -30,11 +30,23 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
     def eval_run_cmd(
         suite: str = typer.Argument("evals/magagent-evals.json"),
         project: str = typer.Option(".", "--project", "-p"),
+        compare: str = typer.Option(
+            "", "--compare", help="Compare against the last recorded run at this version."
+        ),
     ) -> None:
         """Run a local eval suite's verification commands."""
-        from magent.evals import run_eval_suite
+        from magent.evals import compare_eval_runs, run_eval_suite
 
-        console.print_json(data=run_eval_suite(project, suite, store=store()))
+        report = run_eval_suite(project, suite, store=store())
+        if not compare:
+            console.print_json(data=report)
+            raise typer.Exit(0 if report.get("ok") else 1)
+
+        comparison = compare_eval_runs(store(), report["suite"], compare)
+        console.print_json(data={"run": report, "comparison": comparison})
+        # A regression against the baseline fails the command even if the run
+        # itself passed more tasks than it failed.
+        raise typer.Exit(0 if report.get("ok") and comparison.get("ok") else 1)
 
     @eval_app.command("report")
     def eval_report_cmd(limit: int = typer.Option(20, "--limit", "-n")) -> None:

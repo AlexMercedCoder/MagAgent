@@ -138,6 +138,7 @@ class FakeConfig:
     file_mutation_verifier = True
 
 
+
 def make_session() -> AgentSession:
     session = AgentSession.__new__(AgentSession)
     session._mcp_start_task = None
@@ -811,3 +812,87 @@ async def test_run_tool_loop_stops_after_user_denies_permission(monkeypatch) -> 
     assert len(calls) == 1
     assert text.startswith("Stopped because you denied")
     assert messages[-1]["role"] == "assistant"
+
+
+@pytest.mark.asyncio
+async def test_model_round_streams_deltas_to_the_caller(monkeypatch) -> None:
+    """Feature #1: the response used to arrive as one blob because litellm was
+    never called with stream=True."""
+
+    class FakeChunk:
+        def __init__(self, content):
+            self.choices = [SimpleNamespace(delta=SimpleNamespace(content=content, tool_calls=None))]
+
+    class FakeStream:
+        def __aiter__(self):
+            async def gen():
+                for piece in ("Hel", "lo ", "world"):
+                    yield FakeChunk(piece)
+
+            return gen()
+
+    calls = []
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
+        return FakeStream()
+
+    def fake_builder(chunks, messages=None):
+        text = "".join(chunk.choices[0].delta.content for chunk in chunks)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=text, tool_calls=None))]
+        )
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "acompletion", fake_acompletion)
+    monkeypatch.setattr(litellm, "stream_chunk_builder", fake_builder)
+
+    session = make_session()
+    seen: list[str] = []
+    response = await session._model_round([{"role": "user", "content": "hi"}], None, on_text=seen.append)
+
+    assert seen == ["Hel", "lo ", "world"], "deltas must reach the caller as they arrive"
+    assert response.choices[0].message.content == "Hello world"
+    assert len(calls) == 1
+    assert calls[0]["stream"] is True
+
+
+@pytest.mark.asyncio
+async def test_model_round_costs_one_call_when_streaming_is_unsupported(monkeypatch) -> None:
+    """A provider that ignores stream=True must not trigger a second call."""
+    calls = []
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="one shot", tool_calls=None))]
+        )
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "acompletion", fake_acompletion)
+
+    session = make_session()
+    response = await session._model_round([{"role": "user", "content": "hi"}], None, on_text=lambda _c: None)
+
+    assert response.choices[0].message.content == "one shot"
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_model_round_without_a_listener_does_not_stream(monkeypatch) -> None:
+    calls = []
+
+    async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="x", tool_calls=None))])
+
+    import litellm
+
+    monkeypatch.setattr(litellm, "acompletion", fake_acompletion)
+
+    session = make_session()
+    await session._model_round([{"role": "user", "content": "hi"}], None)
+
+    assert "stream" not in calls[0]

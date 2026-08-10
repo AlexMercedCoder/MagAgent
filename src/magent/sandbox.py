@@ -335,3 +335,92 @@ def sandbox_manifest() -> str:
         },
         indent=2,
     )
+
+
+# ─────────────────────────────────────────────
+# Sandboxed shell execution (roadmap feature #3)
+# ─────────────────────────────────────────────
+
+SHELL_SANDBOX_PROFILES = {"off", "bubblewrap", "docker"}
+
+
+def shell_sandbox_available(profile: str) -> bool:
+    """Whether the requested isolation profile can actually run here."""
+    normalized = (profile or "off").strip().lower()
+    if normalized == "off":
+        return True
+    if normalized == "bubblewrap":
+        return shutil.which("bwrap") is not None
+    if normalized == "docker":
+        return shutil.which("docker") is not None
+    return False
+
+
+def wrap_shell_command(
+    command: str,
+    *,
+    profile: str,
+    cwd: str | Path,
+    network: bool = False,
+    image: str = "python:3.12-slim",
+) -> list[str] | None:
+    """Return argv that runs `command` under `profile`, or None for no wrapping.
+
+    Defence in depth for `run_shell`: the classifier decides *whether* a command
+    may run, and this decides *what it can reach* if it does. Given how many
+    ways the old classifier could be talked into a silent execution, a command
+    that cannot see beyond the project directory is worth having even when the
+    tier says it is fine.
+    """
+    normalized = (profile or "off").strip().lower()
+    if normalized not in SHELL_SANDBOX_PROFILES:
+        raise ValueError(f"Unknown shell sandbox profile: {profile!r}")
+    if normalized == "off":
+        return None
+    if not shell_sandbox_available(normalized):
+        raise RuntimeError(f"Shell sandbox profile {normalized!r} is not available on this machine")
+
+    workdir = str(Path(cwd).resolve())
+
+    if normalized == "bubblewrap":
+        argv = [
+            "bwrap",
+            "--die-with-parent",
+            "--unshare-pid",
+            "--unshare-uts",
+            "--unshare-ipc",
+            # Read-only system, writable project only.
+            "--ro-bind", "/usr", "/usr",
+            "--ro-bind", "/bin", "/bin",
+            "--ro-bind", "/lib", "/lib",
+            "--ro-bind-try", "/lib64", "/lib64",
+            "--ro-bind-try", "/etc/resolv.conf", "/etc/resolv.conf",
+            "--proc", "/proc",
+            "--dev", "/dev",
+            "--tmpfs", "/tmp",
+            "--bind", workdir, workdir,
+            "--chdir", workdir,
+        ]
+        if not network:
+            argv.append("--unshare-net")
+        return [*argv, "sh", "-lc", command]
+
+    return [
+        "docker",
+        "run",
+        "--rm",
+        "-i",
+        *([] if network else ["--network", "none"]),
+        "--user",
+        f"{os.getuid()}:{os.getgid()}" if hasattr(os, "getuid") else "1000:1000",
+        "--memory", "2g",
+        "--pids-limit", "512",
+        "--cap-drop", "ALL",
+        "--security-opt", "no-new-privileges",
+        "-v", f"{workdir}:{workdir}",
+        "-w", workdir,
+        image,
+        "sh",
+        "-lc",
+        command,
+    ]

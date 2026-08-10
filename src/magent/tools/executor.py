@@ -119,6 +119,8 @@ class ToolExecutor(
         tool_budgets: dict[str, int] | None = None,
         session_id: str = "manual",
         interactive_permissions: bool = True,
+        shell_sandbox: str = "off",
+        shell_sandbox_network: bool = False,
         config: Any | None = None,
         activity_callback: Callable[[str, dict[str, Any], float, str], None] | None = None,
     ):
@@ -132,6 +134,9 @@ class ToolExecutor(
         self.tool_budgets = {**DEFAULT_TOOL_BUDGETS, **(tool_budgets or {})}
         self.session_id = session_id
         self.interactive_permissions = interactive_permissions
+        # Optional isolation for run_shell, independent of the permission tier.
+        self.shell_sandbox = str(shell_sandbox or "off")
+        self.shell_sandbox_network = bool(shell_sandbox_network)
         self.config = config
         self.activity_callback = activity_callback
         self._active_tasks: set[asyncio.Task[Any]] = set()

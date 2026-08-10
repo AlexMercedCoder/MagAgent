@@ -1,0 +1,18 @@
+{
+  "name": "memory-recall",
+  "description": "Memory writes, recalls and hygiene behave as documented.",
+  "tasks": [
+    {
+      "id": "memory-quality",
+      "prompt": "Report on the health of the memory graph.",
+      "commands": ["magent memory quality"],
+      "success": ["command:0"]
+    },
+    {
+      "id": "memory-hygiene-dry-run",
+      "prompt": "Identify duplicate and stale memory without changing anything.",
+      "commands": ["magent memory hygiene --json"],
+      "success": ["command:0"]
+    }
+  ]
+}

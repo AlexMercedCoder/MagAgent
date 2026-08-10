@@ -56,6 +56,35 @@ class SessionLogger:
             },
         )
 
+    def transcript_path(self) -> Path:
+        """Full-fidelity transcript for this session, used by `magent resume`."""
+        return self._path.with_suffix(".transcript.jsonl")
+
+    def log_transcript(self, role: str, content: str) -> None:
+        """Append one complete turn.
+
+        The event log caps turns at a 500/200-character preview, which is right
+        for telemetry but useless for resuming a conversation, so the full text
+        goes here.
+        """
+        try:
+            with self.transcript_path().open("a", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "ts": datetime.now(UTC).isoformat(),
+                            "session": self.session_id,
+                            "user": self.username,
+                            "role": role,
+                            "content": content,
+                        },
+                        default=str,
+                    )
+                    + "\n"
+                )
+        except OSError:
+            pass  # a transcript is a convenience, never a reason to fail a turn
+
     def log_user_turn(self, turn_number: int, message: str) -> None:
         self._write(
             "user_turn",

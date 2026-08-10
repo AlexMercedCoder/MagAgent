@@ -1,0 +1,18 @@
+{
+  "name": "durability",
+  "description": "Workbench state survives corruption and concurrent access; a crash must never silently empty a ledger.",
+  "tasks": [
+    {
+      "id": "store-durability",
+      "prompt": "Verify atomic writes, corrupt-file quarantine and locking.",
+      "commands": ["python -m pytest tests/unit/test_durability_and_state.py -q"],
+      "success": ["command:0"]
+    },
+    {
+      "id": "identifier-paths",
+      "prompt": "No caller-supplied identifier may escape its directory.",
+      "commands": ["python -m pytest tests/unit/test_safe_names.py -q"],
+      "success": ["command:0"]
+    }
+  ]
+}

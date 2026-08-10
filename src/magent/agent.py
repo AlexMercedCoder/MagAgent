@@ -10,7 +10,7 @@ import logging
 import re
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
@@ -191,6 +191,8 @@ class AgentSession:
             tool_budgets=config.get("tool_budgets", default={}),
             session_id=self.session_id,
             interactive_permissions=interactive_permissions,
+            shell_sandbox=str(config.get("permissions", "shell_sandbox", default="off") or "off"),
+            shell_sandbox_network=bool(config.get("permissions", "shell_sandbox_network", default=False)),
             config=config,
             activity_callback=self._log_tool_progress_event,
         )
@@ -503,8 +505,84 @@ class AgentSession:
         keep = self.config.keep_recent_turns
         return self.conversation[-(keep + 1) : -1] if keep > 0 else []
 
+    @property
+    def _spend(self) -> Any:
+        tracker = getattr(self, "_spend_tracker", None)
+        if tracker is None:
+            from magent.budgets import SpendTracker
+
+            tracker = SpendTracker(self.config)
+            self._spend_tracker = tracker
+        return tracker
+
+    def _streaming_enabled(self) -> bool:
+        return bool(getattr(self.config, "stream_tokens", True))
+
+    async def _model_round(
+        self,
+        messages: list[dict[str, Any]],
+        tool_defs: list[dict[str, Any]] | None,
+        *,
+        on_text: Callable[[str], None] | None = None,
+    ) -> Any:
+        """One model call, streaming when a consumer is listening.
+
+        `stream_chat` previously yielded the whole answer as a single chunk —
+        litellm was never called with `stream=True` — so the caller waited for
+        the full response before seeing anything. Deltas are forwarded to
+        `on_text` as they arrive and the chunks are reassembled into the same
+        response object the non-streaming path returns, so the tool loop below
+        is unchanged.
+        """
+        import litellm
+
+        litellm.suppress_debug_info = True
+        request: dict[str, Any] = {
+            "messages": _sanitize_messages(messages),
+            **self._completion_params(0.3, 4096),
+            **self._provider_request_kwargs(),
+        }
+        if tool_defs:
+            request["tools"] = tool_defs
+            request["tool_choice"] = "auto"
+
+        if on_text is None or not self._streaming_enabled():
+            return await litellm.acompletion(**request)
+
+        chunks: list[Any] = []
+        try:
+            stream = await litellm.acompletion(**request, stream=True)
+            if not hasattr(stream, "__aiter__"):
+                # Provider (or test double) ignored stream=True and returned a
+                # complete response. Use it rather than paying for a second call.
+                return stream
+            async for chunk in stream:
+                chunks.append(chunk)
+                if not getattr(chunk, "choices", None):
+                    continue
+                delta = chunk.choices[0].delta
+                text = getattr(delta, "content", None) if delta else None
+                if text:
+                    on_text(text)
+        except Exception:
+            if not chunks:
+                # Nothing arrived: fall back so a provider that cannot stream
+                # still answers.
+                return await litellm.acompletion(**request)
+            raise
+
+        rebuilt = litellm.stream_chunk_builder(chunks, messages=request["messages"])
+        if rebuilt is None:
+            return await litellm.acompletion(**request)
+        return rebuilt
+
     async def _run_tool_loop(
-        self, messages: list[dict[str, Any]], user_message: str = "", *, narrate: bool = False
+        self,
+        messages: list[dict[str, Any]],
+        user_message: str = "",
+        *,
+        narrate: bool = False,
+        on_text: Callable[[str], None] | None = None,
     ) -> tuple[str, list[dict[str, Any]], int]:
         """Run the LLM + tool loop. Returns (final_text, messages, tool_call_count).
 
@@ -542,14 +620,18 @@ class AgentSession:
                         console.print(f"[yellow]  stop {self._stop_console_summary(content)}[/yellow]")
                     messages.append({"role": "assistant", "content": content})
                     return content, messages, total_tool_calls
+                budget = self._spend.check()
+                if not budget.ok:
+                    content = self._finalize_turn_response(budget.reason, failed_file_mutations)
+                    if narrate:
+                        console.print(f"[red]  stop {budget.reason}[/red]")
+                    messages.append({"role": "assistant", "content": content})
+                    return content, messages, total_tool_calls
+                if budget.warning and narrate:
+                    console.print(f"[yellow]  budget {budget.warning}[/yellow]")
+
                 llm_started = time.monotonic()
-                response = await litellm.acompletion(
-                    messages=_sanitize_messages(messages),
-                    tools=tool_defs,
-                    tool_choice="auto",
-                    **self._completion_params(0.3, 4096),
-                    **self._provider_request_kwargs(),
-                )
+                response = await self._model_round(messages, tool_defs, on_text=on_text)
                 llm_elapsed = self._log_timing(
                     "llm_call",
                     llm_started,
@@ -779,7 +861,13 @@ class AgentSession:
 
         return "", messages, total_tool_calls  # unreachable
 
-    async def _run_turn(self, user_message: str, *, narrate: bool = False) -> tuple[str, int]:
+    async def _run_turn(
+        self,
+        user_message: str,
+        *,
+        narrate: bool = False,
+        on_text: Callable[[str], None] | None = None,
+    ) -> tuple[str, int]:
         """Run one complete turn: prompt, tool loop, history, logging, memory.
 
         `chat` and `stream_chat` used to be ~600-line near-copies of the same
@@ -792,13 +880,15 @@ class AgentSession:
         user_message = self._resolve_agent_message(user_message)
         self.turn_count += 1
         self.logger.log_user_turn(self.turn_count, user_message)
+        with suppress(Exception):
+            self.logger.log_transcript("user", user_message)
         self.conversation.append({"role": "user", "content": user_message})
 
         messages = self._build_prompt_messages(user_message)
 
         try:
             response, _messages, tool_calls = await self._run_tool_loop(
-                messages, user_message, narrate=narrate
+                messages, user_message, narrate=narrate, on_text=on_text
             )
         except Exception as e:
             response, tool_calls = f"\n[Error: {e}]", 0
@@ -806,6 +896,7 @@ class AgentSession:
         self.conversation.append({"role": "assistant", "content": response})
         with suppress(Exception):
             self.logger.log_assistant_turn(self.turn_count, response, tool_calls)
+            self.logger.log_transcript("assistant", response)
 
         if self._periodic_memory_write_due():
             await self._maybe_write_memories()
@@ -814,9 +905,33 @@ class AgentSession:
         return response, tool_calls
 
     async def stream_chat(self, user_message: str) -> AsyncIterator[str]:
-        """Stream the agent response. Yields text chunks."""
-        response, _tool_calls = await self._run_turn(user_message, narrate=True)
-        yield response
+        """Stream the agent response, token by token where the provider allows."""
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        turn = asyncio.create_task(
+            self._run_turn(user_message, narrate=True, on_text=queue.put_nowait)
+        )
+        turn.add_done_callback(lambda _task: queue.put_nowait(None))
+
+        streamed: list[str] = []
+        while True:
+            chunk = await queue.get()
+            if chunk is None:
+                break
+            streamed.append(chunk)
+            yield chunk
+
+        response, _tool_calls = await turn
+
+        # The loop may finalise the text after the model finished (appending
+        # guidance, or substituting a stop message), so emit whatever the
+        # caller has not already seen.
+        already = "".join(streamed)
+        if not already:
+            if response:
+                yield response
+        elif response and response != already:
+            yield response[len(already) :] if response.startswith(already) else f"\n{response}"
 
     async def chat(self, user_message: str) -> str:
         """Non-streaming completion. Returns full response string."""
@@ -1378,6 +1493,7 @@ class AgentSession:
             cache_source=str(cache_usage["cache_source"] or ""),
             cost_usd=cost,
         )
+        self._spend.record(cost or 0.0)
 
     async def spawn_subagent(self, task_id: str, description: str) -> str:
         """Spawn a focused sub-agent for a parallel task. Returns its result."""

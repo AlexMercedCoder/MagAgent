@@ -146,6 +146,31 @@ def register_permission_commands(permission_app: typer.Typer) -> None:
             for substitution in segment["substitutions"]:
                 console.print(f"    [red]substitution:[/red] {substitution}")
 
+    @permission_app.command("secrets")
+    def permission_secrets_cmd(
+        json_output: bool = typer.Option(False, "--json", help="Emit JSON instead of a table."),
+    ) -> None:
+        """Check credential hygiene: plaintext keys, file modes, gateway exposure."""
+        from magent.cli.command_context import require_user
+        from magent.secrets_hygiene import secrets_hygiene_report
+
+        try:
+            username = require_user()
+        except Exception:
+            username = None
+
+        report = secrets_hygiene_report(username)
+        if json_output:
+            console.print_json(data=report)
+            raise typer.Exit(0 if report.get("ok") else 1)
+
+        for finding in report.get("findings", []):
+            mark = "[green]OK[/green]" if finding["ok"] else "[red]!![/red]"
+            console.print(f"{mark} [bold]{finding['key']}[/bold] {finding['detail']}")
+            if finding.get("command") and not finding["ok"]:
+                console.print(f"   [dim]fix:[/dim] {finding['command']}")
+        raise typer.Exit(0 if report.get("ok") else 1)
+
     @permission_app.command("trust-list")
     def permission_trust_list_cmd() -> None:
         """Show shell patterns saved by session/always approvals."""

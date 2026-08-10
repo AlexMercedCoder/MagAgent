@@ -132,6 +132,33 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
             }
         )
 
+    @provider_app.command("conformance")
+    def provider_conformance_cmd(
+        record: bool = typer.Option(False, "--record", help="Rewrite the recorded fixture."),
+        json_output: bool = typer.Option(False, "--json"),
+    ) -> None:
+        """Check how MagAgent talks to each provider. Runs offline."""
+        from magent.provider_conformance import conformance_matrix, record_fixture
+
+        matrix = conformance_matrix()
+        if record:
+            path = record_fixture(matrix)
+            console.print(f"[green]Recorded {path}[/green]")
+
+        if json_output:
+            console.print_json(data=matrix)
+            raise typer.Exit(0 if matrix["ok"] else 1)
+
+        for check in matrix["checks"]:
+            mark = "[green]OK[/green]" if check["ok"] else "[red]!![/red]"
+            console.print(f"{mark} [bold]{check['id']}[/bold] {check['description']}")
+            for case in check["cases"]:
+                if not case["ok"]:
+                    console.print(
+                        f"   [red]{case['provider']}/{case['model']}[/red]: {'; '.join(case['problems'])}"
+                    )
+        raise typer.Exit(0 if matrix["ok"] else 1)
+
     @provider_app.command("models")
     def provider_models_cmd(
         provider_id: str = typer.Argument(..., help="Provider ID to inspect."),

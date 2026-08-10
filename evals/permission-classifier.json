@@ -1,0 +1,24 @@
+{
+  "name": "permission-classifier",
+  "description": "The shell classifier must not regress on any verified bypass. Every command here reached execution at SILENT or AUTO tier before the 0.36 rewrite.",
+  "tasks": [
+    {
+      "id": "classifier-bypass-suite",
+      "prompt": "Confirm no shell command classified below CONFIRM can mutate state or reach the network.",
+      "commands": ["python -m pytest tests/unit/test_permissions_bypass.py -q"],
+      "success": ["command:0"]
+    },
+    {
+      "id": "classify-substitution",
+      "prompt": "A command substitution must be classified on what it actually runs.",
+      "commands": ["magent permission classify \"echo $(rm -rf /tmp/x)\" --json --no-allowlist"],
+      "success": ["command:0", "output:block"]
+    },
+    {
+      "id": "classify-redirect",
+      "prompt": "A redirect that writes a real file is a write, whatever precedes it.",
+      "commands": ["magent permission classify \"echo pwned > /tmp/x\" --json --no-allowlist"],
+      "success": ["command:0", "output:redirect-write"]
+    }
+  ]
+}

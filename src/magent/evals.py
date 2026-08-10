@@ -78,12 +78,69 @@ def run_eval_suite(root: str | Path, suite_path: str | Path, store: Any | None =
         "suite": suite.get("name", path.stem),
         "path": str(path),
         "root": str(root_path),
+        "version": _current_version(),
+        "passed": sum(1 for item in results if item["ok"]),
+        "total": len(results),
         "tasks": results,
         "ran_at": now_iso(),
     }
     if store is not None:
         store.append("eval_runs", report)
     return report
+
+
+def _current_version() -> str:
+    try:
+        from magent import __version__
+
+        return str(__version__)
+    except Exception:
+        return ""
+
+
+def compare_eval_runs(store: Any, suite: str, baseline: str) -> dict[str, Any]:
+    """Compare the latest run of `suite` against the last run at `baseline`.
+
+    Lets a release claim measured capability instead of asserting it: the
+    roadmap's `magent eval run --compare v0.34.0`.
+    """
+    runs = [item for item in store.read("eval_runs", []) if item.get("suite") == suite]
+    if not runs:
+        return {"ok": False, "error": f"No recorded runs for suite {suite!r}"}
+
+    latest = runs[-1]
+    previous = next(
+        (item for item in reversed(runs[:-1]) if str(item.get("version", "")) == baseline), None
+    )
+    if previous is None:
+        return {
+            "ok": False,
+            "error": f"No run of {suite!r} recorded at version {baseline!r}",
+            "known_versions": sorted({str(item.get("version", "")) for item in runs if item.get("version")}),
+        }
+
+    def outcomes(run: dict[str, Any]) -> dict[str, bool]:
+        return {str(task.get("id", "")): bool(task.get("ok")) for task in run.get("tasks", [])}
+
+    before, after = outcomes(previous), outcomes(latest)
+    regressions = sorted(task for task, ok in after.items() if before.get(task) and not ok)
+    fixes = sorted(task for task, ok in after.items() if ok and before.get(task) is False)
+
+    return {
+        # A regression is a failure of the comparison, whatever the totals say.
+        "ok": not regressions,
+        "suite": suite,
+        "baseline": baseline,
+        "baseline_ran_at": previous.get("ran_at", ""),
+        "current_version": latest.get("version", ""),
+        "current_ran_at": latest.get("ran_at", ""),
+        "baseline_passed": f"{previous.get('passed', 0)}/{previous.get('total', 0)}",
+        "current_passed": f"{latest.get('passed', 0)}/{latest.get('total', 0)}",
+        "regressions": regressions,
+        "fixed": fixes,
+        "new_tasks": sorted(set(after) - set(before)),
+        "removed_tasks": sorted(set(before) - set(after)),
+    }
 
 
 def eval_report(store: Any, limit: int = 20) -> list[dict[str, Any]]:

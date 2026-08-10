@@ -82,6 +82,51 @@ def register_memory_commands(
         console.print_json(data={"ok": True, "candidates": promotion_candidates(store, project, limit=limit)})
 
 
+    @memory_app.command("hygiene")
+    def memory_hygiene_cmd(
+        apply_changes: bool = typer.Option(False, "--apply", help="Actually remove the listed nodes."),
+        ttl_days: int = typer.Option(45, "--ttl-days", help="Age at which session summaries decay."),
+        threshold: float = typer.Option(0.86, "--similarity", help="Duplicate similarity threshold."),
+        include_stale: bool = typer.Option(False, "--stale", help="Also remove decayed nodes."),
+        json_output: bool = typer.Option(False, "--json"),
+    ):
+        """Find (and optionally remove) duplicate and stale memory nodes."""
+        from magent.memory_hygiene import run_hygiene
+
+        mgr, _ = _get_memory_manager()
+        result = run_hygiene(
+            mgr,
+            ttl_days=ttl_days,
+            threshold=threshold,
+            remove_stale=include_stale,
+            apply=apply_changes,
+        )
+
+        if json_output:
+            console.print_json(data=result)
+            raise typer.Exit(0 if result.get("ok") else 1)
+
+        if not result.get("ok"):
+            console.print(f"[red]{result.get('error')}[/red]")
+            raise typer.Exit(1)
+
+        console.print(
+            f"[bold]{result['nodes']}[/bold] nodes · "
+            f"[yellow]{result['duplicate_count']}[/yellow] duplicates · "
+            f"[yellow]{result['stale_count']}[/yellow] stale (>{ttl_days}d)"
+        )
+        for group in result["duplicate_groups"][:10]:
+            console.print(f"  [dim]keep[/dim] {group['keep']} [dim]— {group['preview']}[/dim]")
+            for member in group["duplicates"]:
+                console.print(f"    [red]dup[/red] {member['id']} ({member['similarity']})")
+        for item in result["stale"][:10]:
+            console.print(f"  [yellow]stale[/yellow] {item['id']} ({item['age_days']}d)")
+
+        if result.get("applied"):
+            console.print(f"[green]Removed {result.get('removed_count', 0)} node(s).[/green]")
+        elif result.get("targets"):
+            console.print("[dim]Dry run. Re-run with --apply to remove these.[/dim]")
+
     @memory_app.command("inbox")
     def memory_inbox_cmd(
         action: str = typer.Argument("list", help="list, accept, reject, or edit"),

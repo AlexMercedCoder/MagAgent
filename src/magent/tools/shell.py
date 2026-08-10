@@ -140,6 +140,8 @@ class ShellToolsMixin:
     show_tool_calls: bool
     username: str
     interactive_permissions: bool
+    shell_sandbox: str
+    shell_sandbox_network: bool
     _active_processes: set[asyncio.subprocess.Process]
 
     def _log_tool(self, name: str, desc: str, tier: RiskTier) -> None:
@@ -226,6 +228,24 @@ class ShellToolsMixin:
         console.print(f"[dim]Approved once; running `{command}`.[/dim]")
         return PermissionResult(True, tier, "user-confirmed")
 
+    def _sandbox_argv(self, command: str) -> list[str] | None:
+        """Wrap a command in the configured isolation profile, if any."""
+        profile = str(getattr(self, "shell_sandbox", "") or "off")
+        if profile == "off":
+            return None
+        from magent.sandbox import wrap_shell_command
+
+        try:
+            return wrap_shell_command(
+                command,
+                profile=profile,
+                cwd=self.cwd,
+                network=bool(getattr(self, "shell_sandbox_network", False)),
+            )
+        except (ValueError, RuntimeError) as error:
+            console.print(f"[yellow]Shell sandbox unavailable ({error}); running unsandboxed.[/yellow]")
+            return None
+
     async def run_shell(self, command: str, timeout: int = 60) -> ToolResult:
         original_command = command
         command = _prefer_platform_python_command(command)
@@ -257,7 +277,10 @@ class ShellToolsMixin:
                 return {"ok": False, "error": f"Invalid shell syntax: {e}"}
             if not argv:
                 return {"ok": False, "error": "Empty command"}
-            if _uses_shell_syntax(command):
+            sandboxed = self._sandbox_argv(command)
+            if sandboxed is not None:
+                proc = await _create_exec_process(*sandboxed, cwd=self.cwd)
+            elif _uses_shell_syntax(command):
                 proc = await _create_shell_process(command, self.cwd)
             else:
                 proc = await _create_exec_process(*argv, cwd=self.cwd)

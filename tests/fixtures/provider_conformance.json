@@ -1,0 +1,112 @@
+{
+  "checks": [
+    {
+      "cases": [
+        {
+          "model": "gpt-5.1",
+          "observed": {
+            "has_timeout": true,
+            "temperature": null
+          },
+          "ok": true,
+          "problems": [],
+          "provider": "openai",
+          "temperature_in": 0.3
+        },
+        {
+          "model": "gpt-5.1",
+          "observed": {
+            "has_timeout": true,
+            "temperature": 1
+          },
+          "ok": true,
+          "problems": [],
+          "provider": "openai",
+          "temperature_in": 1
+        },
+        {
+          "model": "claude-sonnet-5",
+          "observed": {
+            "has_timeout": true,
+            "temperature": null
+          },
+          "ok": true,
+          "problems": [],
+          "provider": "anthropic",
+          "temperature_in": 0.3
+        },
+        {
+          "model": "claude-sonnet-4-5",
+          "observed": {
+            "has_timeout": true,
+            "temperature": 0.3
+          },
+          "ok": true,
+          "problems": [],
+          "provider": "anthropic",
+          "temperature_in": 0.3
+        },
+        {
+          "model": "gemini-3-pro",
+          "observed": {
+            "has_timeout": true,
+            "temperature": null
+          },
+          "ok": true,
+          "problems": [],
+          "provider": "google",
+          "temperature_in": 0.3
+        },
+        {
+          "model": "gpt-4o",
+          "observed": {
+            "has_timeout": true,
+            "temperature": 0.3
+          },
+          "ok": true,
+          "problems": [],
+          "provider": "openai",
+          "temperature_in": 0.3
+        }
+      ],
+      "description": "Models that reject a custom temperature must not receive one.",
+      "id": "default-temperature-only",
+      "ok": true
+    },
+    {
+      "cases": [
+        {
+          "model": "gpt-4o",
+          "observed": {
+            "has_timeout": true,
+            "temperature": 0.3
+          },
+          "ok": true,
+          "problems": [],
+          "provider": "openai",
+          "temperature_in": 0.3
+        },
+        {
+          "model": "claude-sonnet-5",
+          "observed": {
+            "has_timeout": true,
+            "temperature": null
+          },
+          "ok": true,
+          "problems": [],
+          "provider": "anthropic",
+          "temperature_in": 0.3
+        }
+      ],
+      "description": "Every provider call carries a timeout.",
+      "id": "request-deadline",
+      "ok": true
+    }
+  ],
+  "ok": true,
+  "providers": [
+    "anthropic",
+    "google",
+    "openai"
+  ]
+}

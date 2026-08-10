@@ -320,6 +320,57 @@ class MessageRouter:
         )
         return f"Queued Agentic Graph {task['id']} (execution {task['execution_task_id']})."
 
+    def session_report(self) -> dict[str, Any]:
+        """Live channel sessions and per-user rate state, for operators."""
+        now = time.time()
+        window = now - 60.0
+        return {
+            "ok": True,
+            "sessions": [
+                {
+                    "channel_id": channel_id,
+                    "session_id": getattr(session, "session_id", ""),
+                    "turns": int(getattr(session, "turn_count", 0) or 0),
+                    "cwd": getattr(session, "cwd", ""),
+                    "busy": self._channel_locks.get(channel_id) is not None
+                    and self._channel_locks[channel_id].locked(),
+                }
+                for channel_id, session in self._session_cache.items()
+            ],
+            "rate_limits": [
+                {"user_id": user_id, "recent_requests": len([s for s in stamps if s > window])}
+                for user_id, stamps in self.rate_limiter._buckets.items()
+            ],
+            "allowed_user_ids": sorted(self.allowed_user_ids),
+            "allow_anyone": self.allow_anyone,
+            "require_mention": self.require_mention,
+        }
+
+    async def end_session(self, channel_id: str) -> dict[str, Any]:
+        """End one channel's session, writing memory and closing logs."""
+        session = self._session_cache.pop(channel_id, None)
+        if session is None:
+            return {"ok": False, "error": f"No live session for channel {channel_id}"}
+        with contextlib.suppress(Exception):
+            await session.end_session()
+        self._channel_locks.pop(channel_id, None)
+        return {"ok": True, "channel_id": channel_id}
+
+    def revoke_user(self, user_id: str) -> dict[str, Any]:
+        """Drop a user from the in-memory allowlist for this gateway process.
+
+        Deliberately not persisted: it is an operational stop, and the config
+        stays the source of truth.
+        """
+        user_id = str(user_id)
+        if user_id in self.allowed_user_ids:
+            self.allowed_user_ids.discard(user_id)
+            return {"ok": True, "user_id": user_id, "revoked": True}
+        if self.allow_anyone:
+            self.allow_anyone = False
+            return {"ok": True, "user_id": user_id, "revoked": True, "allow_anyone": False}
+        return {"ok": False, "error": f"{user_id} was not admitted anyway"}
+
     async def close_all_sessions(self) -> None:
         """End all open agent sessions (writes memory, closes logs)."""
         for session in self._session_cache.values():

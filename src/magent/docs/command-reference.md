@@ -144,6 +144,7 @@ Generated from the active Typer command tree.
 - `magent release`
 - `magent repo-graph`
 - `magent research`
+- `magent resume`
 - `magent review`
 - `magent review-show`
 - `magent routine`
@@ -299,6 +300,7 @@ Generated from the active Typer command tree.
 - `magent memory delete`
 - `magent memory export`
 - `magent memory graph`
+- `magent memory hygiene`
 - `magent memory inbox`
 - `magent memory index`
 - `magent memory log`
@@ -355,6 +357,7 @@ Generated from the active Typer command tree.
 - `magent permission explain`
 - `magent permission profiles`
 - `magent permission propose`
+- `magent permission secrets`
 - `magent permission set`
 - `magent permission status`
 - `magent permission trust-clear`
@@ -411,6 +414,7 @@ Generated from the active Typer command tree.
 
 - `magent provider catalog-doctor`
 - `magent provider clear-cooldown`
+- `magent provider conformance`
 - `magent provider cooldowns`
 - `magent provider detect`
 - `magent provider doctor`
