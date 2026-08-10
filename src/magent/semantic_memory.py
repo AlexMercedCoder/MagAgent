@@ -278,6 +278,9 @@ class SemanticMemoryIndex:
 
 
 def chunk_text(text: str, max_words: int = 180, overlap_words: int = 30) -> list[str]:
+    # An overlap at or above the window makes every chunk one word long.
+    max_words = max(1, int(max_words))
+    overlap_words = max(0, min(int(overlap_words), max_words - 1))
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
     chunks: list[str] = []
     current: list[str] = []

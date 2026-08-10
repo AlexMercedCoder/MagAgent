@@ -24,10 +24,30 @@ def hook_config_path(project: str | Path = ".") -> Path:
     return Path(project).resolve() / ".magent" / "hooks.toml"
 
 
+_HOOK_CACHE: dict[str, tuple[float, int, dict[str, list[str]]]] = {}
+
+
 def load_hooks(project: str | Path = ".") -> dict[str, list[str]]:
+    """Load and parse .magent/hooks.toml, cached on the file's mtime and size.
+
+    This was re-read and re-parsed twice per tool call (pre and post), for
+    every tool call of every turn.
+    """
     path = hook_config_path(project)
     if not path.exists():
+        _HOOK_CACHE.pop(str(path), None)
         return {}
+
+    try:
+        stat = path.stat()
+        signature = (stat.st_mtime, stat.st_size)
+    except OSError:
+        signature = (0.0, 0)
+
+    cached = _HOOK_CACHE.get(str(path))
+    if cached and (cached[0], cached[1]) == signature:
+        return dict(cached[2])
+
     try:
         with path.open("rb") as f:
             data = tomllib.load(f)
@@ -45,6 +65,7 @@ def load_hooks(project: str | Path = ".") -> dict[str, list[str]]:
             hooks[event] = [value]
         elif isinstance(value, list):
             hooks[event] = [str(item) for item in value if str(item).strip()]
+    _HOOK_CACHE[str(path)] = (signature[0], signature[1], dict(hooks))
     return hooks
 
 
@@ -101,3 +122,20 @@ release_check = []
         encoding="utf-8",
     )
     return {"ok": True, "path": str(path)}
+
+
+async def run_hooks_async(
+    project: str | Path,
+    event: str,
+    payload: dict[str, Any] | None = None,
+    *,
+    timeout: int = 30,
+) -> list[dict[str, Any]]:
+    """Run hooks off the event loop.
+
+    Hook subprocesses ran synchronously inside the async loop, blocking every
+    other task for up to `timeout` seconds per hook.
+    """
+    import asyncio
+
+    return await asyncio.to_thread(run_hooks, project, event, payload, timeout=timeout)

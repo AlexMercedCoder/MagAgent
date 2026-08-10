@@ -25,6 +25,7 @@ from magent.config import (
 )
 from magent.config_safety import redact_config_text
 from magent.memory import MemoryManager
+from magent.permissions import PERMISSION_MODES
 from magent.task_runtime import TaskRuntime, TaskRuntimeError, TaskState
 from magent.tools.db import db_list_tables, db_query, db_schema, list_databases
 
@@ -51,7 +52,7 @@ CONFIG_SCHEMA: list[dict[str, Any]] = [
         "type": "enum",
         "scope": "global",
         "category": "permissions",
-        "choices": ["balanced", "ask", "strict", "paranoid", "permissive", "silent", "yolo"],
+        "choices": sorted(PERMISSION_MODES),
         "description": "Default tool permission posture.",
     },
     {
@@ -286,6 +287,15 @@ def config_set(
     cfg = load_user_profile(username) if scope == "user" else load_global_config()
     node = cfg
     parts = [part for part in path.split(".") if part]
+    if not parts:
+        # `path="."` used to reach parts[-1] and raise IndexError.
+        return {"ok": False, "error": "path must name at least one config key"}
+    if path.strip() == "defaults.permission_mode" and str(value) not in PERMISSION_MODES:
+        # A desktop client could silently set yolo (all gating off).
+        return {
+            "ok": False,
+            "error": f"permission_mode must be one of {', '.join(sorted(PERMISSION_MODES))}",
+        }
     for part in parts[:-1]:
         node = node.setdefault(part, {})
         if not isinstance(node, dict):
@@ -506,7 +516,26 @@ def _redact_obj(value: Any) -> Any:
     if isinstance(value, dict):
         redacted = {}
         for key, item in value.items():
-            if any(secret in str(key).lower() for secret in ("api_key", "token", "secret", "password")):
+            lowered = str(key).lower()
+            if lowered in {"api_key_env", "api_key_keyring", "api_key_command", "api_key_file"}:
+                redacted[key] = item
+                continue
+            if any(
+                secret in lowered
+                for secret in (
+                    "api_key",
+                    "apikey",
+                    "access_key",
+                    "secret",
+                    "token",
+                    "password",
+                    "passwd",
+                    "credential",
+                    "bearer",
+                    "private_key",
+                    "auth",
+                )
+            ):
                 redacted[key] = "***" if item else item
             else:
                 redacted[key] = _redact_obj(item)

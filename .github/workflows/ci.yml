@@ -28,6 +28,12 @@ jobs:
       - name: Lint
         run: python -m ruff check src tests
 
+      - name: Type check
+        # The gate `make lint` runs. It was never in CI while it could not
+        # pass; it passes now, so a regression fails the build.
+        if: matrix.python-version == '3.12'
+        run: python -m mypy src/magent
+
       - name: Unit tests
         run: python -m pytest tests/unit -q
 

@@ -1342,8 +1342,18 @@ def inspect_data(path: str) -> dict[str, Any]:
     if p.suffix.lower() == ".csv":
         with p.open(newline="", encoding="utf-8", errors="replace") as f:
             reader = csv.DictReader(f)
-            rows = list(reader)
-        return {"kind": "csv", "columns": reader.fieldnames or [], "rows": len(rows), "sample": rows[:5]}
+            # fieldnames must be read inside the block: a zero-byte CSV made
+            # the deferred access raise "I/O operation on closed file". Rows are
+            # counted as they stream rather than materialised just to be
+            # measured.
+            columns = reader.fieldnames or []
+            sample: list[dict[str, Any]] = []
+            total = 0
+            for row in reader:
+                total += 1
+                if len(sample) < 5:
+                    sample.append(row)
+        return {"kind": "csv", "columns": columns, "rows": total, "sample": sample}
     if p.suffix.lower() in {".db", ".sqlite", ".sqlite3"}:
         conn = sqlite3.connect(str(p))
         try:
@@ -1522,6 +1532,8 @@ def policy_profiles() -> dict[str, dict[str, Any]]:
 
 
 def _run_git(root: str | Path, args: list[str]) -> str:
+    # Narrow: a bare `except Exception` reported a non-git directory, a missing
+    # binary and a timeout all as "no diff".
     try:
         result = subprocess.run(
             ["git", *args],
@@ -1531,29 +1543,45 @@ def _run_git(root: str | Path, args: list[str]) -> str:
             timeout=30,
         )
         return result.stdout
-    except Exception:
+    except (OSError, subprocess.SubprocessError):
         return ""
 
 
 def _run_git_result(root: str | Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    """Run git, turning a timeout into a result rather than a traceback."""
+    try:
+        return subprocess.run(
+            ["git", *args],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(["git", *args], 124, "", "git timed out after 30s")
 
 
 def _run_command(root: str | Path, command: str, timeout: int = 60) -> dict[str, Any]:
-    result = subprocess.run(
-        command,
-        cwd=str(root),
-        shell=True,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
+    # None of these runners caught TimeoutExpired, so `plan-apply --run-checks`,
+    # `release check` and `diagnostics` died with a raw traceback on a slow suite.
+    try:
+        result = subprocess.run(
+            command,
+            cwd=str(root),
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "command": command,
+            "ok": False,
+            "returncode": 124,
+            "stdout": "",
+            "stderr": f"timed out after {timeout}s",
+            "timed_out": True,
+        }
     return {
         "command": command,
         "ok": result.returncode == 0,
@@ -1564,7 +1592,10 @@ def _run_command(root: str | Path, command: str, timeout: int = 60) -> dict[str,
 
 
 def _run_command_args(root: str | Path, cmd: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=timeout)
+    try:
+        return subprocess.run(cmd, cwd=str(root), capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, 124, "", f"timed out after {timeout}s")
 
 
 def _file_sha256(path: Path) -> str:

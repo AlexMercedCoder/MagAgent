@@ -168,6 +168,17 @@ root_path = "."
 # ─────────────────────────────────────────────
 
 
+def _merge_patterns(user: Any, glob: Any) -> list[str]:
+    """User profile entries take precedence, global entries still apply."""
+    merged: list[str] = []
+    for source in (user or [], glob or []):
+        for item in source:
+            text = str(item)
+            if text not in merged:
+                merged.append(text)
+    return merged
+
+
 class Config:
     """Merged view of global config + active user profile."""
 
@@ -208,11 +219,23 @@ class Config:
 
     @property
     def allowed_shell_patterns(self) -> list[str]:
-        return self._user.get("permissions", {}).get("allowed_shell_patterns", [])
+        """User profile entries first, then the global [permissions] section.
+
+        The README documents `[permissions] allowed_shell_patterns` in the
+        global config, but only the user profile was ever read, so globally
+        configured patterns did nothing.
+        """
+        return _merge_patterns(
+            self._user.get("permissions", {}).get("allowed_shell_patterns"),
+            self._global.get("permissions", {}).get("allowed_shell_patterns"),
+        )
 
     @property
     def trusted_shell_patterns(self) -> list[str]:
-        return self._user.get("permissions", {}).get("trusted_shell_patterns", [])
+        return _merge_patterns(
+            self._user.get("permissions", {}).get("trusted_shell_patterns"),
+            self._global.get("permissions", {}).get("trusted_shell_patterns"),
+        )
 
     @property
     def memory_budget_tokens(self) -> int:
@@ -354,10 +377,17 @@ class Config:
 
     @property
     def write_every_n_turns(self) -> int:
-        return int(
-            self._user.get("memory", {}).get("write_every_n_turns")
-            or self._global.get("memory", {}).get("write_every_n_turns", 5)
-        )
+        """Turns between periodic memory writes. 0 disables them.
+
+        An `or` chain treated an explicit 0 as "unset" and fell through to 5,
+        and a global 0 that did get through reached `turn_count % value`.
+        """
+        value = self._user.get("memory", {}).get("write_every_n_turns")
+        if value is None:
+            value = self._global.get("memory", {}).get("write_every_n_turns")
+        if value is None:
+            return 5
+        return max(0, int(value))
 
     @property
     def extraction_provider(self) -> str:

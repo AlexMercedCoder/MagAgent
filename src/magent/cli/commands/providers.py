@@ -124,7 +124,13 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
                     "reason": "passed" if ok else "provider ping failed",
                 }
             )
-        console.print_json(data={"ok": all(row["ok"] is not False for row in rows), "providers": rows})
+        console.print_json(
+            data={
+                "ok": bool(rows) and all(row["ok"] is not False for row in rows),
+                "providers": rows,
+                "tested": len(rows),
+            }
+        )
 
     @provider_app.command("models")
     def provider_models_cmd(
@@ -218,4 +224,10 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
                     timeout_seconds=timeout,
                 )
             )
-        console.print_json(data={"ok": all(row["ok"] for row in rows), "providers": rows})
+        console.print_json(
+            data={
+                "ok": bool(rows) and all(row["ok"] for row in rows),
+                "providers": rows,
+                "tested": len(rows),
+            }
+        )

@@ -10,7 +10,7 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -1979,6 +1979,12 @@ def review_cmd(
         console.print(f"[green]✓ Saved review {item['id']}[/green]")
         if json_out:
             console.print_json(data=item)
+        # --save used to return before this check, so `--save --fail-on P1`
+        # always exited 0 no matter what the review found.
+        if fail_on and review_fails_threshold(
+            (item.get("summary") or {}).get("findings", []), fail_on
+        ):
+            raise typer.Exit(1)
         return
     if json_out:
         summary = review_summary(project, base)
@@ -2942,9 +2948,13 @@ def auth_remove_cmd(provider_id: str = typer.Argument(...)):
 
     result = delete_keyring_secret(provider_id)
     cfg = load_global_config()
-    entry = cfg.setdefault("providers", {}).setdefault(provider_id, {})
-    entry.pop("api_key_keyring", None)
-    save_global_config(cfg)
+    # Only touch a provider that was actually configured: setdefault created an
+    # empty entry for providers that never existed, which then showed up as
+    # `configured: true`.
+    providers = cfg.get("providers") or {}
+    entry = providers.get(provider_id)
+    if isinstance(entry, dict) and entry.pop("api_key_keyring", None) is not None:
+        save_global_config(cfg)
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)
@@ -3363,6 +3373,29 @@ def policy_list_cmd():
     console.print_json(data=policy_profiles())
 
 
+def _block_until_interrupt(server: Any = None) -> None:
+    """Wait for Ctrl+C, then shut the server down.
+
+    `signal.pause()` does not exist on Windows, so the AttributeError path
+    returned immediately and the server died the moment it started.
+    """
+    import threading
+
+    stop = threading.Event()
+    try:
+        # A bare wait() is not interruptible by Ctrl+C on Windows, so poll.
+        while not stop.wait(0.5):
+            pass
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if server is not None:
+            with contextlib.suppress(Exception):
+                server.shutdown()
+            with contextlib.suppress(Exception):
+                server.server_close()
+
+
 @app.command("dashboard", rich_help_panel="Data & Local UI")
 def dashboard_cmd(
     out: str = typer.Option("magent-dashboard.html", "--out"),
@@ -3376,11 +3409,11 @@ def dashboard_cmd(
     if serve:
         result = serve_dashboard(_store(), port=port, open_browser=open_browser)
         console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
         console.print("[dim]Press Ctrl+C to stop.[/dim]")
-        try:
-            signal.pause()
-        except (AttributeError, KeyboardInterrupt):
-            return
+        _block_until_interrupt(result.get("server"))
+        return
     path = export_dashboard(_store(), out)
     console.print(f"[green]✓ Dashboard written to {path}[/green]")
 
@@ -3396,12 +3429,12 @@ def ui_cmd(
 
     username = _require_user()
     result = serve_ui(_store(), project=project, username=username, port=port, open_browser=open_browser)
-    console.print_json(data=result)
+    console.print_json(data={key: value for key, value in result.items() if key != "server"})
+    if not result.get("ok"):
+        raise typer.Exit(1)
     console.print("[dim]Press Ctrl+C to stop.[/dim]")
-    try:
-        signal.pause()
-    except (AttributeError, KeyboardInterrupt):
-        return
+    _block_until_interrupt(result.get("server"))
+    return
 
 
 @checkpoint_app.command("list")
@@ -4030,15 +4063,18 @@ def memory_log(
     from magent.logging import list_session_logs
     from magent.utils import human_bytes
 
-    logs = list_session_logs(limit=limit)
+    # Filter first, then limit. Truncating to `limit` before filtering by user
+    # returned an empty table whenever the newest sessions belonged to someone
+    # else.
+    logs = list_session_logs(limit=limit if not user else max(limit * 10, 200))
+    if user:
+        logs = [entry for entry in logs if entry.get("user") == user][:limit]
     if not logs:
         console.print("[dim]No session logs found.[/dim]")
         return
 
     t = Table("Session", "User", "Started", "Status", "Events", "Size")
     for entry in logs:
-        if user and entry.get("user") != user:
-            continue
         status = (
             "[green]complete[/green]"
             if entry.get("ended") != "active"
@@ -4398,7 +4434,7 @@ def gateway_stop():
     from magent.gateway import GATEWAY_PID_FILE, is_gateway_running
 
     running, pid = is_gateway_running()
-    if not running:
+    if not running or pid is None:
         console.print("[dim]No gateway is running.[/dim]")
         raise typer.Exit()
 

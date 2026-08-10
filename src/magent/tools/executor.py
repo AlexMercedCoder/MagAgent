@@ -33,7 +33,7 @@ from magent.tools.messaging import MessagingToolsMixin
 from magent.tools.registry import strip_tool_activity, validate_tool_args
 from magent.tools.shell import ShellToolsMixin
 from magent.tools.system import SystemToolsMixin
-from magent.tools.types import DEFAULT_TOOL_BUDGETS, ToolResult
+from magent.tools.types import DEFAULT_TOOL_BUDGETS, OPAQUE_RESULT_KEYS, ToolResult
 from magent.tools.web import WebToolsMixin
 
 console = Console()
@@ -212,10 +212,14 @@ class ToolExecutor(
 
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         from magent.tools.catalog import built_in_tool_definitions
+        from magent.tools.registry import reconcile_required_with_signatures
 
         return cast(
             list[dict[str, Any]],
-            filter_tool_definitions_for_user(built_in_tool_definitions(), self.username),
+            reconcile_required_with_signatures(
+                filter_tool_definitions_for_user(built_in_tool_definitions(), self.username),
+                self,
+            ),
         )
 
     def get_tool_definitions_for_message(self, message: str) -> list[dict[str, Any]]:
@@ -385,6 +389,17 @@ class ToolExecutor(
         changed = False
         output = dict(result)
         for key, value in list(output.items()):
+            if key in OPAQUE_RESULT_KEYS:
+                # Base64 image payloads are not prose: appending a truncation
+                # marker produced undecodable data that was handed straight to
+                # vision models. Drop the field instead of corrupting it.
+                if isinstance(value, str) and len(value) > budget:
+                    output.pop(key)
+                    output[f"{key}_omitted"] = (
+                        f"{len(value)} characters of binary payload omitted; pass raw=true to receive it"
+                    )
+                    changed = True
+                continue
             if isinstance(value, str) and len(value) > budget:
                 output[key] = value[:budget].rstrip() + (
                     f"\n\n[...{key} truncated at {budget} chars; pass raw=true for full output...]"

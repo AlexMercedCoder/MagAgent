@@ -306,11 +306,12 @@ async def test_run_tool_loop_dispatches_tool_and_returns_final_text(monkeypatch)
 async def test_dispatch_tool_call_strips_activity_but_keeps_audit_metadata(monkeypatch) -> None:
     hook_payloads = []
 
-    def fake_run_hooks(project, event, payload):
+    async def fake_run_hooks(project, event, payload, **kwargs):
+        # Hooks now run off the event loop, so the agent calls the async form.
         hook_payloads.append((project, event, payload))
         return []
 
-    monkeypatch.setattr("magent.agent.run_hooks", fake_run_hooks)
+    monkeypatch.setattr("magent.agent.run_hooks_async", fake_run_hooks)
     session = make_session()
     result = await session._dispatch_tool_call(
         "write_file",

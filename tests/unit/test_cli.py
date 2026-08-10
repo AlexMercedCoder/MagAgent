@@ -653,11 +653,9 @@ def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -
             "username": username,
         },
     )
-    monkeypatch.setattr(
-        cli_main.signal,
-        "pause",
-        lambda: (_ for _ in ()).throw(KeyboardInterrupt()),
-    )
+    # signal.pause() does not exist on Windows, so the server is now blocked
+    # on a portable, interruptible wait instead.
+    monkeypatch.setattr(cli_main, "_block_until_interrupt", lambda server=None: None)
 
     result = runner.invoke(cli_main.app, ["ui", "--project", str(project), "--port", "9999"])
 

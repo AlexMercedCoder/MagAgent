@@ -180,6 +180,21 @@ class SessionLogger:
         return self._path
 
 
+def _first_json_object(lines: Any) -> dict[str, Any]:
+    """First line that parses as a JSON object, skipping corrupt ones."""
+    for line in lines:
+        text = str(line).strip()
+        if not text:
+            continue
+        try:
+            value = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
 def list_session_logs(limit: int = 20) -> list[dict[str, Any]]:
     """List recent session log files with basic metadata."""
     if not LOGS_DIR.exists():
@@ -187,9 +202,11 @@ def list_session_logs(limit: int = 20) -> list[dict[str, Any]]:
     files = sorted(LOGS_DIR.glob("*.jsonl"), key=lambda f: f.stat().st_mtime, reverse=True)
     results = []
     for f in files[:limit]:
-        lines = f.read_text().splitlines()
-        first = json.loads(lines[0]) if lines else {}
-        last = json.loads(lines[-1]) if lines else {}
+        lines = f.read_text(encoding="utf-8", errors="replace").splitlines()
+        # One truncated line used to break the whole listing (`magent stats`,
+        # insights) with an unguarded json.loads.
+        first = _first_json_object(lines)
+        last = _first_json_object(reversed(lines))
         results.append(
             {
                 "file": f.name,

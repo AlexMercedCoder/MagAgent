@@ -201,9 +201,24 @@ class FileToolsMixin:
         if not perm.approved:
             return self._permission_denied(perm)
         try:
-            content = abs_path.read_text(encoding="utf-8")
-            if old_str not in content:
+            # errors="replace" so a non-UTF-8 file reports a readable failure
+            # instead of raising out of the tool.
+            content = abs_path.read_text(encoding="utf-8", errors="replace")
+            occurrences = content.count(old_str)
+            if occurrences == 0:
                 return {"ok": False, "error": f"String not found in {path}"}
+            if occurrences > 1:
+                # Editing an arbitrary one of several matches and reporting
+                # success is worse than refusing: the caller cannot tell which
+                # site changed.
+                return {
+                    "ok": False,
+                    "error": (
+                        f"old_str matches {occurrences} places in {path}; include more "
+                        "surrounding context so the intended one is unambiguous."
+                    ),
+                    "occurrences": occurrences,
+                }
             checkpoint_id = self._checkpoint(abs_path, "edit_file")
             abs_path.write_text(content.replace(old_str, new_str, 1), encoding="utf-8")
             return {"ok": True, "path": str(abs_path), "checkpoint_id": checkpoint_id}
@@ -308,7 +323,7 @@ class FileToolsMixin:
             return self._permission_denied(perm)
         try:
             out.mkdir(parents=True, exist_ok=True)
-            if archive_path.endswith(".zip"):
+            if archive_path.lower().endswith(".zip"):
                 with zipfile.ZipFile(src) as archive:
                     names = archive.namelist()
                     safe_extract_zip(archive, out)

@@ -33,4 +33,11 @@ def safe_extract_tar(tf: Any, output_dir: Path) -> None:
             link_target = (target.parent / linkname).resolve(strict=False)
             if not is_within(link_target, root):
                 raise ValueError(f"Refusing to extract unsafe archive link: {member.name}")
-    tf.extractall(root)
+    # filter="data" is the Python 3.12+ default and refuses absolute paths,
+    # traversal and special files during extraction. The pre-check above cannot
+    # catch a symlink member followed by a write *through* that symlink, since
+    # it validates before anything exists on disk.
+    try:
+        tf.extractall(root, filter="data")
+    except TypeError:  # pragma: no cover - Python < 3.12
+        tf.extractall(root)

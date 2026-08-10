@@ -275,7 +275,9 @@ def test_config_ux_provider_access_modes_and_doctor_actions(tmp_path: Path, monk
     fixed = config_ux.fix_doctor_actions("alice")
 
     assert result["access_mode"] == "subscription"
-    assert result["config"]["api_key_env"] == "***"
+    # api_key_env names *where* the key lives; it is not itself a secret, and
+    # redacting it left users unable to verify what they had configured.
+    assert result["config"]["api_key_env"] == "OPENCODE_GO_KEY"
     assert detected["openai"]["access_modes"][1]["id"] == "codex"
     assert detected["opencode-go"]["api_key_env"] == "OPENCODE_GO_KEY"
     assert detected["mistral"]["api_key_env"] == "MISTRAL_API_KEY"

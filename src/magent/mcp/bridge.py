@@ -161,11 +161,13 @@ async def _transport(profile: dict[str, Any], stack: AsyncExitStack) -> Any:
         return stdio_client(params)
 
     if transport == "streamable-http":
-        import httpx
+        # httpx2, not httpx: the MCP SDK depends on httpx2 and
+        # streamable_http_client requires an httpx2.AsyncClient specifically.
+        import httpx2
         from mcp.client.streamable_http import streamable_http_client
 
         http = await stack.enter_async_context(
-            httpx.AsyncClient(
+            httpx2.AsyncClient(
                 headers=_expand_mapping(profile.get("headers")),
                 timeout=float(profile.get("timeout", 30.0)),
                 follow_redirects=True,

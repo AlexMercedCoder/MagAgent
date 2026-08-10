@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import ast
 import fnmatch
-import os
 from enum import IntEnum
 from pathlib import Path
 from typing import NamedTuple
@@ -341,6 +340,12 @@ _LOWERABLE_REASONS = {
     "unknown-command",
     "version-probe",
 }
+
+
+# The permission modes that are actually implemented. desktop_api advertised
+# "ask", "strict" and "permissive", none of which exist — unknown modes fall
+# through to balanced behaviour.
+PERMISSION_MODES = frozenset({"silent", "balanced", "paranoid", "yolo"})
 
 
 class ShellClassification(NamedTuple):
@@ -695,7 +700,8 @@ def classify_file_op(op: str, path: str, cwd: str) -> RiskTier:
     raw_path = Path(path).expanduser()
     abs_path = (raw_path if raw_path.is_absolute() else root / raw_path).resolve(strict=False)
     try:
-        os.path.commonpath([str(root), str(abs_path)])
+        # commonpath raises when the paths are on different drives/roots; the
+        # containment answer itself comes from the parent check.
         in_cwd = abs_path == root or root in abs_path.parents
     except ValueError:
         in_cwd = False

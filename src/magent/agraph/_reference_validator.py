@@ -525,7 +525,9 @@ class Validator:
             if missing:
                 self.report.add("AG113", "error", f"edge references unknown node(s) {missing}", pointer)
                 continue
-            edges.append((src, dst, edge.get("kind", "sequence"), edge.get("when")))
+            # src/dst are known non-None here (the `missing` check above
+            # returned otherwise); make that explicit for the element type.
+            edges.append((str(src), str(dst), str(edge.get("kind", "sequence")), edge.get("when")))
 
         deduped = list(dict.fromkeys(edges))
         scope.effective_edges = deduped

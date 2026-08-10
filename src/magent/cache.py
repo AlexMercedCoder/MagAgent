@@ -76,8 +76,8 @@ CACHE_CAPABILITIES: dict[str, CacheCapabilities] = {
         implicit_prefix_cache=True,
         notes="OpenAI-compatible endpoint; cache behavior depends on the upstream model gateway.",
     ),
-    "nous": CacheCapabilities(
-        provider="nous",
+    "nous-portal": CacheCapabilities(
+        provider="nous-portal",
         implicit_prefix_cache=True,
         notes="OpenAI-compatible endpoint; cache behavior depends on the selected model.",
     ),

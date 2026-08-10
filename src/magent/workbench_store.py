@@ -65,6 +65,10 @@ def _quarantine(path: Path, error: Exception) -> Path:
 class WorkbenchStore:
     """Simple JSON-backed store scoped to one MagAgent user."""
 
+    # Class-level default so instances built with __new__ (some tests, and any
+    # caller that skips __init__) still have somewhere to record warnings.
+    warnings: list[str] = []
+
     def __init__(self, username: str):
         self.username = username
         self.root = USERS_DIR / username / WORKBENCH_DIRNAME

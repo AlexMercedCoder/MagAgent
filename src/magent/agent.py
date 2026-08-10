@@ -29,7 +29,7 @@ from magent.artifact_contracts import (
 )
 from magent.cache import extract_cache_usage
 from magent.config import Config, user_memory_dir
-from magent.hooks import run_hooks
+from magent.hooks import run_hooks_async
 from magent.logging import SessionLogger
 from magent.memory import MemoryManager
 from magent.memory.extraction import extract_memories
@@ -462,6 +462,15 @@ class AgentSession:
         if callable(params):
             return params(temperature, max_tokens)
         return {"temperature": temperature, "max_tokens": max_tokens}
+
+    def _periodic_memory_write_due(self) -> bool:
+        """Whether this turn should trigger a periodic memory write.
+
+        `write_every_n_turns = 0` means "never"; it used to reach
+        `turn_count % 0` as a ZeroDivisionError.
+        """
+        interval = int(self.config.write_every_n_turns or 0)
+        return interval > 0 and self.turn_count % interval == 0
 
     def _provider_request_kwargs(self) -> dict[str, Any]:
         if hasattr(self.provider, "request_kwargs"):
@@ -978,7 +987,7 @@ class AgentSession:
                         self.conversation.append({"role": "assistant", "content": fallback})
                         self.logger.log_assistant_turn(self.turn_count, fallback, total_tool_calls)
                         yield fallback
-                        if self.turn_count % self.config.write_every_n_turns == 0:
+                        if self._periodic_memory_write_due():
                             await self._maybe_write_memories()
                         self._maybe_compact_conversation()
                         return
@@ -991,7 +1000,7 @@ class AgentSession:
                     self.conversation.append({"role": "assistant", "content": full_response})
                     self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
                     yield full_response
-                    if self.turn_count % self.config.write_every_n_turns == 0:
+                    if self._periodic_memory_write_due():
                         await self._maybe_write_memories()
                     self._maybe_compact_conversation()
                     return
@@ -1148,7 +1157,7 @@ class AgentSession:
         self.conversation.append({"role": "assistant", "content": response})
         self.logger.log_assistant_turn(self.turn_count, response, tool_call_count)
 
-        if self.turn_count % self.config.write_every_n_turns == 0:
+        if self._periodic_memory_write_due():
             await self._maybe_write_memories()
         self._maybe_compact_conversation()
 
@@ -1528,16 +1537,26 @@ class AgentSession:
         """Dispatch a tool call and record hooks, scratchpad, and audit logs."""
         dispatch_args = strip_tool_activity(tool_args)
         self._log_tool_started_event(tool_name, tool_args)
-        run_hooks(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
+        # Hooks run off the loop: a synchronous subprocess here blocked every
+        # other task for up to the hook timeout.
+        await run_hooks_async(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
         if self.mcp.is_mcp_tool(tool_name):
             result = await self.mcp.dispatch(tool_name, dispatch_args)
         else:
             result = await self.tools.dispatch(tool_name, dispatch_args)
-        run_hooks(self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result})
+        await run_hooks_async(
+            self._cwd(), "post_tool", {"tool": tool_name, "args": tool_args, "result": result}
+        )
         if tool_name in FILE_MUTATION_TOOLS:
-            run_hooks(self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result})
+            await run_hooks_async(
+                self._cwd(), "post_edit", {"tool": tool_name, "args": tool_args, "result": result}
+            )
         if tool_name == "run_shell" and not result.get("ok", True):
-            run_hooks(self._cwd(), "command_failure", {"tool": tool_name, "args": tool_args, "result": result})
+            await run_hooks_async(
+                self._cwd(),
+                "command_failure",
+                {"tool": tool_name, "args": tool_args, "result": result},
+            )
         self._observe_tool_result(tool_name, tool_args, result)
 
         from magent.permissions import RiskTier, classify_shell_command

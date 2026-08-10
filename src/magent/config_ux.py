@@ -689,8 +689,16 @@ def _redact_gateway(gateway: dict[str, Any]) -> dict[str, Any]:
     return redacted
 
 
+# `api_key_env` and `api_key_keyring` name *where* a key lives; they are not
+# secrets, and redacting them left users unable to verify what they had set.
+_NON_SECRET_KEY_FIELDS = {"api_key_env", "api_key_keyring", "api_key_command", "api_key_file"}
+
+
 def _redact_provider_entry(entry: dict[str, Any]) -> dict[str, Any]:
-    return {key: ("***" if "key" in key.lower() and value else value) for key, value in entry.items()}
+    return {
+        key: ("***" if key not in _NON_SECRET_KEY_FIELDS and "key" in key.lower() and value else value)
+        for key, value in entry.items()
+    }
 
 
 def provider_readiness(provider_id: str, provider_cfg: dict[str, Any] | None = None) -> dict[str, Any]:
