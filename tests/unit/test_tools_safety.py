@@ -454,26 +454,47 @@ async def test_deep_research_collects_sources(monkeypatch, tmp_path: Path) -> No
 
 @pytest.mark.asyncio
 async def test_http_request_uses_web_capability_client(monkeypatch, tmp_path: Path) -> None:
+    """Requests are streamed and sent one hop at a time so each URL is validated."""
+
     class FakeResponse:
         is_success = True
+        is_redirect = False
         status_code = 201
         headers = {"content-type": "application/json"}
-        text = '{"created": true}'
+        encoding = "utf-8"
 
-        def json(self):
-            return {"created": True}
+        async def aiter_bytes(self):
+            yield b'{"created": true}'
+
+        async def aclose(self):
+            return None
+
+    class FakeRequest:
+        def __init__(self, method, url, kwargs):
+            self.method = method
+            self.url = url
+            self.kwargs = kwargs
 
     class FakeClient:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
         async def __aenter__(self):
             return self
 
         async def __aexit__(self, *args):
             return None
 
-        async def request(self, method, url, **kwargs):
+        def build_request(self, method, url, **kwargs):
             assert method == "POST"
             assert url == "https://example.com/items"
             assert kwargs["json"] == {"name": "demo"}
+            return FakeRequest(method, url, kwargs)
+
+        async def send(self, request, stream=False, follow_redirects=False):
+            # Redirects must not be delegated to httpx: each hop is validated.
+            assert stream is True
+            assert follow_redirects is False
             return FakeResponse()
 
     monkeypatch.setattr(web_module.httpx, "AsyncClient", FakeClient)
@@ -488,6 +509,36 @@ async def test_http_request_uses_web_capability_client(monkeypatch, tmp_path: Pa
     assert result["ok"] is True
     assert result["status"] == 201
     assert result["body_json"] == {"created": True}
+
+
+@pytest.mark.asyncio
+async def test_http_request_mutating_method_is_confirm_tier(tmp_path: Path) -> None:
+    """`http_request(method="POST")` gets the same answer as `curl -X POST`."""
+    from magent.net_policy import classify_network_action
+    from magent.permissions import RiskTier, classify_shell_command
+
+    assert classify_network_action("GET", "https://example.com") == RiskTier.AUTO
+    assert classify_network_action("POST", "https://example.com") == RiskTier.CONFIRM
+    assert classify_shell_command("curl -X POST https://example.com") == RiskTier.CONFIRM
+
+
+@pytest.mark.asyncio
+async def test_web_tools_refuse_internal_targets(tmp_path: Path) -> None:
+    """SSRF: link-local, loopback and non-http schemes are rejected before the request."""
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    for url in (
+        "http://169.254.169.254/latest/meta-data/",
+        "http://127.0.0.1:7830/api/state",
+        "file:///etc/passwd",
+    ):
+        result = await tools.web_fetch(url)
+        assert result["ok"] is False
+        assert result["blocked_by"] == "network-policy"
+
+        result = await tools.http_request("GET", url)
+        assert result["ok"] is False
+        assert result["blocked_by"] == "network-policy"
 
 
 @pytest.mark.asyncio

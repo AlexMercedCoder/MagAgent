@@ -8,16 +8,18 @@ import difflib
 import hashlib
 import json
 import re
+import secrets
 import shlex
 import shutil
 import sqlite3
 import subprocess
 import threading
 import tomllib
+import urllib.parse
 import webbrowser
 from collections import Counter
 from datetime import UTC, datetime
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -1456,18 +1458,58 @@ def export_dashboard(store: WorkbenchStore, out: str | Path) -> Path:
 
 
 def serve_dashboard(store: WorkbenchStore, port: int = 7820, open_browser: bool = False) -> dict[str, Any]:
-    path = export_dashboard(store, store.root / "dashboard.html")
-    class Handler(SimpleHTTPRequestHandler):
-        def __init__(self, *args: Any, **kwargs: Any):
-            super().__init__(*args, directory=str(path.parent), **kwargs)
+    """Serve the dashboard, and only the dashboard.
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    Rooting `SimpleHTTPRequestHandler` at the workbench directory published
+    `checkpoints/` — byte-for-byte backups of every file the agent has touched,
+    `.env` files included — plus `patches/` and every workbench JSON, to any
+    local process or web page, with directory listing on and no auth. The page
+    is now rendered once and served from memory; nothing else is reachable.
+    """
+    path = export_dashboard(store, store.root / "dashboard.html")
+    body = path.read_bytes()
+    token = secrets.token_urlsafe(32)
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            parsed = urllib.parse.urlparse(self.path)
+            host = (self.headers.get("Host") or "").split(":")[0]
+            supplied = urllib.parse.parse_qs(parsed.query).get("token", [""])[0]
+
+            if host not in {"127.0.0.1", "localhost", "[::1]", "::1"} or not secrets.compare_digest(
+                supplied, token
+            ):
+                self.send_response(403)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            if parsed.path not in {"/", f"/{path.name}"}:
+                self.send_response(404)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: Any) -> None:
+            return None
+
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError as e:
+        return {"ok": False, "error": f"Could not bind 127.0.0.1:{port}: {e}", "path": str(path)}
+
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    url = f"http://127.0.0.1:{port}/{path.name}"
+    url = f"http://127.0.0.1:{port}/?token={token}"
     if open_browser:
         webbrowser.open(url)
-    return {"ok": True, "url": url, "path": str(path)}
+    return {"ok": True, "url": url, "path": str(path), "token": token, "server": server}
 
 
 def policy_profiles() -> dict[str, dict[str, Any]]:

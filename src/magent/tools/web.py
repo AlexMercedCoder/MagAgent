@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import warnings
 from pathlib import Path
@@ -11,6 +12,13 @@ from urllib.parse import urlparse
 import httpx
 
 from magent.browser import browser_screenshot, browser_snapshot
+from magent.net_policy import (
+    UrlPolicyError,
+    classify_network_action,
+    read_capped,
+    request_with_policy,
+    validate_request_url,
+)
 from magent.permissions import PermissionResult, RiskTier
 from magent.tools.types import ToolResult
 
@@ -218,16 +226,23 @@ class WebToolsMixin:
 
     async def web_fetch(self, url: str, extract_article: bool = True) -> ToolResult:
         """Fetch a URL and extract bounded readable text."""
-        tier = RiskTier.AUTO
+        tier = classify_network_action("GET", url)
         self._log_tool("web_fetch", url, tier)
         perm = self._check_permission(f"Fetch URL: {url}", tier)
         if not perm.approved:
             return self._permission_denied(perm)
 
         try:
-            async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
-                response = await client.get(url, headers={"User-Agent": "MagAgent/0.2"})
-                raw_html = response.text
+            validate_request_url(url)
+        except UrlPolicyError as e:
+            return {"ok": False, "error": str(e), "blocked_by": "network-policy"}
+
+        try:
+            async with httpx.AsyncClient(timeout=25) as client:
+                response = await request_with_policy(
+                    client, "GET", url, headers={"User-Agent": "MagAgent/0.2"}
+                )
+                raw_html = await read_capped(response)
 
             if extract_article:
                 try:
@@ -348,46 +363,59 @@ class WebToolsMixin:
         timeout: int = 30,
     ) -> ToolResult:
         """Make an HTTP request with custom headers and an optional body."""
-        tier = RiskTier.AUTO
+        # Same policy as the shell classifier applies to `curl -X POST`: a
+        # mutating method is a confirmation, not an auto-approve.
+        tier = classify_network_action(method, url)
         self._log_tool("http_request", f"{method.upper()} {url}", tier)
         perm = self._check_permission(f"HTTP {method.upper()} {url}", tier)
         if not perm.approved:
             return self._permission_denied(perm)
+
         try:
-            kwargs: dict[str, Any] = {
-                "headers": headers or {},
-                "timeout": timeout,
-                "follow_redirects": True,
-            }
+            validate_request_url(url)
+        except UrlPolicyError as e:
+            return {"ok": False, "error": str(e), "blocked_by": "network-policy"}
+
+        try:
+            kwargs: dict[str, Any] = {"headers": headers or {}}
             if body:
                 if isinstance(body, dict):
                     kwargs["json"] = body
                 else:
                     kwargs["content"] = body.encode()
-            async with httpx.AsyncClient() as client:
-                response = await client.request(method.upper(), url, **kwargs)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await request_with_policy(client, method, url, **kwargs)
+                text = await read_capped(response)
             try:
-                data = response.json()
+                data = json.loads(text)
             except Exception:
                 data = None
             return {
                 "ok": response.is_success,
                 "status": response.status_code,
                 "headers": dict(response.headers),
-                "body_text": response.text[:5000],
+                "body_text": text[:5000],
                 "body_json": data,
-                "truncated": len(response.text) > 5000,
+                "truncated": len(text) > 5000,
             }
+        except UrlPolicyError as e:
+            return {"ok": False, "error": str(e), "blocked_by": "network-policy"}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
     async def browser_snapshot(self, url: str, wait_ms: int = 500) -> ToolResult:
         """Capture title and body text from a page with Playwright."""
-        tier = RiskTier.AUTO
+        tier = classify_network_action("GET", url)
         self._log_tool("browser_snapshot", url, tier)
         perm = self._check_permission(f"Browser snapshot: {url}", tier)
         if not perm.approved:
             return self._permission_denied(perm)
+        try:
+            # Playwright happily loads file:// and localhost; the policy applies
+            # to the browser exactly as it does to httpx.
+            validate_request_url(url)
+        except UrlPolicyError as e:
+            return {"ok": False, "error": str(e), "blocked_by": "network-policy"}
         return await browser_snapshot(url, wait_ms=wait_ms)
 
     async def browser_screenshot(self, url: str, path: str, wait_ms: int = 500) -> ToolResult:
@@ -397,6 +425,10 @@ class WebToolsMixin:
         perm = self._check_permission(f"Browser screenshot: {url}", tier)
         if not perm.approved:
             return self._permission_denied(perm)
+        try:
+            validate_request_url(url)
+        except UrlPolicyError as e:
+            return {"ok": False, "error": str(e), "blocked_by": "network-policy"}
         return await browser_screenshot(url, str(abs_path), wait_ms=wait_ms)
 
 

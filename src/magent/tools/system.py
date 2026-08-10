@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
-import json
 import shlex
 import shutil
 import sys
@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 
 from magent.permissions import PermissionResult, RiskTier
 from magent.tools.types import ToolResult
+
+_NOTIFY_URGENCIES = {"low", "normal", "critical"}
 
 
 class SystemToolsMixin:
@@ -66,6 +68,15 @@ class SystemToolsMixin:
     async def notify(self, title: str, message: str, urgency: str = "normal") -> ToolResult:
         """Send a desktop notification after a long-running task."""
         self._log_tool("notify", title, RiskTier.SILENT)
+
+        # `urgency` reaches a command line, so it is validated rather than
+        # interpolated.
+        if urgency not in _NOTIFY_URGENCIES:
+            return {
+                "ok": False,
+                "error": f"urgency must be one of {', '.join(sorted(_NOTIFY_URGENCIES))}",
+            }
+
         try:
             from plyer import notification
 
@@ -73,10 +84,27 @@ class SystemToolsMixin:
             return {"ok": True, "title": title, "message": message}
         except ImportError:
             pass
-        if shutil.which("notify-send"):
-            return await self.run_shell(
-                f"notify-send --urgency={urgency} {json.dumps(title)} {json.dumps(message)}"
+
+        notify_send = shutil.which("notify-send")
+        if notify_send:
+            # Exec form, no shell: json.dumps() is JSON quoting, not shell
+            # quoting, and bash still expands $(...) inside double quotes — so
+            # a title of `$(touch /tmp/pwned)` used to execute.
+            proc = await asyncio.create_subprocess_exec(
+                notify_send,
+                f"--urgency={urgency}",
+                "--",
+                title,
+                message,
+                cwd=self.cwd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
+            _, stderr = await proc.communicate()
+            if proc.returncode == 0:
+                return {"ok": True, "title": title, "message": message}
+            return {"ok": False, "error": stderr.decode("utf-8", errors="replace").strip()}
+
         return {"ok": False, "error": "No notification backend available (plyer or notify-send)"}
 
     async def clipboard_read(self) -> ToolResult:

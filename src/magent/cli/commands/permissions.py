@@ -75,6 +75,77 @@ def register_permission_commands(permission_app: typer.Typer) -> None:
 
         console.print_json(data=permission_propose(text))
 
+    @permission_app.command("classify")
+    def permission_classify_cmd(
+        command: str = typer.Argument(..., help="Shell command to classify (quote it)."),
+        use_allowlist: bool = typer.Option(
+            True,
+            "--allowlist/--no-allowlist",
+            help="Apply the active user's allowed_shell_patterns.",
+        ),
+        json_output: bool = typer.Option(False, "--json", help="Emit JSON instead of a table."),
+    ) -> None:
+        """Show the risk tier a shell command would receive, and why.
+
+        A dry run: nothing is executed. Useful when tuning
+        `allowed_shell_patterns`, and it is the same entry point the classifier
+        bypass regression suite exercises.
+        """
+        from magent.cli.command_context import require_user
+        from magent.config import Config
+        from magent.permissions import TIER_LABELS, describe_shell_command
+        from magent.permissions.shell_parse import parse_command
+
+        allowlist: list[str] = []
+        if use_allowlist:
+            try:
+                allowlist = list(Config(require_user()).allowed_shell_patterns or [])
+            except Exception:
+                allowlist = []
+
+        result = describe_shell_command(command, allowlist or None)
+        parsed = parse_command(command)
+
+        payload = {
+            "ok": parsed.ok,
+            "command": command,
+            "tier": int(result.tier),
+            "tier_name": result.tier.name.lower(),
+            "reason": result.reason,
+            "detail": result.detail,
+            "allowlist_applied": bool(allowlist),
+            "segments": [
+                {
+                    "command": segment.normalized(),
+                    "head": segment.head,
+                    "assignments": segment.assignments,
+                    "writes": [
+                        f"{redirect.operator} {redirect.target}" for redirect in segment.writes_files
+                    ],
+                    "substitutions": segment.substitutions,
+                }
+                for segment in parsed.segments
+            ],
+        }
+
+        if json_output:
+            console.print_json(data=payload)
+            return
+
+        console.print(f"[bold]{command}[/bold]")
+        console.print(f"  tier   {TIER_LABELS[result.tier]} ({int(result.tier)})")
+        console.print(f"  rule   {result.reason}" + (f" — {result.detail}" if result.detail else ""))
+        if not parsed.ok:
+            console.print(f"  [red]parse error: {parsed.error}[/red]")
+        for index, segment in enumerate(payload["segments"], start=1):
+            console.print(f"  [dim]segment {index}:[/dim] {segment['command'] or '(none)'}")
+            if segment["assignments"]:
+                console.print(f"    [dim]assignments:[/dim] {' '.join(segment['assignments'])}")
+            for write in segment["writes"]:
+                console.print(f"    [yellow]writes:[/yellow] {write}")
+            for substitution in segment["substitutions"]:
+                console.print(f"    [red]substitution:[/red] {substitution}")
+
     @permission_app.command("trust-list")
     def permission_trust_list_cmd() -> None:
         """Show shell patterns saved by session/always approvals."""

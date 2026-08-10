@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import secrets
 import threading
 import urllib.parse
 import webbrowser
@@ -83,7 +84,7 @@ def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | N
     }
 
 
-def render_ui_html() -> str:
+def render_ui_html(token: str = "") -> str:
     return """<!doctype html>
 <html lang="en">
 <head>
@@ -118,7 +119,10 @@ pre{white-space:pre-wrap;word-break:break-word;background:#f1f3f6;border-radius:
 <section><h2>Docs</h2><div class="row"><input id="docQuery" placeholder="Search docs"><button onclick="searchDocs()">Search</button></div><pre id="docs"></pre></section>
 </main>
 <script>
-async function getJson(path){const r=await fetch(path);return await r.json()}
+const TOKEN=new URLSearchParams(location.search).get('token')||'';
+function withToken(path){return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(TOKEN)}
+async function getJson(path){const r=await fetch(withToken(path),{headers:{'X-Magent-Token':TOKEN}});return await r.json()}
+async function postJson(path){const r=await fetch(withToken(path),{method:'POST',headers:{'X-Magent-Token':TOKEN}});return await r.json()}
 function show(id,data){document.getElementById(id).textContent=JSON.stringify(data,null,2)}
 async function refresh(){
  const data=await getJson('/api/state');
@@ -133,13 +137,13 @@ async function refresh(){
  document.getElementById('checkpointCount').textContent=data.checkpoints.length;
 }
 async function searchDocs(){const q=encodeURIComponent(document.getElementById('docQuery').value);show('docs',await getJson('/api/docs/search?q='+q))}
-async function loadReleaseCheck(){show('workspace',await getJson('/api/release/check'))}
+async function loadReleaseCheck(){show('workspace',await postJson('/api/release/check'))}
 async function loadReadiness(){show('workspace',await getJson('/api/readiness'))}
 async function loadCockpit(){show('cockpit',await getJson('/api/cockpit'))}
 async function loadModelHealth(){show('modelHealth',await getJson('/api/model/health'))}
-async function runProviderSmoke(){const p=encodeURIComponent(document.getElementById('smokeProvider').value);const m=encodeURIComponent(document.getElementById('smokeModel').value);show('modelHealth',await getJson('/api/provider/smoke?provider='+p+'&model='+m))}
+async function runProviderSmoke(){const p=encodeURIComponent(document.getElementById('smokeProvider').value);const m=encodeURIComponent(document.getElementById('smokeModel').value);show('modelHealth',await postJson('/api/provider/smoke?provider='+p+'&model='+m))}
 async function loadMemoryInbox(){show('memory',await getJson('/api/memory/inbox'))}
-async function promoteMemory(){const id=encodeURIComponent(document.getElementById('memoryId').value);show('memory',await getJson('/api/memory/promote?id='+id))}
+async function promoteMemory(){const id=encodeURIComponent(document.getElementById('memoryId').value);show('memory',await postJson('/api/memory/promote?id='+id))}
 async function inspectPatch(){const id=encodeURIComponent(document.getElementById('patchId').value);show('patches',await getJson('/api/patch/preview?id='+id))}
 async function inspectCheckpoint(){const id=encodeURIComponent(document.getElementById('checkpointId').value);show('checkpoints',await getJson('/api/checkpoint/diff?id='+id))}
 refresh()
@@ -156,9 +160,33 @@ def serve_ui(
     port: int = 7830,
     open_browser: bool = False,
 ) -> dict[str, Any]:
+    """Serve the local ops UI.
+
+    Binding to loopback is not access control: any web page the user visits can
+    fire `<img src="http://127.0.0.1:7830/api/memory/promote?id=…">`, and a
+    DNS-rebound host can read `/api/state` (project paths, command history).
+    So every request must carry a per-launch token and a loopback `Host`, and
+    the endpoints that change state are POST-only.
+    """
     root = Path(project).resolve()
+    token = secrets.token_urlsafe(32)
+
+    # Endpoints that mutate state or spend money. GET must not reach these.
+    mutating_paths = {"/api/memory/promote", "/api/provider/smoke", "/api/release/check"}
 
     class Handler(BaseHTTPRequestHandler):
+        def _authorized(self, parsed: urllib.parse.ParseResult) -> bool:
+            host = (self.headers.get("Host") or "").split(":")[0]
+            if host not in {"127.0.0.1", "localhost", "[::1]", "::1"}:
+                return False  # DNS rebinding
+            origin = self.headers.get("Origin")
+            if origin and urllib.parse.urlparse(origin).hostname not in {"127.0.0.1", "localhost", "::1"}:
+                return False
+            supplied = urllib.parse.parse_qs(parsed.query).get("token", [""])[0]
+            if not supplied:
+                supplied = (self.headers.get("X-Magent-Token") or "").strip()
+            return secrets.compare_digest(supplied, token)
+
         def _json(self, data: Any, status: int = 200) -> None:
             payload = json.dumps(data, default=str).encode()
             self.send_response(status)
@@ -167,12 +195,26 @@ def serve_ui(
             self.end_headers()
             self.wfile.write(payload)
 
+        def do_POST(self) -> None:  # noqa: N802
+            self._dispatch(method="POST")
+
         def do_GET(self) -> None:  # noqa: N802
+            self._dispatch(method="GET")
+
+        def _dispatch(self, method: str) -> None:
             parsed = urllib.parse.urlparse(self.path)
             query = urllib.parse.parse_qs(parsed.query)
+
+            if not self._authorized(parsed):
+                self._json({"ok": False, "error": "unauthorized"}, status=403)
+                return
+            if method == "GET" and parsed.path in mutating_paths:
+                self._json({"ok": False, "error": "use POST for this endpoint"}, status=405)
+                return
+
             try:
                 if parsed.path == "/":
-                    payload = render_ui_html().encode()
+                    payload = render_ui_html(token).encode()
                     self.send_response(200)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
                     self.send_header("Content-Length", str(len(payload)))
@@ -244,10 +286,16 @@ def serve_ui(
         def log_message(self, format: str, *args: Any) -> None:
             return None
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError as e:
+        return {"ok": False, "error": f"Could not bind 127.0.0.1:{port}: {e}", "port": port}
+
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
-    url = f"http://127.0.0.1:{port}/"
+    # The token travels in the opened URL; without it every request is refused.
+    url = f"http://127.0.0.1:{port}/?token={token}"
     if open_browser:
         webbrowser.open(url)
-    return {"ok": True, "url": url, "project": str(root)}
+    # Returning the server lets callers shut it down instead of leaking it.
+    return {"ok": True, "url": url, "project": str(root), "token": token, "server": server}
