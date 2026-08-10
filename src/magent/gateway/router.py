@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import time
-from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -12,33 +12,50 @@ from rich.console import Console
 
 from magent.config import get_current_user
 from magent.gateway.base import IncomingMessage
+from magent.secret_scrub import correlation_id, safe_error_message, scrub_secrets
 
 console = Console()
 
 
 class RateLimiter:
-    """Token-bucket rate limiter per user."""
+    """Token-bucket rate limiter per user.
 
-    def __init__(self, max_per_minute: int = 10):
+    Bounded: the bucket map used to grow forever, and merely *reading* a user's
+    reset time minted a permanent entry for them, so any stranger sending one
+    blocked message left a row behind.
+    """
+
+    def __init__(self, max_per_minute: int = 10, max_tracked_users: int = 10_000):
         self.max_per_minute = max_per_minute
-        self._buckets: dict[str, list[float]] = defaultdict(list)
+        self.max_tracked_users = max_tracked_users
+        self._buckets: dict[str, list[float]] = {}
+
+    def _prune(self, now: float) -> None:
+        window = now - 60.0
+        for user_id in [key for key, stamps in self._buckets.items() if not stamps or max(stamps) <= window]:
+            del self._buckets[user_id]
+        # Hard ceiling in case a flood outruns natural expiry.
+        while len(self._buckets) > self.max_tracked_users:
+            oldest = min(self._buckets, key=lambda key: max(self._buckets[key], default=0.0))
+            del self._buckets[oldest]
 
     def is_allowed(self, user_id: str) -> bool:
         now = time.time()
         window = now - 60.0
-        bucket = self._buckets[user_id]
-        # Remove timestamps older than 1 minute
-        self._buckets[user_id] = [t for t in bucket if t > window]
-        if len(self._buckets[user_id]) >= self.max_per_minute:
+        self._prune(now)
+        recent = [stamp for stamp in self._buckets.get(user_id, []) if stamp > window]
+        if len(recent) >= self.max_per_minute:
+            self._buckets[user_id] = recent
             return False
-        self._buckets[user_id].append(now)
+        recent.append(now)
+        self._buckets[user_id] = recent
         return True
 
     def seconds_until_reset(self, user_id: str) -> float:
-        if not self._buckets[user_id]:
+        stamps = self._buckets.get(user_id)  # read-only: never creates an entry
+        if not stamps:
             return 0.0
-        oldest = min(self._buckets[user_id])
-        return max(0.0, 60.0 - (time.time() - oldest))
+        return max(0.0, 60.0 - (time.time() - min(stamps)))
 
 
 class MessageRouter:
@@ -56,16 +73,38 @@ class MessageRouter:
 
     def __init__(self, gateway_config: dict[str, Any]):
         self.config = gateway_config
-        self.allowed_user_ids: set[str] = set(gateway_config.get("allowed_user_ids", []))
-        self.allowed_channel_ids: set[str] = set(gateway_config.get("allowed_channel_ids", []))
+        self.allowed_user_ids: set[str] = {
+            str(user_id) for user_id in gateway_config.get("allowed_user_ids", [])
+        }
+        self.allowed_channel_ids: set[str] = {
+            str(channel_id) for channel_id in gateway_config.get("allowed_channel_ids", [])
+        }
+        self.allow_anyone: bool = bool(gateway_config.get("allow_anyone", False))
+        self.require_mention: bool = bool(gateway_config.get("require_mention", False))
+        self.allow_persistent_approvals: bool = bool(
+            gateway_config.get("allow_persistent_approvals", False)
+        )
+        self.admin_user_ids: set[str] = {
+            str(user_id) for user_id in gateway_config.get("admin_user_ids", [])
+        }
         self.rate_limiter = RateLimiter(
             max_per_minute=gateway_config.get("rate_limit_per_minute", 10)
         )
         self._username = gateway_config.get("username") or get_current_user() or "default"
         self._session_cache: dict[str, Any] = {}  # channel_id → AgentSession
+        self._channel_locks: dict[str, asyncio.Lock] = {}
 
     def is_authorized(self, msg: IncomingMessage) -> tuple[bool, str]:
         """Returns (allowed, reason)."""
+        # Fail closed. An empty allowlist used to admit everyone in the
+        # workspace/server to a headless session where permission checks
+        # auto-resolve; opening that up is now a deliberate opt-in.
+        if not self.allowed_user_ids and not self.allow_anyone:
+            return False, (
+                "Gateway allowlist is empty. Set gateway.allowed_user_ids, "
+                "or gateway.allow_anyone = true to accept everyone."
+            )
+
         if self.allowed_user_ids and msg.user_id not in self.allowed_user_ids:
             return False, f"User {msg.user_id} not in allowlist"
 
@@ -77,6 +116,17 @@ class MessageRouter:
             return False, f"Rate limit exceeded. Try again in {wait:.0f}s"
 
         return True, ""
+
+    def should_respond(self, msg: IncomingMessage) -> bool:
+        """Honour `require_mention`, which was documented but never implemented.
+
+        Adapters call this before handling; a direct message always counts.
+        """
+        if not self.require_mention:
+            return True
+        if msg.is_dm:
+            return True
+        return bool(getattr(msg, "mentions_bot", False))
 
     def _get_session(self, channel_id: str) -> Any:
         """Get or create an AgentSession for a channel (persistent per channel)."""
@@ -128,6 +178,18 @@ class MessageRouter:
                 session.tools.session_shell_patterns.append(command)
             return f"Approved for this gateway session: `{command}`"
 
+        # `/approve always` writes into the on-disk user profile, which then
+        # applies to future *local* CLI sessions. A chat message should not be
+        # able to do that unless the operator has said so.
+        if not self.allow_persistent_approvals:
+            return (
+                "Persistent approvals are disabled for this gateway. "
+                "Use `/approve session <command>`, or set "
+                "gateway.allow_persistent_approvals = true to allow saving."
+            )
+        if self.admin_user_ids and msg.user_id not in self.admin_user_ids:
+            return "Only gateway admins may save approvals for future sessions."
+
         from magent.config import load_user_profile, save_user_profile
 
         profile = load_user_profile(self._username)
@@ -141,6 +203,13 @@ class MessageRouter:
             self._session_cache[msg.channel_id].tools.trusted_shell_patterns.append(command)
         return f"Approved for future sessions: `{command}`"
 
+    def _channel_lock(self, channel_id: str) -> asyncio.Lock:
+        lock = self._channel_locks.get(channel_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._channel_locks[channel_id] = lock
+        return lock
+
     async def handle(self, msg: IncomingMessage) -> str:
         """Auth-check and dispatch a message. Returns response text."""
         allowed, reason = self.is_authorized(msg)
@@ -150,6 +219,12 @@ class MessageRouter:
             )
             return f"⛔ {reason}"
 
+        # One AgentSession per channel, entered concurrently by overlapping
+        # messages, corrupts the shared conversation and scratchpad.
+        async with self._channel_lock(msg.channel_id):
+            return await self._handle_locked(msg)
+
+    async def _handle_locked(self, msg: IncomingMessage) -> str:
         console.print(
             f"[dim cyan]Gateway [{msg.platform}][/dim cyan] "
             f"[bold]{msg.username}[/bold]: {msg.text[:80]}"
@@ -202,8 +277,11 @@ class MessageRouter:
             if bridge is not None:
                 with contextlib.suppress(Exception):
                     bridge.fail(e)
-            console.print(f"[red]Gateway session error: {e}[/red]")
-            return f"❌ Agent error: {e}"
+            # The detail stays local; the chat platform gets a reference, because
+            # provider exception strings can carry request URLs, headers and keys.
+            reference = correlation_id()
+            console.print(f"[red]Gateway session error (ref {reference}): {scrub_secrets(str(e))}[/red]")
+            return f"❌ {safe_error_message(e, reference=reference)}"
 
     def _handle_graph_command(self, msg: IncomingMessage) -> str | None:
         """Validate, plan, or queue AGS graphs from an authorized gateway chat."""

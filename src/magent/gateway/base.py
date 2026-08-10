@@ -8,6 +8,8 @@ from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any
 
+from magent.secret_scrub import safe_error_message
+
 
 @dataclass
 class IncomingMessage:
@@ -20,6 +22,7 @@ class IncomingMessage:
     channel_id: str  # Channel / chat ID
     text: str  # Raw message text
     is_dm: bool = False  # Direct message (vs. channel/group)
+    mentions_bot: bool = False  # Bot was @mentioned (drives require_mention)
     reply_to: str | None = None  # Thread/reply context
     raw: dict = field(default_factory=dict)  # Raw platform payload
 
@@ -47,6 +50,17 @@ class GatewayAdapter(ABC):
         self.config = config
         self.handler = handler
         self._running = False
+
+    def should_respond(self, msg: IncomingMessage) -> bool:
+        """Whether this message should be handled at all.
+
+        Implements `require_mention`, which was documented in the router
+        docstring but never enforced anywhere — Slack in particular handled
+        every message event in every channel the bot could see.
+        """
+        if not self.config.get("require_mention", False):
+            return True
+        return msg.is_dm or msg.mentions_bot
 
     @property
     @abstractmethod
@@ -98,19 +112,26 @@ class GatewayAdapter(ABC):
         await self.send_typing(msg.channel_id)
 
         # Step 2: Run agent
+        succeeded = True
         try:
             result = await asyncio.wait_for(
                 self.handler(msg),
                 timeout=self.config.get("max_task_duration_seconds", 300),
             )
         except TimeoutError:
+            succeeded = False
             result = "⚠️ Task timed out. Try breaking it into smaller steps."
         except Exception as e:
-            result = f"❌ Error: {e}"
+            succeeded = False
+            # Exception text can carry request URLs, headers and keys.
+            result = f"❌ {safe_error_message(e)}"
 
-        # Step 3: Update or follow-up
+        # Step 3: Update or follow-up. Only a success gets a success mark —
+        # a timeout used to come back as "✅ ⚠️ Task timed out".
         if ack_id:
-            await self.update_message(msg.channel_id, ack_id, f"✅ {result}")
+            await self.update_message(
+                msg.channel_id, ack_id, f"✅ {result}" if succeeded else result
+            )
         else:
             await self.post_message(
                 OutgoingMessage(

@@ -35,6 +35,19 @@ class SlackAdapter(GatewayAdapter):
         self._app = None
         self._socket_handler = None
         self._bot_user_id: str | None = None
+        self._client = None
+
+    def _web_client(self):
+        """One Slack web client for the adapter's lifetime.
+
+        A fresh AsyncWebClient (and its aiohttp session) was built for every
+        message and never closed, leaking a connection pool per message.
+        """
+        if self._client is None:
+            from slack_sdk.web.async_client import AsyncWebClient
+
+            self._client = AsyncWebClient(token=self.config["bot_token"])
+        return self._client
 
     @property
     def platform_name(self) -> str:
@@ -75,9 +88,7 @@ class SlackAdapter(GatewayAdapter):
 
         # Fetch bot's own user ID (to detect self-mentions)
         try:
-            from slack_sdk.web.async_client import AsyncWebClient
-
-            client = AsyncWebClient(token=self.config["bot_token"])
+            client = self._web_client()
             info = await client.auth_test()
             self._bot_user_id = info["user_id"]
         except Exception as e:
@@ -99,6 +110,7 @@ class SlackAdapter(GatewayAdapter):
             if not text:
                 return
 
+            raw_text = event.get("text", "")
             msg = IncomingMessage(
                 platform="slack",
                 message_id=event.get("ts", ""),
@@ -107,9 +119,15 @@ class SlackAdapter(GatewayAdapter):
                 channel_id=event.get("channel", ""),
                 text=text,
                 is_dm=event.get("channel_type") == "im",
+                mentions_bot=bool(self._bot_user_id and f"<@{self._bot_user_id}>" in raw_text),
                 reply_to=event.get("thread_ts") or event.get("ts"),
                 raw=event,
             )
+
+            # `require_mention` is honoured here: this handler receives every
+            # message event in every channel the bot is in.
+            if not self.should_respond(msg):
+                return
 
             # Try to resolve display name
             try:
@@ -138,9 +156,7 @@ class SlackAdapter(GatewayAdapter):
     async def post_message(self, msg: OutgoingMessage) -> str | None:
         """Post a message to Slack. Returns the message timestamp (ts) as ID."""
         try:
-            from slack_sdk.web.async_client import AsyncWebClient
-
-            client = AsyncWebClient(token=self.config["bot_token"])
+            client = self._web_client()
 
             kwargs: dict[str, Any] = {
                 "channel": msg.channel_id,
@@ -158,9 +174,7 @@ class SlackAdapter(GatewayAdapter):
     async def update_message(self, channel_id: str, message_id: str, new_text: str) -> None:
         """Edit an existing Slack message."""
         try:
-            from slack_sdk.web.async_client import AsyncWebClient
-
-            client = AsyncWebClient(token=self.config["bot_token"])
+            client = self._web_client()
             await client.chat_update(
                 channel=channel_id,
                 ts=message_id,

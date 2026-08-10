@@ -73,24 +73,30 @@ class GatewayRunner:
 
         # Graceful shutdown on SIGINT / SIGTERM
         loop = asyncio.get_running_loop()
+        runner = asyncio.gather(
+            *(adapter.start() for adapter in self._adapters),
+            return_exceptions=True,
+        )
 
         def _shutdown():
+            # Cancelling *every* task included this coroutine itself, so the
+            # `finally: await self.shutdown()` never ran: adapters kept their
+            # connections and the PID file survived. Cancel only the runner.
             console.print("\n[dim]Gateway shutting down...[/dim]")
-            for t in asyncio.all_tasks(loop):
-                t.cancel()
+            runner.cancel()
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             with contextlib.suppress(NotImplementedError):
                 loop.add_signal_handler(sig, _shutdown)
 
         try:
-            await asyncio.gather(
-                *(adapter.start() for adapter in self._adapters),
-                return_exceptions=True,
-            )
+            await runner
         except asyncio.CancelledError:
             pass
         finally:
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                with contextlib.suppress(NotImplementedError, ValueError):
+                    loop.remove_signal_handler(sig)
             await self.shutdown()
 
     async def shutdown(self) -> None:
@@ -120,12 +126,20 @@ def is_gateway_running() -> tuple[bool, int | None]:
         return False, None
     try:
         pid = int(GATEWAY_PID_FILE.read_text().strip())
-        # Check if process exists
-        os.kill(pid, 0)
-        return True, pid
-    except (ProcessLookupError, PermissionError, ValueError):
+    except (OSError, ValueError):
         GATEWAY_PID_FILE.unlink(missing_ok=True)
         return False, None
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        GATEWAY_PID_FILE.unlink(missing_ok=True)
+        return False, None
+    except PermissionError:
+        # The process exists but belongs to another uid — that is *alive*, not
+        # dead. Treating it as dead deleted the PID file of a running gateway.
+        return True, pid
+    return True, pid
 
 
 EXAMPLE_GATEWAY_CONFIG = """
@@ -138,14 +152,28 @@ EXAMPLE_GATEWAY_CONFIG = """
 # MagAgent user profile to use for gateway sessions
 username = "alex"
 
-# Platform user IDs allowed to send instructions
+# Platform user IDs allowed to send instructions. REQUIRED: while this is
+# empty the gateway refuses every message, because a gateway session runs
+# headless and auto-resolves permission checks.
 # Slack: User ID like "U01234ABCDE" (Settings → Profile → ⋮ → Copy member ID)
 # Discord: User ID (enable Developer Mode → right-click user → Copy ID)
 # Telegram: Numeric user ID (send /start to @userinfobot)
 allowed_user_ids = []
 
+# Accept anyone who can reach the bot. Only set this on a private workspace —
+# it hands every member a headless agent on this machine.
+# allow_anyone = false
+
 # Optional: restrict to specific channel IDs only
 # allowed_channel_ids = []
+
+# In group channels, only respond when the bot is @mentioned. DMs always pass.
+# require_mention = false
+
+# Allow `/approve always` from chat to write trusted shell patterns into the
+# on-disk profile, where they also apply to future local CLI sessions.
+# allow_persistent_approvals = false
+# admin_user_ids = []
 
 # Max requests per user per minute (default: 10)
 rate_limit_per_minute = 10

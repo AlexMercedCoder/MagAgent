@@ -43,6 +43,15 @@ class TelegramAdapter(GatewayAdapter):
     def platform_name(self) -> str:
         return "telegram"
 
+    def _passes_chat_gates(self, msg: IncomingMessage) -> bool:
+        """The respond_to_dms / respond_to_groups gates, in one place.
+
+        `/ask` reached the agent without consulting them.
+        """
+        if msg.is_dm:
+            return getattr(self, "_respond_to_dms", self.config.get("respond_to_dms", True))
+        return getattr(self, "_respond_to_groups", self.config.get("respond_to_groups", True))
+
     async def start(self) -> None:
         try:
             from telegram import Update
@@ -67,6 +76,8 @@ class TelegramAdapter(GatewayAdapter):
         respond_to_groups = self.config.get("respond_to_groups", True)
         respond_to_dms = self.config.get("respond_to_dms", True)
         command_prefix = self.config.get("command_prefix", "")
+        self._respond_to_groups = respond_to_groups
+        self._respond_to_dms = respond_to_dms
 
         app = Application.builder().token(bot_token).build()
         self._app = app
@@ -142,7 +153,12 @@ class TelegramAdapter(GatewayAdapter):
                 channel_id=str(update.message.chat.id),
                 text=text,
                 is_dm=update.message.chat.type == "private",
+                mentions_bot=True,
             )
+            # /ask used to skip the respond_to_dms / respond_to_groups gates
+            # that every ordinary message is checked against.
+            if not self._passes_chat_gates(msg):
+                return
             await self.ack_and_respond(msg)
 
         app.add_handler(CommandHandler("ask", cmd_ask))
@@ -187,13 +203,18 @@ class TelegramAdapter(GatewayAdapter):
                 sent = await self._bot.send_message(**kwargs)
             return str(sent.message_id) if sent else None
         except Exception:
-            # Retry without Markdown if parse error
+            # Retry without Markdown if parse error. Every chunk must be sent:
+            # sending only the first silently dropped the rest of the answer.
             try:
-                sent = await self._bot.send_message(
-                    chat_id=int(msg.channel_id),
-                    text=_chunk_telegram(msg.text)[0],
-                )
-                return str(sent.message_id)
+                first_id = None
+                for chunk in _chunk_telegram(msg.text):
+                    kwargs = {"chat_id": int(msg.channel_id), "text": chunk}
+                    if first_id is None and msg.reply_to:
+                        kwargs["reply_to_message_id"] = int(msg.reply_to)
+                    sent = await self._bot.send_message(**kwargs)
+                    if first_id is None:
+                        first_id = str(sent.message_id)
+                return first_id
             except Exception as e2:
                 log.error(f"Telegram post_message error: {e2}")
                 return None
@@ -217,12 +238,11 @@ class TelegramAdapter(GatewayAdapter):
                     text=extra,
                 )
         except Exception:
-            # Edit may fail if content unchanged or too old — post as new message
+            # Edit may fail if content unchanged or too old — post as new
+            # messages, all of them.
             try:
-                await self._bot.send_message(
-                    chat_id=int(channel_id),
-                    text=_chunk_telegram(new_text)[0],
-                )
+                for chunk in _chunk_telegram(new_text):
+                    await self._bot.send_message(chat_id=int(channel_id), text=chunk)
             except Exception as e:
                 log.error(f"Telegram update_message error: {e}")
 

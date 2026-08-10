@@ -68,13 +68,22 @@ def _make_msg(**kwargs) -> IncomingMessage:
 
 class TestMessageRouterAuth:
     def _router(self, **cfg):
-        config = {"username": "testuser", **cfg}
+        # Tests that are not about the allowlist itself opt in explicitly,
+        # because an empty allowlist now means "admit nobody".
+        config = {"username": "testuser", "allow_anyone": True, **cfg}
         return MessageRouter(config)
 
-    def test_allows_all_when_no_allowlist(self):
-        router = self._router()
-        msg = _make_msg()
-        allowed, _ = router.is_authorized(msg)
+    def test_blocks_everyone_when_allowlist_is_empty(self):
+        """Fail closed: an empty allowlist used to admit the whole workspace
+        to a headless session where permission checks auto-resolve."""
+        router = MessageRouter({"username": "testuser"})
+        allowed, reason = router.is_authorized(_make_msg())
+        assert allowed is False
+        assert "allowlist is empty" in reason
+
+    def test_allow_anyone_is_an_explicit_opt_in(self):
+        router = MessageRouter({"username": "testuser", "allow_anyone": True})
+        allowed, _ = router.is_authorized(_make_msg())
         assert allowed is True
 
     def test_blocks_user_not_in_allowlist(self):
@@ -135,7 +144,7 @@ class TestMessageRouterHandle:
         import magent.workbench_store as workbench_store
 
         monkeypatch.setattr(workbench_store, "USERS_DIR", tmp_path / "users")
-        router = MessageRouter({"username": "testuser"})
+        router = MessageRouter({"username": "testuser", "allow_anyone": True})
         # Mock the session so we don't need a real LLM
         mock_session = AsyncMock()
         mock_session.chat = AsyncMock(return_value="Hello from agent!")
@@ -154,7 +163,7 @@ class TestMessageRouterHandle:
 
     @pytest.mark.asyncio
     async def test_gateway_session_approval_adds_exact_command(self):
-        router = MessageRouter({"username": "testuser"})
+        router = MessageRouter({"username": "testuser", "allow_anyone": True})
         mock_session = MagicMock()
         mock_session.tools.session_shell_patterns = []
         router._session_cache["chan1"] = mock_session
@@ -170,7 +179,7 @@ class TestMessageRouterHandle:
         import magent.workbench_store as workbench_store
 
         monkeypatch.setattr(workbench_store, "USERS_DIR", tmp_path / "users")
-        router = MessageRouter({"username": "testuser"})
+        router = MessageRouter({"username": "testuser", "allow_anyone": True})
         mock_session = AsyncMock()
         mock_session.chat = AsyncMock(side_effect=RuntimeError("LLM exploded"))
         mock_session.session_id = "gateway-session"
@@ -184,7 +193,11 @@ class TestMessageRouterHandle:
         msg = _make_msg()
         result = await router.handle(msg)
         assert "❌" in result
-        assert "LLM exploded" in result
+        # Provider exception strings can carry request URLs, headers and keys,
+        # so the remote user gets a type and a reference, not the detail.
+        assert "LLM exploded" not in result
+        assert "RuntimeError" in result
+        assert "ref " in result
 
 
 # ─────────────────────────────────────────────
@@ -354,3 +367,108 @@ class TestTelegramUtils:
         assert len(chunks) > 1
         for chunk in chunks:
             assert len(chunk) <= 200
+
+
+# ─────────────────────────────────────────────
+# Gateway hardening regressions
+# ─────────────────────────────────────────────
+
+
+class TestGatewayHardening:
+    def test_persistent_approvals_are_off_by_default(self):
+        """`/approve always` writes into the on-disk profile, where it also
+        applies to future local CLI sessions."""
+        router = MessageRouter({"username": "testuser", "allow_anyone": True})
+        result = router._handle_approval_command(_make_msg(text="/approve always rm -rf /tmp/x"))
+        assert "disabled" in result
+
+    def test_persistent_approvals_can_be_limited_to_admins(self):
+        router = MessageRouter(
+            {
+                "username": "testuser",
+                "allow_anyone": True,
+                "allow_persistent_approvals": True,
+                "admin_user_ids": ["someone_else"],
+            }
+        )
+        result = router._handle_approval_command(_make_msg(text="/approve always npm test"))
+        assert "admins" in result
+
+    def test_require_mention_gates_group_messages(self):
+        from magent.gateway.base import GatewayAdapter
+
+        class Adapter(GatewayAdapter):
+            platform_name = "test"
+
+            async def start(self): ...
+            async def stop(self): ...
+            async def post_message(self, msg): ...
+            async def update_message(self, channel_id, message_id, new_text): ...
+            async def send_typing(self, channel_id): ...
+
+        adapter = Adapter({"require_mention": True}, AsyncMock())
+
+        assert adapter.should_respond(_make_msg(is_dm=True)) is True
+        assert adapter.should_respond(_make_msg(is_dm=False, mentions_bot=True)) is True
+        assert adapter.should_respond(_make_msg(is_dm=False, mentions_bot=False)) is False
+
+    def test_rate_limiter_reset_lookup_does_not_create_entries(self):
+        limiter = RateLimiter(max_per_minute=5)
+        limiter.seconds_until_reset("never-seen")
+        assert "never-seen" not in limiter._buckets
+
+    def test_rate_limiter_prunes_expired_users(self):
+        limiter = RateLimiter(max_per_minute=5)
+        limiter.is_allowed("old-user")
+        limiter._buckets["old-user"] = [0.0]  # long expired
+        limiter.is_allowed("new-user")
+        assert "old-user" not in limiter._buckets
+
+    @pytest.mark.asyncio
+    async def test_channel_messages_are_serialised(self, tmp_path, monkeypatch):
+        """One AgentSession per channel entered concurrently corrupts its
+        conversation and scratchpad."""
+        import magent.workbench_store as workbench_store
+
+        monkeypatch.setattr(workbench_store, "USERS_DIR", tmp_path / "users")
+        router = MessageRouter({"username": "testuser", "allow_anyone": True})
+
+        concurrent = 0
+        peak = 0
+
+        async def chat(text):
+            nonlocal concurrent, peak
+            concurrent += 1
+            peak = max(peak, concurrent)
+            await asyncio.sleep(0.01)
+            concurrent -= 1
+            return "ok"
+
+        mock_session = AsyncMock()
+        mock_session.chat = chat
+        mock_session.session_id = "gateway-session"
+        mock_session.cwd = str(tmp_path)
+        mock_session.provider = MagicMock(provider_id="test", model="test")
+        mock_session.logger = None
+        mock_session.scratchpad = {}
+        mock_session.turn_count = 1
+        router._session_cache["chan1"] = mock_session
+
+        await asyncio.gather(*(router.handle(_make_msg()) for _ in range(4)))
+        assert peak == 1
+
+
+class TestSecretScrubbing:
+    def test_keys_are_scrubbed(self):
+        from magent.secret_scrub import scrub_secrets
+
+        scrubbed = scrub_secrets("failed with api_key=abcdef1234567890 and sk-abcdefghijklmnopqrst")
+        assert "abcdef1234567890" not in scrubbed
+        assert "sk-abcdefghijklmnopqrst" not in scrubbed
+
+    def test_safe_error_message_hides_detail(self):
+        from magent.secret_scrub import safe_error_message
+
+        message = safe_error_message(RuntimeError("Bearer sk-verysecrettoken12345 rejected"))
+        assert "sk-verysecrettoken12345" not in message
+        assert "RuntimeError" in message
