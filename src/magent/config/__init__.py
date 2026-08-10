@@ -85,6 +85,17 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "search_codebase": 9000,
         "db_query": 8000,
     },
+    "budgets": {
+        "session_usd": 0.0,
+        "daily_usd": 0.0,
+        "warn_at": 0.8,
+    },
+    "permissions": {
+        "shell_sandbox": "off",
+        "shell_sandbox_network": False,
+        "allowed_shell_patterns": [],
+        "trusted_shell_patterns": [],
+    },
     "skills": {
         "lockfile": str(SKILLS_LOCK),
     },

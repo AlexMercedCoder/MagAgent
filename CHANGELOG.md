@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.35.1
+
+- Rebuilt shell classification around a structural parser so substitutions, redirects,
+  destructive read-command flags, network upload flags, executable prefixes, and saved trust
+  patterns cannot bypass permission policy.
+- Added shared outbound network policy with SSRF protection, bounded responses, redirect
+  validation, and confirmation for mutating HTTP methods; protected local HTTP surfaces with
+  launch tokens, host checks, POST-only mutations, and scoped dashboard serving.
+- Hardened remote gateways with fail-closed allowlists, explicit public-access opt-in,
+  mention enforcement, channel serialization, session-only approvals by default, lifecycle
+  fixes, and redacted external errors.
+- Added atomic, locked, recoverable workbench storage; durable daemon claims; safer session
+  messaging runtime paths; plugin path containment; read-only SQLite enforcement; and
+  subprocess timeout cleanup.
+- Fixed completed-subagent cap accounting, parallel task batching, `magent run`, duplicate CLI
+  registrations, streaming error history, provider request merging, MCP response handling,
+  semantic-memory index consistency, and graph retry/isolation edge cases.
+- Added resumable chat transcripts, enforced spend budgets, shell sandbox profiles, memory
+  hygiene, provider conformance checks, gateway administration, permission diagnostics,
+  secret hygiene checks, and reusable release eval suites.
+- Extracted memory commands and terminal renderers from the main CLI, consolidated the agent
+  tool loop, centralized subprocess and safe-name handling, and restored a passing mypy gate.
+- Expanded the unit suite from 478 to 715 tests and raised the branch-coverage floor to 64%.
+
 ## 0.35.0
 
 - Added safe Pi package compatibility: native Agent Skill and prompt-template conversion, context and MCP import, manifest detection, quarantined extension/theme inventory, and an explicitly granted Pi-runtime bridge.

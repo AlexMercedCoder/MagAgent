@@ -9,7 +9,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'0.35.0'`
+- `agent.version` default: `'0.35.1'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 - `agent.max_model_rounds_per_turn` default: `16`
@@ -62,6 +62,17 @@ Stored at `~/.config/magent/config.toml`.
 - `tool_budgets.run_python` default: `10000`
 - `tool_budgets.search_codebase` default: `9000`
 - `tool_budgets.db_query` default: `8000`
+### `budgets`
+
+- `budgets.session_usd` default: `0.0`
+- `budgets.daily_usd` default: `0.0`
+- `budgets.warn_at` default: `0.8`
+### `permissions`
+
+- `permissions.shell_sandbox` default: `'off'`
+- `permissions.shell_sandbox_network` default: `False`
+- `permissions.allowed_shell_patterns` default: `[]`
+- `permissions.trusted_shell_patterns` default: `[]`
 ### `skills`
 
 - `skills.lockfile` default: `'~/.config/magent/skills.lock'`

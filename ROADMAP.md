@@ -2,8 +2,8 @@
 
 > Canonical direction for MagAgent, MagGraph, and Mag Command Center.
 >
-> Last audited: 2026-08-09
-> Current releases: MagAgent 0.34.0, MagGraph 0.4.1, Mag Command Center 0.2.0
+> Last audited: 2026-08-10
+> Current releases: MagAgent 0.35.1, MagGraph 0.4.1, Mag Command Center 0.3.0
 
 ## Purpose
 
@@ -42,7 +42,7 @@ The product thesis for the next several releases is:
 - **Release engineering is mature for the project age.** All three projects have
   automated builds or tests, and the desktop app produces native installers across
   supported platforms.
-- **Current functional baselines are healthy.** The audit ran 411 passing MagAgent
+- **Current functional baselines are healthy.** The audit ran 715 passing MagAgent
   tests, 122 passing MagGraph workspace tests plus 3 doc tests, and 10 passing
   Command Center tests. The Command Center production web build also completed.
 
@@ -51,13 +51,13 @@ The product thesis for the next several releases is:
 - **Reliability is not yet measured end to end.** MagAgent has a local eval scaffold,
   but there is no maintained corpus of representative coding, research, document,
   memory, permission, and provider tasks with version-over-version scores.
-- **MagAgent still has concentrated modules.** `cli/main.py` is about 4,760 lines,
-  `agent.py` about 1,950, and `workbench.py` about 1,760. These files still increase
+- **MagAgent still has concentrated modules.** `cli/main.py` is about 4,190 lines,
+  `agent.py` about 1,770, and `workbench.py` about 1,910. These files still increase
   regression risk and slow focused testing. `tools/executor.py` is now a roughly
-  390-line lifecycle and dispatch facade backed by focused capability modules.
+  450-line lifecycle and dispatch facade backed by focused capability modules.
 - **The MagAgent coverage gate should keep ratcheting upward.** The checkout-isolation
   guard, fatal resource warnings, and connection cleanup are now in place, and the
-  suite reaches 64.61% against the 63% floor. High-blast-radius agent, gateway,
+  suite reaches 65.91% branch coverage against the 64% floor. High-blast-radius agent, gateway,
   sandbox, and UI paths remain the next coverage targets.
 - **Command Center test depth is low.** Ten utility/integration tests do not exercise
   its chat lifecycle, cancellation, project/session switching, setup flows, memory
@@ -102,10 +102,12 @@ or API exists.
 all three repositories have trustworthy local and CI quality gates and no critical
 workflow depends on a monolithic module.
 
-**Progress (2026-08-09):** The first MagAgent confidence unit is complete. Pytest now
+**Progress (2026-08-10):** The MagAgent confidence and hardening units are complete. Pytest now
 imports the checkout explicitly, resource leaks fail the suite, cached user databases
-have deterministic shutdown, semantic-memory connections close correctly, and 411
-tests pass with 64.61% branch coverage against the 63% gate.
+have deterministic shutdown, semantic-memory connections close correctly, and 715
+tests pass with 65.91% branch coverage against the 64% gate. Structural shell parsing,
+network policy, fail-closed gateways, atomic workbench state, provider conformance, and a
+passing type-check ratchet now guard the highest-risk runtime boundaries.
 
 The first modularization unit is also complete: document, diagram, and image tools now
 live in a strictly typed `magent.tools.artifacts` capability module. The public
@@ -137,7 +139,7 @@ lifecycle, selection, dispatch, progress, and output budgeting.
 
 - Make tests fail if `magent.__file__` is outside the checkout during development or
   CI. Standardize an editable-install or `src`-layout test command.
-- Restore and ratchet coverage above the current 63% floor. Prioritize behavior with
+- Continue ratcheting coverage above the current 64% floor. Prioritize behavior with
   high blast radius: the agent loop, artifact recovery, memory writes, permissions,
   daemon jobs, setup, gateway routing, and provider error handling.
 - Close SQLite connections deterministically and turn resource warnings into test
@@ -708,7 +710,13 @@ maintainer-run evals without adding product telemetry.
 4. **Mag Command Center 0.2.0 (released):** typed client, controller extraction,
    persistent native state, event-native concurrent chat, cancellation, recovery,
    checkpoint/session workbench, artifact previews, diagnostics, and accessibility checks.
-5. **Ecosystem beta milestone (next):**
+5. **MagAgent 0.35.0 and 0.35.1 (released):** Agentic Graph Specification level 3,
+   portable graph workflows, Pi compatibility, structural permission policy, network and
+   gateway hardening, durable state, resumable sessions, spend limits, memory hygiene,
+   provider conformance, and restored type/coverage gates.
+6. **Mag Command Center 0.3.0 (released):** graph workbench integration against MagAgent's
+   0.35 machine contracts.
+7. **Ecosystem beta milestone (next):**
    `mag.ecosystem-readiness.v1` now aggregates component contracts, graph benchmark
    evidence, packaged docs, and explicit external gates. Run real-provider and packaged
    three-OS acceptance matrices, configure signing, publish the first cross-project eval

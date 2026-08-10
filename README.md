@@ -81,6 +81,10 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Includes a durable **local workbench** for tasks, artifacts, project profiles, inboxes, routines, follow-ups, API bookmarks, patch queues, session timelines, static dashboards, and a live local UI
 - Coordinates live local agents with authenticated session-to-session messages, explicit receiving policies, durable outboxes, receipts, and strict untrusted-input boundaries
 - Supports a **remote gateway** so you can send it tasks from Slack, Discord, or Telegram while you're away from your terminal
+- Applies structural shell classification, outbound SSRF protection, fail-closed gateway access,
+  atomic workbench storage, secret-hygiene checks, and optional shell sandbox profiles
+- Can resume saved interactive transcripts, enforce session/daily spend budgets, audit memory
+  hygiene, and run offline provider-conformance checks
 
 Every session, MagAgent extracts facts, preferences, and patterns from your conversation and writes them into a MagGraph knowledge graph. Next session, it reads that graph to understand your tech stack, coding style, project context, and recurring patterns — without you having to repeat yourself.
 
@@ -807,6 +811,44 @@ magent memory wizard
 magent gateway configure telegram --bot-token "$TELEGRAM_BOT_TOKEN"
 magent subagent configure --max 3 --parallel 2
 magent project init
+```
+
+### Safety and diagnostics
+
+```bash
+# Explain a command's risk tier without executing it
+magent permission classify "curl -s https://example.com | head"
+
+# Check plaintext credentials, config permissions, and gateway exposure
+magent permission secrets
+
+# Validate provider request construction without spending API quota
+magent provider conformance
+
+# Preview duplicate/stale memory; add --apply only after review
+magent memory hygiene
+
+# List and continue durable interactive transcripts
+magent resume --list
+magent resume SESSION_ID
+```
+
+Gateways deny all remote users until `allowed_user_ids` is configured, unless the operator
+explicitly enables `allow_anyone`. Mutating HTTP requests require confirmation, local web UIs
+use per-launch access tokens, and shell trust rules are matched structurally rather than as raw
+wildcards. See [Security and hardening](src/magent/docs/hardening.md) for configuration details.
+
+Optional host-execution and spend guardrails live in the same global config:
+
+```toml
+[permissions]
+shell_sandbox = "off"          # off, docker, bubblewrap, or sandbox-exec
+shell_sandbox_network = false
+
+[budgets]
+session_usd = 0.0               # 0 disables the limit
+daily_usd = 0.0
+warn_at = 0.8
 ```
 
 ### Where settings live, and which wins

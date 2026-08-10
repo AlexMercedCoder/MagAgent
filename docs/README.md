@@ -30,8 +30,10 @@ magent docs doctor
 - [Plugins](../src/magent/docs/plugins.md)
 - [Desktop Integration](../src/magent/docs/desktop-integration.md)
 - [Agentic Graphs](../src/magent/docs/agentic-graphs.md)
+- [Security And Hardening](../src/magent/docs/hardening.md)
 - [MagAgent 0.34.0 Release Record](RELEASE_0.34.0.md)
 - [MagAgent 0.35.0 Release Record](RELEASE_0.35.0.md)
+- [MagAgent 0.35.1 Release Record](RELEASE_0.35.1.md)
 
 Common setup tasks now have CLI-first flows:
 
