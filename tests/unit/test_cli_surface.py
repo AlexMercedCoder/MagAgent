@@ -100,9 +100,22 @@ def test_run_command_does_not_call_a_typer_command_as_a_function(tmp_path, monke
 
 def test_config_schema_keeps_the_user_variant() -> None:
     """Regression for bug #22: the desktop schema takes --user again."""
+    root = typer.main.get_command(cli_main.app)
+    config = root.commands["config"]
+    schema = config.commands["schema"]
+    option_names = {
+        option
+        for parameter in schema.params
+        for option in getattr(parameter, "opts", [])
+    }
+
+    assert "--user" in option_names
+    assert "-u" in option_names
+
+    # Keep the user-facing smoke, but do not derive the API contract from
+    # Rich's terminal-width-dependent rendering of the option table.
     result = runner.invoke(cli_main.app, ["config", "schema", "--help"])
     assert result.exit_code == 0
-    assert "--user" in result.output
 
 
 # ─────────────────────────────────────────────

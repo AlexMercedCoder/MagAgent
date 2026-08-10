@@ -23,6 +23,8 @@
 - Extracted memory commands and terminal renderers from the main CLI, consolidated the agent
   tool loop, centralized subprocess and safe-name handling, and restored a passing mypy gate.
 - Expanded the unit suite from 478 to 715 tests and raised the branch-coverage floor to 64%.
+- Updated CI to current checkout/setup actions and made CLI option-contract tests independent
+  of terminal-width-specific Rich help rendering.
 
 ## 0.35.0
 
