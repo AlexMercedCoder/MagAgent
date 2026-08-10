@@ -48,8 +48,22 @@ def register_config_commands(config_app: typer.Typer) -> None:
         console.print_json(data=config_get(user, include_raw=raw))
 
     @config_app.command("schema")
-    def config_schema_cmd(user: str | None = typer.Option(None, "--user", "-u")) -> None:
+    def config_schema_cmd(
+        user: str | None = typer.Option(None, "--user", "-u"),
+        defaults: bool = typer.Option(
+            False, "--defaults", help="Show generated field metadata and defaults instead."
+        ),
+    ) -> None:
         """Return guided config field metadata for desktop integrations."""
+        # Two commands were registered under this name; main.py's won and the
+        # --user variant desktop integrations rely on was unreachable. Both
+        # behaviours live here now.
+        if defaults:
+            from magent.config_validation import config_schema as generated_schema
+
+            console.print_json(data=generated_schema())
+            return
+
         from magent.desktop_api import config_schema
 
         console.print_json(data=config_schema(user))

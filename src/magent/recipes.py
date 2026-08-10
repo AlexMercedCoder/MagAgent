@@ -109,9 +109,19 @@ def list_recipes(store: Any, project: str | Path = ".") -> list[dict[str, Any]]:
 
 
 def get_recipe(store: Any, name: str, project: str | Path = ".") -> dict[str, Any] | None:
-    """Find a recipe by name."""
+    """Find a recipe by name, with saved recipes shadowing built-ins.
+
+    Resolution used to take the first name match from a list that put built-ins
+    first, so `save_recipe("release-prep", ...)` was stored and listed but
+    `run_recipe` always ran the built-in.
+    """
     normalized = _normalize_name(name)
-    return next((item for item in list_recipes(store, project) if _normalize_name(item.get("name", "")) == normalized), None)
+    resolved: dict[str, dict[str, Any]] = {}
+    for item in list_recipes(store, project):
+        key = _normalize_name(item.get("name", ""))
+        if key:
+            resolved[key] = item  # later entries (saved, playbook) win
+    return resolved.get(normalized)
 
 
 def save_recipe(

@@ -1364,7 +1364,11 @@ def project_wizard_cmd(
     force: bool = typer.Option(False, "--force"),
 ):
     """Guided project bootstrap alias for project init."""
-    project_init_cmd(path=path, force=force)
+    # Call the underlying helper, not the Typer command: invoking a command as
+    # a function leaves every unpassed parameter as a truthy OptionInfo.
+    from magent.ux_flows import init_project
+
+    console.print_json(data=init_project(path, force=force))
 
 
 @project_app.command("config")
@@ -1483,6 +1487,41 @@ def followup_list_cmd():
     console.print(table)
 
 
+def _build_and_save_plan(
+    goal: str,
+    project: str,
+    *,
+    save: bool = False,
+    executable: bool = False,
+    commands: list[str] | None = None,
+    include_diff: bool = True,
+) -> tuple[str, dict | None]:
+    """Plain-Python core of `magent plan`.
+
+    Typer commands must never be called as functions: the parameters keep their
+    `typer.OptionInfo` defaults, every `if option:` branch fires because those
+    objects are truthy, and the values are then used as data. `magent run` did
+    exactly that and died with "OptionInfo object is not iterable" after
+    already appending a runs record.
+    """
+    from magent.workbench import build_plan, save_execution_plan, save_plan
+
+    text = build_plan(project, goal)
+    item = None
+    if save:
+        if executable:
+            item = save_execution_plan(
+                _store(),
+                project,
+                goal,
+                commands=commands or [],
+                include_diff=include_diff,
+            )
+        else:
+            item = save_plan(_store(), project, goal)
+    return text, item
+
+
 @app.command("plan", rich_help_panel="Planning, Review & Release")
 def plan_cmd(
     goal: str = typer.Argument(...),
@@ -1498,21 +1537,14 @@ def plan_cmd(
     json_output: bool = typer.Option(False, "--json", help="Emit machine-readable plan data."),
 ):
     """Generate a local plan without modifying files."""
-    from magent.workbench import build_plan, save_execution_plan, save_plan
-
-    text = build_plan(project, goal)
-    item = None
-    if save:
-        if executable:
-            item = save_execution_plan(
-                _store(),
-                project,
-                goal,
-                commands=command or [],
-                include_diff=not no_diff,
-            )
-        else:
-            item = save_plan(_store(), project, goal)
+    text, item = _build_and_save_plan(
+        goal,
+        project,
+        save=save,
+        executable=executable,
+        commands=command or [],
+        include_diff=not no_diff,
+    )
     if json_output:
         console.print_json(data={"ok": True, "plan_markdown": text, "saved": item})
         return
@@ -1676,7 +1708,8 @@ def run_cmd(
     store = _store()
     item = store.append("runs", {"goal": goal, "budget": budget, "status": "planned"})
     console.print(f"[green]✓ Planned run {item['id']}[/green]")
-    plan_cmd(goal, project or os.getcwd())
+    text, _saved = _build_and_save_plan(goal, project or os.getcwd())
+    console.print(text)
 
 
 @app.command("goal", rich_help_panel="Everyday Agent Work")
@@ -2926,14 +2959,6 @@ def config_validate_cmd():
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)
-
-
-@config_app.command("schema")
-def config_schema_cmd():
-    """Show generated config schema/default field metadata."""
-    from magent.config_validation import config_schema
-
-    console.print_json(data=config_schema())
 
 
 @subagent_app.command("configure")

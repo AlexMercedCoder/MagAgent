@@ -117,6 +117,32 @@ def list_databases(username: str) -> dict[str, Any]:
     return {"ok": True, "databases": dbs}
 
 
+# Authorizer actions that read. Everything else is denied for db_query.
+_READ_ONLY_ACTIONS = frozenset(
+    {
+        sqlite3.SQLITE_SELECT,
+        sqlite3.SQLITE_READ,
+        sqlite3.SQLITE_FUNCTION,
+        sqlite3.SQLITE_RECURSIVE,
+    }
+)
+
+
+def _read_only_authorizer(action: int, *_args: Any) -> int:
+    """Let SQLite enforce read-only, rather than trusting the statement prefix."""
+    return sqlite3.SQLITE_OK if action in _READ_ONLY_ACTIONS else sqlite3.SQLITE_DENY
+
+
+def _blocked_write_statement(sql: str) -> str:
+    """Reject write statements that reach outside the per-user database dir."""
+    normalized = " ".join(sql.strip().upper().split())
+    if normalized.startswith("ATTACH") or " ATTACH DATABASE " in f" {normalized} ":
+        return "ATTACH is not permitted: it would open a database outside the MagAgent data directory."
+    if normalized.startswith("VACUUM INTO") or normalized.startswith("VACUUM  INTO"):
+        return "VACUUM INTO is not permitted: it writes a file outside the MagAgent data directory."
+    return ""
+
+
 def db_query(
     username: str, sql: str, params: list[Any] | None = None, db_name: str = "default"
 ) -> dict[str, Any]:
@@ -132,11 +158,19 @@ def db_query(
             "error": "db_query only supports SELECT/WITH. Use db_execute for writes.",
         }
 
+    conn = None
     try:
         conn = _get_db(username, db_name)
-        cursor = conn.execute(sql, params or [])
-        rows = _rows_to_dicts(cursor.fetchall())
-        cols = [d[0] for d in cursor.description] if cursor.description else []
+        # A prefix check is not read-only enforcement:
+        # `WITH x AS (SELECT 1) DELETE FROM t` starts with WITH and deletes.
+        # The authorizer is the only thing SQLite itself will honour.
+        conn.set_authorizer(_read_only_authorizer)
+        try:
+            cursor = conn.execute(sql, params or [])
+            rows = _rows_to_dicts(cursor.fetchall())
+            cols = [d[0] for d in cursor.description] if cursor.description else []
+        finally:
+            conn.set_authorizer(None)
         return {
             "ok": True,
             "db": db_name,
@@ -144,7 +178,11 @@ def db_query(
             "rows": rows,
             "count": len(rows),
         }
-    except sqlite3.Error as e:
+    except sqlite3.DatabaseError as e:
+        # DENY from the authorizer surfaces as "not authorized".
+        if conn is not None:
+            with contextlib.suppress(Exception):
+                conn.set_authorizer(None)
         return {"ok": False, "error": str(e), "db": db_name}
 
 
@@ -155,6 +193,13 @@ def db_execute(
     Execute a write statement: INSERT, UPDATE, DELETE, CREATE TABLE, etc.
     Use db_name to target or create a specific named database.
     """
+    blocked = _blocked_write_statement(sql)
+    if blocked:
+        return {"ok": False, "error": blocked, "db": db_name}
+
+    # Initialised before the try: if _get_db raised, the rollback below
+    # dereferenced an unbound name and turned the error into a NameError.
+    conn = None
     try:
         conn = _get_db(username, db_name)
         cursor = conn.execute(sql, params or [])
@@ -166,8 +211,9 @@ def db_execute(
             "last_insert_rowid": cursor.lastrowid,
         }
     except sqlite3.Error as e:
-        with contextlib.suppress(Exception):
-            conn.rollback()
+        if conn is not None:
+            with contextlib.suppress(Exception):
+                conn.rollback()
         return {"ok": False, "error": str(e), "db": db_name}
 
 

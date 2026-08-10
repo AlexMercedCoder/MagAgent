@@ -62,7 +62,13 @@ class SubAgentRunner:
         self._execution_task_id = ""
         task = SubAgentTask(task_id=task_id, description=description)
         max_subagents = int(getattr(self.config, "max_subagents", 3))
-        if max_subagents <= 0 or len(self._tasks) >= max_subagents:
+        # The cap is on *concurrency*, not on how many sub-agents this runner
+        # has ever spawned. Counting finished tasks meant `/spawn` failed
+        # forever after N total spawns, and because goal_orchestrator reuses one
+        # runner for every step, step 4 of any orchestrated goal always failed
+        # under the default max of 3.
+        running = sum(1 for existing in self._tasks.values() if not existing.done)
+        if max_subagents <= 0 or running >= max_subagents:
             task.done = True
             task.error = f"Sub-agent cap reached ({max_subagents}). Run `magent subagent configure --max <n>` to change it."
             if not self.quiet:
@@ -132,10 +138,18 @@ class SubAgentRunner:
         return task
 
     async def spawn_parallel(self, tasks: list[tuple[str, str]]) -> list[SubAgentTask]:
-        """Spawn multiple sub-agents in parallel. Returns results in order."""
+        """Spawn multiple sub-agents in parallel, in waves. Results keep order.
+
+        Overflow tasks used to be dropped silently by `tasks[:max_parallel]` —
+        the caller got fewer results than it asked for with no error.
+        """
         max_parallel = max(1, int(getattr(self.config, "max_parallel_subagents", 2)))
-        coros = [self.spawn(tid, desc) for tid, desc in tasks[:max_parallel]]
-        return list(await asyncio.gather(*coros, return_exceptions=False))
+        results: list[SubAgentTask] = []
+        for start in range(0, len(tasks), max_parallel):
+            wave = tasks[start : start + max_parallel]
+            coros = [self.spawn(task_id, description) for task_id, description in wave]
+            results.extend(await asyncio.gather(*coros, return_exceptions=False))
+        return results
 
     def get_task(self, task_id: str) -> SubAgentTask | None:
         return self._tasks.get(task_id)

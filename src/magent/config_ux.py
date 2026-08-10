@@ -668,7 +668,12 @@ def fix_doctor_actions(username: str | None = None) -> dict[str, Any]:
     cfg.setdefault("subagents", {}).setdefault("max_parallel_subagents", 2)
     provider = cfg.get("defaults", {}).get("provider", "")
     if provider:
-        cfg.setdefault("providers", {}).setdefault(provider, {})["access_mode"] = DEFAULT_ACCESS_MODE.get(provider, "api")
+        # setdefault, like every neighbouring line: this lives in the "safe
+        # fixes" path and used to reset a deliberate access_mode (openai
+        # "codex" → "api"), breaking the user's setup.
+        cfg.setdefault("providers", {}).setdefault(provider, {}).setdefault(
+            "access_mode", DEFAULT_ACCESS_MODE.get(provider, "api")
+        )
     save_global_config(cfg)
     after = doctor_actions(username)
     return {"ok": after["ok"], "before": before, "after": after}
@@ -704,11 +709,15 @@ def provider_readiness(provider_id: str, provider_cfg: dict[str, Any] | None = N
     )
     env_present = bool(env_present_name)
     inline_key = bool(provider_cfg.get("api_key"))
+    # Config resolution and `magent auth add` both use api_key_keyring, so a
+    # provider configured that way is ready — readiness used to ignore the
+    # field entirely and report "not configured" right after a successful add.
+    keyring_key = bool(provider_cfg.get("api_key_keyring"))
     local = bool(metadata.get("local")) or access_mode == "local" or provider_id in {"custom", "ollama", "lmstudio"}
     aws = access_mode == "aws"
     codex = provider_id == "openai" and access_mode == "codex"
     codex_ready = shutil.which("codex") is not None if codex else False
-    credential_configured = env_present or inline_key
+    credential_configured = env_present or inline_key or keyring_key
     ready = local or aws or codex_ready or credential_configured
     if local:
         reason = "local provider"
@@ -718,6 +727,8 @@ def provider_readiness(provider_id: str, provider_cfg: dict[str, Any] | None = N
         reason = "Codex CLI available" if codex_ready else "Codex CLI not found"
     elif inline_key:
         reason = "inline API key configured"
+    elif keyring_key:
+        reason = "API key stored in the system keyring"
     elif env_present:
         reason = f"environment variable {env_present_name} is present"
     elif env_var:
@@ -727,6 +738,7 @@ def provider_readiness(provider_id: str, provider_cfg: dict[str, Any] | None = N
     return {
         "ready": ready,
         "credential_configured": credential_configured,
+        "keyring": keyring_key,
         "env": env_var,
         "env_aliases": list(provider_env_aliases(provider_id)),
         "env_present": env_present,

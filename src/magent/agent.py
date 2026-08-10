@@ -11,6 +11,7 @@ import re
 import time
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -1111,7 +1112,17 @@ class AgentSession:
 
         except Exception as e:
             err = f"\n[Error: {e}]"
+            # Record the failed turn like every other exit path does. Yielding
+            # without appending left the history ending on a user message, so
+            # the next turn sent two consecutive user roles (which several
+            # providers reject), and skipped compaction and memory writes.
+            # chat() has always handled this correctly.
+            self.conversation.append({"role": "assistant", "content": err})
+            if self.logger:
+                with suppress(Exception):
+                    self.logger.log_assistant_turn(self.turn_count, err, 0)
             yield err
+            self._maybe_compact_conversation()
 
     async def chat(self, user_message: str) -> str:
         """Non-streaming completion. Returns full response string."""
