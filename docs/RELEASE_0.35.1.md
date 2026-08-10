@@ -1,6 +1,6 @@
 # MagAgent 0.35.1 Release Record
 
-**Status:** Prepared for release on 2026-08-10.
+**Status:** Released on 2026-08-10.
 
 ## Scope
 
@@ -41,7 +41,12 @@ python -m twine check dist/*
 - 715 unit tests pass on Python 3.14.5 with 65.91% branch coverage against the 64% floor.
 - The release includes dedicated permission-bypass, durability, CLI-surface, safe-name,
   gateway, plugin/session-hardening, and feature regression suites.
-- CI runs tests on Python 3.11, 3.12, 3.13, and 3.14 and enforces typing and branch coverage.
+- CI run `31438091166` passed on Python 3.11, 3.12, 3.13, and 3.14, including the typing and
+  branch-coverage gates.
+- The source distribution and universal wheel passed `twine check` and clean-wheel smoke tests.
 
-Publication details are recorded after the Git tag, GitHub release, PyPI upload, and clean-wheel
-smoke test complete.
+## Publication
+
+- Git tag and GitHub release: `v0.35.1`
+- PyPI package: `mag-agent==0.35.1`
+- Published artifacts: source distribution and `py3-none-any` wheel
