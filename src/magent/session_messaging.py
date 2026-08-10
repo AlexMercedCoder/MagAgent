@@ -13,6 +13,7 @@ import struct
 import tempfile
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,8 @@ MAX_QUEUE_ITEMS = 200
 MAX_HOPS = 3
 MESSAGE_TTL_SECONDS = 24 * 60 * 60
 PEER_TTL_SECONDS = 12 * 60 * 60
+# Live sessions refresh their roster entry well inside the TTL.
+PEER_HEARTBEAT_SECONDS = 5 * 60
 RATE_LIMIT_PER_MINUTE = 20
 VALID_POLICIES = {"accept", "hold", "refuse"}
 _ID_RE = re.compile(r"^[A-Za-z0-9_.-]{1,96}$")
@@ -43,13 +46,46 @@ def _user_key(username: str) -> str:
     return hashlib.sha256(username.encode("utf-8")).hexdigest()[:20]
 
 
+def _runtime_root() -> Path:
+    """Base directory for AF_UNIX endpoints.
+
+    `$XDG_RUNTIME_DIR` is per-user and mode 0700 by construction, so it is
+    preferred. `/tmp` is world-writable: another user on a shared host can
+    pre-create the predictable `magent-<uid>-<hash>` directory and own the
+    parent of our sockets.
+    """
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir:
+        candidate = Path(runtime_dir)
+        if candidate.is_dir():
+            return candidate
+    # AF_UNIX paths are commonly capped near 100 bytes, so a short prefix
+    # matters and TMPDIR may itself be deeply nested.
+    return Path("/tmp") if os.name == "posix" and Path("/tmp").is_dir() else Path(tempfile.gettempdir())
+
+
+def _assert_private_dir(path: Path) -> None:
+    """Refuse to use a runtime directory we do not exclusively own."""
+    if os.name != "posix":
+        return
+    try:
+        info = path.stat()
+    except OSError:
+        return
+    if info.st_uid != os.getuid():
+        raise PermissionError(
+            f"Refusing to use {path}: owned by uid {info.st_uid}, not {os.getuid()}"
+        )
+    if info.st_mode & 0o077:
+        raise PermissionError(
+            f"Refusing to use {path}: mode {info.st_mode & 0o777:o} is accessible to other users"
+        )
+
+
 def _paths(username: str) -> dict[str, Path]:
     root = messaging_root() / _user_key(username)
     uid = os.getuid() if hasattr(os, "getuid") else os.getpid()
-    # Prefer the conventional short POSIX runtime prefix because AF_UNIX paths
-    # are commonly capped near 100 bytes and TMPDIR may itself be deeply nested.
-    temp_root = Path("/tmp") if os.name == "posix" and Path("/tmp").is_dir() else Path(tempfile.gettempdir())
-    runtime = temp_root / f"magent-{uid}-{_user_key(username)}"
+    runtime = _runtime_root() / f"magent-{uid}-{_user_key(username)}"
     return {
         "root": root,
         "peers": root / "peers",
@@ -66,10 +102,15 @@ def _paths(username: str) -> dict[str, Path]:
 
 def _ensure_dirs(username: str) -> dict[str, Path]:
     paths = _paths(username)
-    for path in paths.values():
-        path.mkdir(parents=True, exist_ok=True)
+    for name, path in paths.items():
+        # mode is applied at creation, not after: a directory created 0755 and
+        # chmod'ed later is briefly world-readable, and the chmod was swallowed.
+        path.mkdir(parents=True, exist_ok=True, mode=0o700)
         with contextlib.suppress(OSError):
             path.chmod(0o700)
+        if name == "runtime":
+            # Hard-fail rather than accept a directory another user owns.
+            _assert_private_dir(path)
     return paths
 
 
@@ -82,9 +123,12 @@ def _safe_id(value: str, label: str = "session ID") -> str:
 def _atomic_json(path: Path, value: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + f".{secrets.token_hex(4)}.tmp")
-    temp.write_text(json.dumps(value, indent=2, sort_keys=True), encoding="utf-8")
-    with contextlib.suppress(OSError):
-        temp.chmod(0o600)
+    # O_CREAT|O_EXCL with mode 0600 so the file is never briefly world-readable:
+    # these records carry peer secrets, and write_text() honours the ambient
+    # umask before any later chmod can narrow it.
+    descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.write(json.dumps(value, indent=2, sort_keys=True))
     temp.replace(path)
 
 
@@ -146,13 +190,26 @@ def _pid_alive(pid: int) -> bool:
 
 
 def _peer_is_live(peer: dict[str, Any]) -> bool:
+    """Liveness is decided by the process, not by the clock.
+
+    The TTL used to be authoritative, so a session running longer than
+    PEER_TTL_SECONDS was unregistered and its live unix socket deleted — and
+    nothing ever re-registered it. The heartbeat below refreshes long-lived
+    sessions; the TTL now only retires peers we have heard nothing from *and*
+    whose pid is gone.
+    """
+    if not peer.get("endpoint"):
+        return False
+    if not _pid_alive(int(peer.get("pid") or 0)):
+        return False
+
+    stamp = peer.get("heartbeat_at") or peer.get("registered_at")
     try:
-        registered = datetime.fromisoformat(str(peer.get("registered_at"))).timestamp()
+        last_seen = datetime.fromisoformat(str(stamp)).timestamp()
     except (TypeError, ValueError):
-        return False
-    if time.time() - registered > PEER_TTL_SECONDS:
-        return False
-    return _pid_alive(int(peer.get("pid") or 0)) and bool(peer.get("endpoint"))
+        # An unparseable stamp on a live pid is not a reason to kill the peer.
+        return True
+    return time.time() - last_seen <= PEER_TTL_SECONDS
 
 
 def list_sessions(username: str, *, include_stale: bool = False) -> list[dict[str, Any]]:
@@ -203,13 +260,28 @@ def _socket_peer_uid(conn: socket.socket) -> int | None:
 
 def _send_wire(peer: dict[str, Any], payload: dict[str, Any], timeout: float) -> dict[str, Any]:
     transport = peer.get("transport")
+    endpoint = str(peer.get("endpoint") or "")
+
+    # An ephemeral sender (the CLI) registers `endpoint: "ephemeral"` and has
+    # nothing listening. The address parsing below used to run *after* the
+    # socket was created and *before* the try, so this raised an unhandled
+    # ValueError and leaked the socket.
+    if transport not in {"unix", "tcp"} or endpoint == "ephemeral":
+        return {"status": "unreachable", "error": f"peer is not listening (transport={transport!r})"}
+
     if transport == "unix":
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        address: Any = str(peer["endpoint"])
+        address: Any = endpoint
     else:
+        if ":" not in endpoint:
+            return {"status": "unreachable", "error": f"malformed endpoint {endpoint!r}"}
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        host, port = str(peer["endpoint"]).rsplit(":", 1)
-        address = (host, int(port))
+        host, port = endpoint.rsplit(":", 1)
+        try:
+            address = (host, int(port))
+        except ValueError:
+            sock.close()
+            return {"status": "unreachable", "error": f"malformed endpoint {endpoint!r}"}
     try:
         sock.settimeout(timeout)
         sock.connect(address)
@@ -487,6 +559,7 @@ class SessionMessenger:
         self._thread: threading.Thread | None = None
         self._socket: socket.socket | None = None
         self._seen: set[str] = set()
+        self._seen_order: deque[str] = deque()
         self._rate: dict[str, list[float]] = {}
         self._lock = threading.Lock()
         digest = hashlib.sha256(session_id.encode()).hexdigest()[:24]
@@ -496,7 +569,11 @@ class SessionMessenger:
         self.endpoint = str(self.paths["runtime"] / f"{digest}.sock") if self.transport == "unix" else ""
         for bucket in ("inbox", "held", "seen"):
             queued = _read_jsonl(self.paths[bucket] / f"{self.session_id}.jsonl")
-            self._seen.update(str(item.get("message_id")) for item in queued if item.get("message_id"))
+            for item in queued:
+                identifier = str(item.get("message_id") or "")
+                if identifier and identifier not in self._seen:
+                    self._seen.add(identifier)
+                    self._seen_order.append(identifier)
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -528,6 +605,7 @@ class SessionMessenger:
         retry_outbox(self.username, self.session_id)
 
     def _register(self) -> None:
+        now = _now()
         _atomic_json(
             self.paths["peers"] / f"{self.session_id}.json",
             {
@@ -543,13 +621,29 @@ class SessionMessenger:
                 "endpoint": self.endpoint,
                 "capability": self.capability,
                 "policy": self.policy,
-                "registered_at": _now(),
+                "registered_at": now,
+                "heartbeat_at": now,
             },
         )
 
+    def _heartbeat(self) -> None:
+        """Refresh the roster entry so a long-lived session is never reaped."""
+        path = self.paths["peers"] / f"{self.session_id}.json"
+        record = _read_json(path)
+        if not record:
+            self._register()
+            return
+        record["heartbeat_at"] = _now()
+        with contextlib.suppress(OSError):
+            _atomic_json(path, record)
+
     def _serve(self) -> None:
         assert self._socket is not None
+        last_heartbeat = time.time()
         while not self._stop.is_set():
+            if time.time() - last_heartbeat > PEER_HEARTBEAT_SECONDS:
+                self._heartbeat()
+                last_heartbeat = time.time()
             try:
                 conn, _address = self._socket.accept()
             except TimeoutError:
@@ -620,12 +714,15 @@ class SessionMessenger:
             recent.append(now)
             self._rate[sender_id] = recent
             self._seen.add(message_id)
+            self._seen_order.append(message_id)
             _append_bounded_jsonl(
                 self.paths["seen"] / f"{self.session_id}.jsonl",
                 {"message_id": message_id, "received_at": _now()},
             )
-            if len(self._seen) > MAX_QUEUE_ITEMS * 2:
-                self._seen = set(list(self._seen)[-MAX_QUEUE_ITEMS:])
+            # Evict oldest-first. Slicing an unordered set dropped arbitrary
+            # ids, which let a recent message_id be replayed.
+            while len(self._seen_order) > MAX_QUEUE_ITEMS * 2:
+                self._seen.discard(self._seen_order.popleft())
         safe = {
             key: envelope.get(key)
             for key in (

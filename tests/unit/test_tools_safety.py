@@ -786,3 +786,51 @@ async def test_open_file_and_git_delegate_to_shell(monkeypatch, tmp_path: Path) 
     assert commands[0] == f"/usr/bin/xdg-open {tmp_path / 'notes.txt'}"
     assert git["ok"] is True
     assert commands[1] == "git status --short"
+
+
+class TestNetworkPolicyResolution:
+    """The SSRF guard must not depend on DNS being reachable."""
+
+    def test_ip_literals_are_blocked_without_dns(self, monkeypatch) -> None:
+        import socket as socket_module
+
+        from magent.net_policy import UrlPolicyError, validate_request_url
+
+        def no_dns(*args, **kwargs):
+            raise OSError("resolver unavailable")
+
+        monkeypatch.setattr(socket_module, "getaddrinfo", no_dns)
+
+        for url in ("http://127.0.0.1:7830/api/state", "http://169.254.169.254/latest/"):
+            with pytest.raises(UrlPolicyError):
+                validate_request_url(url)
+
+    def test_loopback_names_are_blocked_without_dns(self, monkeypatch) -> None:
+        import socket as socket_module
+
+        from magent.net_policy import UrlPolicyError, validate_request_url
+
+        monkeypatch.setattr(
+            socket_module, "getaddrinfo", lambda *a, **k: (_ for _ in ()).throw(OSError("no dns"))
+        )
+
+        for url in ("http://localhost:8080/", "http://app.localhost/"):
+            with pytest.raises(UrlPolicyError):
+                validate_request_url(url)
+
+    def test_unresolvable_public_host_is_not_blocked(self, monkeypatch) -> None:
+        """Refusing because *our* lookup failed buys nothing — the request uses
+        the same resolver — and would make every web tool need DNS."""
+        import socket as socket_module
+
+        from magent.net_policy import validate_request_url
+
+        monkeypatch.setattr(
+            socket_module, "getaddrinfo", lambda *a, **k: (_ for _ in ()).throw(OSError("no dns"))
+        )
+        assert validate_request_url("https://example.com/path") == "https://example.com/path"
+
+    def test_redirect_hops_are_capped(self) -> None:
+        from magent.net_policy import MAX_REDIRECTS
+
+        assert MAX_REDIRECTS <= 10

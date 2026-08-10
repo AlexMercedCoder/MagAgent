@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import ipaddress
 import socket
-from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from magent.permissions import RiskTier
@@ -37,6 +36,9 @@ __all__ = [
 
 ALLOWED_SCHEMES = {"http", "https"}
 
+# Refused by name as well as by address, so an unavailable resolver is not a bypass.
+_LOCAL_HOSTNAMES = {"localhost", "ip6-localhost", "ip6-loopback"}
+
 # Methods that only read.
 READ_METHODS = {"GET", "HEAD", "OPTIONS"}
 
@@ -46,13 +48,6 @@ MAX_RESPONSE_BYTES = 5_000_000
 
 class UrlPolicyError(ValueError):
     """A URL was rejected before any request was made."""
-
-
-@dataclass(frozen=True)
-class _Target:
-    scheme: str
-    host: str
-    port: int | None
 
 
 def _blocked_reason(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
@@ -80,7 +75,14 @@ def _blocked_reason(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> s
 
 
 def _resolve(host: str, port: int | None) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
-    """Every address `host` resolves to. A name may map to several."""
+    """Every address `host` resolves to. A name may map to several.
+
+    A resolution *failure* returns nothing rather than raising. Refusing a
+    request because our own lookup failed buys no safety — the connection uses
+    the same resolver and would fail too — while making every web tool depend
+    on DNS being reachable, which breaks offline use and makes behaviour
+    load-dependent.
+    """
     try:
         return [ipaddress.ip_address(host.strip("[]"))]
     except ValueError:
@@ -88,8 +90,8 @@ def _resolve(host: str, port: int | None) -> list[ipaddress.IPv4Address | ipaddr
 
     try:
         infos = socket.getaddrinfo(host, port or 0, proto=socket.IPPROTO_TCP)
-    except OSError as error:
-        raise UrlPolicyError(f"Could not resolve host {host!r}: {error}") from error
+    except OSError:
+        return []
 
     addresses = []
     for info in infos:
@@ -98,8 +100,6 @@ def _resolve(host: str, port: int | None) -> list[ipaddress.IPv4Address | ipaddr
             addresses.append(ipaddress.ip_address(candidate))
         except ValueError:
             continue
-    if not addresses:
-        raise UrlPolicyError(f"Could not resolve host {host!r}")
     return addresses
 
 
@@ -123,6 +123,12 @@ def validate_request_url(url: str, *, allow_private: bool = False) -> str:
 
     if allow_private:
         return url
+
+    # Names that mean "this machine" are refused by name too, so a resolver
+    # that is unavailable cannot turn into a bypass.
+    host = parsed.hostname.lower().rstrip(".")
+    if host in _LOCAL_HOSTNAMES or host.endswith(".localhost"):
+        raise UrlPolicyError(f"Refusing to reach {parsed.hostname}: loopback hostname")
 
     try:
         port = parsed.port

@@ -14,6 +14,7 @@ from typing import Any
 from magent.config import CONFIG_DIR
 
 PLUGIN_DIR = CONFIG_DIR / "plugins"
+_SAFE_MCP_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 PLUGIN_STATE = CONFIG_DIR / "plugins.toml"
 PLUGIN_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 
@@ -29,6 +30,27 @@ def _safe_plugin_name(value: str) -> dict[str, Any]:
             "error": f"Invalid plugin name: {value!r}. Use letters, numbers, dots, underscores, or dashes.",
         }
     return {"ok": True, "name": name}
+
+
+def _contained_paths(root: Path, entries: Any, label: str) -> list[Path]:
+    """Resolve plugin-supplied relative paths, refusing anything outside `root`.
+
+    These entries come from inside the plugin's own report.json and became
+    `--extension` arguments to a subprocess, so `../../..` in one of them meant
+    an arbitrary file was loaded as an extension.
+    """
+    resolved_root = root.resolve(strict=False)
+    paths: list[Path] = []
+    for item in entries or []:
+        if not isinstance(item, str) or not item.strip():
+            continue
+        candidate = (resolved_root / item).resolve(strict=False)
+        try:
+            candidate.relative_to(resolved_root)
+        except ValueError:
+            raise ValueError(f"{label} entry escapes the plugin package: {item!r}") from None
+        paths.append(candidate)
+    return paths
 
 
 def _plugin_target(name: str) -> dict[str, Any]:
@@ -164,12 +186,22 @@ def set_plugin_grant(
 
 
 def enabled_plugin_paths() -> list[Path]:
-    state = _state()
-    return [
-        PLUGIN_DIR / name
-        for name, cfg in state.items()
-        if cfg.get("enabled") and (PLUGIN_DIR / name).exists()
-    ]
+    """Directories of enabled plugins.
+
+    Keys come from plugins.toml verbatim and feed load_external_graph_checkers,
+    which *execs Python*, so each one goes through the same containment check
+    as any other plugin name.
+    """
+    paths: list[Path] = []
+    for name, cfg in _state().items():
+        if not cfg.get("enabled"):
+            continue
+        target = _plugin_target(str(name))
+        if not target.get("ok"):
+            continue
+        if target["path"].exists():
+            paths.append(target["path"])
+    return paths
 
 
 def load_external_graph_checkers() -> list[str]:
@@ -255,6 +287,41 @@ def import_mcp_plugin(
     return result
 
 
+def _mcp_server_problem(server_name: str, server_cfg: Any) -> str:
+    """Describe why a plugin-supplied MCP server entry is unusable, or "".
+
+    Entries were written into the global config with no shape validation at
+    all, and MCP servers are launched as subprocesses.
+    """
+    if not _SAFE_MCP_NAME.fullmatch(server_name):
+        return f"invalid server name {server_name!r}"
+    if not isinstance(server_cfg, dict):
+        return "server entry must be a table"
+
+    command = server_cfg.get("command")
+    url = server_cfg.get("url")
+    if command is None and url is None:
+        return "server entry needs a 'command' or a 'url'"
+    if command is not None and not isinstance(command, str):
+        return "'command' must be a string"
+    if command is not None and not command.strip():
+        return "'command' must not be empty"
+
+    args = server_cfg.get("args", [])
+    if not isinstance(args, list) or any(not isinstance(item, str) for item in args):
+        return "'args' must be a list of strings"
+
+    env = server_cfg.get("env", {})
+    if not isinstance(env, dict) or any(
+        not isinstance(key, str) or not isinstance(value, str) for key, value in env.items()
+    ):
+        return "'env' must be a table of strings"
+
+    if url is not None and not isinstance(url, str):
+        return "'url' must be a string"
+    return ""
+
+
 def apply_plugin_mcp(name: str, *, force: bool = False) -> dict[str, Any]:
     target_result = _plugin_target(name)
     if not target_result["ok"]:
@@ -274,8 +341,15 @@ def apply_plugin_mcp(name: str, *, force: bool = False) -> dict[str, Any]:
     cfg.setdefault("mcp", {}).setdefault("servers", {})
     added: list[str] = []
     skipped: list[str] = []
+    rejected: list[dict[str, str]] = []
     for server_name, server_cfg in servers.items():
-        target_name = server_name
+        target_name = str(server_name)
+        # These land in the global MCP config and are later executed, so the
+        # shape is checked rather than trusted.
+        problem = _mcp_server_problem(target_name, server_cfg)
+        if problem:
+            rejected.append({"server": target_name, "error": problem})
+            continue
         if target_name in cfg["mcp"]["servers"] and not force:
             skipped.append(target_name)
             continue
@@ -284,7 +358,14 @@ def apply_plugin_mcp(name: str, *, force: bool = False) -> dict[str, Any]:
     GLOBAL_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     with GLOBAL_CONFIG.open("wb") as f:
         tomli_w.dump(cfg, f)
-    return {"ok": True, "plugin": name, "added": added, "skipped": skipped, "config": str(GLOBAL_CONFIG)}
+    return {
+        "ok": True,
+        "plugin": name,
+        "added": added,
+        "skipped": skipped,
+        "rejected": rejected,
+        "config": str(GLOBAL_CONFIG),
+    }
 
 
 def import_compat_plugin(
@@ -573,9 +654,20 @@ def run_pi_plugin_bridge(
     report_path = compatibility_root / "report.json"
     if not report_path.is_file():
         return {"ok": False, "error": f"Plugin is not an imported Pi pack: {name}"}
-    report = json.loads(report_path.read_text(encoding="utf-8"))
-    extensions = [compatibility_root / "package" / item for item in report["preserved"]["extensions"]]
-    themes = [compatibility_root / "package" / item for item in report["preserved"]["themes"]]
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {"ok": False, "error": f"Unreadable Pi report for {name}: {exc}"}
+
+    # Defensive .get() chains: direct indexing raised an uncaught KeyError on a
+    # malformed report.
+    preserved = (report or {}).get("preserved") or {}
+    package_root = compatibility_root / "package"
+    try:
+        extensions = _contained_paths(package_root, preserved.get("extensions"), "extensions")
+        themes = _contained_paths(package_root, preserved.get("themes"), "themes")
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
     skills = sorted((target_result["path"] / "skills").rglob("SKILL.md"))
     prompts = sorted((target_result["path"] / "recipes").glob("*.md"))
     command = [pi_executable, "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes"]
