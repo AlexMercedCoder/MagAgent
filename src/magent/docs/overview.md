@@ -17,6 +17,7 @@ Core ideas:
 - `magent docs show architecture` explains the major code boundaries.
 - `magent doctor` checks your local setup.
 - `magent memory ...` inspects and manages the MagGraph memory graph.
+- `magent graph validate`, `plan`, `generate`, and `run` manage portable Agentic Graph workflows.
 - `magent context map` shows memory, workbench, and project state together.
 - `magent task`, `magent artifact`, `magent plan`, `magent patch`, `magent dashboard`, and `magent ui` manage local productivity state.
 

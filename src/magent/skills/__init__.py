@@ -17,6 +17,7 @@ from magent.tokens import estimate_tokens, truncate_to_tokens
 console = Console()
 
 MAX_ACTIVE_SKILLS = 3
+BUILTIN_SKILLS_DIR = Path(__file__).resolve().parent.parent / "builtin_skills"
 
 
 class Skill:
@@ -116,7 +117,7 @@ class SkillRegistry:
 
     def __init__(self, extra_dirs: list[Path] | None = None):
         self.skills: list[Skill] = []
-        self._search_dirs: list[Path] = [SKILLS_DIR]
+        self._search_dirs: list[Path] = [SKILLS_DIR, BUILTIN_SKILLS_DIR]
         if extra_dirs:
             self._search_dirs.extend(extra_dirs)
 

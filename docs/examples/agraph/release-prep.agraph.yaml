@@ -1,0 +1,56 @@
+ags_version: "1.0"
+kind: AgenticGraph
+id: magent/examples/release-prep
+title: Release preparation
+objective: Prepare a repository release and require human approval before publishing.
+version: "1.0.0"
+requires_conformance: 2
+entrypoints: [inspect]
+constraints: {max_parallel_nodes: 2, max_node_executions: 8, max_cost_usd: 8.0}
+nodes:
+  inspect:
+    type: task
+    title: Inspect release readiness
+    description: Inspect versioning, changelog, repository status, and release automation without making changes.
+    outputs:
+      report: {type: markdown, description: Release-readiness findings.}
+    intelligence: {tier: standard, hints: [code_comprehension]}
+    requirements:
+      tools: [file_read, file_search]
+      permissions: ["fs:read:**"]
+      workspace: read_only
+    success:
+      summary: Release-readiness findings exist.
+      criteria:
+        - {id: report, kind: artifact_present, description: Findings were emitted., output: report}
+  verify:
+    type: task
+    title: Run release checks
+    description: Run the project's configured release checks and summarize exact evidence and blockers.
+    depends_on: [inspect]
+    inputs:
+      findings: {type: markdown, description: Inspection findings., from: nodes.inspect.outputs.report}
+    outputs:
+      evidence: {type: markdown, description: Check results and blockers.}
+    intelligence: {tier: advanced, hints: [adversarial_review], rationale: Release verification must detect subtle regressions.}
+    requirements:
+      tools: [file_read, shell_exec]
+      permissions: ["fs:read:**", "shell:exec:*"]
+      workspace: read_only
+    success:
+      summary: Release checks have evidence.
+      criteria:
+        - {id: evidence, kind: artifact_present, description: Verification evidence was emitted., output: evidence}
+  approve:
+    type: gate
+    title: Approve release
+    description: A maintainer reviews the evidence before any publishing workflow begins.
+    depends_on: [verify]
+    gate:
+      mode: approve
+      roles: [maintainer]
+      prompt: Approve this release candidate?
+      present: [nodes.verify.outputs.evidence]
+      on_reject: fail
+outputs:
+  release_evidence: {type: markdown, description: Approved release evidence., from: nodes.verify.outputs.evidence}

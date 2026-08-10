@@ -51,6 +51,7 @@ Generated from the active Typer command tree.
 
 ## code
 
+- `magent code graph`
 - `magent code index`
 - `magent code related`
 - `magent code symbols`
@@ -141,6 +142,7 @@ Generated from the active Typer command tree.
 - `magent readiness`
 - `magent recipe`
 - `magent release`
+- `magent repo-graph`
 - `magent research`
 - `magent review`
 - `magent review-show`
@@ -237,6 +239,21 @@ Generated from the active Typer command tree.
 - `magent github pr`
 - `magent github prs`
 - `magent github status`
+
+## graph
+
+- `magent graph add`
+- `magent graph export-plan`
+- `magent graph export-plugin`
+- `magent graph export-recipe`
+- `magent graph generate`
+- `magent graph list`
+- `magent graph plan`
+- `magent graph resume`
+- `magent graph run`
+- `magent graph show`
+- `magent graph status`
+- `magent graph validate`
 
 ## hook
 
@@ -352,12 +369,15 @@ Generated from the active Typer command tree.
 - `magent plugin import codex-skill`
 - `magent plugin import gemini`
 - `magent plugin import opencode`
+- `magent plugin import pi`
 - `magent plugin install`
 - `magent plugin list`
 - `magent plugin mcp`
 - `magent plugin mcp apply`
 - `magent plugin mcp import`
 - `magent plugin metadata`
+- `magent plugin pi`
+- `magent plugin pi bridge`
 - `magent plugin registry-index`
 - `magent plugin schema`
 - `magent plugin validate`

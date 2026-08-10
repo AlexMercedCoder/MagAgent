@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.35.0
+
+- Added safe Pi package compatibility: native Agent Skill and prompt-template conversion, context and MCP import, manifest detection, quarantined extension/theme inventory, and an explicitly granted Pi-runtime bridge.
+- Added Agentic Graph Specification 1.0 conformance level 3 with strict validation, deterministic planning, typed expressions, model-tier routing, harness-owned criteria, human gates, branching, retries, budgets, parallel execution, loops, maps, subgraphs, compensation, resume, and portable run records.
+- Added `magent graph validate`, `plan`, `add/list/show`, `generate`, `run/status/resume`, plan and recipe export, and native plugin-pack export commands.
+- Retargeted orchestrated goals onto the Agentic Graph executor and added graph execution to the daemon, gateways, desktop machine API, task runtime, tool policy, and sandbox boundaries.
+- Added project-aware graph generation, canonical schemas and examples, an offline authoring guide, a bundled AGS skill, generation evals, conformance fixtures, and provider-free structural execution tests for every packaged YAML example.
+- Added machine-readable AGS capability, tier, and logical-tool mappings through `magent system info`.
+- Updated architecture, command, plugin, testing, support, roadmap, and repository documentation for portable graph workflows.
+
 ## 0.34.0
 
 - Added a unified durable task runtime for interactive, one-shot, goal, daemon, gateway, and desktop execution with versioned task and event contracts.

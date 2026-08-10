@@ -113,6 +113,14 @@ def create_orchestrated_goal(
         )
         for index, _step in enumerate(steps)
     ]
+    agraph = _orchestration_to_graph(
+        goal,
+        root=root,
+        cache_key=cache_key,
+        steps=steps,
+        step_packets=step_packets,
+        execution_model_role=execution_model_role,
+    )
     goal_record = store.append(
         "goals",
         {
@@ -143,6 +151,7 @@ def create_orchestrated_goal(
             "steps": [step["title"] for step in steps],
             "checks": _likely_checks(profile),
             "plan_markdown": master_plan,
+            "agraph": agraph,
             "orchestration": {
                 "cache_key": cache_key,
                 "planning_model_role": planning_model_role,
@@ -157,6 +166,7 @@ def create_orchestrated_goal(
                 "current_step": 0,
                 "status": "planned",
                 "execution_task_id": runtime_task["id"],
+                "agraph": agraph,
             },
         },
     )
@@ -219,7 +229,8 @@ async def run_orchestrated_plan(
     retry_step: int = 0,
     quiet: bool = False,
 ) -> dict[str, Any]:
-    """Resume or retry a saved orchestrated plan."""
+    """Resume or retry a saved orchestrated plan through the AGS runner."""
+    from magent.agraph.execute import GraphExecutor
     from magent.subagents import SubAgentRunner
 
     plan = get_orchestrated_plan(store, plan_id)
@@ -245,14 +256,6 @@ async def run_orchestrated_plan(
         execution_task_id = runtime_task["id"]
         plan["execution_task_id"] = execution_task_id
         orchestration["execution_task_id"] = execution_task_id
-    if runtime_task["state"] in {"completed", "failed", "cancelled"}:
-        runtime.retry(execution_task_id, reason="Orchestrated plan retry")
-    current_task = runtime.get(execution_task_id)
-    if current_task and current_task["state"] != "running":
-        if current_task["state"] in {"waiting", "blocked"}:
-            runtime.resume(execution_task_id, reason="Orchestrated plan execution started")
-        else:
-            runtime.transition(execution_task_id, "running")
     runner = SubAgentRunner(
         username,
         provider,
@@ -269,8 +272,8 @@ async def run_orchestrated_plan(
             status_item["status"] = "pending"
             status_item.pop("error", None)
             status_item.pop("completed_at", None)
-    for index, step in enumerate(orchestration["steps"][start_index:], start=start_index):
-        packet = build_step_packet(
+    packets = [
+        build_step_packet(
             goal=_goal_text(plan),
             root=root,
             cache_key=orchestration["cache_key"],
@@ -280,46 +283,44 @@ async def run_orchestrated_plan(
             execution_model_role=orchestration["execution_model_role"],
             completed_summaries=completed,
         )
-        step_statuses[index] = {
-            **step_statuses[index],
-            "status": "running",
-            "started_at": now_iso(),
-        }
-        store.update_item(
-            "plans",
-            plan["id"],
-            status="running",
-            orchestration={
-                **orchestration,
-                "current_step": index,
-                "status": "running",
-                "step_statuses": step_statuses,
-                "completed_summaries": completed,
-            },
-        )
-        child = runtime.create(
-            "orchestrated_step",
-            step["title"],
-            project=root,
-            parent_task_id=execution_task_id,
-            planning_role=orchestration["planning_model_role"],
-            execution_role=orchestration["execution_model_role"],
-            metadata={"plan_id": plan_id, "step": index + 1},
-        )
-        runtime.transition(child["id"], "running", detail={"step": index + 1})
-        runtime.record_event(
-            execution_task_id,
-            "child_task_started",
-            detail={"child_task_id": child["id"], "step": index + 1, "title": step["title"]},
-        )
+        for index in range(start_index, len(orchestration["steps"]))
+    ]
+    graph = _orchestration_to_graph(
+        _goal_text(plan),
+        root=root,
+        cache_key=orchestration["cache_key"],
+        steps=orchestration["steps"][start_index:],
+        step_packets=packets,
+        execution_model_role=orchestration["execution_model_role"],
+        id_suffix=f"retry-{start_index + 1}" if start_index else "run",
+    )
+
+    class _RouteConfig:
+        max_parallel_subagents = 1
+        permission_mode = str(getattr(config, "permission_mode", "balanced"))
+        model_roles = {orchestration["execution_model_role"]: "provided/model", "coding": "provided/model"}
+
+        @staticmethod
+        def provider_and_model_for_role(_role: str) -> tuple[str, str]:
+            return "provided", "model"
+
+        @staticmethod
+        def provider_config(_provider: str) -> dict[str, Any]:
+            return {"models": {"model": {"capabilities": {"context_tokens": 100000}}}}
+
+    next_index = start_index
+
+    async def run_step(_node_id: str, prompt: str, _route: Any, _task_id: str) -> dict[str, Any]:
+        nonlocal next_index
+        index = next_index
+        next_index += 1
+        step = orchestration["steps"][index]
+        step_statuses[index] = {**step_statuses[index], "status": "running", "started_at": now_iso()}
         try:
-            runner._execution_task_id = child["id"]
-            task = await runner.spawn(f"{plan['id']}_step_{index + 1}", packet)
-            task_result = task.result
-            task_error = task.error
+            task = await runner.spawn(f"{plan['id']}_step_{index + 1}", prompt)
+            task_result, task_error = task.result, task.error
         except Exception as exc:
-            task_result = ""
-            task_error = str(exc)
+            task_result, task_error = "", str(exc)
         summary = {
             "step": index + 1,
             "title": step["title"],
@@ -329,24 +330,6 @@ async def run_orchestrated_plan(
             "completed_at": now_iso(),
         }
         completed.append(summary)
-        runtime.update_context(
-            child["id"],
-            final_audit={
-                "ok": summary["ok"],
-                "summary": summary["summary"],
-                "error": summary["error"],
-            },
-        )
-        runtime.transition(
-            child["id"],
-            "completed" if summary["ok"] else "failed",
-            detail={"step": index + 1},
-        )
-        runtime.record_event(
-            execution_task_id,
-            "child_task_finished",
-            detail={"child_task_id": child["id"], "step": index + 1, "ok": summary["ok"]},
-        )
         step_statuses[index] = {
             **step_statuses[index],
             "status": "completed" if summary["ok"] else "failed",
@@ -355,10 +338,21 @@ async def run_orchestrated_plan(
             "completed_at": summary["completed_at"],
         }
         if task_error:
-            break
+            raise RuntimeError(task_error)
+        return {"outputs": {"summary": task_result[:1600]}}
+
+    graph_result = await GraphExecutor(
+        username=username,
+        config=_RouteConfig(),
+        project=root,
+        store=store,
+        agent_runner=run_step,
+        root_task_id=execution_task_id,
+        compatibility_completed_state=True,
+    ).run(graph)
     status = (
         "completed"
-        if len(completed) == len(orchestration["steps"]) and all(item["ok"] for item in completed)
+        if graph_result.get("ok") and len(completed) == len(orchestration["steps"]) and all(item["ok"] for item in completed)
         else "blocked"
     )
     final_orchestration = {
@@ -367,6 +361,7 @@ async def run_orchestrated_plan(
         "current_step": len(completed),
         "step_statuses": step_statuses,
         "status": status,
+        "agraph_run_id": (graph_result.get("run") or {}).get("run_id", ""),
     }
     store.update_item("plans", plan["id"], status=status, orchestration=final_orchestration)
     runtime.update_context(
@@ -378,10 +373,8 @@ async def run_orchestrated_plan(
         },
         metadata={"plan_id": plan_id},
     )
-    if status == "completed":
-        runtime.transition(execution_task_id, "validating", reason="All staged steps completed")
-        runtime.transition(execution_task_id, "completed", reason="Orchestrated goal completed")
-    else:
+    current_parent = runtime.get(execution_task_id)
+    if status != "completed" and current_parent and current_parent["state"] != "blocked":
         runtime.transition(execution_task_id, "blocked", reason="A staged step failed")
     updated_goal = None
     if plan.get("goal_id"):
@@ -571,6 +564,88 @@ def _render_master_plan(
         ]
     )
     return "\n".join(lines)
+
+
+def _orchestration_to_graph(
+    goal: str,
+    *,
+    root: Path,
+    cache_key: str,
+    steps: list[dict[str, Any]],
+    step_packets: list[str],
+    execution_model_role: str,
+    id_suffix: str = "plan",
+) -> dict[str, Any]:
+    """Convert cached orchestrated steps into the single AGS execution representation."""
+    nodes: dict[str, Any] = {}
+    previous = ""
+    for index, (step, packet) in enumerate(zip(steps, step_packets, strict=True), 1):
+        node_id = f"step_{index}"
+        node: dict[str, Any] = {
+            "type": "task",
+            "title": step["title"],
+            "description": packet,
+            "outputs": {
+                "summary": {
+                    "type": "markdown",
+                    "description": "Compact summary of files changed, checks run, evidence, and blockers.",
+                }
+            },
+            "intelligence": {
+                "tier": "standard",
+                "rationale": f"Use the configured {execution_model_role} role for one focused staged step.",
+            },
+            "success": {
+                "summary": "The staged step returned its required summary.",
+                "criteria": [
+                    {
+                        "id": "summary_present",
+                        "kind": "artifact_present",
+                        "description": "The sub-agent returned a compact step summary.",
+                        "output": "summary",
+                    }
+                ],
+            },
+            "constraints": {"max_agent_steps": 40, "max_wall_clock_seconds": 1800},
+            "failure": {"on_exhausted": "fail"},
+            "estimate": {"effort": "m", "cost_usd": 1.0},
+        }
+        if previous:
+            node["depends_on"] = [previous]
+            node["inputs"] = {
+                "prior_summary": {
+                    "type": "markdown",
+                    "description": "Summary from the preceding staged step.",
+                    "from": f"nodes.{previous}.outputs.summary",
+                }
+            }
+        nodes[node_id] = node
+        previous = node_id
+    return {
+        "ags_version": "1.0",
+        "kind": "AgenticGraph",
+        "id": f"magent/orchestrated/{cache_key}/{id_suffix}",
+        "title": f"Orchestrated goal: {goal}"[:200],
+        "objective": goal,
+        "requires_conformance": 1,
+        "context": {"project_root": str(root), "master_plan_cache_key": cache_key},
+        "entrypoints": ["step_1"],
+        "nodes": nodes,
+        "constraints": {
+            "max_parallel_nodes": 1,
+            "max_node_executions": max(1, len(nodes)),
+            "max_wall_clock_seconds": max(1800, len(nodes) * 1800),
+        },
+        "policy": {"on_expression_error": "fail", "on_node_failure": "halt", "checkpointing": "per_node"},
+        "outputs": {
+            "summary": {
+                "type": "markdown",
+                "description": "Summary from the final staged step.",
+                "from": f"nodes.{previous}.outputs.summary",
+            }
+        },
+        "metadata": {"source": "magent-goal-orchestrator", "cache_key": cache_key},
+    }
 
 
 def _likely_checks(profile: dict[str, Any]) -> list[str]:

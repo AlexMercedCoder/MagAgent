@@ -125,7 +125,7 @@ def test_desktop_execution_task_contract(tmp_path: Path, monkeypatch) -> None:
     detail = desktop_api.execution_task("alice", task["id"])
     cancelled = desktop_api.execution_task_action("alice", task["id"], "cancel")
 
-    assert listed["tasks"][0]["schema_version"] == "magent.task.v1"
+    assert listed["tasks"][0]["schema_version"] == "magent.task.v2"
     assert detail["events"][0]["type"] == "task_created"
     assert cancelled["task"]["state"] == "cancelled"
 
@@ -134,7 +134,7 @@ def test_platform_contracts_publish_stable_task_and_plugin_versions() -> None:
     result = desktop_api.platform_contracts()
 
     assert result["schema"] == "magent.platform-contracts.v1"
-    assert result["contracts"]["task"]["version"] == "magent.task.v1"
+    assert result["contracts"]["task"]["version"] == "magent.task.v2"
     assert result["contracts"]["task_event"]["version"] == "magent.task-event.v1"
     assert result["contracts"]["plugin_manifest"]["version"] == "1"
     assert result["contracts"]["ecosystem_readiness"]["version"] == "mag.ecosystem-readiness.v1"

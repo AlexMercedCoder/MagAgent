@@ -1,0 +1,17 @@
+{
+  "schema": "magent.agraph-eval.v1",
+  "description": "Provider-free AGS generation quality corpus.",
+  "targets": {"strict_validation_rate": 0.8, "required_machine_criteria_per_graph": 1, "max_frontier_nodes": 1},
+  "goals": [
+    "repair a failing API test and document the root cause",
+    "prepare a Python package release",
+    "audit repository documentation for stale commands",
+    "upgrade a dependency and verify compatibility",
+    "triage a reported login bug",
+    "add a REST endpoint with focused tests",
+    "review a patch for security regressions",
+    "build an accessible settings panel",
+    "reduce a slow database query",
+    "migrate a configuration file without breaking users"
+  ]
+}

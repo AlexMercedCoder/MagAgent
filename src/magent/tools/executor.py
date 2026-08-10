@@ -201,6 +201,11 @@ class ToolExecutor(
             "permission_reason": perm.reason,
         }
 
+    async def _graph_emit_output(self, name: str, value: Any) -> ToolResult:
+        from magent.agraph.output import emit_output
+
+        return emit_output(name, value)
+
     # ─────────────────────────────────────────────
     # TOOL DEFINITIONS (OpenAI function-calling format)
     # ─────────────────────────────────────────────
@@ -224,6 +229,11 @@ class ToolExecutor(
     async def dispatch(self, tool_name: str, tool_args: dict[str, Any]) -> ToolResult:
         """Dispatch a tool call by name."""
         a = _normalize_tool_args(tool_name, strip_tool_activity(tool_args))
+        from magent.agraph.runtime_context import authorize_graph_tool
+
+        graph_authorization = await authorize_graph_tool(tool_name, a, self.cwd)
+        if not graph_authorization.get("ok"):
+            return graph_authorization
         raw = bool(a.pop("raw", False))
         definition = next(
             (item for item in self.get_tool_definitions() if item.get("function", {}).get("name") == tool_name),
@@ -238,6 +248,7 @@ class ToolExecutor(
                     "missing": validation["missing"],
                 }
         dispatch_map: dict[str, Any] = {
+            "graph_emit_output": lambda: self._graph_emit_output(a["name"], a["value"]),
             "read_file": lambda: self.read_file(a["path"]),
             "read_file_range": lambda: self.read_file_range(
                 a["path"], a.get("start_line", 1), a.get("end_line")

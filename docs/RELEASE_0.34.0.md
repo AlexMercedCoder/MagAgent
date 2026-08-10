@@ -1,4 +1,6 @@
-# MagAgent 0.34.0 Release Prep
+# MagAgent 0.34.0 Release Record
+
+**Status:** Released on 2026-08-09 as tag `v0.34.0`.
 
 ## Scope
 
@@ -11,7 +13,9 @@
 - Updated GitHub and built-in roadmap, architecture, memory, configuration, testing,
   desktop integration, command, and TUI documentation.
 
-## Validation Before Release
+## Release Validation
+
+The release was validated with the following checks:
 
 ```bash
 PYTHONPATH=src python -m ruff check src tests
@@ -24,13 +28,5 @@ python -m build --outdir /tmp/magent-dist-next
 python -m twine check /tmp/magent-dist-next/*
 ```
 
-## Manual Smoke
-
-```bash
-magent mcp list
-magent mcp test <configured-server>
-magent session doctor
-magent session peers
-```
-
-Run a real two-session delivery smoke and an MCP fixture smoke before publishing.
+Manual smoke coverage included MCP discovery and fixture testing, session diagnostics,
+peer discovery, and real two-session delivery.

@@ -72,6 +72,7 @@ permission_app = typer.Typer(help="Permission profile UX", name="permission")
 performance_app = typer.Typer(help="Local performance diagnostics", name="performance")
 workbench_app = typer.Typer(help="Workbench storage maintenance", name="workbench")
 system_app = typer.Typer(help="Machine-readable system and desktop integration info", name="system")
+graph_app = typer.Typer(help="Portable Agentic Graph validation, planning, generation, and execution", name="graph")
 
 app.add_typer(user_app, name="user", rich_help_panel="Setup & Configuration")
 app.add_typer(memory_app, name="memory", rich_help_panel="Memory & Context")
@@ -123,6 +124,7 @@ _HELP_PANELS = {
     "performance": "Performance & Diagnostics",
     "workbench": "Workbench & Productivity",
     "system": "Performance & Diagnostics",
+    "graph": "Agents & Automation",
 }
 
 for _name, _typer in [
@@ -169,6 +171,7 @@ for _name, _typer in [
     ("performance", performance_app),
     ("workbench", workbench_app),
     ("system", system_app),
+    ("graph", graph_app),
 ]:
     app.add_typer(_typer, name=_name, rich_help_panel=_HELP_PANELS.get(_name, "Advanced"))
 
@@ -222,4 +225,5 @@ __all__ = [
     "workspace_app",
     "workbench_app",
     "system_app",
+    "graph_app",
 ]

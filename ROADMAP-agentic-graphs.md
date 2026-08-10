@@ -10,8 +10,16 @@
 > `schema/agentic-graph-run-1.0.schema.json`, `docs/harness-integration.md`,
 > `docs/skill-authoring.md`, `tools/validate_agraph.py`.
 >
-> Status: proposed. Nothing here is built yet.
-> Last updated: 2026-08-09. Baseline: MagAgent 0.34.0, MagGraph 0.4.1, 411 passing tests.
+> Status: implemented on the current development branch through AGS 1.0 conformance level 3.
+> Last updated: 2026-08-10. Baseline: MagAgent 0.34.0, MagGraph 0.4.1.
+
+## Implementation record
+
+All roadmap phases are represented in the shipped architecture: package-local schemas and reference validation, strict AGX parsing, deterministic plans, durable execution, branching and composition, harness-owned criteria, tier routing, permission ceilings, human checkpoints, worktree/copied sandbox isolation, portable run records, digest-guarded resume, goal-orchestrator migration, recipe and plugin bridges, generation, offline authoring guidance, daemon/gateway entry points, desktop contracts, examples, and conformance tests.
+
+Container isolation is intentionally a refusal boundary: MagAgent returns `RT014` instead of pretending that a host-side agent session ran inside Docker. The supported-feature report describes this precisely. This preserves the specification's no-silent-downgrade requirement.
+
+The maintained implementation guide is now [`src/magent/docs/agentic-graphs.md`](src/magent/docs/agentic-graphs.md). The phase tables below remain as the design history and traceability checklist.
 
 ---
 
@@ -63,6 +71,7 @@ New package `src/magent/agraph/`, with everything else reused:
 ```
 src/magent/agraph/
 ├── __init__.py
+├── constants.py     # conformance claim and supported feature ids
 ├── document.py      # load JSON/YAML, duplicate-key rejection, canonical digest
 ├── validate.py      # AG0xx / AG1xx / AG2xx / AG9xx findings with JSON Pointers
 ├── expressions.py   # AGX tokenizer, parser, evaluator (no host eval)
@@ -71,15 +80,18 @@ src/magent/agraph/
 ├── execute.py       # per-node lifecycle; wraps AgentSession
 ├── routing.py       # intelligence tier -> magent model role -> provider/model
 ├── criteria.py      # the nine criterion kinds
-├── hitl.py          # gate nodes and human[] checkpoints
 ├── generate.py      # goal -> graph (the second direction)
+├── ecosystem.py     # portable plugin-pack export
+├── mappings.py      # logical tools and intelligence-tier mappings
+├── output.py        # task-local graph_emit_output collection
+├── runtime_context.py # task-local tool and permission ceiling
 └── record.py        # AGS run record emission
 ```
 
 Integration seams, all existing:
 
-- **Node execution** → `AgentSession` (`src/magent/agent.py`) via `SubAgentRunner`
-  (`src/magent/subagents/__init__.py`), one sub-agent per node.
+- **Node execution** → one bounded `AgentSession` (`src/magent/agent.py`) per task node, with
+  graph routing, task parentage, and task-local tool policy applied by `GraphExecutor`.
 - **State and events** → `TaskRuntime` (`src/magent/task_runtime.py`), one task row per node
   execution, `parent_task_id` giving the graph run its tree.
 - **Documents and records at rest** → `WorkbenchStore` (`src/magent/workbench_store.py`), new
@@ -117,9 +129,6 @@ Ship this alone. It is useful on its own and it is what every later phase is bui
 
 | # | Item | Effort | Depends on | Notes |
 | --- | --- | --- | --- | --- |
-| 1.1 | `agraph/document.py`: load `.agraph.json` / `.agraph.yaml`, reject duplicate YAML keys, compute the canonical SHA-256 digest | S | 0.4 | Duplicate-key rejection matters: a duplicated node id would silently drop a node. Spec §3. |
-| 1.2 | `agraph/validate.py` layers 1 and 2 — JSON Schema plus cycles, dangling ids, entrypoints, joins, decision branches, fragment refs | M | 1.1 | Findings as `{code, severity, message, pointer}`. Port from the spec repo's validator. |
-| 1.3 | `agraph/expressions.py`: AGX tokenizer + recursive-descent parser | M | — | Parser only in this phase. **Never `eval()`** — graph documents are untrusted input (spec §22). |
 | 1.4 | `agraph/validate.py` layer 3 — scope checks, the predecessor rule (AG201), undeclared references, `secrets.*` prohibition (AG205) | M | 1.2, 1.3 | This is where most generated-graph bugs get caught. |
 | 1.5 | `agraph/plan.py`: effective edge set, topological order, reachability, worst-case execution count, projected cost from `estimate`, tier histogram | M | 1.2 | Worst-case count multiplies `retry.max_attempts` × `loop.max_iterations` × `map.max_items` through every nesting level. |
 | 1.6 | CLI: `magent graph validate <file>` and `magent graph plan <file> [--json]` in a new `src/magent/cli/commands/graph.py` | S | 1.2, 1.5 | Register `graph_app` in `src/magent/cli/app.py` alongside `plan_app`/`execution_app`. |

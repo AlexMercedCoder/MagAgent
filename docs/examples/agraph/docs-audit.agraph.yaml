@@ -1,0 +1,45 @@
+ags_version: "1.0"
+kind: AgenticGraph
+id: magent/examples/docs-audit
+title: Documentation audit
+objective: Compare repository documentation with current commands and behavior, then report stale material.
+version: "1.0.0"
+requires_conformance: 2
+entrypoints: [inventory]
+constraints: {max_parallel_nodes: 2, max_node_executions: 6, max_cost_usd: 3.0}
+nodes:
+  inventory:
+    type: task
+    title: Inventory documentation
+    description: Locate user-facing repository and offline documentation, command references, examples, and release notes.
+    outputs:
+      inventory: {type: markdown, description: Documentation inventory.}
+    intelligence: {tier: minimal, hints: [code_comprehension]}
+    requirements:
+      tools: [file_read, file_search]
+      permissions: ["fs:read:**"]
+      workspace: read_only
+    success:
+      summary: Documentation inventory exists.
+      criteria:
+        - {id: inventory, kind: artifact_present, description: Inventory was emitted., output: inventory}
+  compare:
+    type: task
+    title: Compare docs to implementation
+    description: Compare the inventory with actual CLI help, configuration defaults, and public machine contracts; identify exact stale locations.
+    depends_on: [inventory]
+    inputs:
+      inventory: {type: markdown, description: Documentation inventory., from: nodes.inventory.outputs.inventory}
+    outputs:
+      audit: {type: markdown, description: Prioritized stale-doc findings.}
+    intelligence: {tier: standard, hints: [adversarial_review]}
+    requirements:
+      tools: [file_read, file_search, shell_exec]
+      permissions: ["fs:read:**", "shell:exec:magent*"]
+      workspace: read_only
+    success:
+      summary: Documentation findings exist.
+      criteria:
+        - {id: audit, kind: artifact_present, description: Audit findings were emitted., output: audit}
+outputs:
+  audit: {type: markdown, description: Final documentation audit., from: nodes.compare.outputs.audit}

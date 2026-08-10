@@ -19,6 +19,9 @@ Plugins are installable local extension packs for MagAgent.
 - `magent plugin import opencode ./opencode-pack`
 - `magent plugin import claude ./claude-project`
 - `magent plugin import codex-skill ./SKILL.md`
+- `magent plugin import gemini ./gemini-extension`
+- `magent plugin import pi ./pi-package`
+- `magent plugin pi bridge pi-package --project . --dry-run`
 
 Installed plugins live under `~/.config/magent/plugins`, and enabled state is recorded in `~/.config/magent/plugins.toml`.
 Plugin names are validated before install/import and may contain only letters,
@@ -82,11 +85,39 @@ MagAgent can normalize and import common agent ecosystem shapes:
 
 - OpenCode-style `agents/*.md`, `.opencode/agents/*.md`, `commands/*.md`, and MCP config.
 - Claude-style `CLAUDE.md`, `.claude/agents/*.md`, `.claude/commands/*.md`, and MCP config.
+- Gemini-style agents, commands, skills, project instructions, and MCP config.
 - Codex-style `SKILL.md` files or skill directories.
+- Pi package `skills`, Markdown prompt templates, context files, package metadata, and MCP config.
 - MCP configs using `[mcp.servers]`, `[servers]`, or JSON `mcpServers`.
 - Foreign metadata from `plugin.json`, `package.json`, `AGENTS.md`, `CLAUDE.md`, and `SKILL.md`.
 
 Imported packs are converted into MagAgent-native `agents/`, `recipes/`, `skills/`, and `mcp.toml` surfaces.
+
+### Pi Runtime Boundary
+
+Pi skills use the Agent Skills standard and import directly. Pi Markdown prompt templates become
+MagAgent recipes, while `AGENTS.md`, `CLAUDE.md`, `SYSTEM.md`, and `APPEND_SYSTEM.md` become agent
+instructions. Pi TypeScript/JavaScript extensions and themes are preserved under
+`compatibility/pi/` and described in `report.json`; MagAgent never imports or executes that code
+inside its Python process.
+
+To run preserved extensions, enable the imported plugin, grant `external_process` at user or
+canonical project scope, inspect the generated command with `--dry-run`, and then launch the
+bridge. The bridge invokes the installed `pi` executable with extension discovery disabled and
+only the imported resources passed explicitly:
+
+```bash
+magent plugin enable pi-package
+magent plugin grant pi-package --scope project --project . --permissions external_process
+magent plugin pi bridge pi-package --project . --dry-run
+magent plugin pi bridge pi-package --project .
+```
+
+The bridge is compatibility through Pi's runtime, not a source-level translation of Pi's
+`ExtensionAPI`. Imported packages do not install Node dependencies automatically; review the
+package and prepare its dependencies before bridging when required.
+
+Native manifests may also declare `agentic_graph` and `schemas` capabilities. `magent graph export-plugin` creates a valid native pack containing the AGS schemas and bundled authoring skill. An enabled, reviewed plugin may provide `agraph_checkers.py` with a `register(register_external_checker)` function to add named `external` success criteria; enabling that plugin is the explicit trust boundary for loading its Python code.
 
 ## MCP Contribution
 

@@ -98,6 +98,7 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "models": {
         "coding": "",
         "review": "",
+        "frontier": "",
         "memory": "",
         "cheap": "",
         "image_maker": "",
@@ -108,6 +109,16 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "max_parallel_subagents": 2,
         "model_role": "coding",
         "sandbox_mode": "",
+    },
+    "agraph": {
+        "tier_roles": {
+            "minimal": "cheap",
+            "standard": "coding",
+            "advanced": "coding",
+            "frontier": "frontier",
+        },
+        "allow_command_criteria": True,
+        "max_parallel_nodes": 2,
     },
     "mcp": {},
     "session_messaging": {

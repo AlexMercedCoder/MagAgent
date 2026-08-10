@@ -1,0 +1,48 @@
+ags_version: "1.0"
+kind: AgenticGraph
+id: magent/examples/bug-triage
+title: Bug triage
+objective: Reproduce, diagnose, and propose a bounded repair for a reported bug.
+version: "1.0.0"
+requires_conformance: 2
+params:
+  report: {type: string, description: The bug report to investigate.}
+entrypoints: [reproduce]
+nodes:
+  reproduce:
+    type: task
+    title: Reproduce the defect
+    description: Inspect the repository and reproduce the reported behavior with the narrowest useful command.
+    inputs:
+      report: {type: string, description: User bug report., from: params.report}
+    outputs:
+      evidence: {type: markdown, description: Reproduction steps and observed output.}
+    intelligence: {tier: standard, hints: [code_comprehension]}
+    requirements:
+      tools: [file_read, file_search, shell_exec]
+      permissions: ["fs:read:**", "shell:exec:*"]
+      workspace: read_only
+    success:
+      summary: Reproduction evidence exists.
+      criteria:
+        - {id: evidence, kind: artifact_present, description: Evidence was emitted., output: evidence}
+  diagnose:
+    type: task
+    title: Diagnose root cause
+    description: Trace the reproduced behavior to a root cause and propose a focused repair plus validation criteria.
+    depends_on: [reproduce]
+    inputs:
+      evidence: {type: markdown, description: Reproduction evidence., from: nodes.reproduce.outputs.evidence}
+    outputs:
+      diagnosis: {type: markdown, description: "Root cause, repair scope, and checks."}
+    intelligence: {tier: advanced, hints: [code_comprehension, adversarial_review], rationale: Root-cause analysis requires cross-file reasoning.}
+    requirements:
+      tools: [file_read, file_search]
+      permissions: ["fs:read:**"]
+      workspace: read_only
+    success:
+      summary: A concrete diagnosis exists.
+      criteria:
+        - {id: diagnosis, kind: artifact_present, description: Diagnosis was emitted., output: diagnosis}
+outputs:
+  diagnosis: {type: markdown, description: Final bug diagnosis., from: nodes.diagnose.outputs.diagnosis}

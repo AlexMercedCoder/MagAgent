@@ -7,6 +7,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,44 @@ from magent.workbench_domains.plans import show_plan
 from magent.workbench_store import now_iso
 
 SANDBOX_MODES = {"worktree", "copy", "container"}
+
+
+@contextmanager
+def graph_workspace(root: Path, mode: str):
+    """Provision an AGS node workspace without silently weakening isolation."""
+    normalized = mode.strip().lower()
+    if normalized == "shared":
+        yield root
+        return
+    if normalized == "container":
+        raise RuntimeError("RT014 container-isolated agent sessions are not available")
+    if normalized == "worktree":
+        if not shutil.which("git"):
+            raise RuntimeError("RT014 git is required for worktree isolation")
+        probe = _run(root, ["git", "rev-parse", "--show-toplevel"], timeout=30)
+        if not probe.get("ok"):
+            raise RuntimeError("RT014 worktree isolation requires a Git repository")
+        target = Path(tempfile.mkdtemp(prefix="magent-agraph-worktree-"))
+        result = _run(root, ["git", "worktree", "add", "--detach", str(target), "HEAD"], timeout=120)
+        if not result.get("ok"):
+            shutil.rmtree(target, ignore_errors=True)
+            raise RuntimeError(f"RT014 could not create worktree: {result.get('stderr', result.get('error', 'unknown error'))}")
+        try:
+            yield target
+        finally:
+            _run(root, ["git", "worktree", "remove", "--force", str(target)], timeout=120)
+            shutil.rmtree(target, ignore_errors=True)
+        return
+    if normalized == "sandbox":
+        target = Path(tempfile.mkdtemp(prefix="magent-agraph-sandbox-"))
+        ignore = shutil.ignore_patterns(".git", ".venv", "node_modules", "__pycache__", ".pytest_cache")
+        shutil.copytree(root, target, dirs_exist_ok=True, ignore=ignore)
+        try:
+            yield target
+        finally:
+            shutil.rmtree(target, ignore_errors=True)
+        return
+    raise RuntimeError(f"RT014 unsupported isolation mode {mode!r}")
 
 
 def execute_plan_sandbox(

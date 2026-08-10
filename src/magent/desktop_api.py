@@ -119,11 +119,26 @@ CONFIG_SCHEMA: list[dict[str, Any]] = [
 
 def system_info() -> dict[str, Any]:
     """Return desktop-friendly local MagAgent installation info."""
+    from magent.agraph.mappings import TIER_TO_MODEL_ROLE, TOOL_NAME_MAP
+
     username = get_current_user()
     executable = shutil.which("magent") or ""
     return {
         "ok": True,
         "magent_version": __version__,
+        "agentic_graph": {
+            "spec_version": "1.0",
+            "conformance_level": 3,
+            "supported_features": [
+                "validation", "planning", "task", "decision", "gate", "loop", "map",
+                "subgraph", "criteria", "retries", "budgets", "parallelism",
+                "run-records", "resume", "generation",
+            ],
+            "tier_to_model_role": dict(TIER_TO_MODEL_ROLE),
+            "logical_tool_mapping": {
+                name: list(tools) for name, tools in TOOL_NAME_MAP.items()
+            },
+        },
         "python": sys.version.split()[0],
         "platform": {
             "system": platform.system(),
@@ -159,6 +174,12 @@ def platform_contracts() -> dict[str, Any]:
             "ecosystem_readiness": {"version": "mag.ecosystem-readiness.v1", "status": "beta"},
             "config_schema": {"version": "1", "status": "beta"},
             "memory_batch": {"version": "1", "status": "beta", "requires": "maggraph>=0.4.1"},
+            "agentic_graph": {
+                "version": "1.0",
+                "status": "draft-standard",
+                "conformance_level": 3,
+                "transport": "json/jsonl",
+            },
             "mcp": {
                 "status": "dual-era-core",
                 "legacy_through": "2025-11-25",
@@ -172,6 +193,56 @@ def platform_contracts() -> dict[str, Any]:
             "breaking_changes_before_1_0": "minor-version only with migration notes",
         },
     }
+
+
+def graph_validate(path: str, *, strict: bool = False) -> dict[str, Any]:
+    """Validate a graph for desktop clients without executing it."""
+    from magent.agraph.validate import validate_graph
+
+    return validate_graph(path, strict=strict).as_dict()
+
+
+def graph_plan(path: str) -> dict[str, Any]:
+    """Return a render-ready graph plan."""
+    from magent.agraph.plan import plan_graph
+
+    try:
+        return plan_graph(path).as_dict()
+    except (OSError, ValueError) as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def graph_catalog(username: str) -> dict[str, Any]:
+    """Return saved graph documents and recent portable run records."""
+    from magent.workbench_store import WorkbenchStore
+
+    store = WorkbenchStore(username)
+    return {
+        "ok": True,
+        "graphs": store.read("graphs", []),
+        "runs": list(reversed(store.read("graph_runs", [])))[:100],
+    }
+
+
+async def graph_execute(
+    username: str,
+    path: str,
+    *,
+    project: str = ".",
+    params: dict[str, Any] | None = None,
+    assume_yes: bool = False,
+) -> dict[str, Any]:
+    """Execute a graph through the same runtime used by the CLI."""
+    from magent.agraph.execute import GraphExecutor
+    from magent.workbench_store import WorkbenchStore
+
+    return await GraphExecutor(
+        username=username,
+        config=load_config(username),
+        project=project,
+        store=WorkbenchStore(username),
+        assume_yes=assume_yes,
+    ).run(path, params=params or {})
 
 
 def config_get(username: str | None = None, *, include_raw: bool = False) -> dict[str, Any]:

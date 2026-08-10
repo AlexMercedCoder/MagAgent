@@ -697,23 +697,24 @@ maintainer-run evals without adding product telemetry.
 - A VS Code extension before the machine API and task event protocol are stable; once
   stable, an editor client becomes much cheaper to build correctly.
 
-## Recommended Immediate Release Sequence
+## Completed Release Sequence And Next Milestone
 
 1. **MagAgent 0.33.0 (released):** test isolation, coverage repair, SQLite cleanup,
    tool modularization, dual-era MCP, and authenticated local session coordination.
-2. **MagGraph 0.4.1 (release prepared):** API contract tests, scale benchmarks,
+2. **MagGraph 0.4.1 (released):** API contract tests, scale benchmarks,
    crash-safe atomic updates, hybrid retrieval, temporal/provenance fields, and reviewed batches.
-3. **MagAgent 0.34.0 (release prepared):** versioned task/event protocol, durable lifecycle, cancellation,
+3. **MagAgent 0.34.0 (released):** versioned task/event protocol, durable lifecycle, cancellation,
    artifact contracts, and unified execution surfaces.
-4. **Mag Command Center 0.2.0 (release prepared):** typed client, controller extraction,
+4. **Mag Command Center 0.2.0 (released):** typed client, controller extraction,
    persistent native state, event-native concurrent chat, cancellation, recovery,
    checkpoint/session workbench, artifact previews, diagnostics, and accessibility checks.
-5. **Ecosystem beta milestone (local evidence complete; release operations next):**
+5. **Ecosystem beta milestone (next):**
    `mag.ecosystem-readiness.v1` now aggregates component contracts, graph benchmark
    evidence, packaged docs, and explicit external gates. Run real-provider and packaged
    three-OS acceptance matrices, configure signing, publish the first cross-project eval
    report, and freeze candidate 1.0 contracts for feedback.
 
-This order deliberately builds confidence first, then shared execution, then memory
-quality, then desktop polish. It turns the breadth already present in Mag into a
-dependable product advantage instead of continuing to increase its maintenance load.
+The completed sequence built confidence first, then shared execution, memory quality,
+and desktop polish. The next milestone is operational: validate the released ecosystem
+across providers and packaged platforms, publish comparable evidence, and freeze the
+contracts needed for a dependable beta.

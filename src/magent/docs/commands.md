@@ -1,5 +1,15 @@
 # Commands
 
+## Agentic Graphs
+
+- `magent graph validate <file> --strict`: validate an AGS JSON or YAML document with stable diagnostic codes.
+- `magent graph plan <file>`: preview deterministic order, parallel groups, gates, tiers, cost, and worst-case executions.
+- `magent graph generate "<goal>" --out <file>`: generate a conservative, strictly valid graph for review.
+- `magent graph run <file> --project .`: execute through the durable graph runtime.
+- `magent graph status <run-id>` / `resume <run-id>`: inspect or resume portable run records.
+- `magent graph add/list/show`: manage the local graph catalog.
+- `magent repo-graph` or `magent code graph`: inspect repository imports; this is distinct from portable Agentic Graph workflows.
+
 Important command paths:
 
 - `magent --help`: show grouped command categories with a Start Here section.
@@ -158,6 +168,8 @@ Important command paths:
 - `magent plugin import claude <path>`: import Claude-style project instructions, agents, commands, and MCP config.
 - `magent plugin import codex-skill <path>`: import a Codex-style `SKILL.md` pack.
 - `magent plugin import gemini <path>`: import Gemini CLI-style extensions, commands, skills, and MCP config.
+- `magent plugin import pi <path>`: convert portable Pi skills, prompts, context, and MCP config while inventorying runtime-specific assets.
+- `magent plugin pi bridge <name> [--project path] [--mode interactive|rpc|json] [--dry-run]`: run explicitly granted, preserved extensions through the installed Pi runtime.
 
 MCP runtime inspection:
 

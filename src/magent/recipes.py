@@ -178,5 +178,42 @@ def run_recipe(store: Any, name: str, project: str | Path = ".") -> dict[str, An
     }
 
 
+def recipe_to_agraph_fragment(store: Any, name: str, project: str | Path = ".") -> dict[str, Any]:
+    """Export a recipe as a reusable AGS subgraph fragment."""
+    recipe = get_recipe(store, name, project)
+    if not recipe:
+        return {"ok": False, "error": f"Recipe not found: {name}"}
+    nodes: dict[str, Any] = {}
+    previous = ""
+    steps = recipe.get("steps") or [recipe.get("description") or f"Run recipe {name}"]
+    for index, step in enumerate(steps, 1):
+        node_id = f"step_{index}"
+        node = {
+            "type": "task",
+            "title": str(step)[:200],
+            "description": str(step),
+            "outputs": {"summary": {"type": "markdown", "description": "Step outcome and evidence."}},
+            "intelligence": {"tier": "standard", "rationale": "Execute one bounded recipe step."},
+            "requirements": {"tools": ["file_read", "shell_exec"], "permissions": ["fs:read:**", "shell:exec:*"], "workspace": "read_write"},
+            "success": {"summary": "The recipe step completed.", "criteria": [{"id": "summary_present", "kind": "artifact_present", "description": "A step summary was emitted.", "output": "summary"}]},
+            "estimate": {"effort": "s", "cost_usd": 0.2},
+        }
+        if previous:
+            node["depends_on"] = [previous]
+            node["inputs"] = {"prior": {"type": "markdown", "description": "Prior step summary.", "from": f"nodes.{previous}.outputs.summary"}}
+        nodes[node_id] = node
+        previous = node_id
+    return {
+        "ok": True,
+        "name": recipe["name"],
+        "fragment": {
+            "title": recipe.get("description") or recipe["name"],
+            "entrypoints": ["step_1"],
+            "nodes": nodes,
+            "outputs": {"summary": {"type": "markdown", "description": "Final recipe result.", "from": f"nodes.{previous}.outputs.summary"}},
+        },
+    }
+
+
 def _normalize_name(name: str) -> str:
     return name.strip().lower().replace("_", "-")

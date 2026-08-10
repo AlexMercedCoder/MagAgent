@@ -13,8 +13,10 @@ console = Console()
 def register_plugin_commands(plugin_app: typer.Typer) -> None:
     import_app = typer.Typer(help="Import plugins from other agent ecosystems", name="import")
     mcp_app = typer.Typer(help="Import and apply MCP plugin packs", name="mcp")
+    pi_app = typer.Typer(help="Inspect and bridge imported Pi packages", name="pi")
     plugin_app.add_typer(import_app, name="import")
     plugin_app.add_typer(mcp_app, name="mcp")
+    plugin_app.add_typer(pi_app, name="pi")
 
     @plugin_app.command("list")
     def plugin_list_cmd(json_output: bool = typer.Option(True, "--json/--no-json")) -> None:
@@ -215,6 +217,35 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
         from magent.plugins import import_compat_plugin
 
         result = import_compat_plugin("gemini", source, name=name, force=force)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @import_app.command("pi")
+    def plugin_import_pi_cmd(
+        source: str = typer.Argument(...),
+        name: str = typer.Option("", "--name"),
+        force: bool = typer.Option(False, "--force"),
+    ) -> None:
+        """Import portable Pi skills/prompts and inventory runtime extensions."""
+        from magent.plugins import import_compat_plugin
+
+        result = import_compat_plugin("pi", source, name=name, force=force)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @pi_app.command("bridge")
+    def plugin_pi_bridge_cmd(
+        name: str = typer.Argument(...),
+        project: str = typer.Option(".", "--project", "-p"),
+        mode: str = typer.Option("interactive", "--mode", help="interactive, rpc, or json"),
+        dry_run: bool = typer.Option(False, "--dry-run", help="Show the reviewed command without starting Pi."),
+    ) -> None:
+        """Run preserved extensions through Pi's runtime after explicit approval."""
+        from magent.plugins import run_pi_plugin_bridge
+
+        result = run_pi_plugin_bridge(name, project=project, mode=mode, dry_run=dry_run)
         console.print_json(data=result)
         if not result.get("ok"):
             raise typer.Exit(1)

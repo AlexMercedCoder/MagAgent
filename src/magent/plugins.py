@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -170,6 +172,27 @@ def enabled_plugin_paths() -> list[Path]:
     ]
 
 
+def load_external_graph_checkers() -> list[str]:
+    """Load AGS criterion checkers from explicitly enabled plugin packs."""
+    loaded = []
+    for root in enabled_plugin_paths():
+        module_path = root / "agraph_checkers.py"
+        if not module_path.is_file():
+            continue
+        spec = importlib.util.spec_from_file_location(f"magent_plugin_{root.name}_agraph", module_path)
+        if spec is None or spec.loader is None:
+            continue
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        register = getattr(module, "register", None)
+        if callable(register):
+            from magent.agraph.criteria import register_external_checker
+
+            register(register_external_checker)
+            loaded.append(root.name)
+    return loaded
+
+
 def enabled_plugin_mcp_servers() -> dict[str, Any]:
     servers: dict[str, Any] = {}
     for plugin_path in enabled_plugin_paths():
@@ -275,7 +298,7 @@ def import_compat_plugin(
     if not src.exists():
         return {"ok": False, "error": f"Import source not found: {src}"}
     ecosystem = ecosystem.replace("_", "-").lower()
-    if ecosystem not in {"opencode", "claude", "codex-skill", "gemini"}:
+    if ecosystem not in {"opencode", "claude", "codex-skill", "gemini", "pi"}:
         return {"ok": False, "error": f"Unsupported importer: {ecosystem}"}
     plugin_name_result = _safe_plugin_name(name or f"{src.stem}-{ecosystem}")
     if not plugin_name_result["ok"]:
@@ -297,9 +320,18 @@ def import_compat_plugin(
         _import_claude(src, target, converted)
     elif ecosystem == "gemini":
         _import_gemini(src, target, converted)
+    elif ecosystem == "pi":
+        from magent.plugin_compat_pi import import_pi
+
+        import_pi(src, target, converted)
     else:
         _import_codex_skill(src, target, converted)
     _copy_mcp_if_present(src, target, converted)
+    if ecosystem == "pi":
+        report_path = target / "compatibility" / "pi" / "report.json"
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        report["portable"]["mcp"] = list(converted.get("mcp", []))
+        report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     _write_manifest(
         target,
         {
@@ -312,7 +344,7 @@ def import_compat_plugin(
             "source_url": str(src),
         },
     )
-    return {
+    result = {
         "ok": True,
         "plugin": plugin_name,
         "name": plugin_name,
@@ -323,6 +355,10 @@ def import_compat_plugin(
         "packs": _pack_paths(target),
         "metadata": normalize_plugin_metadata(target),
     }
+    pi_report = target / "compatibility" / "pi" / "report.json"
+    if pi_report.is_file():
+        result["compatibility_report"] = json.loads(pi_report.read_text(encoding="utf-8"))
+    return result
 
 
 def normalize_plugin_metadata(path: str | Path) -> dict[str, Any]:
@@ -421,6 +457,16 @@ def _inferred_metadata(path: Path) -> dict[str, Any]:
     if (path / "GEMINI.md").exists() or (path / ".gemini").exists():
         compatibility.append("gemini")
         capabilities.extend(["agents", "recipes", "skills"])
+    from magent.plugin_compat_pi import is_pi_package, pi_manifest
+
+    package_pi = pi_manifest(path)
+    pi_layout = any((path / item).exists() for item in ("extensions", "prompts", "themes", ".pi"))
+    if is_pi_package(path) or pi_layout:
+        compatibility.append("pi")
+        if package_pi.get("skills") or (path / ".pi" / "skills").exists():
+            capabilities.append("skills")
+        if package_pi.get("prompts") or (path / ".pi" / "prompts").exists():
+            capabilities.append("recipes")
     if (path / "SKILL.md").exists():
         compatibility.append("codex-skill")
         capabilities.append("skills")
@@ -485,6 +531,76 @@ def _import_gemini(src: Path, target: Path, converted: dict[str, list[str]]) -> 
     _copy_markdown_dir(src / ".gemini" / "skills", target / "skills" / _safe_name(src.name), converted["skills"])
     if (src / "GEMINI.md").exists():
         _write_agent_from_markdown(src / "GEMINI.md", target / "agents" / "gemini.md", converted["agents"])
+
+
+def run_pi_plugin_bridge(
+    name: str,
+    *,
+    project: str = ".",
+    mode: str = "interactive",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Launch imported Pi extensions in Pi's own runtime after an explicit grant."""
+    target_result = _plugin_target(name)
+    if not target_result["ok"] or not target_result["path"].is_dir():
+        return {"ok": False, "error": f"Plugin not installed: {name}"}
+    state = _state()
+    plugin_state = state.get(name, {})
+    if not plugin_state.get("enabled"):
+        return {"ok": False, "error": f"Plugin must be enabled before bridging: {name}"}
+    project_path = Path(project).expanduser().resolve()
+    grants = plugin_state.get("grants", {})
+    granted = set(grants.get(str(project_path), [])) | set(grants.get("user", []))
+    if "external_process" not in granted:
+        return {
+            "ok": False,
+            "error": "Pi bridge requires an external_process grant at user or project scope.",
+            "grant_command": f"magent plugin grant {name} --scope project --project {project_path} --permissions external_process",
+        }
+    if mode not in {"interactive", "rpc", "json"}:
+        return {"ok": False, "error": "mode must be interactive, rpc, or json"}
+    from magent.plugin_sdk import verify_plugin
+
+    verification = verify_plugin(target_result["path"])
+    if not verification.get("ok"):
+        return {"ok": False, "error": "Plugin integrity check failed", "verification": verification}
+    pi_executable = shutil.which("pi")
+    if not pi_executable and not dry_run:
+        return {"ok": False, "error": "Pi executable was not found on PATH"}
+    pi_executable = pi_executable or "pi"
+
+    compatibility_root = target_result["path"] / "compatibility" / "pi"
+    report_path = compatibility_root / "report.json"
+    if not report_path.is_file():
+        return {"ok": False, "error": f"Plugin is not an imported Pi pack: {name}"}
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    extensions = [compatibility_root / "package" / item for item in report["preserved"]["extensions"]]
+    themes = [compatibility_root / "package" / item for item in report["preserved"]["themes"]]
+    skills = sorted((target_result["path"] / "skills").rglob("SKILL.md"))
+    prompts = sorted((target_result["path"] / "recipes").glob("*.md"))
+    command = [pi_executable, "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes"]
+    for extension in extensions:
+        command.extend(["--extension", str(extension)])
+    for skill in skills:
+        command.extend(["--skill", str(skill)])
+    for prompt in prompts:
+        command.extend(["--prompt-template", str(prompt)])
+    for theme in themes:
+        command.extend(["--theme", str(theme)])
+    if mode != "interactive":
+        command.extend(["--mode", mode])
+    result = {
+        "ok": True,
+        "plugin": name,
+        "project": str(project_path),
+        "mode": mode,
+        "command": command,
+        "executed": False,
+    }
+    if dry_run:
+        return result
+    completed = subprocess.run(command, cwd=project_path, check=False)  # noqa: S603
+    return {**result, "executed": True, "returncode": completed.returncode, "ok": completed.returncode == 0}
 
 
 def _copy_markdown_dir(src: Path, dest: Path, converted: list[str]) -> None:
@@ -593,6 +709,13 @@ def _infer_permissions(path: Path) -> list[str]:
         permissions.extend(["external_process", "network"])
     if (path / "tools").exists():
         permissions.append("tools")
+    report = path / "compatibility" / "pi" / "report.json"
+    if report.is_file():
+        try:
+            if json.loads(report.read_text(encoding="utf-8")).get("preserved", {}).get("extensions"):
+                permissions.append("external_process")
+        except Exception:
+            pass
     return sorted(set(permissions))
 
 

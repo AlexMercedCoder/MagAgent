@@ -1,5 +1,11 @@
 # Architecture
 
+## Agentic Graph Runtime
+
+`magent.agraph` is the portable orchestration boundary. `document.py` and `validate.py` own untrusted graph input; `plan.py`, `schedule.py`, and `expressions.py` own deterministic graph semantics; `execute.py` adapts nodes to `AgentSession`, `TaskRuntime`, tool policy, sandbox workspaces, and `WorkbenchStore`; `criteria.py` owns harness-side validation; and `record.py` emits AGS run records. `goal_orchestrator.py` is a compatibility adapter over this engine, not an independent scheduler.
+
+The tool-dispatch boundary consults a task-local graph policy before MagAgent's normal permission policy. This keeps concurrent graph nodes isolated while preserving the user's stricter policy as the final authority.
+
 MagAgent is organized around four local layers. Keeping these layers distinct makes future feature work easier to reason about and keeps MagGraph focused on durable memory rather than operational bookkeeping.
 
 ## Layers
@@ -180,7 +186,7 @@ and desktop consumers read the same JSON-shaped snapshots and event records.
 
 `magent.daemon` owns the durable background queue for asks, recipes, plans, shell tasks, scheduled followups, and gateway work. It uses the workbench store so queued work remains inspectable and resumable.
 
-`magent.plugins` owns installable extension pack metadata and enabled state. Plugin packs can carry agents, recipes, skills, tool bundles, and MCP config. Enabled plugin agent directories participate directly in agent discovery, and enabled plugin MCP configs contribute collision-safe runtime MCP servers. Compatibility importers convert OpenCode, Claude, Codex skill, and MCP config shapes into MagAgent-native packs.
+`magent.plugins` owns installable extension pack metadata and enabled state. Plugin packs can carry agents, recipes, skills, tool bundles, and MCP config. Enabled plugin agent directories participate directly in agent discovery, and enabled plugin MCP configs contribute collision-safe runtime MCP servers. Compatibility importers convert OpenCode, Claude, Gemini, Codex skill, Pi portable resources, and MCP config shapes into MagAgent-native packs. Pi extension source remains quarantined and can run only through Pi's own executable after plugin enablement and an explicit `external_process` grant; foreign JavaScript never loads into the MagAgent process.
 
 `magent.mcp.profile` is the SDK-independent MCP configuration boundary. It normalizes
 transport and protocol-era preferences, rejects ambiguous or unsafe configurations,

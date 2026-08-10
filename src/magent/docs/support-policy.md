@@ -7,7 +7,7 @@ command is the source of truth for Command Center and third-party clients.
 
 - Python 3.11 through 3.14 are tested release targets.
 - MagGraph 0.3.x is the current memory API family.
-- Task snapshots use `magent.task.v1`; task events use `magent.task-event.v1`.
+- Task snapshots use `magent.task.v2`; task events use `magent.task-event.v1`. Desktop clients may continue reading v1 snapshots during the additive-state migration.
 - Plugin manifests use SDK API version `1`.
 - Provider compatibility reports use `magent.provider-support.v1`.
 - Core MCP support is dual-era through legacy `2025-11-25` and modern `2026-07-28`.

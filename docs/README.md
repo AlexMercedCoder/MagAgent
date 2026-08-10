@@ -29,7 +29,9 @@ magent docs doctor
 - [Background Worker](../src/magent/docs/daemon.md)
 - [Plugins](../src/magent/docs/plugins.md)
 - [Desktop Integration](../src/magent/docs/desktop-integration.md)
-- [Next Release Prep](RELEASE_PREP_NEXT.md)
+- [Agentic Graphs](../src/magent/docs/agentic-graphs.md)
+- [MagAgent 0.34.0 Release Record](RELEASE_0.34.0.md)
+- [MagAgent 0.35.0 Release Record](RELEASE_0.35.0.md)
 
 Common setup tasks now have CLI-first flows:
 
@@ -60,10 +62,14 @@ magent daemon enqueue shell "pytest -q"
 magent plugin list
 magent plugin mcp import ./mcp.toml --name filesystem
 magent plugin import codex-skill ./SKILL.md
+magent plugin import pi ./pi-package
 magent project init
 magent config backup
 magent events list
 magent next
+magent graph generate "repair the failing tests" --out repair.agraph.yaml
+magent graph validate repair.agraph.yaml --strict
+magent graph plan repair.agraph.yaml
 ```
 
 ## Architecture And Workflow

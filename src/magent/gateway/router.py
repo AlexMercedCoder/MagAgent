@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import time
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 from rich.console import Console
@@ -156,6 +157,9 @@ class MessageRouter:
 
         bridge = None
         try:
+            graph_result = self._handle_graph_command(msg)
+            if graph_result is not None:
+                return graph_result
             approval_result = self._handle_approval_command(msg)
             if approval_result is not None:
                 return approval_result
@@ -200,6 +204,43 @@ class MessageRouter:
                     bridge.fail(e)
             console.print(f"[red]Gateway session error: {e}[/red]")
             return f"❌ Agent error: {e}"
+
+    def _handle_graph_command(self, msg: IncomingMessage) -> str | None:
+        """Validate, plan, or queue AGS graphs from an authorized gateway chat."""
+        import json
+        import shlex
+
+        if not msg.text.strip().startswith("/graph "):
+            return None
+        try:
+            parts = shlex.split(msg.text.strip())
+        except ValueError as exc:
+            return f"Invalid graph command: {exc}"
+        if len(parts) < 3 or parts[1] not in {"validate", "plan", "run"}:
+            return "Usage: /graph validate|plan|run <path> [--yes]"
+        action, raw_path = parts[1], parts[2]
+        project = Path(str(self.config.get("project") or ".")).resolve()
+        path = (project / raw_path).resolve(strict=False)
+        if path != project and project not in path.parents:
+            return "Graph path must stay inside the configured gateway project."
+        if action == "validate":
+            from magent.desktop_api import graph_validate
+
+            return json.dumps(graph_validate(str(path)), indent=2, default=str)[:7000]
+        if action == "plan":
+            from magent.desktop_api import graph_plan
+
+            return json.dumps(graph_plan(str(path)), indent=2, default=str)[:7000]
+        from magent.daemon import enqueue_task
+        from magent.workbench import WorkbenchStore
+
+        task = enqueue_task(
+            WorkbenchStore(self._username),
+            "agraph",
+            {"path": str(path), "yes": "--yes" in parts, "source": f"{msg.platform}/{msg.channel_id}"},
+            project=project,
+        )
+        return f"Queued Agentic Graph {task['id']} (execution {task['execution_task_id']})."
 
     async def close_all_sessions(self) -> None:
         """End all open agent sessions (writes memory, closes logs)."""

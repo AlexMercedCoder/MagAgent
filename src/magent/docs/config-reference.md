@@ -9,7 +9,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'0.34.0'`
+- `agent.version` default: `'0.35.0'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 - `agent.max_model_rounds_per_turn` default: `16`
@@ -77,6 +77,7 @@ Stored at `~/.config/magent/config.toml`.
 
 - `models.coding` default: `''`
 - `models.review` default: `''`
+- `models.frontier` default: `''`
 - `models.memory` default: `''`
 - `models.cheap` default: `''`
 - `models.image_maker` default: `''`
@@ -87,6 +88,16 @@ Stored at `~/.config/magent/config.toml`.
 - `subagents.max_parallel_subagents` default: `2`
 - `subagents.model_role` default: `'coding'`
 - `subagents.sandbox_mode` default: `''`
+### `agraph`
+
+### `agraph.tier_roles`
+
+- `agraph.tier_roles.minimal` default: `'cheap'`
+- `agraph.tier_roles.standard` default: `'coding'`
+- `agraph.tier_roles.advanced` default: `'coding'`
+- `agraph.tier_roles.frontier` default: `'frontier'`
+- `agraph.allow_command_criteria` default: `True`
+- `agraph.max_parallel_nodes` default: `2`
 ### `mcp`
 
 ### `session_messaging`

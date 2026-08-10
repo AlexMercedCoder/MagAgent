@@ -14,43 +14,58 @@ from typing import Any, Literal, cast
 
 from magent.workbench_store import WorkbenchStore
 
-TASK_SCHEMA_VERSION = "magent.task.v1"
+TASK_SCHEMA_VERSION = "magent.task.v2"
 EVENT_SCHEMA_VERSION = "magent.task-event.v1"
 
 TaskState = Literal[
+    "pending",
+    "ready",
     "queued",
     "planning",
     "running",
     "waiting",
+    "awaiting_human",
     "blocked",
     "validating",
     "completed",
+    "succeeded",
     "failed",
     "cancelled",
+    "skipped",
 ]
 
 TASK_STATES: tuple[TaskState, ...] = (
+    "pending",
+    "ready",
     "queued",
     "planning",
     "running",
     "waiting",
+    "awaiting_human",
     "blocked",
     "validating",
     "completed",
+    "succeeded",
     "failed",
     "cancelled",
+    "skipped",
 )
 
 _TRANSITIONS: dict[TaskState, frozenset[TaskState]] = {
+    "pending": frozenset({"ready", "blocked", "cancelled", "skipped"}),
+    "ready": frozenset({"running", "blocked", "cancelled", "skipped"}),
     "queued": frozenset({"planning", "running", "cancelled"}),
     "planning": frozenset({"running", "waiting", "blocked", "failed", "cancelled"}),
-    "running": frozenset({"waiting", "blocked", "validating", "completed", "failed", "cancelled"}),
+    "running": frozenset({"waiting", "awaiting_human", "blocked", "validating", "completed", "succeeded", "failed", "cancelled", "skipped"}),
     "waiting": frozenset({"running", "blocked", "failed", "cancelled"}),
-    "blocked": frozenset({"queued", "running", "failed", "cancelled"}),
-    "validating": frozenset({"running", "blocked", "completed", "failed", "cancelled"}),
+    "awaiting_human": frozenset({"running", "blocked", "failed", "cancelled"}),
+    "blocked": frozenset({"queued", "ready", "running", "failed", "cancelled"}),
+    "validating": frozenset({"running", "blocked", "completed", "succeeded", "failed", "cancelled"}),
     "completed": frozenset({"queued"}),
-    "failed": frozenset({"queued", "cancelled"}),
+    "succeeded": frozenset({"queued"}),
+    "failed": frozenset({"queued", "blocked", "cancelled"}),
     "cancelled": frozenset({"queued"}),
+    "skipped": frozenset({"queued"}),
 }
 
 
@@ -101,7 +116,7 @@ class TaskRuntime:
             "created_at": now,
             "updated_at": now,
             "started_at": now if state in {"running", "validating"} else "",
-            "finished_at": now if state in {"completed", "failed", "cancelled"} else "",
+            "finished_at": now if state in {"completed", "succeeded", "failed", "cancelled", "skipped"} else "",
             "planning_role": str(planning_role)[:80],
             "execution_role": str(execution_role)[:80],
             "permission_policy": str(permission_policy)[:80],
@@ -202,10 +217,10 @@ class TaskRuntime:
                 raise TaskRuntimeError(f"Illegal task transition: {current} -> {state}")
             now = _now()
             started_at = task["started_at"] or (now if state in {"running", "validating"} else "")
-            finished_at = now if state in {"completed", "failed", "cancelled"} else ""
+            finished_at = now if state in {"completed", "succeeded", "failed", "cancelled", "skipped"} else ""
             attempt = int(task["attempt"]) + (
                 1
-                if state == "queued" and current in {"blocked", "completed", "failed", "cancelled"}
+                if state == "queued" and current in {"blocked", "completed", "succeeded", "failed", "cancelled", "skipped"}
                 else 0
             )
             connection.execute(

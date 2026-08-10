@@ -155,6 +155,10 @@ def _execute_item(
         command = ["magent", "recipe", "run", payload.get("name", ""), "--project", project]
     elif kind == "orchestrated_goal":
         command = ["magent", "goal-run", payload.get("id", ""), "--project", project, "--json"]
+    elif kind == "agraph":
+        command = ["magent", "graph", "run", payload.get("path", ""), "--project", project, "--json"]
+        if payload.get("yes"):
+            command.append("--yes")
     elif kind == "plan":
         command = ["magent", "plan-apply", payload.get("id", ""), "--yes"]
     elif kind == "shell":

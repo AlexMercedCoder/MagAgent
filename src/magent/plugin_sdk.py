@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Any
 
 PLUGIN_API_VERSION = "1"
-KNOWN_CAPABILITIES = frozenset({"agents", "skills", "recipes", "hooks", "tools", "mcp", "ui"})
+KNOWN_CAPABILITIES = frozenset(
+    {"agents", "skills", "recipes", "hooks", "tools", "mcp", "ui", "agentic_graph", "schemas"}
+)
 KNOWN_PERMISSIONS = frozenset(
     {"files", "shell", "web", "data", "db", "desktop", "external_process", "network", "tools"}
 )
@@ -212,6 +214,8 @@ def _infer_permissions(root: Path) -> set[str]:
         permissions.update({"external_process", "network"})
     if (root / "tools").exists() or (root / "hooks.toml").exists():
         permissions.add("tools")
+    if (root / "compatibility" / "pi" / "package").exists():
+        permissions.add("external_process")
     return permissions
 
 

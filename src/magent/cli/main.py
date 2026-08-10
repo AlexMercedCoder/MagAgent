@@ -40,6 +40,7 @@ from magent.cli.app import (
     followup_app,
     gateway_app,
     github_app,
+    graph_app,
     hook_app,
     inbox_app,
     knowledge_app,
@@ -88,6 +89,7 @@ from magent.cli.commands.evals import register_eval_commands
 from magent.cli.commands.events import register_event_commands
 from magent.cli.commands.execution import register_execution_commands
 from magent.cli.commands.github import register_github_commands
+from magent.cli.commands.graph import register_graph_commands
 from magent.cli.commands.hooks import register_hook_commands
 from magent.cli.commands.lsp import register_lsp_commands
 from magent.cli.commands.performance import register_performance_commands
@@ -118,6 +120,7 @@ register_docs_commands(docs_app, known_command_names=lambda: known_command_names
 register_eval_commands(eval_app, store=store)
 register_event_commands(events_app)
 register_execution_commands(execution_app, store=store, console=console)
+register_graph_commands(graph_app, store=store, console=console)
 register_github_commands(github_app)
 register_hook_commands(hook_app)
 register_lsp_commands(lsp_app)
@@ -1980,12 +1983,15 @@ def review_show_cmd(review_id: str = typer.Argument(...)):
     console.print_json(data=item)
 
 
-@app.command("graph", rich_help_panel="Memory & Context")
+@app.command("repo-graph", rich_help_panel="Code Intelligence & Testing")
 def graph_cmd(project: str = typer.Option(".", "--project", "-p")):
     """Show a lightweight repository import graph."""
     from magent.workbench import repo_graph
 
     console.print_json(data=repo_graph(project))
+
+
+code_app.command("graph")(graph_cmd)
 
 
 @app.command("test-intel", rich_help_panel="Code Intelligence & Testing")

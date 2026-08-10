@@ -10,6 +10,22 @@ from magent.tools.registry import tool_def
 def built_in_tool_definitions() -> list[dict[str, Any]]:
     """Return OpenAI-compatible definitions for all built-in tools."""
     definitions = [
+        {
+            "type": "function",
+            "function": {
+                "name": "graph_emit_output",
+                "description": "Emit one declared Agentic Graph node output. Use once for each declared output before finishing a graph task.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Declared output name"},
+                        "value": {"description": "JSON-compatible output value"},
+                    },
+                    "required": ["name", "value"],
+                    "additionalProperties": False,
+                },
+            },
+        },
         tool_def(
             "read_file",
             "Read the contents of a file.",

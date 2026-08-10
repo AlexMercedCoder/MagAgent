@@ -7,7 +7,7 @@ work. It is intentionally separate from the older personal task list exposed by
 
 ## Task schema
 
-Task snapshots use schema version `magent.task.v1` and live in the current user's
+Task snapshots use schema version `magent.task.v2` and live in the current user's
 `workbench/task_runtime.sqlite3` database. Every task records:
 
 - a stable task ID, kind, title, state, project ID/path, and optional session ID;

@@ -9,9 +9,9 @@
 [![PyPI version](https://img.shields.io/pypi/v/mag-agent.svg)](https://pypi.org/project/mag-agent/)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-411%20passing-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-478%20passing-brightgreen.svg)](tests/)
 
-[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Gateway](#remote-gateway) · [Roadmap](ROADMAP.md) · [Docs](docs/)
+[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Agentic Graphs](#agentic-graphs) · [Gateway](#remote-gateway) · [Roadmap](ROADMAP.md) · [Docs](docs/)
 
 </div>
 
@@ -56,7 +56,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Adds LSP-aware code intelligence commands for symbols, diagnostics, definitions, and references
 - Queues background asks, recipes, plans, shell tasks, followups, and gateway tasks through `magent daemon`
 - Installs local extension packs for agents, recipes, skills, tools, and MCP configuration through `magent plugin`
-- Imports MCP, Claude, OpenCode, and Codex skill packs into MagAgent-native plugins with normalized registry metadata
+- Imports MCP, Claude, OpenCode, Gemini, Codex skill, and portable Pi package assets into MagAgent-native plugins with normalized registry metadata
 - Connects dual-era MCP servers over stdio or Streamable HTTP, with cache-aware tool,
   prompt, and resource catalogs, live invalidation, completion, and consent-gated MRTR
 - Reads project playbooks from `.magent/playbook.toml` for command routines, release checklists, review rules, and context defaults
@@ -470,7 +470,7 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Knowledge commands** — `magent knowledge remember/recall/forget`
 - **Review and planning** — `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent review --json`, `magent review --save`, `magent review-show`, `magent run`
 - **Goal loops and jobs** — `magent goal --verify --review`, `magent goal --orchestrated`, `magent goal-run`, `magent goal --background`, `magent jobs`, `magent daemon run-once`, `magent statusline`
-- **Repo/test helpers** — `magent graph`, `magent code index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent diagnostics --deep`, `magent ci --logs`, `magent ci --repair-plan --save`
+- **Repo/test helpers** — `magent repo-graph`, `magent code graph/index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent diagnostics --deep`, `magent ci --logs`, `magent ci --repair-plan --save`
 - **Patch queue** — `magent patch save/list/apply/revert`
 - **Patch-first workflow** — `magent patch preview/explain`, `magent workspace status/clean-report`
 - **Checkpoint undo** — `magent checkpoint list/show/diff/restore/restore-last/session-list/session-diff/session-restore`
@@ -560,6 +560,19 @@ Spawn a parallel agent to work on a focused sub-task while you continue the main
 ```
 
 The sub-agent runs an isolated session sharing your memory graph, completes the task, and returns a summary. Use this for long-running tasks that shouldn't interrupt the main flow.
+
+## Agentic Graphs
+
+MagAgent supports Agentic Graph Specification 1.0 through conformance level 3. AGS files are portable, reviewable DAGs with typed contracts, model-tier routing, parallel branches, loops, maps, subgraphs, budgets, retries, human gates, harness-owned criteria, and portable run records.
+
+```bash
+magent graph generate "ship the next API version" --project . --out release.agraph.yaml
+magent graph validate release.agraph.yaml --strict
+magent graph plan release.agraph.yaml
+magent graph run release.agraph.yaml --project .
+```
+
+Graph permissions only restrict MagAgent's existing policy; they never expand it. See [Agentic Graphs](src/magent/docs/agentic-graphs.md) and the [examples](docs/examples/agraph/) for authoring, safety, and runtime details.
 
 The main agent can orchestrate sub-agents, and the cap is configurable:
 
@@ -711,7 +724,8 @@ magent doctor --fix    # Apply safe local config fixes
 magent plan "goal"     # Generate a local implementation plan
 magent run "goal"      # Record an autonomous work-session plan
 magent review          # Heuristic local diff review
-magent graph           # Lightweight repo import graph
+magent repo-graph      # Lightweight repo import graph
+magent graph plan FILE # Preview a portable Agentic Graph
 magent code index      # Build local symbol/import/test index
 magent code symbols    # Search indexed code symbols
 magent code related    # Show related tests/import peers for a file

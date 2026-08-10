@@ -1,5 +1,7 @@
 # Testing And Reliability
 
+Agentic Graph coverage includes the upstream invalid conformance fixtures, strict validation of every packaged example, provider-free structural execution of every packaged YAML graph, strict expressions and lazy defaults, deterministic plans, routing, decision outputs, checkpoints, permissions, isolation refusal, branching, loops, maps, subgraphs, resume digest guards, measured budgets, and portable run-record schema validation. Run it directly with `pytest -q tests/unit/test_agraph.py`.
+
 MagAgent uses focused unit tests plus CLI smoke tests to keep local agent workflows reliable.
 The CI coverage gate is ratcheted to the measured unit-suite floor so it catches
 regressions without overstating the current full-package percentage.
