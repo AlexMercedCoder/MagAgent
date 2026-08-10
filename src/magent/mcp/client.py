@@ -16,6 +16,9 @@ from typing import Any
 from magent.mcp.catalog import MCPCatalogFreshness, MCPPrompt, MCPResource
 from magent.mcp.profile import MCPProtocolMode, MCPServerProfile, MCPTransport
 
+# The bridge may send a whole resource on one line; the asyncio default is 64 KiB.
+MAX_BRIDGE_LINE_BYTES = 4 * 1024 * 1024
+
 log = logging.getLogger("magent.mcp.client")
 
 MCPInputHandler = Callable[[dict[str, Any]], dict[str, Any] | Awaitable[dict[str, Any]]]
@@ -144,6 +147,10 @@ class MCPClient:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                # The default StreamReader limit is 64 KiB, but the bridge will
+                # happily send a 200,000-character resource; without this a
+                # large tool result raised LimitOverrunError.
+                limit=MAX_BRIDGE_LINE_BYTES,
             )
             self._stderr_task = asyncio.create_task(self._drain_stderr())
             await self._send_line(self._profile_payload())
@@ -487,7 +494,13 @@ class MCPClient:
                         continue
                     self._apply_bridge_event(response)
                     continue
-                if response.get("id") != request_id:
+                response_id = response.get("id")
+                if response_id != request_id:
+                    # A reply that arrives after its `wait_for` timed out is
+                    # stale, not fatal. Raising here left the stream off by one
+                    # and failed every subsequent request forever.
+                    if isinstance(response_id, int) and response_id < request_id:
+                        continue
                     raise RuntimeError("MCP bridge response ID mismatch")
                 return response
 
@@ -504,9 +517,16 @@ class MCPClient:
         if not raw:
             detail = " | ".join(self._stderr_tail[-3:])
             raise RuntimeError(f"MCP bridge exited unexpectedly{': ' + detail if detail else ''}")
-        value = json.loads(raw)
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            # Server libraries sometimes print to stdout. Skip the noise rather
+            # than tearing down the connection.
+            self._stderr_tail.append(f"ignored non-JSON bridge line: {raw[:200]!r}")
+            return await self._read_line(timeout=timeout)
         if not isinstance(value, dict):
-            raise RuntimeError("MCP bridge returned a non-object response")
+            self._stderr_tail.append(f"ignored non-object bridge line: {raw[:200]!r}")
+            return await self._read_line(timeout=timeout)
         return value
 
     async def _drain_stderr(self) -> None:

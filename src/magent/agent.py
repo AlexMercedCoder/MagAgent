@@ -451,6 +451,18 @@ class AgentSession:
             )
         return "\n".join(blocks)
 
+    def _completion_params(self, temperature: float = 0.3, max_tokens: int = 4096) -> dict[str, Any]:
+        """Provider-safe temperature/max_tokens for the active provider.
+
+        The loop used to pass `temperature=0.3` straight to litellm, bypassing
+        the provider layer's workaround — and gpt-5 / claude-sonnet-5 class
+        models reject any temperature other than the default.
+        """
+        params = getattr(self.provider, "completion_params", None)
+        if callable(params):
+            return params(temperature, max_tokens)
+        return {"temperature": temperature, "max_tokens": max_tokens}
+
     def _provider_request_kwargs(self) -> dict[str, Any]:
         if hasattr(self.provider, "request_kwargs"):
             return self.provider.request_kwargs(
@@ -519,8 +531,7 @@ class AgentSession:
                     messages=_sanitize_messages(messages),
                     tools=tool_defs,
                     tool_choice="auto",
-                    temperature=0.3,
-                    max_tokens=4096,
+                    **self._completion_params(0.3, 4096),
                     **self._provider_request_kwargs(),
                 )
                 self._log_timing(
@@ -776,8 +787,7 @@ class AgentSession:
                     messages=_sanitize_messages(messages),
                     tools=tool_defs,
                     tool_choice="auto",
-                    temperature=0.3,
-                    max_tokens=4096,
+                    **self._completion_params(0.3, 4096),
                     **self._provider_request_kwargs(),
                 )
                 llm_elapsed = self._log_timing(
@@ -1393,13 +1403,15 @@ class AgentSession:
             started = time.monotonic()
             response = await litellm.acompletion(
                 messages=recovery_messages,
-                temperature=0.2,
-                max_tokens=int(
-                    getattr(
-                        self.config,
-                        "artifact_recovery_max_tokens",
-                        ARTIFACT_RECOVERY_MAX_TOKENS,
-                    )
+                **self._completion_params(
+                    0.2,
+                    int(
+                        getattr(
+                            self.config,
+                            "artifact_recovery_max_tokens",
+                            ARTIFACT_RECOVERY_MAX_TOKENS,
+                        )
+                    ),
                 ),
                 **self._provider_request_kwargs(),
             )

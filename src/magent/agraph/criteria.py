@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
+import referencing
+import referencing.exceptions
 
 from magent.agraph.expressions import evaluate_expression, resolve_value
 
@@ -22,6 +24,81 @@ JudgeCallback = Callable[[str, list[Any], dict[str, Any]], Awaitable[tuple[float
 ExternalChecker = Callable[[dict[str, Any], dict[str, Any]], Awaitable[tuple[bool, str]]]
 
 EXTERNAL_CHECKERS: dict[str, ExternalChecker] = {}
+
+
+MAX_JUDGE_SAMPLES = 9
+# Graph-supplied regexes run against graph-supplied text; a catastrophic
+# backtracking pattern would spin forever, and node wall-clock guards do not
+# cover criterion evaluation.
+REGEX_TIMEOUT_SECONDS = 2.0
+# Bounds the worst case when no timeout-capable engine is present.
+MAX_REGEX_INPUT_CHARS = 200_000
+# (a+)+ / (a*)* / (\d+)+ shapes — the classic backtracking bombs.
+_NESTED_QUANTIFIER = re.compile(r"\([^()]*[+*]\)[+*]")
+
+try:  # optional: the only way to genuinely bound regex execution in Python
+    import regex as _regex_module
+except ImportError:  # pragma: no cover - regex is commonly present transitively
+    _regex_module = None
+
+_REGEX_FLAGS = {
+    "i": re.IGNORECASE,
+    "m": re.MULTILINE,
+    "s": re.DOTALL,
+    "x": re.VERBOSE,
+    "a": re.ASCII,
+}
+
+
+def _regex_flags(raw: str) -> int:
+    """Map flag letters explicitly rather than via getattr on the re module."""
+    flags = re.NOFLAG
+    for letter in raw:
+        if letter.strip() == "":
+            continue
+        flag = _REGEX_FLAGS.get(letter.lower())
+        if flag is None:
+            raise ValueError(f"unsupported regex flag {letter!r}")
+        flags |= flag
+    return flags
+
+
+def _search_bounded(pattern: str, text: str, flags: int) -> bool:
+    """Regex search with a wall-clock bound.
+
+    A thread cannot provide this: CPython's `re` holds the GIL for the whole
+    match, so `join(timeout)` never gets to run. The `regex` module supports a
+    real `timeout=`; when it is not installed we bound the damage instead by
+    capping the input and refusing the nested-quantifier shapes that cause
+    catastrophic backtracking.
+    """
+    if len(text) > MAX_REGEX_INPUT_CHARS:
+        text = text[:MAX_REGEX_INPUT_CHARS]
+
+    if _regex_module is not None:
+        try:
+            return (
+                _regex_module.search(pattern, text, flags=flags, timeout=REGEX_TIMEOUT_SECONDS)
+                is not None
+            )
+        except TimeoutError as exc:
+            raise TimeoutError(
+                f"regex evaluation exceeded {REGEX_TIMEOUT_SECONDS}s "
+                "(possible catastrophic backtracking)"
+            ) from exc
+
+    if _NESTED_QUANTIFIER.search(pattern):
+        raise ValueError(
+            "regex rejected: nested quantifiers can backtrack catastrophically, and no "
+            "timeout-capable regex engine is available (install the `regex` package)"
+        )
+    return re.search(pattern, text, flags) is not None
+
+
+def _no_remote_refs(uri: str):
+    raise referencing.exceptions.Unretrievable(
+        f"remote $ref resolution is disabled for graph criteria: {uri}"
+    )
 
 
 def register_external_checker(name: str, checker: ExternalChecker) -> None:
@@ -111,7 +188,7 @@ async def evaluate_criterion(
             stdout = str(result.get("stdout", ""))
             pattern = criterion.get("expect_stdout_matches")
             if pattern:
-                passed = passed and re.search(str(pattern), stdout) is not None
+                passed = passed and _search_bounded(str(pattern), stdout, re.NOFLAG)
             evidence = (stdout + "\n" + str(result.get("stderr", ""))).strip()[-4000:]
         elif kind == "file_exists":
             pattern = str(resolve_value(criterion.get("path", ""), scope))
@@ -134,8 +211,8 @@ async def evaluate_criterion(
                 target = evaluate_expression(str(criterion["target"]), {**scope, "self": {"outputs": outputs}})
             else:
                 target = outputs.get(str(criterion.get("output", "")), "")
-            flags = sum((getattr(re, flag.upper()) for flag in str(criterion.get("flags", ""))), re.NOFLAG)
-            matched = re.search(str(criterion.get("pattern", "")), str(target), flags) is not None
+            flags = _regex_flags(str(criterion.get("flags", "")))
+            matched = _search_bounded(str(criterion.get("pattern", "")), str(target), flags)
             passed = not matched if criterion.get("negate") else matched
             evidence = _evidence(target)
         elif kind == "json_schema":
@@ -144,7 +221,10 @@ async def evaluate_criterion(
             if schema is None:
                 schema_path = _safe_path(project, str(criterion.get("schema_ref", "")))
                 schema = json.loads(schema_path.read_text(encoding="utf-8"))
-            jsonschema.Draft202012Validator(schema).validate(value)
+            # A `$ref: "https://…"` in a graph document made outbound requests
+            # while evaluating a criterion. Resolve locally only.
+            registry = referencing.Registry(retrieve=_no_remote_refs)
+            jsonschema.Draft202012Validator(schema, registry=registry).validate(value)
             passed = True
             evidence = "valid"
         elif kind == "human":
@@ -155,7 +235,7 @@ async def evaluate_criterion(
         elif kind == "llm_judge":
             if judge is None:
                 raise RuntimeError("llm judge is unavailable")
-            samples = max(1, int(criterion.get("samples", 1) or 1))
+            samples = max(1, min(MAX_JUDGE_SAMPLES, int(criterion.get("samples", 1) or 1)))
             inputs = [resolve_value(value, {**scope, "self": {"outputs": outputs}}) for value in criterion.get("inputs") or list(outputs.values())]
             judgments = [await judge(str(resolve_value(criterion.get("rubric", ""), scope)), inputs, criterion) for _ in range(samples)]
             score = float(statistics.median(item[0] for item in judgments))
@@ -185,8 +265,13 @@ async def evaluate_criterion(
 
 
 def _safe_path(project: Path, raw: str) -> Path:
-    path = (project / raw).resolve(strict=False)
-    if path != project and project not in path.parents:
+    # The candidate is resolved but the root was not, and a graph workspace is
+    # a raw mkdtemp path that may itself traverse a symlink (/tmp → /private/tmp
+    # on macOS). Comparing resolved-against-unresolved produced both false
+    # rejections and a potential bypass.
+    root = project.resolve(strict=False)
+    path = (root / raw).resolve(strict=False)
+    if path != root and root not in path.parents:
         raise ValueError("path escapes the graph workspace")
     return path
 
@@ -194,7 +279,13 @@ def _safe_path(project: Path, raw: str) -> Path:
 def _safe_glob(project: Path, pattern: str) -> list[Path]:
     if Path(pattern).is_absolute() or ".." in Path(pattern).parts:
         raise ValueError("path escapes the graph workspace")
-    return [path.resolve() for path in project.glob(pattern) if path.resolve() == project or project in path.resolve().parents]
+    root = project.resolve(strict=False)
+    matches = []
+    for match in root.glob(pattern):
+        resolved = match.resolve(strict=False)
+        if resolved == root or root in resolved.parents:
+            matches.append(resolved)
+    return matches
 
 
 def _evidence(value: Any) -> str:

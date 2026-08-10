@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
+import os
 import shlex
+import signal
 import subprocess
 import tempfile
 import time
@@ -52,68 +55,131 @@ def list_queue(store: Any, status: str = "") -> dict[str, Any]:
     return {"ok": True, "tasks": items}
 
 
+def _claim_next(store: Any, runtime: Any, now: datetime) -> dict[str, Any] | None:
+    """Atomically claim one due task, or return None.
+
+    run_once used to read the whole queue, mark items running only in memory,
+    execute them (potentially for ten minutes), and write state back once at
+    the end. A second worker saw those items still `pending` and ran them
+    again, and a crash mid-batch lost every result.
+    """
+
+    def claim(items: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        for item in items:
+            if item.get("status") != "pending" or not _due(item, now):
+                continue
+
+            execution_task_id = str(item.get("execution_task_id") or "")
+            runtime_task = runtime.get(execution_task_id) if execution_task_id else None
+            if runtime_task and runtime_task["state"] in {"cancelled", "waiting"}:
+                continue
+            if not runtime_task:
+                runtime_task = runtime.create(
+                    str(item.get("kind") or "ask"),
+                    _task_title(str(item.get("kind") or "ask"), item.get("payload") or {}),
+                    project=item.get("project") or ".",
+                    metadata={"source": "daemon", "legacy_queue_id": item.get("id", "")},
+                )
+                item["execution_task_id"] = runtime_task["id"]
+
+            # The claim is persisted before we return, so a concurrent worker
+            # sees "running" rather than a second chance to execute it.
+            item["status"] = "running"
+            item["attempts"] = int(item.get("attempts") or 0) + 1
+            item["updated_at"] = datetime.now(UTC).isoformat()
+            return items, dict(item)
+        return items, None
+
+    return store.mutate(QUEUE_STORE, [], claim)
+
+
+def _record_outcome(store: Any, task_id: str, updates: dict[str, Any]) -> None:
+    """Persist one item's outcome immediately, not at the end of the batch."""
+
+    def apply(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        for item in items:
+            if item.get("id") == task_id:
+                item.update(updates)
+                item["updated_at"] = datetime.now(UTC).isoformat()
+        return items
+
+    store.mutate(QUEUE_STORE, [], apply)
+
+
 def run_once(store: Any, *, limit: int = 1) -> dict[str, Any]:
-    items = store.read(QUEUE_STORE, [])
     runtime = TaskRuntime(store)
     now = datetime.now(UTC)
     results: list[dict[str, Any]] = []
-    for item in items:
-        if len(results) >= limit:
+
+    while len(results) < limit:
+        item = _claim_next(store, runtime, now)
+        if item is None:
             break
-        if item.get("status") != "pending" or not _due(item, now):
-            continue
+
+        task_id = str(item.get("id") or "")
         execution_task_id = str(item.get("execution_task_id") or "")
-        runtime_task = runtime.get(execution_task_id) if execution_task_id else None
-        if runtime_task and runtime_task["state"] in {"cancelled", "waiting"}:
-            continue
-        if not runtime_task:
-            runtime_task = runtime.create(
-                str(item.get("kind") or "ask"),
-                _task_title(str(item.get("kind") or "ask"), item.get("payload") or {}),
-                project=item.get("project") or ".",
-                metadata={"source": "daemon", "legacy_queue_id": item.get("id", "")},
+
+        # An illegal transition used to raise out of the loop, so the final
+        # write never happened and every completed item in the batch re-ran.
+        with contextlib.suppress(Exception):
+            runtime.transition(execution_task_id, "running", detail={"queue_id": task_id})
+
+        try:
+            result = _execute_item(
+                item,
+                control_state=lambda task_id=execution_task_id: str(
+                    (runtime.get(task_id) or {}).get("state", "")
+                ),
             )
-            execution_task_id = runtime_task["id"]
-            item["execution_task_id"] = execution_task_id
-        item["status"] = "running"
-        item["attempts"] = int(item.get("attempts") or 0) + 1
-        runtime.transition(execution_task_id, "running", detail={"queue_id": item.get("id", "")})
-        result = _execute_item(
-            item,
-            control_state=lambda task_id=execution_task_id: str(
-                (runtime.get(task_id) or {}).get("state", "")
-            ),
-        )
+        except Exception as exc:  # never leave an item stuck in "running"
+            result = {"ok": False, "error": str(exc)}
+
         if result.get("cancelled"):
-            item["status"] = "cancelled"
+            status = "cancelled"
         elif result.get("paused"):
-            item["status"] = "pending"
+            status = "pending"
         else:
-            item["status"] = "done" if result.get("ok") else "failed"
+            status = "done" if result.get("ok") else "failed"
+
+        item["status"] = status
         item["result"] = result
-        item["updated_at"] = datetime.now(UTC).isoformat()
-        runtime.update_context(
-            execution_task_id,
-            final_audit={"ok": bool(result.get("ok")), "returncode": result.get("returncode")},
-            metadata={"queue_status": item["status"]},
-        )
-        if not result.get("cancelled") and not result.get("paused"):
-            runtime.transition(
+        # try/finally in spirit: the outcome is written per item, so a crash
+        # in the next iteration cannot roll this one back to pending.
+        _record_outcome(store, task_id, {"status": status, "result": result})
+
+        with contextlib.suppress(Exception):
+            runtime.update_context(
                 execution_task_id,
-                "completed" if result.get("ok") else "failed",
-                detail={"queue_id": item.get("id", "")},
+                final_audit={"ok": bool(result.get("ok")), "returncode": result.get("returncode")},
+                metadata={"queue_status": status},
             )
+            if not result.get("cancelled") and not result.get("paused"):
+                runtime.transition(
+                    execution_task_id,
+                    "completed" if result.get("ok") else "failed",
+                    detail={"queue_id": task_id},
+                )
+
         results.append({"task": item, "result": result})
-    store.write(QUEUE_STORE, items)
-    return {"ok": all(item["result"].get("ok") for item in results), "ran": len(results), "results": results}
+
+    return {
+        # all([]) is True: an empty run used to report success when nothing ran.
+        "ok": bool(results) and all(entry["result"].get("ok") for entry in results),
+        "ran": len(results),
+        "results": results,
+    }
 
 
 def enqueue_due_followups(store: Any) -> dict[str, Any]:
     followups = store.read("followups", [])
     created = []
     now = datetime.now(UTC)
+    # Anything already dealt with stays dealt with. Only "queued" was skipped,
+    # so a followup that had been run, cancelled or failed was re-enqueued on
+    # every pass, forever.
+    settled = {"queued", "done", "completed", "cancelled", "failed", "dismissed", "skipped"}
     for item in followups:
-        if item.get("status") == "queued":
+        if str(item.get("status") or "") in settled:
             continue
         run_at = item.get("when") or item.get("run_at") or ""
         if run_at and not _time_due(run_at, now):
@@ -180,7 +246,54 @@ def _run_shell(
         argv = shlex.split(command)
     except ValueError as e:
         return {"ok": False, "command": command, "error": str(e)}
+
+    # Anything that can write the daemon_queue store could previously run
+    # arbitrary local commands: this path went straight to shlex.split + Popen
+    # with no classification at all.
+    from magent.command_policy import command_policy
+
+    policy = command_policy(command)
+    if not policy["ok"]:
+        return {
+            "ok": False,
+            "command": command,
+            "tier": policy["tier"],
+            "blocked": True,
+            "error": "Blocked by MagAgent command policy",
+        }
     return _run_command(argv, project, control_state=control_state)
+
+
+def _terminate_group(process: subprocess.Popen[Any], *, force: bool = False) -> None:
+    """Signal the whole process group.
+
+    `start_new_session=True` puts the child in its own group, but terminate()
+    and kill() only reach the leader — a shell task's children carried on
+    running after a cancel or a timeout.
+    """
+    try:
+        group = os.getpgid(process.pid)
+    except (AttributeError, ProcessLookupError, OSError):
+        group = None
+
+    def signal_all(sig: int) -> None:
+        if group is not None:
+            with contextlib.suppress(ProcessLookupError, OSError):
+                os.killpg(group, sig)
+                return
+        with contextlib.suppress(Exception):
+            process.kill() if sig == signal.SIGKILL else process.terminate()
+
+    if not force:
+        signal_all(signal.SIGTERM)
+        try:
+            process.wait(timeout=1.0)
+            return
+        except subprocess.TimeoutExpired:
+            pass
+    signal_all(signal.SIGKILL)
+    with contextlib.suppress(Exception):
+        process.wait(timeout=2.0)
 
 
 def _run_command(
@@ -204,14 +317,10 @@ def _run_command(
                 state = str(control_state() if control_state else "")
                 if state in {"cancelled", "waiting"}:
                     requested = state
-                    process.terminate()
-                    try:
-                        process.wait(timeout=1.0)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
+                    _terminate_group(process)
                     break
                 if time.monotonic() - started >= 600:
-                    process.kill()
+                    _terminate_group(process, force=True)
                     requested = "timeout"
                     break
                 time.sleep(0.1)

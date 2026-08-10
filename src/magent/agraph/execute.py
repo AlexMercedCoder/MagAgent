@@ -82,6 +82,12 @@ class GraphExecutor:
         self._resume_nodes: dict[str, dict[str, Any]] = {}
         self._workspace: ContextVar[Path] = ContextVar("magent_agraph_workspace", default=self.project)
         self._agent_steps: ContextVar[int] = ContextVar("magent_agraph_agent_steps", default=0)
+        # Per-node usage, so budgets are not charged for sibling nodes.
+        self._node_usage: ContextVar[dict[str, Any] | None] = ContextVar(
+            "magent_agraph_node_usage", default=None
+        )
+        # Guards alternate_node fallback recursion.
+        self._fallback_chain: list[str] = []
         self._composition_depth: ContextVar[int] = ContextVar(
             "magent_agraph_composition_depth", default=0
         )
@@ -184,6 +190,10 @@ class GraphExecutor:
         except asyncio.CancelledError:
             self._finish("cancelled")
             self.runtime.transition(self._root_task_id, "cancelled", reason="Graph execution cancelled")
+            # Persist before re-raising: the record was left saying "running"
+            # forever, because the raise skipped the write below.
+            with contextlib.suppress(Exception):
+                self._persist_record()
             raise
         except Exception as exc:
             self._diagnostic(getattr(exc, "code", "RT001"), "error", str(exc))
@@ -251,6 +261,11 @@ class GraphExecutor:
                 groups_running.discard(group)
                 if isinstance(result, BaseException):
                     statuses[node_id] = "failed"
+                    # Record the failure in scope too: downstream expressions
+                    # like `nodes.X.status == "failed"` used to raise RT020
+                    # because the node was never added at all.
+                    outputs[node_id] = {}
+                    scope["nodes"][node_id] = {"outputs": {}, "status": "failed"}
                     self._diagnostic(getattr(result, "code", "RT001"), "error", str(result), node_id=node_id)
                     continue
                 status, node_outputs = result
@@ -337,11 +352,19 @@ class GraphExecutor:
             usage_before = dict(self._record["usage"])
             started = now_iso()
             error = ""
+            # Reset per attempt: a failed retry used to return whatever the
+            # previous attempt had produced.
+            outputs = {}
+            node_usage_token = self._node_usage.set({})
             criteria_results: list[CriterionResult] = []
             policy_token = set_graph_tool_policy(self._tool_policy(node, scope))
             try:
                 isolation = str((node.get("constraints") or {}).get("isolation", "shared"))
-                with graph_workspace(self.project, isolation) as workspace:
+                # Open the workspace relative to the *current* workspace, not
+                # the project root: children of an isolated node used to
+                # execute against the real project tree.
+                base = self._workspace.get()
+                with graph_workspace(base, isolation) as workspace:
                     workspace_token = self._workspace.set(workspace)
                     try:
                         await self._checkpoint(node, "before_start", scope, human_events)
@@ -371,6 +394,7 @@ class GraphExecutor:
                 status, error = "failed", str(exc)
             finally:
                 reset_graph_tool_policy(policy_token)
+                self._node_usage.reset(node_usage_token)
             attempts.append(
                 {
                     "attempt": attempt_number,
@@ -478,7 +502,14 @@ class GraphExecutor:
                 raise GraphRunError("decision node has no route", "RT011")
             response = await self.agent_runner(full_id, _decision_prompt(node, inputs, labels), route, task_id)
             parsed = response if isinstance(response, dict) else (_json_object(str(response)) or {})
-            selected = str(parsed.get("decision", "")) if parsed else str(response).strip().strip('"').splitlines()[0]
+            # An empty model response used to raise IndexError on splitlines()[0]
+            # instead of falling through to default_branch.
+            raw_lines = str(response).strip().strip('"').splitlines()
+            selected = (
+                str(parsed.get("decision", ""))
+                if parsed
+                else (raw_lines[0] if raw_lines else "")
+            )
             declared = set(node.get("outputs") or {})
             response_outputs = parsed.get("outputs", {}) if isinstance(parsed, dict) else {}
             if isinstance(response_outputs, dict):
@@ -553,13 +584,23 @@ class GraphExecutor:
         else:
             if block.get("mode") != "repeat":
                 action = block.get("on_max_iterations", "fail")
-                accepted = self.assume_yes or (
-                    bool(self.approval)
-                    and bool(await self.approval("Loop reached max_iterations. Accept the partial result?", block))
-                )
-                if action == "escalate" and accepted:
+                # Only "escalate" is a question for a human. `fail` and
+                # `succeed_partial` are already decisions, but the prompt fired
+                # for all three.
+                if action == "succeed_partial":
                     pass
-                elif action != "succeed_partial":
+                elif action == "escalate":
+                    accepted = self.assume_yes or (
+                        bool(self.approval)
+                        and bool(
+                            await self.approval(
+                                "Loop reached max_iterations. Accept the partial result?", block
+                            )
+                        )
+                    )
+                    if not accepted:
+                        raise GraphRunError("loop reached max_iterations", "RT031")
+                else:
                     raise GraphRunError("loop reached max_iterations", "RT031")
         outputs = {name: evaluate_expression(str(expression), child_scope or scope) for name, expression in (block.get("collect") or {}).items()}
         outputs["iterations"] = completed
@@ -587,7 +628,19 @@ class GraphExecutor:
                     raise GraphRunError(f"map item {index} failed", "RT033")
                 return item_scope
 
-        item_scopes = await asyncio.gather(*(run_item(index, value) for index, value in enumerate(values)))
+        # TaskGroup, not gather: on the first failure gather leaves sibling
+        # agent sessions and subprocesses running detached.
+        item_results: list[Any] = [None] * len(values)
+
+        async with asyncio.TaskGroup() as group:
+            for index, value in enumerate(values):
+
+                async def collect(index: int = index, value: Any = value) -> None:
+                    item_results[index] = await run_item(index, value)
+
+                group.create_task(collect())
+
+        item_scopes = item_results
         outputs: dict[str, Any] = {}
         for name, expression in (block.get("collect") or {}).items():
             outputs[name] = [evaluate_expression(str(expression), item_scope) for item_scope in item_scopes]
@@ -618,12 +671,9 @@ class GraphExecutor:
             fragment = child.data
         else:
             raise GraphRunError("subgraph has no source", "RT040")
+        param_scope = {**scope, "inputs": inputs}
         child_params = {
-            name: (
-                evaluate_expression(value, {**scope, "inputs": inputs})
-                if isinstance(value, str)
-                else resolve_value(value, {**scope, "inputs": inputs})
-            )
+            name: _agx_or_literal(value, param_scope)
             for name, value in (block.get("params") or {}).items()
         }
         child_scope = {**scope, "params": child_params or inputs}
@@ -634,7 +684,13 @@ class GraphExecutor:
             raise GraphRunError("subgraph failed", "RT043")
         child_scope["outputs"] = self._resolve_graph_outputs(fragment, child_scope)
         mapping = block.get("outputs_from") or fragment.get("outputs") or {}
-        return {name: evaluate_expression(str(spec.get("from") if isinstance(spec, dict) else spec), child_scope) for name, spec in mapping.items()}
+        # `outputs_from` values may be literals as well as references, so they
+        # go through template resolution like every other input path rather
+        # than being parsed as raw AGX.
+        return {
+            name: _agx_or_literal(spec.get("from") if isinstance(spec, dict) else spec, child_scope)
+            for name, spec in mapping.items()
+        }
 
     async def _fallback(self, node_id: str, node: dict[str, Any], outputs: dict[str, Any], scope: dict[str, Any]) -> str:
         failure = node.get("failure") or {}
@@ -666,9 +722,22 @@ class GraphExecutor:
                     return "succeeded"
                 return "awaiting_human"
             if strategy == "alternate_node":
-                alternate = (self._document.data.get("nodes") or {}).get(fallback.get("node")) if self._document else None
+                alternate_id = str(fallback.get("node") or "")
+                if alternate_id in self._fallback_chain:
+                    self._diagnostic(
+                        "RT001",
+                        "error",
+                        f"alternate_node cycle: {' -> '.join([*self._fallback_chain, alternate_id])}",
+                        node_id=node_id,
+                    )
+                    continue
+                alternate = (self._document.data.get("nodes") or {}).get(alternate_id) if self._document else None
                 if alternate:
-                    status, replacement = await self._execute_node(str(fallback["node"]), alternate, scope, "fallback")
+                    self._fallback_chain.append(alternate_id)
+                    try:
+                        status, replacement = await self._execute_node(alternate_id, alternate, scope, "fallback")
+                    finally:
+                        self._fallback_chain.pop()
                     outputs.update(replacement)
                     if status == "succeeded":
                         return "succeeded"
@@ -935,16 +1004,29 @@ class GraphExecutor:
 
     def _consume_usage(self, usage: dict[str, Any]) -> None:
         self._agent_steps.set(int(usage.get("turns", 0) or 0))
+        # Accumulate against the *running node* as well as the graph. Diffing
+        # the global counter charged each node for whatever its concurrently
+        # running siblings spent, and killed nodes with RT030 for usage they
+        # never incurred.
+        node_usage = self._node_usage.get()
         for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
             target = {"prompt_tokens": "input_tokens", "completion_tokens": "output_tokens"}.get(key, key)
-            self._record["usage"][target] = int(self._record["usage"].get(target, 0)) + int(usage.get(key, 0) or 0)
+            amount = int(usage.get(key, 0) or 0)
+            self._record["usage"][target] = int(self._record["usage"].get(target, 0)) + amount
+            if node_usage is not None:
+                node_usage[target] = int(node_usage.get(target, 0)) + amount
+        cost = float(usage.get("cost_usd", 0) or 0)
         self._record["usage"]["cost_usd"] = round(
-            float(self._record["usage"].get("cost_usd", 0)) + float(usage.get("cost_usd", 0) or 0), 8
+            float(self._record["usage"].get("cost_usd", 0)) + cost, 8
         )
+        if node_usage is not None:
+            node_usage["cost_usd"] = round(float(node_usage.get("cost_usd", 0)) + cost, 8)
 
     def _enforce_usage_budgets(self, node: dict[str, Any], before: dict[str, Any]) -> None:
         constraints = node.get("constraints") or {}
-        delta = _usage_delta(before, self._record["usage"])
+        # Per-node accumulation when available, so siblings cannot bill us.
+        node_usage = self._node_usage.get()
+        delta = dict(node_usage) if node_usage is not None else _usage_delta(before, self._record["usage"])
         checks = (
             ("max_input_tokens", "input_tokens", "input-token"),
             ("max_output_tokens", "output_tokens", "output-token"),
@@ -1039,6 +1121,23 @@ def _bind_params(document: dict[str, Any], supplied: dict[str, Any]) -> dict[str
     if unknown:
         raise GraphRunError(f"unknown parameters: {', '.join(sorted(unknown))}", "AG302")
     return result
+
+
+def _agx_or_literal(value: Any, scope: dict[str, Any]) -> Any:
+    """Evaluate a subgraph param/output binding.
+
+    These fields carry bare AGX expressions (`params.label`, `outputs.result`),
+    unlike every other input path, which is template-only. Running AGX on every
+    string meant a plain literal — `"hello world"`, a path, a sentence — was a
+    parse error rather than a value. References still evaluate; anything AGX
+    cannot parse is taken literally.
+    """
+    if not isinstance(value, str):
+        return resolve_value(value, scope)
+    try:
+        return evaluate_expression(value, scope)
+    except AgxEvaluationError:
+        return resolve_value(value, scope)
 
 
 def _fragment_params(fragment: dict[str, Any], supplied: dict[str, Any]) -> dict[str, Any]:

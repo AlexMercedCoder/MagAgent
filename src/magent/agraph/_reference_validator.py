@@ -93,10 +93,22 @@ FUNCTIONS = {
     "succeeded": 1, "failed": 1, "skipped": 1, "output": 2,
 }
 
+def _output_expression(spec: Any) -> str:
+    """Expression for an output binding.
+
+    The runtime accepts both `{"from": "..."}` and the plain string shorthand;
+    the validator assumed a mapping and crashed with AttributeError on graphs
+    that ran perfectly well.
+    """
+    if isinstance(spec, dict):
+        return str(spec.get("from", "") or "")
+    return str(spec or "")
+
+
 TOKEN_RE = re.compile(
     r"""
     \s*(?:
-      (?P<number>-?\d+\.\d+|-?\d+)
+      (?P<number>\d+\.\d+|\d+)
     | (?P<string>"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')
     | (?P<op>&&|\|\||==|!=|<=|>=|[-+*/%<>!()\[\],.])
     | (?P<name>[A-Za-z_][A-Za-z0-9_]*)
@@ -776,12 +788,12 @@ class Validator:
                     self._check_expr(scope, when, f"{scope.pointer}/edges/{index}/when", anchor, inclusive=True)
             if not scope.is_root:
                 for name, spec in scope.outputs_spec.items():
-                    self._check_expr(scope, spec.get("from", ""),
+                    self._check_expr(scope, _output_expression(spec),
                                      f"{scope.pointer}/outputs/{name}/from", None)
                 self._walk_success(scope, None, f"{scope.pointer}/success", None)
 
         for name, spec in (self.doc.get("outputs") or {}).items():
-            self._check_expr(self.scopes[0], spec.get("from", ""), f"/outputs/{name}/from", None)
+            self._check_expr(self.scopes[0], _output_expression(spec), f"/outputs/{name}/from", None)
         self._walk_success(self.scopes[0], self.doc.get("success"), "/success", None)
 
         self._check_unread_outputs()
@@ -845,16 +857,19 @@ class Validator:
             block = node.get("map") or {}
             body = self._body_scope(block, f"{base}/map/body")
             if "over" in block:
-                self._check_expr(scope, block["over"], f"{base}/map/over", node_id)
+                self._check_expr(scope, block["over"], f"{base}/map/over", node_id, inputs_ok=True)
             for name, expr in (block.get("collect") or {}).items():
                 self._check_expr(body or scope, expr, f"{base}/map/collect/{name}",
                                  None, fragment_ok=True)
         elif node_type == "subgraph":
             block = node.get("subgraph") or {}
             for name, expr in (block.get("params") or {}).items():
-                self._check_expr(scope, expr, f"{base}/subgraph/params/{name}", node_id)
+                self._check_expr(scope, expr, f"{base}/subgraph/params/{name}", node_id, inputs_ok=True)
             for name, expr in (block.get("outputs_from") or {}).items():
-                self._check_expr(scope, expr, f"{base}/subgraph/outputs_from/{name}", node_id, child_ok=True)
+                self._check_expr(
+                    scope, expr, f"{base}/subgraph/outputs_from/{name}", node_id,
+                    child_ok=True, inputs_ok=True,
+                )
 
     def _body_scope(self, block: dict[str, Any], inline_pointer: str) -> Scope | None:
         """Resolve the fragment a loop/map node iterates over, inline or by name."""
@@ -913,7 +928,7 @@ class Validator:
     def _check_expr(self, scope: Scope, text: Any, pointer: str, node_id: str | None,
                     inclusive: bool = False, self_outputs: bool = False,
                     fragment_ok: bool = False, child_ok: bool = False,
-                    in_template: bool = False) -> None:
+                    in_template: bool = False, inputs_ok: bool = False) -> None:
         if not isinstance(text, str) or not text.strip():
             return
         if not in_template and TEMPLATE_RE.search(text):
@@ -939,12 +954,18 @@ class Validator:
                                 f"{name}() takes {expected} arguments, got {arity}", pointer)
 
         for ref in parser.references:
-            self._check_reference(scope, ref, pointer, node_id, inclusive, self_outputs, fragment_ok, child_ok)
+            self._check_reference(scope, ref, pointer, node_id, inclusive, self_outputs, fragment_ok, child_ok, inputs_ok)
 
     def _check_reference(self, scope: Scope, ref: Reference, pointer: str, node_id: str | None,
-                         inclusive: bool, self_outputs: bool, fragment_ok: bool, child_ok: bool) -> None:
+                         inclusive: bool, self_outputs: bool, fragment_ok: bool, child_ok: bool,
+                         inputs_ok: bool = False) -> None:
         root = ref.root
         parts = ref.parts
+
+        # The runtime binds `inputs` for map.over and subgraph params/outputs,
+        # so rejecting it here failed graphs that run correctly.
+        if inputs_ok and root == "inputs":
+            return
 
         if root == "secrets":
             self.report.add("AG205", "error", "expressions must not reference secrets.*", pointer)
@@ -1040,7 +1061,7 @@ class Validator:
         graph_bound: set[tuple[str, str]] = set()
         for spec in (self.doc.get("outputs") or {}).values():
             try:
-                parser = parse_expression(spec.get("from", ""))
+                parser = parse_expression(_output_expression(spec))
             except AgxError:
                 continue
             for ref in parser.references:

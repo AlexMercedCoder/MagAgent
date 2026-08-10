@@ -70,9 +70,7 @@ class MCPManager:
             ok = await client.connect()
             self._clients[name] = client
             if ok:
-                # Index all tools for fast dispatch
-                for tool in client.tools:
-                    self._tool_index[tool.qualified_name] = (client, tool.name)
+                self._reindex_client(client)
             return name, ok
 
         results = await asyncio.gather(
@@ -195,13 +193,59 @@ class MCPManager:
         client = self._clients.get(server_name)
         return [client] if client and client.connected else []
 
+    def _reindex_client(self, client: Any) -> None:
+        """(Re)build the dispatch index for one client's current tool list."""
+        server = getattr(client, "server_name", "")
+        for qualified in [
+            name for name, (indexed, _original) in self._tool_index.items() if indexed is client
+        ]:
+            del self._tool_index[qualified]
+        for tool in client.tools:
+            self._tool_index[tool.qualified_name] = (client, tool.name)
+        log.debug("Reindexed %d tools for MCP server %s", len(client.tools), server)
+
+    def refresh_tools(self, server_name: str = "") -> None:
+        """Rebuild the dispatch index after a `tools/list_changed` notification.
+
+        The index was built once at connect time and never rebuilt, so
+        invalidation was inert: a server that added or removed a tool kept
+        dispatching against the original list.
+        """
+        for name, client in self._clients.items():
+            if server_name and name != server_name:
+                continue
+            self._reindex_client(client)
+
+    def tools_for(self, server_name: str) -> list[Any]:
+        """Tools exposed by one server, or [] when it is not connected.
+
+        Callers used to index the private `_clients` dict directly and could
+        raise KeyError for a server that failed to connect.
+        """
+        client = self._clients.get(server_name)
+        return list(getattr(client, "tools", []) or []) if client else []
+
     def get_tool_definitions(self) -> list[dict[str, Any]]:
         """Return OpenAI-compatible function definitions for all MCP tools."""
         return [tool.to_openai_definition() for tool in self.get_all_tools()]
 
+    def _index_is_stale(self) -> bool:
+        """True when any connected client's tool list no longer matches the index."""
+        for client in self._clients.values():
+            indexed = {
+                name for name, (owner, _original) in self._tool_index.items() if owner is client
+            }
+            if indexed != {tool.qualified_name for tool in getattr(client, "tools", [])}:
+                return True
+        return False
+
     def is_mcp_tool(self, tool_name: str) -> bool:
         """Check if a tool name belongs to an MCP server."""
-        return tool_name.startswith("mcp__") and tool_name in self._tool_index
+        if not tool_name.startswith("mcp__"):
+            return False
+        if tool_name not in self._tool_index and self._index_is_stale():
+            self.refresh_tools()
+        return tool_name in self._tool_index
 
     async def dispatch(self, qualified_name: str, args: dict[str, Any]) -> dict[str, Any]:
         """
@@ -209,6 +253,11 @@ class MCPManager:
         qualified_name format: "mcp__<server_name>__<tool_name>"
         """
         entry = self._tool_index.get(qualified_name)
+        if not entry and self._index_is_stale():
+            # A server that added tools after connect (tools/list_changed) was
+            # invisible, because the index was built once and never rebuilt.
+            self.refresh_tools()
+            entry = self._tool_index.get(qualified_name)
         if not entry:
             return {"ok": False, "error": f"Unknown MCP tool: {qualified_name}"}
 

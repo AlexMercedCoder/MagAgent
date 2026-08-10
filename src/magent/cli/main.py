@@ -4599,7 +4599,7 @@ def mcp_list(
                 table.add_column("Tool", style="white")
                 table.add_column("Qualified Name", style="dim")
                 table.add_column("Description")
-                for tool in manager._clients[name].tools:
+                for tool in manager.tools_for(name):
                     table.add_row(
                         tool.name,
                         tool.qualified_name,
@@ -4649,18 +4649,23 @@ def mcp_test(
             f"protocol_mode={profile.protocol_mode.value} endpoint={profile.public_endpoint}[/dim]"
         )
         ok = await client.connect()
-        if not ok:
-            console.print(f"[red]✗ {client.last_error or 'Connection failed.'}[/red]")
-            raise typer.Exit(1)
+        # From here on the server subprocess exists, so every exit path has to
+        # disconnect — including the failure paths, which used to leak it.
+        try:
+            if not ok:
+                console.print(f"[red]✗ {client.last_error or 'Connection failed.'}[/red]")
+                raise typer.Exit(1)
 
-        console.print(
-            f"[green]✓ Connected using {client.selected_era} MCP "
-            f"({client.selected_protocol_version}) — {len(client.tools)} tools:[/green]"
-        )
-        for tool in client.tools:
-            console.print(f"  [bold]{tool.name}[/bold] — {tool.description}")
-            console.print(f"    [dim]{tool.qualified_name}[/dim]")
-        await client.disconnect()
+            console.print(
+                f"[green]✓ Connected using {client.selected_era} MCP "
+                f"({client.selected_protocol_version}) — {len(client.tools)} tools:[/green]"
+            )
+            for tool in client.tools:
+                console.print(f"  [bold]{tool.name}[/bold] — {tool.description}")
+                console.print(f"    [dim]{tool.qualified_name}[/dim]")
+        finally:
+            with contextlib.suppress(Exception):
+                await client.disconnect()
         console.print("\n[dim]Connection closed.[/dim]")
 
     asyncio.run(_test())

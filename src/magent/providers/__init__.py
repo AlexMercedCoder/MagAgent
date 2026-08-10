@@ -124,6 +124,15 @@ class Provider:
         self.provider_cfg = provider_cfg or {}
         self._base_kwargs = _build_api_kwargs(provider_id, model, self.provider_cfg, api_key)
 
+    def completion_params(self, temperature: float = 0.3, max_tokens: int = 4096) -> dict[str, Any]:
+        """Provider-safe completion parameters for this provider/model.
+
+        The agent loop used to hardcode `temperature=0.3`, bypassing the
+        workaround here — and gpt-5 / claude-sonnet-5 class models reject any
+        temperature but the default.
+        """
+        return _completion_request_params(self.provider_id, self.model, temperature, max_tokens)
+
     @property
     def display_name(self) -> str:
         name = PROVIDER_DISPLAY_NAMES.get(self.provider_id, self.provider_id)
@@ -145,7 +154,7 @@ class Provider:
             response = await litellm.acompletion(
                 messages=messages,
                 **_completion_request_params(self.provider_id, self.model, temperature, max_tokens),
-                **(request_kwargs or self._base_kwargs),
+                **{**self._base_kwargs, **(request_kwargs or {})},
             )
             return response.choices[0].message.content or ""
         except Exception as e:
@@ -171,9 +180,13 @@ class Provider:
                 messages=messages,
                 stream=True,
                 **_completion_request_params(self.provider_id, self.model, temperature, max_tokens),
-                **(request_kwargs or self._base_kwargs),
+                **{**self._base_kwargs, **(request_kwargs or {})},
             )
             async for chunk in response:
+                # Usage-only chunks arrive with an empty choices list; indexing
+                # [0] on them crashed the stream at the very end of a response.
+                if not getattr(chunk, "choices", None):
+                    continue
                 delta = chunk.choices[0].delta
                 if delta and delta.content:
                     yield delta.content

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -15,13 +16,29 @@ from magent.command_policy import command_policy, run_policy_checked_command
 from magent.workbench_domains.plans import show_plan
 from magent.workbench_store import now_iso
 
-SANDBOX_MODES = {"worktree", "copy", "container"}
+# One vocabulary for every caller. Three different sets used to coexist:
+# SANDBOX_MODES here, {"shared","worktree","sandbox"} in graph_workspace, and
+# all four in agraph/execute.py — so `isolation: container` validated and then
+# died at runtime with RT014.
+SANDBOX_MODES = {"shared", "worktree", "copy", "sandbox", "container"}
+
+# `sandbox` is the graph-side name for `copy`.
+MODE_ALIASES = {"sandbox": "copy"}
+
+
+def normalize_mode(mode: str) -> str:
+    """Canonical mode name, or "" when the mode is unknown."""
+    normalized = (mode or "").strip().lower()
+    normalized = MODE_ALIASES.get(normalized, normalized)
+    return normalized if normalized in {"shared", "worktree", "copy", "container"} else ""
 
 
 @contextmanager
 def graph_workspace(root: Path, mode: str):
     """Provision an AGS node workspace without silently weakening isolation."""
-    normalized = mode.strip().lower()
+    normalized = normalize_mode(mode)
+    if not normalized:
+        raise RuntimeError(f"RT014 unsupported isolation mode {mode!r}")
     if normalized == "shared":
         yield root
         return
@@ -44,9 +61,11 @@ def graph_workspace(root: Path, mode: str):
             _run(root, ["git", "worktree", "remove", "--force", str(target)], timeout=120)
             shutil.rmtree(target, ignore_errors=True)
         return
-    if normalized == "sandbox":
+    if normalized == "copy":
         target = Path(tempfile.mkdtemp(prefix="magent-agraph-sandbox-"))
-        ignore = shutil.ignore_patterns(".git", ".venv", "node_modules", "__pycache__", ".pytest_cache")
+        # .git is copied: plans apply patches with `git apply`, which cannot
+        # work in a tree that has no repository.
+        ignore = shutil.ignore_patterns(".venv", "node_modules", "__pycache__", ".pytest_cache")
         shutil.copytree(root, target, dirs_exist_ok=True, ignore=ignore)
         try:
             yield target
@@ -124,15 +143,29 @@ class _sandbox_workspace:
         self.path: Path | None = None
 
     def __enter__(self) -> Path:
-        if self.mode == "worktree" and (self.root / ".git").exists() and shutil.which("git"):
+        self.is_worktree = False
+        if self.mode == "worktree":
+            if not (self.root / ".git").exists() or not shutil.which("git"):
+                raise RuntimeError(
+                    "worktree isolation requires a git repository and the git binary"
+                )
             target = Path(tempfile.mkdtemp(prefix="magent-worktree-"))
             check = _run(self.root, ["git", "worktree", "add", "--detach", str(target), "HEAD"], timeout=120)
-            if check["ok"]:
-                self.path = target
-                return target
-            shutil.rmtree(target, ignore_errors=True)
+            if not check["ok"]:
+                shutil.rmtree(target, ignore_errors=True)
+                # Degrading to a plain copy meant the caller believed it had a
+                # worktree, and __exit__ then ran `git worktree remove` on a
+                # path git had never registered.
+                raise RuntimeError(
+                    f"could not create worktree: {check.get('stderr') or check.get('error') or 'unknown error'}"
+                )
+            self.path = target
+            self.is_worktree = True
+            return target
+
         target = Path(tempfile.mkdtemp(prefix=f"magent-{self.mode}-"))
-        ignore = shutil.ignore_patterns(".git", ".venv", "node_modules", "__pycache__", ".pytest_cache")
+        # .git is copied: plan operations apply patches with `git apply`.
+        ignore = shutil.ignore_patterns(".venv", "node_modules", "__pycache__", ".pytest_cache")
         shutil.copytree(self.root, target, dirs_exist_ok=True, ignore=ignore)
         self.path = target
         return target
@@ -140,7 +173,7 @@ class _sandbox_workspace:
     def __exit__(self, exc_type, exc, tb) -> None:
         if self.keep or self.path is None:
             return
-        if self.mode == "worktree" and (self.root / ".git").exists() and shutil.which("git"):
+        if getattr(self, "is_worktree", False):
             _run(self.root, ["git", "worktree", "remove", "--force", str(self.path)], timeout=120)
         shutil.rmtree(self.path, ignore_errors=True)
 
@@ -149,7 +182,22 @@ def _execute_local_plan(plan: dict[str, Any], workspace: Path, *, run_checks: bo
     results = []
     for op in plan.get("operations", []):
         if op.get("type") == "patch" and op.get("path"):
-            results.append({**_run(workspace, ["git", "apply", str(op["path"])], timeout=120), "operation": op})
+            # The stored plan supplies this path and it may be absolute or
+            # `../`-relative; the shell branch below is policy-checked but this
+            # one applied whatever it was given.
+            patch_path = (workspace / str(op["path"])).resolve(strict=False)
+            try:
+                patch_path.relative_to(workspace.resolve(strict=False))
+            except ValueError:
+                results.append(
+                    {
+                        "ok": False,
+                        "error": f"Patch path escapes the workspace: {op['path']}",
+                        "operation": op,
+                    }
+                )
+                continue
+            results.append({**_run(workspace, ["git", "apply", str(patch_path)], timeout=120), "operation": op})
         elif op.get("type") == "shell" and op.get("command"):
             results.append({**_run_command(workspace, op["command"], timeout=120), "operation": op})
     if run_checks:
@@ -177,10 +225,34 @@ def _execute_container_plan(
             "results": [{**policy, "error": "Blocked by MagAgent command policy"} for policy in policies],
         }
     script = " && ".join(_command_text(command) for command in commands) or "pwd"
+    # The joined script is what actually executes, so it is classified too:
+    # classifying the pieces individually missed what the join creates.
+    joined_policy = command_policy(script)
+    if joined_policy.get("blocked"):
+        return {
+            "ok": False,
+            "workspace": str(workspace),
+            "image": image,
+            "results": [{**joined_policy, "error": "Blocked by MagAgent command policy"}],
+        }
     cmd = [
         "docker",
         "run",
         "--rm",
+        # Isolation that actually isolates: no network, no root, bounded
+        # resources, and a read-only root filesystem outside /workspace.
+        "--network",
+        "none",
+        "--user",
+        f"{os.getuid()}:{os.getgid()}" if hasattr(os, "getuid") else "1000:1000",
+        "--memory",
+        "2g",
+        "--pids-limit",
+        "512",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
         "-v",
         f"{workspace}:/workspace",
         "-w",

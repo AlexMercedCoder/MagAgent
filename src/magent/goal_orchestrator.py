@@ -8,6 +8,7 @@ requirements for the main agent.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 from pathlib import Path
@@ -237,6 +238,17 @@ async def run_orchestrated_plan(
     if not plan:
         return {"ok": False, "error": f"Orchestrated plan not found: {plan_id}", "plan_id": plan_id}
     orchestration = _normalize_orchestration(plan)
+    # Preview has this guard; run did not, so a fully completed plan re-ran its
+    # last step (_start_index clamps to len(steps)-1) on every invocation.
+    if orchestration.get("status") == "completed" and not retry_step:
+        return {
+            "ok": True,
+            "status": "completed",
+            "plan_id": plan_id,
+            "plan": plan,
+            "orchestration": orchestration,
+            "completed_summaries": orchestration.get("completed_summaries", []),
+        }
     start_index = _start_index(orchestration, retry_step=retry_step)
     root = Path(plan.get("root") or ".").resolve()
     runtime = TaskRuntime(store)
@@ -309,11 +321,21 @@ async def run_orchestrated_plan(
             return {"models": {"model": {"capabilities": {"context_tokens": 100000}}}}
 
     next_index = start_index
+    node_step_index: dict[str, int] = {}
 
     async def run_step(_node_id: str, prompt: str, _route: Any, _task_id: str) -> dict[str, Any]:
         nonlocal next_index
-        index = next_index
-        next_index += 1
+        # Map node id -> step index once. A bare counter assumed exactly one
+        # call per node in order, so a retry, a criteria re-run, a fallback or
+        # a _judge call (which also flows through agent_runner) shifted every
+        # later step and eventually raised IndexError outside the try.
+        index = node_step_index.get(_node_id)
+        if index is None:
+            index = next_index
+            node_step_index[_node_id] = index
+            next_index += 1
+        if not 0 <= index < len(orchestration["steps"]):
+            return {"ok": False, "error": f"unknown orchestration step for node {_node_id!r}"}
         step = orchestration["steps"][index]
         step_statuses[index] = {**step_statuses[index], "status": "running", "started_at": now_iso()}
         try:
@@ -374,8 +396,15 @@ async def run_orchestrated_plan(
         metadata={"plan_id": plan_id},
     )
     current_parent = runtime.get(execution_task_id)
-    if status != "completed" and current_parent and current_parent["state"] != "blocked":
-        runtime.transition(execution_task_id, "blocked", reason="A staged step failed")
+    if (
+        status != "completed"
+        and current_parent
+        # completed -> blocked is illegal and used to raise TaskRuntimeError
+        # after the plan had already been persisted.
+        and current_parent["state"] not in {"blocked", "completed", "cancelled"}
+    ):
+        with contextlib.suppress(Exception):
+            runtime.transition(execution_task_id, "blocked", reason="A staged step failed")
     updated_goal = None
     if plan.get("goal_id"):
         updated_goal = store.update_item("goals", plan["goal_id"], status=status)
@@ -518,7 +547,19 @@ def _build_steps(
         )
     if not _likely_checks(profile):
         steps[0]["validation"].append("Missing project checks are explicitly noted.")
-    return steps[: max(1, max_steps)]
+
+    # Truncating from the front dropped the steps the caller explicitly asked
+    # for: with the defaults (max_steps=3, verify=True, review=True) the review
+    # step was always cut despite review=True. Keep the requested trailing
+    # stages and trim the middle instead.
+    limit = max(1, max_steps)
+    if len(steps) <= limit:
+        return steps
+
+    protected = int(bool(verify)) + int(bool(review))
+    if protected == 0 or protected >= limit:
+        return steps[:limit]
+    return [*steps[: limit - protected], *steps[-protected:]]
 
 
 def _render_master_plan(

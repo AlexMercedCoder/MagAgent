@@ -19,6 +19,40 @@ from typing import Any
 
 _MAX_RESOURCE_CHARS = 200_000
 
+# Environment variables a subprocess needs to start at all. Anything else must
+# be named explicitly in the server's `env` block.
+_INHERITED_ENV_VARS = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "SHELL",
+        "LANG",
+        "LC_ALL",
+        "TZ",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+        "SYSTEMROOT",
+        "COMSPEC",
+        "PATHEXT",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "PROGRAMFILES",
+        "PROGRAMDATA",
+        "NODE_PATH",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "REQUESTS_CA_BUNDLE",
+        "XDG_RUNTIME_DIR",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+    }
+)
+
 
 def _dump(value: Any) -> Any:
     """Convert SDK/Pydantic values into JSON-safe protocol payloads."""
@@ -107,7 +141,17 @@ async def _transport(profile: dict[str, Any], stack: AsyncExitStack) -> Any:
         from mcp.client.stdio import stdio_client
 
         overrides = _expand_mapping(profile.get("env")) or {}
-        env = {**os.environ, **overrides} if overrides else None
+        # Only pass through what a subprocess genuinely needs plus the explicit
+        # overrides. Merging the whole parent environment handed every API key
+        # MagAgent holds to any stdio server that declared a single env var.
+        env = None
+        if overrides:
+            inherited = {
+                name: value
+                for name, value in os.environ.items()
+                if name in _INHERITED_ENV_VARS
+            }
+            env = {**inherited, **overrides}
         params = StdioServerParameters(
             command=str(profile.get("command", "")),
             args=list(profile.get("args") or []),
@@ -117,11 +161,11 @@ async def _transport(profile: dict[str, Any], stack: AsyncExitStack) -> Any:
         return stdio_client(params)
 
     if transport == "streamable-http":
-        import httpx2
+        import httpx
         from mcp.client.streamable_http import streamable_http_client
 
         http = await stack.enter_async_context(
-            httpx2.AsyncClient(
+            httpx.AsyncClient(
                 headers=_expand_mapping(profile.get("headers")),
                 timeout=float(profile.get("timeout", 30.0)),
                 follow_redirects=True,

@@ -67,7 +67,10 @@ class SemanticMemoryIndex:
         self.dim = dim
         self.root = USERS_DIR / username / "workbench" / "vector"
         self.root.mkdir(parents=True, exist_ok=True)
-        self.db_path = self.root / "memory_index.sqlite"
+        # The index is per memory graph. Ignoring memory_dir meant two graphs
+        # for the same user shared (and corrupted) one index.
+        scope = hashlib.sha256(str(Path(memory_dir).resolve()).encode("utf-8")).hexdigest()[:12]
+        self.db_path = self.root / f"memory_index_{scope}.sqlite"
         self._init_db()
 
     def _init_db(self) -> None:
@@ -107,8 +110,11 @@ class SemanticMemoryIndex:
             conn.close()
 
     def reset(self) -> None:
-        if self.db_path.exists():
-            self.db_path.unlink()
+        # The -wal/-shm sidecars carry committed pages; leaving them behind
+        # resurrected rows the reset was supposed to remove.
+        for path in (self.db_path, Path(f"{self.db_path}-wal"), Path(f"{self.db_path}-shm")):
+            if path.exists():
+                path.unlink()
         self._init_db()
 
     def status(self) -> dict[str, Any]:
@@ -144,9 +150,12 @@ class SemanticMemoryIndex:
                     continue
                 text = _node_text(node)
                 content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+                # Keyed on the embedder too: changing embedding_model used to
+                # leave every existing row in place and silently in use.
                 current = conn.execute(
-                    "SELECT COUNT(*) FROM memory_embeddings WHERE node_id = ? AND content_hash = ?",
-                    (node_id, content_hash),
+                    "SELECT COUNT(*) FROM memory_embeddings "
+                    "WHERE node_id = ? AND content_hash = ? AND embedding_model = ?",
+                    (node_id, content_hash, self._embedder_id()),
                 ).fetchone()[0]
                 chunks = chunk_text(text)
                 if current == len(chunks):
@@ -157,7 +166,7 @@ class SemanticMemoryIndex:
 
                 conn.execute("DELETE FROM memory_embeddings WHERE node_id = ?", (node_id,))
                 for chunk_id, chunk in enumerate(chunks):
-                    vec = self.embed(chunk)
+                    vec, source = self.embed_with_source(chunk)
                     conn.execute(
                         """
                         INSERT OR REPLACE INTO memory_embeddings
@@ -172,7 +181,7 @@ class SemanticMemoryIndex:
                             chunk,
                             _pack_vector(vec),
                             len(vec),
-                            self.model,
+                            source,
                             content_hash,
                         ),
                     )
@@ -206,8 +215,6 @@ class SemanticMemoryIndex:
         scored_rows = []
         for node_id, chunk_id, node_type, text, blob, dim in rows:
             lexical_score = keyword_score(query_terms, text)
-            if mode == "hybrid" and lexical_score <= 0 and len(rows) > 1000:
-                continue
             semantic_score = 0.0
             if query_vec:
                 vec = _unpack_vector(blob, dim)
@@ -246,13 +253,28 @@ class SemanticMemoryIndex:
                 break
         return deduped
 
+    def _embedder_id(self) -> str:
+        """Identifier of the embedder this instance would use right now."""
+        return f"ollama:{self.model}" if self.provider == "ollama" else f"hash:{self.dim}"
+
     def embed(self, text: str) -> list[float]:
+        vector, _source = self.embed_with_source(text)
+        return vector
+
+    def embed_with_source(self, text: str) -> tuple[list[float], str]:
+        """Return the vector and the embedder that actually produced it.
+
+        A failed Ollama call falls back to 256-dim hash vectors. Recording
+        `self.model` regardless meant one transient outage mid-reindex left two
+        incompatible vector spaces in the same table, compared over `min(len)`
+        dimensions — scores that mean nothing, with nothing to indicate it.
+        """
         if self.provider == "ollama":
             try:
-                return _ollama_embedding(text, self.model)
+                return _ollama_embedding(text, self.model), f"ollama:{self.model}"
             except Exception:
                 pass
-        return local_hash_embedding(text, dim=self.dim)
+        return local_hash_embedding(text, dim=self.dim), f"hash:{self.dim}"
 
 
 def chunk_text(text: str, max_words: int = 180, overlap_words: int = 30) -> list[str]:
