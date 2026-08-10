@@ -87,6 +87,9 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=5.0.0",
+    # Parallel test execution: the suite is dominated by subprocess-spawning
+    # tests, so it scales well across workers.
+    "pytest-xdist>=3.5.0",
     "ruff>=0.4.0",
     "mypy>=1.10.0",
 ]
@@ -189,4 +192,7 @@ omit = [
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-fail_under = 63
+# Ratchet: raise this as coverage improves, never lower it. The new
+# regression suites (classifier bypasses, CLI surface, durability, safe names)
+# lifted the measured figure, so the floor moves up with them.
+fail_under = 64

@@ -19,6 +19,7 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from magent import __version__
+from magent.cli import command_context
 from magent.cli.app import (
     agent_app,
     api_app,
@@ -92,21 +93,31 @@ from magent.cli.commands.github import register_github_commands
 from magent.cli.commands.graph import register_graph_commands
 from magent.cli.commands.hooks import register_hook_commands
 from magent.cli.commands.lsp import register_lsp_commands
+from magent.cli.commands.memory import register_memory_commands
 from magent.cli.commands.performance import register_performance_commands
 from magent.cli.commands.permissions import register_permission_commands
 from magent.cli.commands.plugins import register_plugin_commands
 from magent.cli.commands.providers import register_provider_ux_commands
 from magent.cli.commands.workbench import register_workbench_commands
+from magent.cli.render import (
+    _print_config_center,
+    _print_context_map,
+    _print_jobs_summary,
+    _print_memory_stats,
+    _print_orchestrated_preview,
+    _print_orchestrated_run_result,
+    _print_recent_insights,
+    _print_research_result,
+    _print_session_inbox,
+    _print_session_peers,
+    _print_session_receipt,
+    _print_session_receipts,
+    _print_session_usage,
+)
 from magent.config import (
     CONFIG_DIR,
-    create_user,
-    delete_user,
     get_current_user,
-    list_users,
     load_config,
-    set_current_user,
-    user_exists,
-    user_memory_dir,
 )
 from magent.prompt_input import read_multiline_prompt, read_user_prompt
 
@@ -557,146 +568,6 @@ def update_cmd(run: bool = typer.Option(False, "--run", help="Run the detected u
         raise typer.Exit(completed.returncode)
 
 
-def _print_research_result(result: dict) -> None:
-    if not result.get("ok"):
-        console.print(f"[red]Research failed:[/red] {result.get('error', 'unknown error')}")
-        return
-    from rich.markdown import Markdown
-
-    console.print(Panel.fit(f"[bold]{result.get('topic', 'Research')}[/bold]", title="Research"))
-    summary = str(result.get("summary") or "").strip()
-    if summary:
-        console.print(Markdown(summary))
-    sources = result.get("sources") or []
-    if sources:
-        table = Table("Source", "Title", "URL")
-        for index, source in enumerate(sources, start=1):
-            table.add_row(
-                str(index),
-                str(source.get("title") or "Untitled")[:80],
-                str(source.get("url") or "")[:100],
-            )
-        console.print(table)
-
-
-def _print_session_usage(data: dict) -> None:
-    if not data.get("ok"):
-        console.print("[dim]No session log found yet.[/dim]")
-        return
-    table = Table("Metric", "Value")
-    for key in ("turns", "tool_calls", "prompt_tokens", "completion_tokens", "total_tokens", "cached_tokens"):
-        table.add_row(key.replace("_", " ").title(), str(data.get(key, 0)))
-    table.add_row("Estimated Cost", f"${float(data.get('cost_usd') or 0):.6f}")
-    console.print(table)
-    slowest = data.get("slowest") or []
-    if slowest:
-        slow_table = Table("Slow Step", "Duration", "Detail")
-        for item in slowest[:5]:
-            duration = float(item.get("duration_ms") or 0)
-            metadata = item.get("metadata") or {}
-            detail = str(metadata.get("description") or metadata.get("path") or metadata.get("tool") or "")[:80]
-            slow_table.add_row(str(item.get("name") or ""), f"{duration / 1000:.1f}s", detail)
-        console.print(slow_table)
-
-
-def _print_recent_insights(data: dict) -> None:
-    totals = data.get("totals") or {}
-    console.print(
-        Panel(
-            "\n".join(
-                [
-                    f"Sessions: {totals.get('sessions', 0)}",
-                    f"Turns: {totals.get('turns', 0)}",
-                    f"Tool calls: {totals.get('tool_calls', 0)}",
-                    f"Tokens: {totals.get('total_tokens', 0)}",
-                    f"Cached tokens: {totals.get('cached_tokens', 0)}",
-                    f"Estimated cost: ${float(totals.get('cost_usd') or 0):.6f}",
-                ]
-            ),
-            title="Recent Session Insights",
-        )
-    )
-    rows = data.get("sessions") or []
-    if rows:
-        table = Table("Session Log", "Turns", "Tools", "Tokens", "Slowest")
-        for item in rows:
-            slowest = (item.get("slowest") or [{}])[0]
-            table.add_row(
-                Path(str(item.get("path") or "")).name,
-                str(item.get("turns", 0)),
-                str(item.get("tool_calls", 0)),
-                str(item.get("total_tokens", 0)),
-                str(slowest.get("name") or ""),
-            )
-        console.print(table)
-
-
-def _print_session_peers(peers: list[dict]) -> None:
-    if not peers:
-        console.print("[dim]No other live local sessions.[/dim]")
-        return
-    table = Table("Session ID", "Name", "Project", "Policy", "PID", "State")
-    for peer in peers:
-        table.add_row(
-            str(peer.get("session_id") or ""),
-            str(peer.get("name") or ""),
-            str(peer.get("project") or ""),
-            str(peer.get("policy") or ""),
-            str(peer.get("pid") or ""),
-            "live" if peer.get("live", True) else "stale",
-        )
-    console.print(table)
-
-
-def _print_session_receipt(result: dict) -> None:
-    color = "green" if result.get("ok") else "yellow"
-    console.print(
-        f"[{color}]{result.get('status', 'unknown')}[/{color}] "
-        f"message {result.get('message_id', '')} to {result.get('target_id', '')}"
-    )
-    if result.get("reason"):
-        console.print(f"[dim]{result['reason']}[/dim]")
-    if result.get("cross_project"):
-        console.print(
-            f"[yellow]Cross-project delivery:[/yellow] "
-            f"{result.get('source_project')} -> {result.get('target_project')}. "
-            "Check worktree ownership before editing shared files."
-        )
-
-
-def _print_session_inbox(items: list[dict], *, held: bool = False) -> None:
-    if not items:
-        label = "held" if held else "accepted"
-        console.print(f"[dim]No {label} peer messages.[/dim]")
-        return
-    table = Table("Message ID", "From", "Project", "Received", "Message")
-    for item in items:
-        table.add_row(
-            str(item.get("message_id") or ""),
-            str(item.get("sender_name") or item.get("sender_id") or ""),
-            str(item.get("project") or ""),
-            str(item.get("received_at") or "")[:19],
-            str(item.get("message") or "")[:100],
-        )
-    console.print(table)
-
-
-def _print_session_receipts(items: list[dict]) -> None:
-    if not items:
-        console.print("[dim]No delivery receipts for this session.[/dim]")
-        return
-    table = Table("Time", "Message ID", "Target", "Status", "Reason")
-    for item in items:
-        table.add_row(
-            str(item.get("ts") or "")[:19],
-            str(item.get("message_id") or ""),
-            str(item.get("target_id") or ""),
-            str(item.get("status") or ""),
-            str(item.get("reason") or "")[:80],
-        )
-    console.print(table)
-
-
 def _write_research_report(result: dict, *, out: str | None = None) -> Path:
     path = Path(out).expanduser() if out else Path.cwd() / f"{_slugify_filename(str(result.get('topic') or 'research'))}.md"
     path = path.resolve(strict=False)
@@ -1057,9 +928,13 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
         return True
 
     if command == "/mode":
-        modes = ("silent", "balanced", "paranoid", "yolo")
+        from magent.permissions import PERMISSION_MODES
+
+        modes = tuple(sorted(PERMISSION_MODES))
         if arg in modes:
-            session.config._user.setdefault("permissions", {})["mode"] = arg
+            # Persisted, like `magent mode`. This used to change the in-memory
+            # profile only, so the setting vanished with the session.
+            session.config.set_permission_mode(arg)
             session.tools.permission_mode = arg
             console.print(f"[green]Permission mode set to [bold]{arg}[/bold][/green]")
         else:
@@ -1621,13 +1496,22 @@ def plan_sandbox_cmd(
     dry_run: bool = typer.Option(False, "--dry-run"),
     keep: bool = typer.Option(False, "--keep"),
     image: str = typer.Option("python:3.12", "--image"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ):
     """Run or preview a saved plan in an isolated sandbox."""
+    from magent.cli.command_context import confirm_or_exit
     from magent.sandbox import execute_plan_sandbox, sandbox_plan_preview
 
     if dry_run:
         console.print_json(data=sandbox_plan_preview(_store(), plan_id, mode=mode))
         return
+
+    # `plan-apply --sandbox` asks before running plan operations; this ran the
+    # very same operations without asking.
+    confirm_or_exit(
+        f"Run plan {plan_id} in a {mode} sandbox (executes its commands)?",
+        assume_yes=yes,
+    )
     console.print_json(data=execute_plan_sandbox(_store(), plan_id, mode=mode, run_checks=run_checks, keep=keep, image=image))
 
 
@@ -2210,7 +2094,7 @@ def context_map_cmd(
     """Show memory, workbench, and project state for the current project."""
     from magent.context import context_map
 
-    mgr, _ = _get_memory_manager()
+    mgr, _ = command_context._get_memory_manager()
     data = context_map(_store(), project=project, memory_manager=mgr, query=query)
     if json_output:
         console.print_json(data=data)
@@ -2228,7 +2112,7 @@ def context_audit_cmd(
     from magent.context import context_map
     from magent.daily_driver import context_audit
 
-    mgr, _ = _get_memory_manager()
+    mgr, _ = command_context._get_memory_manager()
     data = context_audit(context_map(_store(), project=project, memory_manager=mgr, query=query))
     if json_output:
         console.print_json(data=data)
@@ -2237,133 +2121,6 @@ def context_audit_cmd(
     console.print("[bold]Context Hygiene Suggestions[/bold]")
     for item in data.get("suggestions", []):
         console.print(f"- {item}")
-
-
-def _print_context_map(data: dict) -> None:
-    console.print(Panel.fit(f"[bold]{data.get('project', '')}[/bold]", title="Context Map"))
-    workspace = data.get("workspace") or {}
-    doctor = data.get("project_doctor") or {}
-    memory = data.get("memory") or {}
-    table = Table("Area", "Signal")
-    table.add_row("Git", f"{len(workspace.get('git_status') or [])} status entries")
-    table.add_row("Plans", str(workspace.get("pending_plans", 0)))
-    table.add_row("Patches", str(workspace.get("patches", 0)))
-    table.add_row("Checkpoints", str(workspace.get("checkpoint_sessions", 0)))
-    missing = doctor.get("missing") or []
-    table.add_row("Project doctor", "ok" if doctor.get("ok") else f"missing: {', '.join(missing[:4]) or 'none'}")
-    stats = memory.get("stats") or {}
-    table.add_row("Memory", f"{stats.get('nodes', 0)} nodes" if memory.get("available") else "unavailable")
-    console.print(table)
-
-    plans = (data.get("active_workbench") or {}).get("plans") or []
-    if plans:
-        plan_table = Table("ID", "Status", "Mode", "Goal")
-        for plan in plans[:5]:
-            plan_table.add_row(
-                plan.get("id", ""),
-                plan.get("status", ""),
-                plan.get("mode", "draft"),
-                str(plan.get("goal", ""))[:80],
-            )
-        console.print(plan_table)
-
-    candidates = data.get("promotion_candidates") or []
-    if candidates:
-        cand_table = Table("Memory Candidate", "Source", "Title")
-        for item in candidates[:8]:
-            cand_table.add_row(
-                item.get("id", ""),
-                item.get("source", ""),
-                str(item.get("title", ""))[:80],
-            )
-        console.print(cand_table)
-    else:
-        console.print("[dim]No high-value memory promotion candidates right now.[/dim]")
-
-    recall = (memory.get("recall") or "").strip()
-    if recall:
-        console.print(Panel(recall, title="Memory Recall"))
-
-
-def _print_jobs_summary(data: dict) -> None:
-    counts = data.get("counts") or {}
-    title = ", ".join(f"{key}: {value}" for key, value in sorted(counts.items())) or "no jobs"
-    console.print(Panel.fit(title, title="Background Jobs"))
-    table = Table("ID", "Status", "Kind", "Project", "Payload")
-    for item in (data.get("jobs") or [])[:20]:
-        payload = item.get("payload") or {}
-        table.add_row(
-            item.get("id", ""),
-            item.get("status", ""),
-            item.get("kind", ""),
-            Path(item.get("project", ".")).name,
-            json.dumps(payload)[:90],
-        )
-    console.print(table)
-
-
-def _print_orchestrated_preview(data: dict) -> None:
-    plan = data.get("plan") or {}
-    orchestration = data.get("orchestration") or {}
-    console.print(Panel(plan.get("plan_markdown", ""), title=f"Orchestrated Plan {plan.get('id', '')}"))
-    table = Table("Step", "Status", "Title")
-    for item in orchestration.get("step_statuses") or []:
-        table.add_row(str(item.get("step", "")), str(item.get("status", "")), str(item.get("title", ""))[:80])
-    console.print(table)
-    console.print(Panel(data.get("packet", ""), title=f"Next Step Packet {data.get('next_step')}"))
-
-
-def _print_orchestrated_run_result(data: dict) -> None:
-    plan = data.get("plan") or {}
-    orchestration = data.get("orchestration") or {}
-    status = data.get("status") or orchestration.get("status") or "unknown"
-    console.print(Panel.fit(f"[bold]{plan.get('id', '')}[/bold] {status}", title="Orchestrated Goal"))
-    table = Table("Step", "Status", "Title", "Evidence")
-    summaries = {int(item.get("step") or 0): item for item in data.get("completed_summaries") or []}
-    for item in orchestration.get("step_statuses") or []:
-        step_no = int(item.get("step") or 0)
-        summary = summaries.get(step_no, {})
-        evidence = summary.get("error") or summary.get("summary") or ""
-        table.add_row(
-            str(step_no),
-            str(item.get("status", "")),
-            str(item.get("title", ""))[:60],
-            str(evidence).replace("\n", " ")[:90],
-        )
-    console.print(table)
-    if not data.get("ok"):
-        console.print("[yellow]Resume with `magent goal-run <plan-id>` or retry a failed step with `magent goal-run <plan-id> --retry-step N`.[/yellow]")
-
-
-def _print_config_center(config, provider_display: str = "") -> None:
-    console.print(Panel.fit("[bold]MagAgent Config[/bold]", title="Control Center"))
-    table = Table("Area", "Current", "Command")
-    table.add_row(
-        "Provider",
-        f"{config.default_provider}/{config.default_model}",
-        "magent provider wizard",
-    )
-    table.add_row(
-        "Model roles",
-        ", ".join(f"{role}:{value or '-'}" for role, value in config.model_roles.items()),
-        "magent model wizard",
-    )
-    table.add_row("Permissions", config.permission_mode, "magent permission set <mode>")
-    table.add_row(
-        "Memory",
-        f"write every {config.write_every_n_turns} turns",
-        "magent memory configure",
-    )
-    table.add_row(
-        "Subagents",
-        f"max {config.max_subagents}, parallel {config.max_parallel_subagents}",
-        "magent subagent wizard",
-    )
-    table.add_row("Tools", "capability packs", "magent tools list")
-    table.add_row("Context", "audit active context", "magent context audit")
-    if provider_display:
-        table.add_row("Session provider", provider_display, "magent model")
-    console.print(table)
 
 
 @recipe_app.command("list")
@@ -3569,637 +3326,16 @@ def checkpoint_session_restore_cmd(
     console.print_json(data=checkpoint_session_restore(_store(), session_id))
 
 
-@memory_app.command("review")
-def memory_review_cmd(diff: bool = typer.Option(False, "--diff")):
-    """Show pending git changes in the current user's memory graph."""
-    from magent.workbench import memory_pending_summary
-
-    console.print_json(data=memory_pending_summary(_require_user(), include_diff=diff))
-
-
-@memory_app.command("approve")
-def memory_approve_cmd(message: str = typer.Option("Approve MagAgent memory updates", "--message", "-m")):
-    """Commit pending memory graph changes for the current user."""
-    from magent.workbench import memory_approve
-
-    console.print_json(data=memory_approve(_require_user(), message=message))
-
-
-@memory_app.command("promote")
-def memory_promote_cmd(
-    source: str | None = typer.Argument(None),
-    source_id: str | None = typer.Argument(None),
-    project: str = typer.Option(".", "--project", "-p"),
-    all_candidates: bool = typer.Option(False, "--all"),
-    limit: int = typer.Option(20, "--limit"),
-):
-    """Promote workbench facts into durable MagGraph memory."""
-    from magent.context import promote_all_candidates, promote_candidate, promotion_candidates
-
-    mgr, _ = _get_memory_manager()
-    store = _store()
-    if all_candidates:
-        console.print_json(data=promote_all_candidates(store, mgr, project=project, limit=limit))
-        return
-    if source and source_id:
-        console.print_json(data=promote_candidate(store, mgr, source, source_id, project=project))
-        return
-    console.print_json(data={"ok": True, "candidates": promotion_candidates(store, project, limit=limit)})
-
-
-@memory_app.command("inbox")
-def memory_inbox_cmd(
-    action: str = typer.Argument("list", help="list, accept, reject, or edit"),
-    candidate_id: str | None = typer.Argument(None),
-    project: str = typer.Option(".", "--project", "-p"),
-    limit: int = typer.Option(30, "--limit", "-n"),
-    reason: str = typer.Option("", "--reason"),
-    title: str = typer.Option("", "--title"),
-    body: str = typer.Option("", "--body"),
-    force: bool = typer.Option(False, "--force", help="Accept after reviewing a duplicate/conflict warning."),
-    json_output: bool = typer.Option(True, "--json/--no-json", help="Emit JSON output."),
-):
-    """Review, accept, reject, or edit pending memory candidates."""
-    from magent.memory_inbox import accept_candidate, edit_candidate, memory_inbox, reject_candidate
-
-    store = _store()
-    normalized = action.lower()
-    if normalized == "list":
-        data = memory_inbox(store, project=project, limit=limit)
-        if json_output:
-            console.print_json(data=data)
-        else:
-            for item in data.get("candidates", []):
-                console.print(f"{item.get('id', '')}\t{item.get('status', 'pending')}\t{item.get('title', '')}")
-        return
-    if not candidate_id:
-        console.print_json(data={"ok": False, "error": "candidate_id is required"})
-        raise typer.Exit(1)
-    if normalized == "accept":
-        mgr, _ = _get_memory_manager()
-        result = accept_candidate(store, mgr, candidate_id, project=project, force=force)
-        console.print_json(data=result)
-        if not result.get("ok"):
-            raise typer.Exit(1)
-        return
-    if normalized == "reject":
-        console.print_json(data=reject_candidate(store, candidate_id, reason=reason))
-        return
-    if normalized == "edit":
-        if not body:
-            console.print_json(data={"ok": False, "error": "--body is required for edit"})
-            raise typer.Exit(1)
-        console.print_json(data=edit_candidate(store, candidate_id, body=body, title=title))
-        return
-    console.print_json(data={"ok": False, "error": f"Unknown inbox action: {action}"})
-    raise typer.Exit(1)
-
-
-@memory_app.command("quality")
-def memory_quality_cmd():
-    """Report duplicate or suppressed memory nodes."""
-    mgr, _ = _get_memory_manager()
-    console.print_json(data=mgr.quality_report())
-
-
-@memory_app.command("merge")
-def memory_merge_cmd(
-    target_id: str = typer.Argument(...),
-    source_id: str = typer.Argument(...),
-    preview: bool = typer.Option(False, "--preview"),
-):
-    """Merge source memory node into target and delete source."""
-    mgr, _ = _get_memory_manager()
-    data = mgr.merge_preview(target_id, source_id) if preview else mgr.merge_nodes(target_id, source_id)
-    console.print_json(data=data)
-
-
-@memory_app.command("suppress")
-def memory_suppress_cmd(
-    node_id: str = typer.Argument(...),
-    reason: str = typer.Option("", "--reason", "-r"),
-):
-    """Mark a memory node as suppressed."""
-    mgr, _ = _get_memory_manager()
-    console.print_json(data=mgr.suppress_node(node_id, reason=reason))
-
-
-@memory_app.command("unsuppress")
-def memory_unsuppress_cmd(node_id: str = typer.Argument(...)):
-    """Remove suppressed markers from a memory node."""
-    mgr, _ = _get_memory_manager()
-    console.print_json(data=mgr.unsuppress_node(node_id))
-
-
-# ─────────────────────────────────────────────
-# User subcommands
-# ─────────────────────────────────────────────
-
-
-@user_app.command("create")
-def user_create(name: str = typer.Argument(..., help="Username to create")):
-    """Create a new user profile."""
-    if user_exists(name):
-        console.print(f"[yellow]User '{name}' already exists.[/yellow]")
-        raise typer.Exit(1)
-    create_user(name)
-    console.print(f"[green]✓ Created user [bold]{name}[/bold][/green]")
-    if not get_current_user():
-        set_current_user(name)
-        console.print(f"[dim]Switched to user: {name}[/dim]")
-
-
-@user_app.command("switch")
-def user_switch(name: str = typer.Argument(..., help="Username to switch to")):
-    """Switch the active user."""
-    if not user_exists(name):
-        console.print(f"[red]User '{name}' does not exist.[/red]")
-        raise typer.Exit(1)
-    set_current_user(name)
-    console.print(f"[green]✓ Switched to user [bold]{name}[/bold][/green]")
-
-
-@user_app.command("delete")
-def user_delete(
-    name: str = typer.Argument(..., help="Username to delete"),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
-):
-    """Delete a user and their memory graph."""
-    if not user_exists(name):
-        console.print(f"[red]User '{name}' does not exist.[/red]")
-        raise typer.Exit(1)
-    if not yes:
-        confirm = Prompt.ask(
-            f"[red]Delete user '{name}' and ALL their memory? Type 'yes' to confirm[/red]",
-            default="no",
-        )
-        if confirm.lower() != "yes":
-            console.print("[dim]Cancelled.[/dim]")
-            raise typer.Exit()
-    delete_user(name)
-    console.print(f"[green]✓ Deleted user [bold]{name}[/bold][/green]")
-
-
-@user_app.command("list")
-def user_list():
-    """List all user profiles."""
-    users = list_users()
-    current = get_current_user()
-    if not users:
-        console.print("[dim]No users found. Run [bold]magent setup[/bold] to get started.[/dim]")
-        return
-    t = Table("User", "Status")
-    for u in users:
-        marker = "[bold green]● active[/bold green]" if u == current else "[dim]○[/dim]"
-        t.add_row(u, marker)
-    console.print(t)
-
-
-@user_app.command("current")
-def user_current():
-    """Show the currently active user."""
-    user = get_current_user()
-    if user:
-        console.print(f"[bold]{user}[/bold]")
-    else:
-        console.print("[dim]No active user.[/dim]")
-
-
-# ─────────────────────────────────────────────
-# Memory subcommands
-# ─────────────────────────────────────────────
-
-
-def _get_memory_manager():
-    username = _require_user()
-    memory_dir = user_memory_dir(username)
-    config = load_config(username)
-    from magent.memory import MemoryManager
-
-    return (
-        MemoryManager(
-            memory_dir,
-            budget_tokens=config.memory_budget_tokens,
-            max_node_tokens=config.recall_body_tokens,
-            username=username,
-            semantic_enabled=config.semantic_memory_enabled,
-            semantic_provider=config.semantic_memory_provider,
-            semantic_model=config.semantic_memory_model,
-        ),
-        username,
-    )
-
-
-@memory_app.command("stats")
-def memory_stats(
-    user: str | None = typer.Option(None, "--user", "-u", help="Target user (default: current)"),
-):
-    """Show memory graph statistics."""
-    username = user or _require_user()
-    if not user_exists(username):
-        console.print(f"[red]User '{username}' not found.[/red]")
-        raise typer.Exit(1)
-    memory_dir = user_memory_dir(username)
-    from magent.memory import MemoryManager
-
-    mgr = MemoryManager(memory_dir)
-    stats = mgr.stats()
-    _print_memory_stats(stats, username)
-
-
-def _print_memory_stats(stats: dict, username: str):
-    from magent.utils import human_bytes
-
-    t = Table(show_header=False, box=None, padding=(0, 2))
-    t.add_column("Key", style="dim")
-    t.add_column("Value", style="bold")
-
-    t.add_row("Nodes", str(stats.get("nodes", 0)))
-    t.add_row("Edges", str(stats.get("edges_total", 0)))
-
-    nt = stats.get("node_types", {})
-    for ntype, count in sorted(nt.items(), key=lambda x: -x[1]):
-        t.add_row(f"  {ntype}", str(count))
-
-    t.add_row("", "")
-    t.add_row("Graph disk", human_bytes(stats.get("disk_bytes", 0)))
-    t.add_row("Avg node size", human_bytes(stats.get("avg_node_bytes", 0)))
-    t.add_row("Largest node", human_bytes(stats.get("largest_node_bytes", 0)))
-    t.add_row("Git commits", str(stats.get("git_commits", "n/a")))
-    t.add_row("Last modified", str(stats.get("last_modified", "n/a")))
-
-    console.print(Panel(t, title=f"[bold cyan]Memory Graph — {username}[/bold cyan]"))
-
-
-@memory_app.command("graph")
-def memory_graph_cmd(
-    query: str = typer.Option("", "--query", "-q", help="Optional graph search query."),
-    limit: int = typer.Option(100, "--limit", "-n"),
-    user: str | None = typer.Option(None, "--user", "-u"),
-):
-    """Return a compact JSON memory graph view for desktop integrations."""
-    from magent.desktop_api import memory_graph
-
-    console.print_json(data=memory_graph(user or _require_user(), query=query, limit=limit))
-
-
-@memory_app.command("node")
-def memory_node_cmd(
-    node_id: str = typer.Argument(...),
-    user: str | None = typer.Option(None, "--user", "-u"),
-):
-    """Return one memory node as JSON with nearby traversal context."""
-    from magent.desktop_api import memory_node
-
-    result = memory_node(user or _require_user(), node_id)
-    console.print_json(data=result)
-    if not result.get("ok"):
-        raise typer.Exit(1)
-
-
-@memory_app.command("update-node")
-def memory_update_node_cmd(
-    node_id: str = typer.Argument(...),
-    body: str = typer.Option("", "--body", help="Replacement Markdown body."),
-    body_file: str = typer.Option("", "--body-file", help="Read replacement Markdown body from a file."),
-    links_json: str = typer.Option("", "--links-json", help="Optional JSON array of links to preserve/add."),
-    preview: bool = typer.Option(False, "--preview", help="Preview hashes and size changes without writing."),
-    user: str | None = typer.Option(None, "--user", "-u"),
-):
-    """Update a memory node body for desktop integrations."""
-    from pathlib import Path
-
-    from magent.desktop_api import memory_update_node, parse_json_value
-
-    resolved_body: str | None = body if body else None
-    if body_file:
-        resolved_body = Path(body_file).read_text(encoding="utf-8")
-    links = parse_json_value(links_json) if links_json else None
-    if links is not None and not isinstance(links, list):
-        console.print_json(data={"ok": False, "error": "--links-json must be a JSON array"})
-        raise typer.Exit(1)
-    result = memory_update_node(
-        user or _require_user(),
-        node_id,
-        body=resolved_body,
-        links=links,
-        preview=preview,
-    )
-    console.print_json(data=result)
-    if not result.get("ok"):
-        raise typer.Exit(1)
-
-
-@memory_app.command("search")
-def memory_search(
-    query: str = typer.Argument(..., help="Search query"),
-    limit: int = typer.Option(10, "--limit", "-n"),
-    mode: str = typer.Option("hybrid", "--mode", help="keyword, semantic, or hybrid"),
-    keyword: bool = typer.Option(False, "--keyword", help="Force keyword search"),
-    semantic: bool = typer.Option(False, "--semantic", help="Force semantic search"),
-):
-    """Search the memory graph."""
-    mgr, username = _get_memory_manager()
-    if keyword:
-        mode = "keyword"
-    if semantic:
-        mode = "semantic"
-    results = mgr.search(query, max_results=limit, mode=mode)
-    if not results:
-        console.print(f"[dim]No results for '{query}'[/dim]")
-        return
-    t = Table("ID", "Type", "Score", "Snippet")
-    for r in results:
-        t.add_row(
-            r["id"],
-            r.get("type", "?"),
-            str(r.get("score", "")),
-            r.get("snippet", "")[:90],
-        )
-    console.print(t)
-
-
-@memory_app.command("batch")
-def memory_batch_cmd(
-    operations_json: str = typer.Option("", "--operations-json", help="JSON array of reviewed operations."),
-    operations_file: str = typer.Option("", "--operations-file", help="Read operations JSON from a file."),
-    preview: bool = typer.Option(False, "--preview", help="Validate without changing memory."),
-    user: str | None = typer.Option(None, "--user", "-u"),
-):
-    """Preview or apply reviewed memory update/suppress/merge operations."""
-    from pathlib import Path
-
-    from magent.desktop_api import memory_apply_batch, parse_json_value
-
-    raw = Path(operations_file).read_text(encoding="utf-8") if operations_file else operations_json
-    operations = parse_json_value(raw) if raw else None
-    if not isinstance(operations, list) or not all(isinstance(item, dict) for item in operations):
-        console.print_json(data={"ok": False, "error": "Provide a JSON array of operation objects"})
-        raise typer.Exit(1)
-    result = memory_apply_batch(user or _require_user(), operations, preview=preview)
-    console.print_json(data=result)
-    if not result.get("ok"):
-        raise typer.Exit(1)
-
-
-@memory_app.command("index")
-def memory_index_cmd():
-    """Build or update the semantic memory search index."""
-    mgr, _ = _get_memory_manager()
-    with console.status("[bold]Indexing semantic memory...[/bold]"):
-        result = mgr.semantic_index()
-    console.print_json(data=result)
-
-
-@memory_semantic_app.command("status")
-def memory_semantic_status_cmd():
-    """Show semantic memory sidecar status."""
-    mgr, _ = _get_memory_manager()
-    console.print_json(data=mgr.semantic_status())
-
-
-@memory_semantic_app.command("reset")
-def memory_semantic_reset_cmd(yes: bool = typer.Option(False, "--yes", "-y")):
-    """Reset the semantic memory sidecar index."""
-    mgr, _ = _get_memory_manager()
-    if not yes:
-        confirm = Prompt.ask("Reset semantic memory index?", choices=["y", "n"], default="n")
-        if confirm != "y":
-            raise typer.Exit()
-    console.print_json(data=mgr.semantic_reset())
-
-
-@memory_app.command("show")
-def memory_show(node_id: str = typer.Argument(..., help="Node ID to display")):
-    """Show a specific memory node."""
-    mgr, _ = _get_memory_manager()
-    node = mgr.read_node(node_id)
-    if not node:
-        console.print(f"[red]Node '{node_id}' not found.[/red]")
-        raise typer.Exit(1)
-    console.print(
-        Panel(
-            f"[bold]Type:[/bold] {node['type']}\n"
-            f"[bold]Links:[/bold] {', '.join(node.get('links') or []) or 'none'}\n\n"
-            f"{node['body']}",
-            title=f"[bold cyan]{node_id}[/bold cyan]",
-        )
-    )
-
-
-@memory_app.command("traverse")
-def memory_traverse(
-    node_id: str = typer.Argument(...),
-    depth: int = typer.Option(2, "--depth", "-d"),
-):
-    """Traverse the memory graph from a node."""
-    mgr, _ = _get_memory_manager()
-    report = mgr.traverse_node(node_id, depth=depth)
-    console.print(report or f"[dim]Node '{node_id}' not found or no connections.[/dim]")
-
-
-@memory_app.command("delete")
-def memory_delete(
-    node_id: str = typer.Argument(...),
-    yes: bool = typer.Option(False, "--yes", "-y"),
-):
-    """Delete a memory node."""
-    mgr, _ = _get_memory_manager()
-    if not yes:
-        confirm = Prompt.ask(f"Delete node '{node_id}'?", choices=["y", "n"], default="n")
-        if confirm != "y":
-            raise typer.Exit()
-    ok = mgr.delete_node(node_id)
-    if ok:
-        console.print(f"[green]✓ Deleted '{node_id}'[/green]")
-    else:
-        console.print(f"[red]Failed to delete '{node_id}'[/red]")
-
-
-@memory_app.command("export")
-def memory_export(
-    out: str | None = typer.Option(None, "--out", "-o"),
-    fmt: str = typer.Option("json", "--format", "-f"),
-):
-    """Export the memory graph to JSON."""
-    import json as json_mod
-
-    mgr, username = _get_memory_manager()
-    nodes = mgr.export_json()
-    data = json_mod.dumps(nodes, indent=2, default=str)
-    if out:
-        Path(out).write_text(data)
-        console.print(f"[green]✓ Exported {len(nodes)} nodes to {out}[/green]")
-    else:
-        console.print(data)
-
-
-@memory_app.command("reset")
-def memory_reset(yes: bool = typer.Option(False, "--yes", "-y")):
-    """Reset (delete) all memory nodes for the current user."""
-    username = _require_user()
-    if not yes:
-        confirm = Prompt.ask(
-            f"[red]Delete ALL memory for user '{username}'? Type 'yes'[/red]",
-            default="no",
-        )
-        if confirm.lower() != "yes":
-            raise typer.Exit()
-
-    memory_dir = user_memory_dir(username)
-    if memory_dir.exists():
-        # Remove all .md files but keep maggraph.toml
-        for f in memory_dir.rglob("*.md"):
-            f.unlink()
-    console.print(f"[green]✓ Memory cleared for '{username}'[/green]")
-
-
-@memory_app.command("log")
-def memory_log(
-    limit: int = typer.Option(20, "--limit", "-n", help="Max sessions to show"),
-    user: str | None = typer.Option(None, "--user", "-u"),
-):
-    """Show recent session logs."""
-    from magent.logging import list_session_logs
-    from magent.utils import human_bytes
-
-    # Filter first, then limit. Truncating to `limit` before filtering by user
-    # returned an empty table whenever the newest sessions belonged to someone
-    # else.
-    logs = list_session_logs(limit=limit if not user else max(limit * 10, 200))
-    if user:
-        logs = [entry for entry in logs if entry.get("user") == user][:limit]
-    if not logs:
-        console.print("[dim]No session logs found.[/dim]")
-        return
-
-    t = Table("Session", "User", "Started", "Status", "Events", "Size")
-    for entry in logs:
-        status = (
-            "[green]complete[/green]"
-            if entry.get("ended") != "active"
-            else "[yellow]active[/yellow]"
-        )
-        t.add_row(
-            entry["session"][:22],
-            entry.get("user", "?"),
-            entry.get("started", "?")[:19],
-            status,
-            str(entry.get("events", 0)),
-            human_bytes(entry.get("bytes", 0)),
-        )
-    console.print(t)
-
-
-@memory_app.command("ui")
-def memory_ui(
-    host: str = typer.Option("127.0.0.1", "--host", help="Loopback host to bind"),
-    port: int = typer.Option(8787, "--port", "-p", help="Port for the MagGraph UI"),
-):
-    """Open the embedded MagGraph web dashboard for the current user's memory graph."""
-    import shutil
-    import subprocess
-
-    username = _require_user()
-    memory_dir = user_memory_dir(username)
-    maggraph_bin = shutil.which("maggraph")
-    if not maggraph_bin:
-        console.print("[red]MagGraph CLI not found. Install it to use 'magent memory ui'.[/red]")
-        raise typer.Exit(1)
-
-    console.print(
-        f"[green]Starting MagGraph UI for '{username}' at http://{host}:{port}[/green]"
-    )
-    code = subprocess.run(
-        [
-            maggraph_bin,
-            "--config",
-            str(memory_dir / "maggraph.toml"),
-            "ui",
-            "--host",
-            host,
-            "--port",
-            str(port),
-        ]
-    ).returncode
-    raise typer.Exit(code)
-
-
-@memory_app.command("sync")
-def memory_sync(
-    action: str = typer.Argument(..., help="push|pull|status"),
-    message: str = typer.Option("MagAgent memory sync", "--message", "-m"),
-):
-    """Run MagGraph Git sync for the current user's memory graph."""
-    import shutil
-    import subprocess
-
-    valid = {"push", "pull", "status"}
-    if action not in valid:
-        console.print(f"[red]Invalid sync action '{action}'. Choose: {', '.join(sorted(valid))}[/red]")
-        raise typer.Exit(1)
-
-    username = _require_user()
-    memory_dir = user_memory_dir(username)
-    maggraph_bin = shutil.which("maggraph")
-    if not maggraph_bin:
-        console.print("[red]MagGraph CLI not found. Install it to use 'magent memory sync'.[/red]")
-        raise typer.Exit(1)
-
-    cmd = [maggraph_bin, "--config", str(memory_dir / "maggraph.toml"), "sync", action]
-    if action == "push":
-        cmd += ["--message", message]
-    raise typer.Exit(subprocess.run(cmd).returncode)
-
-
-@memory_app.command("configure")
-def memory_configure_cmd(
-    mode: str = typer.Option("", "--mode", help="auto, inbox-first, or manual"),
-    semantic: bool | None = typer.Option(None, "--semantic/--no-semantic"),
-    write_every: int | None = typer.Option(None, "--write-every"),
-    extraction_provider: str = typer.Option("", "--extraction-provider"),
-    extraction_model: str = typer.Option("", "--extraction-model"),
-):
-    """Configure memory behavior without editing profile.toml."""
-    from magent.config_ux import configure_memory
-
-    console.print_json(
-        data=configure_memory(
-            _require_user(),
-            mode=mode,
-            semantic=semantic,
-            write_every=write_every,
-            extraction_provider=extraction_provider,
-            extraction_model=extraction_model,
-        )
-    )
-
-
-@memory_app.command("wizard")
-def memory_wizard_cmd():
-    """Interactively configure memory write and semantic recall settings."""
-    from magent.config_ux import configure_memory
-
-    mode = Prompt.ask("Memory mode", choices=["auto", "inbox-first", "manual"], default="inbox-first")
-    semantic = Confirm.ask("Enable semantic memory search?", default=True)
-    write_every = int(Prompt.ask("Write/check memory every N turns", default="3"))
-    extraction_provider = Prompt.ask("Extraction provider (blank keeps current)", default="")
-    extraction_model = Prompt.ask("Extraction model (blank keeps current)", default="")
-    console.print_json(
-        data=configure_memory(
-            _require_user(),
-            mode=mode,
-            semantic=semantic,
-            write_every=write_every,
-            extraction_provider=extraction_provider,
-            extraction_model=extraction_model,
-        )
-    )
-
-
-# ─────────────────────────────────────────────
-# Top-level commands
-# ─────────────────────────────────────────────
+register_memory_commands(
+    memory_app,
+    memory_semantic_app,
+    user_app,
+    # Late-bound on purpose: these resolve from this module's globals on each
+    # call, so patching `cli_main._store` still reaches the extracted commands.
+    store=lambda: _store(),
+    require_user=lambda: _require_user(),
+    get_memory_manager=lambda: command_context._get_memory_manager(),
+)
 
 
 @app.command("setup", rich_help_panel="Start Here")

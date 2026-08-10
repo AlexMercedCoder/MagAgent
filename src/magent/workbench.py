@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import contextlib
 import csv
 import difflib
 import hashlib
@@ -14,6 +15,7 @@ import shutil
 import sqlite3
 import subprocess
 import threading
+import time
 import tomllib
 import urllib.parse
 import webbrowser
@@ -26,6 +28,7 @@ from typing import Any
 from magent import workbench_store as _workbench_store
 from magent.config import LOGS_DIR, USERS_DIR, user_memory_dir
 from magent.project_scan import ignored_path, iter_project_files
+from magent.subprocess_util import run_tracked_sync
 from magent.tokens import estimate_tokens
 from magent.workbench_store import now_iso
 
@@ -581,9 +584,13 @@ def review_summary(root: str | Path, base: str = "HEAD") -> dict[str, Any]:
         )
     categories = Counter(item.get("category", "general") for item in findings)
     files = _run_git(root, ["diff", "--name-only", base, "--"]).splitlines()
+    # One map for the whole review. `related_tests` rebuilds it from a
+    # 500x2000-file scan, and this called it once per changed file.
+    root_path = Path(root).resolve()
+    mapping = test_map(root_path) if files else {}
     file_groups = {
         file: {
-            "related_tests": related_tests(root, file),
+            "related_tests": mapping.get(_project_relative_path(root_path, file), []),
             "risk": _file_risk(file),
         }
         for file in files
@@ -730,8 +737,25 @@ def related_code(store: WorkbenchStore, root: str | Path, file: str) -> dict[str
     return {"root": root_str, "file": rel, "tests": tests, "related": sorted(set(import_peers + tests))}
 
 
-def test_map(root: str | Path) -> dict[str, list[str]]:
+_TEST_MAP_CACHE: dict[str, tuple[float, dict[str, list[str]]]] = {}
+_TEST_MAP_TTL_SECONDS = 30.0
+
+
+def test_map(root: str | Path, *, refresh: bool = False) -> dict[str, list[str]]:
+    """Map source files to the tests that appear to cover them.
+
+    Cached briefly: the scan walks up to 500 test files against 2,000 sources,
+    and several callers ask for it repeatedly within one command.
+    """
     root_path = Path(root).resolve()
+    cache_key = str(root_path)
+    cached = _TEST_MAP_CACHE.get(cache_key)
+    if cached and not refresh and time.monotonic() - cached[0] < _TEST_MAP_TTL_SECONDS:
+        return cached[1]
+    return _build_test_map(root_path, cache_key)
+
+
+def _build_test_map(root_path: Path, cache_key: str) -> dict[str, list[str]]:
     test_patterns = ("test_*.py", "*_test.py", "*.test.js", "*.test.ts", "*_test.go", "*_test.rs")
     tests = []
     seen_tests = set()
@@ -758,6 +782,7 @@ def test_map(root: str | Path) -> dict[str, list[str]]:
                 candidates.append(test.relative_to(root_path).as_posix())
         if candidates:
             mapping[rel] = sorted(set(candidates))
+    _TEST_MAP_CACHE[cache_key] = (time.monotonic(), mapping)
     return mapping
 
 
@@ -1394,55 +1419,126 @@ def session_timeline(session_id: str | None = None, limit: int = 80) -> list[dic
     return events
 
 
+# Per-file usage rollups, keyed on (path, mtime, size). usage_stats is called
+# by `stats`, `cache status` and the dashboard export, and used to re-parse
+# every session JSONL from scratch on each call.
+_USAGE_ROLLUPS: dict[str, tuple[float, int, dict[str, Any]]] = {}
+
+_EMPTY_ROLLUP: dict[str, Any] = {
+    "events": 0,
+    "approx_tokens": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0,
+    "cached_tokens": 0,
+    "cache_write_tokens": 0,
+    "cache_miss_tokens": 0,
+    "cost_usd": 0.0,
+    "pruned_results": 0,
+    "pruned_tokens_saved": 0,
+}
+
+
+def _parse_usage_log(path: Path) -> dict[str, Any]:
+    """Aggregate one session log. Corrupt lines are skipped, not fatal."""
+    rollup: dict[str, Any] = {**_EMPTY_ROLLUP, "tools": Counter()}
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return rollup
+
+    for line in text.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        rollup["events"] += 1
+        rollup["approx_tokens"] += estimate_tokens(json.dumps(event))
+        kind = event.get("event")
+        if kind == "tool_call":
+            rollup["tools"][event.get("tool", "?")] += 1
+        elif kind == "token_usage":
+            rollup["prompt_tokens"] += int(event.get("prompt_tokens") or 0)
+            rollup["completion_tokens"] += int(event.get("completion_tokens") or 0)
+            rollup["total_tokens"] += int(event.get("total_tokens") or 0)
+            rollup["cached_tokens"] += int(event.get("cached_tokens") or 0)
+            rollup["cache_write_tokens"] += int(event.get("cache_write_tokens") or 0)
+            rollup["cache_miss_tokens"] += int(event.get("cache_miss_tokens") or 0)
+            rollup["cost_usd"] += float(event.get("cost_usd") or 0.0)
+        elif kind == "context_pruned":
+            rollup["pruned_results"] += int(event.get("pruned") or 0)
+            rollup["pruned_tokens_saved"] += int(event.get("approx_tokens_saved") or 0)
+    return rollup
+
+
+def _usage_rollup(path: Path) -> dict[str, Any]:
+    """Cached rollup for one log. A finished log is only ever parsed once."""
+    try:
+        stat = path.stat()
+        signature = (stat.st_mtime, stat.st_size)
+    except OSError:
+        return {**_EMPTY_ROLLUP, "tools": Counter()}
+
+    cached = _USAGE_ROLLUPS.get(str(path))
+    if cached and (cached[0], cached[1]) == signature:
+        return cached[2]
+
+    rollup = _parse_usage_log(path)
+    _USAGE_ROLLUPS[str(path)] = (signature[0], signature[1], rollup)
+    return rollup
+
+
+def prune_session_logs(max_files: int = 500, max_age_days: int = 90) -> dict[str, Any]:
+    """Retire old session logs.
+
+    JSONL logs grew without bound, and everything that reads them pays for it.
+    """
+    if not LOGS_DIR.exists():
+        return {"ok": True, "removed": 0, "kept": 0}
+
+    logs = sorted(LOGS_DIR.glob("*.jsonl"), key=lambda item: item.stat().st_mtime, reverse=True)
+    cutoff = time.time() - max_age_days * 86400
+    removed = 0
+
+    for index, path in enumerate(logs):
+        too_many = index >= max_files
+        too_old = path.stat().st_mtime < cutoff
+        if not (too_many or too_old):
+            continue
+        with contextlib.suppress(OSError):
+            path.unlink()
+            _USAGE_ROLLUPS.pop(str(path), None)
+            removed += 1
+
+    return {"ok": True, "removed": removed, "kept": max(0, len(logs) - removed)}
+
+
 def usage_stats() -> dict[str, Any]:
+    """Aggregate token/cost/tool usage across every session log."""
+    totals = {**_EMPTY_ROLLUP}
+    tools: Counter[str] = Counter()
     sessions = 0
-    events = 0
-    approx_tokens = 0
-    prompt_tokens = 0
-    completion_tokens = 0
-    total_tokens = 0
-    cached_tokens = 0
-    cache_write_tokens = 0
-    cache_miss_tokens = 0
-    cost_usd = 0.0
-    pruned_results = 0
-    pruned_tokens_saved = 0
-    tools = Counter()
+
     for path in LOGS_DIR.glob("*.jsonl"):
         sessions += 1
-        for line in path.read_text(encoding="utf-8").splitlines():
-            try:
-                event = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            events += 1
-            approx_tokens += estimate_tokens(json.dumps(event))
-            if event.get("event") == "tool_call":
-                tools[event.get("tool", "?")] += 1
-            if event.get("event") == "token_usage":
-                prompt_tokens += int(event.get("prompt_tokens") or 0)
-                completion_tokens += int(event.get("completion_tokens") or 0)
-                total_tokens += int(event.get("total_tokens") or 0)
-                cached_tokens += int(event.get("cached_tokens") or 0)
-                cache_write_tokens += int(event.get("cache_write_tokens") or 0)
-                cache_miss_tokens += int(event.get("cache_miss_tokens") or 0)
-                cost_usd += float(event.get("cost_usd") or 0.0)
-            if event.get("event") == "context_pruned":
-                pruned_results += int(event.get("pruned") or 0)
-                pruned_tokens_saved += int(event.get("approx_tokens_saved") or 0)
+        rollup = _usage_rollup(path)
+        for key in _EMPTY_ROLLUP:
+            totals[key] += rollup[key]
+        tools.update(rollup["tools"])
+
     return {
         "sessions": sessions,
-        "events": events,
-        "approx_tokens_logged": approx_tokens,
-        "prompt_tokens": prompt_tokens,
-        "completion_tokens": completion_tokens,
-        "total_tokens": total_tokens,
-        "cached_tokens": cached_tokens,
-        "cache_write_tokens": cache_write_tokens,
-        "cache_miss_tokens": cache_miss_tokens,
-        "cost_usd": round(cost_usd, 6),
-        "pruned_results": pruned_results,
-        "pruned_tokens_saved": pruned_tokens_saved,
+        "events": totals["events"],
+        "approx_tokens_logged": totals["approx_tokens"],
+        "prompt_tokens": totals["prompt_tokens"],
+        "completion_tokens": totals["completion_tokens"],
+        "total_tokens": totals["total_tokens"],
+        "cached_tokens": totals["cached_tokens"],
+        "cache_write_tokens": totals["cache_write_tokens"],
+        "cache_miss_tokens": totals["cache_miss_tokens"],
+        "cost_usd": round(totals["cost_usd"], 6),
+        "pruned_results": totals["pruned_results"],
+        "pruned_tokens_saved": totals["pruned_tokens_saved"],
         "top_tools": tools.most_common(10),
     }
 
@@ -1562,33 +1658,8 @@ def _run_git_result(root: str | Path, args: list[str]) -> subprocess.CompletedPr
 
 
 def _run_command(root: str | Path, command: str, timeout: int = 60) -> dict[str, Any]:
-    # None of these runners caught TimeoutExpired, so `plan-apply --run-checks`,
-    # `release check` and `diagnostics` died with a raw traceback on a slow suite.
-    try:
-        result = subprocess.run(
-            command,
-            cwd=str(root),
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        return {
-            "command": command,
-            "ok": False,
-            "returncode": 124,
-            "stdout": "",
-            "stderr": f"timed out after {timeout}s",
-            "timed_out": True,
-        }
-    return {
-        "command": command,
-        "ok": result.returncode == 0,
-        "returncode": result.returncode,
-        "stdout": result.stdout[-4000:],
-        "stderr": result.stderr[-4000:],
-    }
+    """Run a shell check. Timeouts come back as results, not tracebacks."""
+    return dict(run_tracked_sync([command], cwd=root, timeout=timeout, shell=True))
 
 
 def _run_command_args(root: str | Path, cmd: list[str], timeout: int = 60) -> subprocess.CompletedProcess[str]:

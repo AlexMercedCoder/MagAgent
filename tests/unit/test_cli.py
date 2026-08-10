@@ -9,6 +9,7 @@ from magent import __version__ as magent_version
 from magent import agent as magent_agent
 from magent import config as magent_config
 from magent import config_ux, workbench, workbench_store
+from magent.cli import command_context
 from magent.cli import main as cli_main
 from magent.task_runtime import TaskRuntime
 from magent.workbench import WorkbenchStore
@@ -689,7 +690,7 @@ def test_cli_context_map_and_memory_promote(tmp_path: Path, monkeypatch) -> None
             return len(extracted)
 
     memory = FakeMemory()
-    monkeypatch.setattr(cli_main, "_get_memory_manager", lambda: (memory, "cli-test"))
+    monkeypatch.setattr(command_context, "_get_memory_manager", lambda: (memory, "cli-test"))
 
     mapped = runner.invoke(cli_main.app, ["context", "map", "--project", str(project), "--query", "release"])
     mapped_json = runner.invoke(cli_main.app, ["context", "map", "--project", str(project), "--query", "release", "--json"])
@@ -725,7 +726,7 @@ def test_cli_goal_jobs_statusline_config_and_context_audit(tmp_path: Path, monke
         def recall(self, query):
             return ""
 
-    monkeypatch.setattr(cli_main, "_get_memory_manager", lambda: (FakeMemory(), "cli-user"))
+    monkeypatch.setattr(command_context, "_get_memory_manager", lambda: (FakeMemory(), "cli-user"))
 
     goal = runner.invoke(
         cli_main.app,
@@ -907,7 +908,7 @@ def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch
             return len(extracted)
 
     memory = FakeMemory()
-    monkeypatch.setattr(cli_main, "_get_memory_manager", lambda: (memory, "cli-test"))
+    monkeypatch.setattr(command_context, "_get_memory_manager", lambda: (memory, "cli-test"))
 
     playbook = runner.invoke(cli_main.app, ["project", "playbook", "--path", str(project)])
     recipes = runner.invoke(cli_main.app, ["recipe", "list", "--project", str(project)])
@@ -1102,7 +1103,7 @@ def test_cli_memory_quality(monkeypatch) -> None:
         def unsuppress_node(self, node_id):
             return {"ok": True, "id": node_id}
 
-    monkeypatch.setattr(cli_main, "_get_memory_manager", lambda: (FakeManager(), object()))
+    monkeypatch.setattr(command_context, "_get_memory_manager", lambda: (FakeManager(), object()))
 
     result = runner.invoke(cli_main.app, ["memory", "quality"])
     preview = runner.invoke(cli_main.app, ["memory", "merge", "a", "b", "--preview"])

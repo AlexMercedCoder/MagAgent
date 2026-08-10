@@ -136,6 +136,8 @@ class ToolExecutor(
         self.activity_callback = activity_callback
         self._active_tasks: set[asyncio.Task[Any]] = set()
         self._active_processes: set[asyncio.subprocess.Process] = set()
+        # Audit trail of file access outside the project root.
+        self._out_of_project_access: list[dict[str, Any]] = []
 
     async def cancel_active(self) -> None:
         """Cancel active tool work and terminate subprocesses owned by this executor."""
@@ -172,7 +174,24 @@ class ToolExecutor(
         return (raw if raw.is_absolute() else root / raw).resolve(strict=False)
 
     def _path_tier(self, op: str, path: str) -> tuple[Path, RiskTier]:
-        return self._resolve_path(path), classify_file_op(op, path, self.cwd)
+        resolved = self._resolve_path(path)
+        tier = classify_file_op(op, path, self.cwd)
+        self._audit_out_of_project(op, resolved, tier)
+        return resolved, tier
+
+    def _audit_out_of_project(self, op: str, resolved: Path, tier: RiskTier) -> None:
+        """Record access outside the project even when it is auto-approved.
+
+        In `silent` mode tiers 0-2 auto-resolve, so reads, writes and deletes
+        anywhere on disk happened with no prompt *and* no audit line —
+        containment was only ever a tier, never a record.
+        """
+        root = Path(self.cwd).resolve()
+        if resolved == root or root in resolved.parents:
+            return
+        self._out_of_project_access.append({"op": op, "path": str(resolved), "tier": int(tier)})
+        if self.show_tool_calls:
+            console.print(f"  [yellow]⚠ {op} outside project:[/yellow] [dim]{resolved}[/dim]")
 
     def _log_tool(self, name: str, desc: str, tier: RiskTier) -> None:
         if self.show_tool_calls and tier > RiskTier.SILENT:

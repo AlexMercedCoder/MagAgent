@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -52,6 +53,10 @@ SOURCE_EXTS = {
 }
 
 
+# How long a computed fingerprint is trusted before re-statting the tree.
+FINGERPRINT_TTL_SECONDS = 5.0
+
+
 @dataclass
 class RepoMapEntry:
     path: str
@@ -72,6 +77,7 @@ class RepoMapCache:
         self.max_files = max_files
         self._entries: list[RepoMapEntry] = []
         self._fingerprint: tuple[int, int] | None = None
+        self._checked_at = 0.0
 
     def relevant_slice(self, query: str, max_tokens: int = 1200) -> str:
         if max_tokens <= 0:
@@ -105,6 +111,13 @@ class RepoMapCache:
         return truncate_to_tokens(rendered, max_tokens, "[...repo map truncated...]")
 
     def _refresh_if_needed(self) -> None:
+        # Fingerprinting stats up to 2,000 files, and it ran on every turn.
+        # A short TTL keeps the map fresh without paying that on each one.
+        now = time.monotonic()
+        if self._entries and now - self._checked_at < FINGERPRINT_TTL_SECONDS:
+            return
+        self._checked_at = now
+
         fingerprint = self._compute_fingerprint()
         if fingerprint == self._fingerprint:
             return

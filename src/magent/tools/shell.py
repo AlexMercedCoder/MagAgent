@@ -23,6 +23,7 @@ from magent.permissions import (
     shell_pattern_matches,
 )
 from magent.sandbox import execute_plan_sandbox, sandbox_plan_preview
+from magent.subprocess_util import run_tracked
 from magent.tools.types import ToolResult
 
 console = Console()
@@ -408,34 +409,19 @@ class ShellToolsMixin:
             else ["grep", "-rn", "--", pattern, str(abs_path)]
         )
         try:
-            proc = await _create_exec_process(*cmd, cwd=self.cwd)
-            self._active_processes.add(proc)
-            try:
-                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
-            except TimeoutError:
-                # Without this the child was orphaned on timeout.
-                with suppress(ProcessLookupError):
-                    proc.kill()
-                with suppress(Exception):
-                    await proc.wait()
-                return {"ok": False, "error": "Search timed out after 30s"}
-            except asyncio.CancelledError:
-                with suppress(ProcessLookupError):
-                    proc.kill()
-                with suppress(Exception):
-                    await proc.wait()
-                raise
-            finally:
-                self._active_processes.discard(proc)
-            lines = stdout.decode("utf-8", errors="replace").strip().splitlines()
-            return {
-                "ok": True,
-                "matches": lines[:100],
-                "truncated": len(lines) > 100,
-                "total": len(lines),
-            }
+            run = await run_tracked(cmd, cwd=self.cwd, timeout=30, active=self._active_processes)
         except Exception as e:
             return {"ok": False, "error": str(e)}
+        if run.get("timed_out"):
+            return {"ok": False, "error": run["error"]}
+
+        lines = str(run.get("stdout", "")).strip().splitlines()
+        return {
+            "ok": True,
+            "matches": lines[:100],
+            "truncated": len(lines) > 100,
+            "total": len(lines),
+        }
 
     async def git_op(self, subcommand: str, *args: str) -> ToolResult:
         """Run a Git subcommand through the shell permission policy."""

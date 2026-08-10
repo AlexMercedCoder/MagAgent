@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from magent.config import USERS_DIR
+from magent.safe_names import strip_component
 
 # Per-connection cache (username+db_name → connection)
 _connection_cache: dict[str, sqlite3.Connection] = {}
@@ -28,9 +29,12 @@ _connection_lock = threading.RLock()
 
 def _db_path(username: str, db_name: str = "default") -> Path:
     """Resolve the database file path for a user + database name."""
-    # Sanitise name: alphanumeric, hyphens, underscores only
-    safe_name = "".join(c for c in db_name if c.isalnum() or c in "-_").strip("_-") or "default"
-    db_dir = Path(USERS_DIR) / username / "databases"
+    # `db_name` was sanitised here but `username` was not, even though it is
+    # equally a path component. Both go through the shared helper now, in the
+    # strip style, so names people already have data under are unchanged.
+    safe_user = strip_component(username)
+    safe_name = strip_component(db_name)
+    db_dir = Path(USERS_DIR) / safe_user / "databases"
     db_dir.mkdir(parents=True, exist_ok=True)
     return db_dir / f"{safe_name}.db"
 

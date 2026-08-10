@@ -182,10 +182,17 @@ def _merge_patterns(user: Any, glob: Any) -> list[str]:
 class Config:
     """Merged view of global config + active user profile."""
 
-    def __init__(self, global_cfg: dict[str, Any], user_cfg: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        global_cfg: dict[str, Any],
+        user_cfg: dict[str, Any] | None = None,
+        username: str | None = None,
+    ):
         self._global = global_cfg
         self._user = user_cfg or {}
         self._raw = _deep_merge(global_cfg, self._user)
+        # Needed to persist user-scoped settings back to the right profile.
+        self.username = username
 
     def get(self, *keys: str, default: Any = None) -> Any:
         """Dot-path lookup, user profile overrides global."""
@@ -216,6 +223,27 @@ class Config:
         return self._user.get("permissions", {}).get("mode") or self._global.get(
             "defaults", {}
         ).get("permission_mode", "balanced")
+
+    def set_permission_mode(self, mode: str) -> str:
+        """Set and persist the permission mode.
+
+        `/mode` used to mutate `config._user` in memory only, so the change was
+        gone the moment the session ended while `magent mode` persisted it —
+        the same setting with two different lifetimes.
+        """
+        from magent.permissions import PERMISSION_MODES
+
+        normalized = str(mode).strip().lower()
+        if normalized not in PERMISSION_MODES:
+            raise ValueError(
+                f"Unknown permission mode {mode!r}; expected one of {', '.join(sorted(PERMISSION_MODES))}"
+            )
+
+        self._user.setdefault("permissions", {})["mode"] = normalized
+        self._raw = _deep_merge(self._global, self._user)
+        if self.username:
+            save_user_profile(self.username, self._user)
+        return normalized
 
     @property
     def allowed_shell_patterns(self) -> list[str]:
@@ -514,7 +542,7 @@ def load_user_profile(username: str) -> dict[str, Any]:
 def load_config(username: str | None = None) -> Config:
     global_cfg = load_global_config()
     user_cfg = load_user_profile(username) if username else {}
-    return Config(global_cfg, user_cfg)
+    return Config(global_cfg, user_cfg, username=username)
 
 
 # ─────────────────────────────────────────────

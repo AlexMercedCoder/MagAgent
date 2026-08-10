@@ -103,3 +103,65 @@ def test_config_schema_keeps_the_user_variant() -> None:
     result = runner.invoke(cli_main.app, ["config", "schema", "--help"])
     assert result.exit_code == 0
     assert "--user" in result.output
+
+
+# ─────────────────────────────────────────────
+# Tool schema invariants (roadmap improvement #13)
+# ─────────────────────────────────────────────
+
+
+def test_tool_required_lists_match_implementations(tmp_path) -> None:
+    """A tool's `required` list must match the arguments its method actually
+    demands.
+
+    `required` used to be inferred from whether a parameter's *description*
+    contained "optional" or "default", so seven tools marked defaulted
+    parameters as required and validate_tool_args rejected calls that dispatch
+    would have handled.
+    """
+    from magent.tools import ToolExecutor
+    from magent.tools.registry import required_from_signature
+
+    executor = ToolExecutor(str(tmp_path))
+    mismatches = []
+
+    for definition in executor.get_tool_definitions():
+        function = definition["function"]
+        name = function["name"]
+        implementation = getattr(executor, name, None)
+        if implementation is None:
+            continue
+
+        actual = required_from_signature(implementation)
+        if actual is None:
+            continue
+
+        declared = set(function["parameters"].get("required") or [])
+        properties = set(function["parameters"].get("properties") or {})
+        expected = {param for param in actual if param in properties}
+
+        if declared != expected:
+            mismatches.append(f"{name}: declared {sorted(declared)}, implementation needs {sorted(expected)}")
+
+    assert not mismatches, "tool schemas disagree with their implementations:\n" + "\n".join(mismatches)
+
+
+def test_no_tool_marks_a_defaulted_parameter_as_required(tmp_path) -> None:
+    """Spot-check the seven tools the audit named."""
+    from magent.tools import ToolExecutor
+
+    executor = ToolExecutor(str(tmp_path))
+    definitions = {d["function"]["name"]: d["function"]["parameters"] for d in executor.get_tool_definitions()}
+
+    expectations = {
+        "read_file_range": {"path"},
+        "outline_file": {"path"},
+        "notify": {"title", "message"},
+        "db_execute": {"sql"},
+        "db_schema": {"table"},
+        "browser_snapshot": {"url"},
+        "browser_screenshot": {"url", "path"},
+    }
+    for name, expected in expectations.items():
+        if name in definitions:
+            assert set(definitions[name]["required"]) == expected, name

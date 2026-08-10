@@ -67,7 +67,9 @@ class SystemToolsMixin:
 
     async def notify(self, title: str, message: str, urgency: str = "normal") -> ToolResult:
         """Send a desktop notification after a long-running task."""
-        self._log_tool("notify", title, RiskTier.SILENT)
+        # Not SILENT: notify spawns an external process. SILENT is reserved for
+        # things that cannot act outside MagAgent.
+        self._log_tool("notify", title, RiskTier.AUTO)
 
         # `urgency` reaches a command line, so it is validated rather than
         # interpolated.

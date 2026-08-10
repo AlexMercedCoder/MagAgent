@@ -35,7 +35,8 @@ jobs:
         run: python -m mypy src/magent
 
       - name: Unit tests
-        run: python -m pytest tests/unit -q
+        # -n auto: the suite is subprocess-heavy and parallelises well.
+        run: python -m pytest tests/unit -q -n auto
 
       - name: Documentation drift check
         run: |

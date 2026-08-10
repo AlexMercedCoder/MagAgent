@@ -809,6 +809,28 @@ magent subagent configure --max 3 --parallel 2
 magent project init
 ```
 
+### Where settings live, and which wins
+
+MagAgent reads two files and merges them:
+
+| Layer | Path | Scope |
+| --- | --- | --- |
+| Global config | `~/.config/magent/config.toml` | Defaults for every user profile on this machine |
+| User profile | `~/.config/magent/users/<user>.toml` | One person's overrides |
+
+**The user profile wins** for any key both define. A few notes that are easy to
+get wrong:
+
+- `[permissions] allowed_shell_patterns` and `trusted_shell_patterns` merge
+  rather than replace: profile entries are consulted first, then global ones.
+  (Before 0.36 the global section was read for neither.)
+- `[memory] write_every_n_turns = 0` means *disable* periodic memory writes. It
+  is not the same as leaving the key out, which uses the default of 5.
+- `magent mode` and the in-session `/mode` command are the same setting and are
+  both persisted to the user profile.
+- Project-local `.magent/config.toml` covers project settings (hooks,
+  playbooks); it does not override credentials or permissions.
+
 Full config at `~/.config/magent/config.toml`:
 
 ```toml

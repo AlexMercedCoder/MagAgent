@@ -11,6 +11,7 @@ from magent.provider_catalog import validate_provider_catalog
 from magent.providers import (
     PROVIDER_BASE_URLS,
     PROVIDER_DISPLAY_NAMES,
+    REQUEST_TIMEOUT_SECONDS,
     Provider,
     ProviderError,
     _build_api_kwargs,
@@ -109,14 +110,23 @@ def test_provider_request_kwargs_adds_cache_hints() -> None:
 def test_openai_gpt5_family_omits_unsupported_temperature() -> None:
     params = _completion_request_params("openai", "gpt-5.6-luna", 0.3, 10)
 
-    assert params == {"max_tokens": 10}
+    # A request deadline is always present; the point of this test is that the
+    # temperature is omitted for models that reject it.
+    assert params == {"max_tokens": 10, "timeout": REQUEST_TIMEOUT_SECONDS}
     assert _completion_request_params("openai", "gpt-5.6-luna", 1, 10) == {
         "max_tokens": 10,
         "temperature": 1,
+        "timeout": REQUEST_TIMEOUT_SECONDS,
     }
-    assert _completion_request_params("anthropic", "claude-sonnet-5", 0.3, 10) == {"max_tokens": 10}
+    assert _completion_request_params("anthropic", "claude-sonnet-5", 0.3, 10) == {
+        "max_tokens": 10,
+        "timeout": REQUEST_TIMEOUT_SECONDS,
+    }
     assert _completion_request_params("anthropic", "claude-sonnet-4-5", 0.3, 10)["temperature"] == 0.3
-    assert _completion_request_params("google", "gemini-3.6-flash", 0.3, 10) == {"max_tokens": 10}
+    assert _completion_request_params("google", "gemini-3.6-flash", 0.3, 10) == {
+        "max_tokens": 10,
+        "timeout": REQUEST_TIMEOUT_SECONDS,
+    }
 
 
 def test_model_capabilities_identify_image_models() -> None:

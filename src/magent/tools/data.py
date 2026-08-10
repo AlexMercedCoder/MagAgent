@@ -54,7 +54,12 @@ class DataToolsMixin:
         db_name: str = "default",
     ) -> ToolResult:
         """Select from a named user database."""
+        # SILENT is honest now that db_query runs under a read-only authorizer,
+        # but it still never asked permission at all, unlike db_execute.
         self._log_tool("db_query", f"[{db_name}] {sql[:60]}", RiskTier.SILENT)
+        perm = self._check_permission(f"Query {db_name}: {sql[:120]}", RiskTier.SILENT)
+        if not perm.approved:
+            return self._permission_denied(perm)
         from magent.tools.db import db_query
 
         return db_query(self.username, sql, params, db_name)

@@ -17,6 +17,7 @@ from typing import Any
 
 from rich.console import Console
 
+from magent.safe_names import slugify_component
 from magent.tokens import estimate_tokens, truncate_to_tokens
 
 console = Console()
@@ -355,7 +356,12 @@ class MemoryManager:
 
         written = 0
         for item in extracted:
-            node_id = item.get("id", "").strip().replace(" ", "_")
+            # LLM-supplied ids become on-disk filenames, so they are slugified
+            # rather than trusted: `../` or an absolute path would otherwise
+            # write outside the memory directory, and a null id raised
+            # AttributeError.
+            raw_id = item.get("id")
+            node_id = slugify_component(raw_id, fallback="") if raw_id is not None else ""
             if not node_id:
                 continue
 
@@ -543,20 +549,24 @@ class MemoryManager:
         try:
             import subprocess
 
-            git_log = subprocess.run(
-                ["git", "log", "--oneline"],
-                cwd=self.memory_dir,
+            # `-C <dir>` so a memory directory that is not itself a repo cannot
+            # walk up and report a parent repository's history, and a timeout so
+            # a wedged git cannot hang a stats call. `rev-list --count` counts
+            # without materialising every line.
+            git_commits = subprocess.run(
+                ["git", "-C", str(self.memory_dir), "rev-list", "--count", "HEAD"],
                 capture_output=True,
                 text=True,
+                timeout=5,
             )
-            if git_log.returncode == 0:
-                result["git_commits"] = len(git_log.stdout.strip().splitlines())
+            if git_commits.returncode == 0:
+                result["git_commits"] = int(git_commits.stdout.strip() or 0)
 
             git_size = subprocess.run(
-                ["git", "count-objects", "-vH"],
-                cwd=self.memory_dir,
+                ["git", "-C", str(self.memory_dir), "count-objects", "-vH"],
                 capture_output=True,
                 text=True,
+                timeout=5,
             )
             if git_size.returncode == 0:
                 for line in git_size.stdout.splitlines():

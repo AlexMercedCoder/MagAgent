@@ -504,11 +504,16 @@ class AgentSession:
         return self.conversation[-(keep + 1) : -1] if keep > 0 else []
 
     async def _run_tool_loop(
-        self, messages: list[dict[str, Any]], user_message: str = ""
+        self, messages: list[dict[str, Any]], user_message: str = "", *, narrate: bool = False
     ) -> tuple[str, list[dict[str, Any]], int]:
+        """Run the LLM + tool loop. Returns (final_text, messages, tool_call_count).
+
+        `narrate` turns on the interactive console commentary the streaming
+        path shows; headless callers (gateway, sub-agents) leave it off.
         """
-        Run the LLM + tool loop. Returns (final_text, updated_messages, tool_call_count).
-        """
+        turn_started = time.monotonic()
+        if narrate:
+            console.print("[dim]thinking...[/dim]")
         # Wait for MCP servers to finish connecting (if still starting)
         await self._ensure_mcp_started()
 
@@ -533,6 +538,8 @@ class AgentSession:
                         f"Stopped after {self._max_model_rounds_per_turn()} model rounds to avoid an agent loop.",
                         failed_file_mutations,
                     )
+                    if narrate:
+                        console.print(f"[yellow]  stop {self._stop_console_summary(content)}[/yellow]")
                     messages.append({"role": "assistant", "content": content})
                     return content, messages, total_tool_calls
                 llm_started = time.monotonic()
@@ -543,11 +550,21 @@ class AgentSession:
                     **self._completion_params(0.3, 4096),
                     **self._provider_request_kwargs(),
                 )
-                self._log_timing(
+                llm_elapsed = self._log_timing(
                     "llm_call",
                     llm_started,
-                    metadata={"tool_calls_so_far": total_tool_calls, "messages": len(messages)},
+                    metadata={
+                        "round": llm_round,
+                        "turn_elapsed_ms": round((time.monotonic() - turn_started) * 1000, 2),
+                        "tool_calls_so_far": total_tool_calls,
+                        "messages": len(messages),
+                    },
                 )
+                if narrate and self.tools.show_tool_calls:
+                    console.print(
+                        f"[dim]  time model round {llm_round} responded in "
+                        f"{_format_duration(llm_elapsed)} ({total_tool_calls} tools so far)[/dim]"
+                    )
                 self._log_llm_usage(response)
             except Exception as e:
                 return f"[Provider error: {e}]", messages, total_tool_calls
@@ -574,6 +591,8 @@ class AgentSession:
                             total_tool_calls,
                         )
                         if repeat_message:
+                            if narrate:
+                                console.print(f"[yellow]  stop {repeat_message}[/yellow]")
                             messages.append({"role": "assistant", "content": repeat_message})
                             return repeat_message, messages, total_tool_calls
                         tool_started = time.monotonic()
@@ -681,17 +700,27 @@ class AgentSession:
                     total_tool_calls,
                 )
                 if repeat_message:
+                    if narrate:
+                        console.print(f"[yellow]  stop {repeat_message}[/yellow]")
                     messages.append({"role": "assistant", "content": repeat_message})
                     return repeat_message, messages, total_tool_calls
 
+                activity_label = _tool_activity_label(tool_args)
+                if narrate and activity_label and self.tools.show_tool_calls:
+                    console.print(f"[dim]    intent: {escape(activity_label)}[/dim]")
                 tool_started = time.monotonic()
                 result = await self._execute_tool_call(tool_name, tool_args)
                 result_str = self._compress_tool_result(tool_name, result)
-                self._log_timing(
+                tool_elapsed = self._log_timing(
                     f"tool.{tool_name}",
                     tool_started,
                     metadata=_tool_timing_metadata(tool_name, tool_args, result),
                 )
+                if narrate and self.tools.show_tool_calls:
+                    console.print(
+                        f"[dim]    -> {tool_name} finished in {_format_duration(tool_elapsed)} "
+                        f"({self._tool_result_label(result)})[/dim]"
+                    )
                 self._log_tool_activity_event(
                     tool_name,
                     tool_args,
@@ -739,6 +768,10 @@ class AgentSession:
                         messages.append({"role": "assistant", "content": recovered})
                         return recovered, messages, total_tool_calls
                     content = self._finalize_turn_response(stop_message, failed_file_mutations)
+                    if narrate:
+                        console.print(
+                            f"[yellow]  stop {self._stop_console_summary(stop_message)}[/yellow]"
+                        )
                     messages.append({"role": "assistant", "content": content})
                     return content, messages, total_tool_calls
                 if self.config.prune_stale_tool_results:
@@ -746,8 +779,15 @@ class AgentSession:
 
         return "", messages, total_tool_calls  # unreachable
 
-    async def stream_chat(self, user_message: str) -> AsyncIterator[str]:
-        """Stream the agent response token by token. Yields text chunks."""
+    async def _run_turn(self, user_message: str, *, narrate: bool = False) -> tuple[str, int]:
+        """Run one complete turn: prompt, tool loop, history, logging, memory.
+
+        `chat` and `stream_chat` used to be ~600-line near-copies of the same
+        loop, and had already diverged: periodic memory writes fired on only 2
+        of stream_chat's ~8 return paths, and pruning behaviour differed. There
+        is one loop now, and this is the single place turn bookkeeping happens,
+        so every exit path is treated identically.
+        """
         self._ensure_messaging_started()
         user_message = self._resolve_agent_message(user_message)
         self.turn_count += 1
@@ -755,412 +795,32 @@ class AgentSession:
         self.conversation.append({"role": "user", "content": user_message})
 
         messages = self._build_prompt_messages(user_message)
-
-        # Run tool loop first (tools don't stream)
-        # Wait for MCP servers to finish connecting (if still starting)
-        await self._ensure_mcp_started()
-
-        # Merge built-in tools + MCP tools
-        tool_defs = self._tool_definitions(user_message)
-        total_tool_calls = 0
-        pseudo_retry_count = 0
-        repeated_tool_calls: dict[str, int] = {}
-        failed_tool_counts: dict[str, int] = {}
-        failed_file_mutations: dict[str, dict[str, str]] = {}
 
         try:
-            import litellm
-
-            litellm.suppress_debug_info = True
-
-            # First pass: tool loop
-            console.print("[dim]thinking...[/dim]")
-            turn_started = time.monotonic()
-            llm_round = 0
-            while True:
-                llm_round += 1
-                if llm_round > self._max_model_rounds_per_turn():
-                    full_response = self._finalize_turn_response(
-                        f"Stopped after {self._max_model_rounds_per_turn()} model rounds to avoid an agent loop.",
-                        failed_file_mutations,
-                    )
-                    console.print(f"[yellow]  stop {self._stop_console_summary(full_response)}[/yellow]")
-                    messages.append({"role": "assistant", "content": full_response})
-                    self.conversation.append({"role": "assistant", "content": full_response})
-                    self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
-                    yield full_response
-                    self._maybe_compact_conversation()
-                    return
-                llm_started = time.monotonic()
-                response = await litellm.acompletion(
-                    messages=_sanitize_messages(messages),
-                    tools=tool_defs,
-                    tool_choice="auto",
-                    **self._completion_params(0.3, 4096),
-                    **self._provider_request_kwargs(),
-                )
-                llm_elapsed = self._log_timing(
-                    "llm_call",
-                    llm_started,
-                    metadata={
-                        "round": llm_round,
-                        "turn_elapsed_ms": round((time.monotonic() - turn_started) * 1000, 2),
-                        "tool_calls_so_far": total_tool_calls,
-                        "messages": len(messages),
-                    },
-                )
-                if self.tools.show_tool_calls:
-                    console.print(
-                        f"[dim]  time model round {llm_round} responded in {_format_duration(llm_elapsed)} "
-                        f"({total_tool_calls} tools so far)[/dim]"
-                    )
-                self._log_llm_usage(response)
-                choice = response.choices[0]
-                msg = choice.message
-
-                if not msg.tool_calls:
-                    # Got final text. Do not make a second "finalizing" model call:
-                    # some OpenAI-compatible models emit pseudo tool-call markup when
-                    # tools are removed, which can claim work happened without running it.
-                    content = msg.content or ""
-                    pseudo_calls = _extract_pseudo_tool_calls(content)
-                    if pseudo_calls:
-                        messages.append(
-                            {
-                                "role": "assistant",
-                                "content": _strip_pseudo_tool_markup(content) or "Using tools.",
-                            }
-                        )
-                        total_tool_calls += len(pseudo_calls)
-                        for tool_name, tool_args in pseudo_calls:
-                            repeat_message = self._record_tool_call_or_stop(
-                                repeated_tool_calls,
-                                tool_name,
-                                tool_args,
-                                total_tool_calls,
-                            )
-                            if repeat_message:
-                                console.print(f"[yellow]  stop {repeat_message}[/yellow]")
-                                messages.append({"role": "assistant", "content": repeat_message})
-                                self.conversation.append({"role": "assistant", "content": repeat_message})
-                                self.logger.log_assistant_turn(
-                                    self.turn_count,
-                                    repeat_message,
-                                    total_tool_calls,
-                                )
-                                yield repeat_message
-                                self._maybe_compact_conversation()
-                                return
-                            activity_label = _tool_activity_label(tool_args)
-                            if activity_label and self.tools.show_tool_calls:
-                                console.print(f"[dim]    intent: {escape(activity_label)}[/dim]")
-                            tool_started = time.monotonic()
-                            result = await self._dispatch_tool_call(tool_name, tool_args)
-                            tool_elapsed = self._log_timing(
-                                f"tool.{tool_name}",
-                                tool_started,
-                                metadata=_tool_timing_metadata(tool_name, tool_args, result),
-                            )
-                            self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
-                            if self.tools.show_tool_calls:
-                                console.print(
-                                    f"[dim]    -> {tool_name} finished in {_format_duration(tool_elapsed)} "
-                                    f"({self._tool_result_label(result)})[/dim]"
-                                )
-                            messages.append(
-                                {
-                                    "role": "system",
-                                    "content": (
-                                        f"Parsed and executed assistant-emitted tool markup for `{tool_name}`. "
-                                        f"Tool result:\n{self._compress_tool_result(tool_name, result)}"
-                                    ),
-                                }
-                            )
-                            recovered = await self._maybe_recover_missing_write_file_content(
-                                messages,
-                                tool_args,
-                                result,
-                                failed_file_mutations,
-                            )
-                            if recovered:
-                                messages.append({"role": "assistant", "content": recovered})
-                                self.conversation.append({"role": "assistant", "content": recovered})
-                                self.logger.log_assistant_turn(
-                                    self.turn_count,
-                                    recovered,
-                                    total_tool_calls,
-                                )
-                                yield recovered
-                                self._maybe_compact_conversation()
-                                return
-                            if self._permission_denied_by_user(result):
-                                full_response = self._permission_denial_summary(tool_name, tool_args)
-                                messages.append({"role": "assistant", "content": full_response})
-                                self.conversation.append({"role": "assistant", "content": full_response})
-                                self.logger.log_assistant_turn(
-                                    self.turn_count,
-                                    full_response,
-                                    total_tool_calls,
-                                )
-                                yield full_response
-                                self._maybe_compact_conversation()
-                                return
-                            stop_message = self._tool_failure_steer_or_stop(
-                                messages,
-                                tool_name,
-                                tool_args,
-                                result,
-                                failed_tool_counts,
-                            )
-                            if stop_message:
-                                recovered = await self._maybe_recover_missing_write_file_content(
-                                    messages,
-                                    tool_args,
-                                    result,
-                                    failed_file_mutations,
-                                )
-                                if recovered:
-                                    messages.append({"role": "assistant", "content": recovered})
-                                    self.conversation.append({"role": "assistant", "content": recovered})
-                                    self.logger.log_assistant_turn(
-                                        self.turn_count,
-                                        recovered,
-                                        total_tool_calls,
-                                    )
-                                    yield recovered
-                                    self._maybe_compact_conversation()
-                                    return
-                                full_response = self._finalize_turn_response(
-                                    stop_message,
-                                    failed_file_mutations,
-                                )
-                                console.print(f"[yellow]  stop {self._stop_console_summary(stop_message)}[/yellow]")
-                                messages.append({"role": "assistant", "content": full_response})
-                                self.conversation.append({"role": "assistant", "content": full_response})
-                                self.logger.log_assistant_turn(
-                                    self.turn_count,
-                                    full_response,
-                                    total_tool_calls,
-                                )
-                                yield full_response
-                                self._maybe_compact_conversation()
-                                return
-                            if self.config.prune_stale_tool_results:
-                                self._prune_stale_tool_results(messages, tool_name, result)
-                        continue
-                    if _contains_pseudo_tool_markup(content):
-                        pseudo_retry_count += 1
-                        if pseudo_retry_count > 2:
-                            full_response = (
-                                "I tried to use a tool, but the provider returned truncated tool markup. "
-                                "Please retry the request; I will use native file tools instead of printing the file."
-                            )
-                            messages.append({"role": "assistant", "content": full_response})
-                            self.conversation.append({"role": "assistant", "content": full_response})
-                            self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
-                            yield full_response
-                            self._maybe_compact_conversation()
-                            return
-                        messages.append(
-                            {
-                                "role": "assistant",
-                                "content": _strip_pseudo_tool_markup(content) or "Tool markup was incomplete.",
-                            }
-                        )
-                        messages.append(
-                            {
-                                "role": "system",
-                                "content": (
-                                    "The previous assistant response contained incomplete DSML tool markup and was not executed. "
-                                    "Retry by using the native tool call API, especially write_file for generated files. "
-                                    "Do not print DSML or the full file content as normal assistant text."
-                                ),
-                            }
-                        )
-                        continue
-                    if not (msg.content or "").strip() and total_tool_calls:
-                        fallback = self._finalize_turn_response(
-                            self._fallback_tool_summary(),
-                            failed_file_mutations,
-                        )
-                        messages.append({"role": "assistant", "content": fallback})
-                        self.conversation.append({"role": "assistant", "content": fallback})
-                        self.logger.log_assistant_turn(self.turn_count, fallback, total_tool_calls)
-                        yield fallback
-                        if self._periodic_memory_write_due():
-                            await self._maybe_write_memories()
-                        self._maybe_compact_conversation()
-                        return
-                    full_response = self._finalize_turn_response(
-                        content,
-                        failed_file_mutations,
-                        user_message=user_message,
-                    )
-                    messages.append(_sanitize_message(msg.model_dump()))
-                    self.conversation.append({"role": "assistant", "content": full_response})
-                    self.logger.log_assistant_turn(self.turn_count, full_response, total_tool_calls)
-                    yield full_response
-                    if self._periodic_memory_write_due():
-                        await self._maybe_write_memories()
-                    self._maybe_compact_conversation()
-                    return
-
-                messages.append(_sanitize_message(msg.model_dump()))
-                total_tool_calls += len(msg.tool_calls)
-
-                for tc in msg.tool_calls:
-                    tool_name = tc.function.name
-                    try:
-                        tool_args = json.loads(tc.function.arguments)
-                    except json.JSONDecodeError:
-                        tool_args = {}
-                    repeat_message = self._record_tool_call_or_stop(
-                        repeated_tool_calls,
-                        tool_name,
-                        tool_args,
-                        total_tool_calls,
-                    )
-                    if repeat_message:
-                        console.print(f"[yellow]  stop {repeat_message}[/yellow]")
-                        messages.append({"role": "assistant", "content": repeat_message})
-                        self.conversation.append({"role": "assistant", "content": repeat_message})
-                        self.logger.log_assistant_turn(
-                            self.turn_count,
-                            repeat_message,
-                            total_tool_calls,
-                        )
-                        yield repeat_message
-                        self._maybe_compact_conversation()
-                        return
-                    activity_label = _tool_activity_label(tool_args)
-                    if activity_label and self.tools.show_tool_calls:
-                        console.print(f"[dim]    intent: {escape(activity_label)}[/dim]")
-                    tool_started = time.monotonic()
-                    result = await self._execute_tool_call(tool_name, tool_args)
-                    tool_elapsed = self._log_timing(
-                        f"tool.{tool_name}",
-                        tool_started,
-                        metadata=_tool_timing_metadata(tool_name, tool_args, result),
-                    )
-                    self._log_tool_activity_event(tool_name, tool_args, result, duration_ms=tool_elapsed)
-                    self._record_file_mutation_result(failed_file_mutations, tool_name, tool_args, result)
-                    if self.tools.show_tool_calls:
-                        console.print(
-                            f"[dim]    -> {tool_name} finished in {_format_duration(tool_elapsed)} "
-                            f"({self._tool_result_label(result)})[/dim]"
-                        )
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_call_id": tc.id,
-                            "content": self._compress_tool_result(tool_name, result),
-                            "name": tool_name,
-                        }
-                    )
-                    recovered = await self._maybe_recover_missing_write_file_content(
-                        messages,
-                        tool_args,
-                        result,
-                        failed_file_mutations,
-                    )
-                    if recovered:
-                        messages.append({"role": "assistant", "content": recovered})
-                        self.conversation.append({"role": "assistant", "content": recovered})
-                        self.logger.log_assistant_turn(
-                            self.turn_count,
-                            recovered,
-                            total_tool_calls,
-                        )
-                        yield recovered
-                        self._maybe_compact_conversation()
-                        return
-                    if self._permission_denied_by_user(result):
-                        full_response = self._permission_denial_summary(tool_name, tool_args)
-                        messages.append({"role": "assistant", "content": full_response})
-                        self.conversation.append({"role": "assistant", "content": full_response})
-                        self.logger.log_assistant_turn(
-                            self.turn_count,
-                            full_response,
-                            total_tool_calls,
-                        )
-                        yield full_response
-                        self._maybe_compact_conversation()
-                        return
-                    stop_message = self._tool_failure_steer_or_stop(
-                        messages,
-                        tool_name,
-                        tool_args,
-                        result,
-                        failed_tool_counts,
-                    )
-                    if stop_message:
-                        recovered = await self._maybe_recover_missing_write_file_content(
-                            messages,
-                            tool_args,
-                            result,
-                            failed_file_mutations,
-                        )
-                        if recovered:
-                            messages.append({"role": "assistant", "content": recovered})
-                            self.conversation.append({"role": "assistant", "content": recovered})
-                            self.logger.log_assistant_turn(
-                                self.turn_count,
-                                recovered,
-                                total_tool_calls,
-                            )
-                            yield recovered
-                            self._maybe_compact_conversation()
-                            return
-                        full_response = self._finalize_turn_response(
-                            stop_message,
-                            failed_file_mutations,
-                        )
-                        console.print(f"[yellow]  stop {self._stop_console_summary(stop_message)}[/yellow]")
-                        messages.append({"role": "assistant", "content": full_response})
-                        self.conversation.append({"role": "assistant", "content": full_response})
-                        self.logger.log_assistant_turn(
-                            self.turn_count,
-                            full_response,
-                            total_tool_calls,
-                        )
-                        yield full_response
-                        self._maybe_compact_conversation()
-                        return
-                    if self.config.prune_stale_tool_results:
-                        self._prune_stale_tool_results(messages, tool_name, result)
-
+            response, _messages, tool_calls = await self._run_tool_loop(
+                messages, user_message, narrate=narrate
+            )
         except Exception as e:
-            err = f"\n[Error: {e}]"
-            # Record the failed turn like every other exit path does. Yielding
-            # without appending left the history ending on a user message, so
-            # the next turn sent two consecutive user roles (which several
-            # providers reject), and skipped compaction and memory writes.
-            # chat() has always handled this correctly.
-            self.conversation.append({"role": "assistant", "content": err})
-            if self.logger:
-                with suppress(Exception):
-                    self.logger.log_assistant_turn(self.turn_count, err, 0)
-            yield err
-            self._maybe_compact_conversation()
+            response, tool_calls = f"\n[Error: {e}]", 0
 
-    async def chat(self, user_message: str) -> str:
-        """Non-streaming completion. Returns full response string."""
-        self._ensure_messaging_started()
-        user_message = self._resolve_agent_message(user_message)
-        self.turn_count += 1
-        self.logger.log_user_turn(self.turn_count, user_message)
-        self.conversation.append({"role": "user", "content": user_message})
-
-        messages = self._build_prompt_messages(user_message)
-
-        response, _, tool_call_count = await self._run_tool_loop(messages, user_message)
         self.conversation.append({"role": "assistant", "content": response})
-        self.logger.log_assistant_turn(self.turn_count, response, tool_call_count)
+        with suppress(Exception):
+            self.logger.log_assistant_turn(self.turn_count, response, tool_calls)
 
         if self._periodic_memory_write_due():
             await self._maybe_write_memories()
         self._maybe_compact_conversation()
 
+        return response, tool_calls
+
+    async def stream_chat(self, user_message: str) -> AsyncIterator[str]:
+        """Stream the agent response. Yields text chunks."""
+        response, _tool_calls = await self._run_turn(user_message, narrate=True)
+        yield response
+
+    async def chat(self, user_message: str) -> str:
+        """Non-streaming completion. Returns full response string."""
+        response, _tool_calls = await self._run_turn(user_message)
         return response
 
     def _resolve_agent_message(self, user_message: str) -> str:

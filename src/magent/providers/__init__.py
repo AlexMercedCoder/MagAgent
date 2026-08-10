@@ -92,9 +92,14 @@ def _build_api_kwargs(
     return kwargs
 
 
+REQUEST_TIMEOUT_SECONDS = 600
+
+
 def _completion_request_params(provider_id: str, model: str, temperature: float, max_tokens: int) -> dict[str, Any]:
     """Return provider-safe common completion parameters."""
-    params: dict[str, Any] = {"max_tokens": max_tokens}
+    # Every provider call gets a request deadline: without one a wedged
+    # endpoint hangs the agent turn indefinitely.
+    params: dict[str, Any] = {"max_tokens": max_tokens, "timeout": REQUEST_TIMEOUT_SECONDS}
     default_temperature_only = (
         (provider_id == "openai" and model.startswith("gpt-5"))
         or (provider_id == "anthropic" and model.startswith("claude-sonnet-5"))
