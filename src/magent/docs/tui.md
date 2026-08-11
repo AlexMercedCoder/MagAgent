@@ -32,6 +32,9 @@ Interactive sessions include daily-driver slash commands:
 - `/retry` removes the last exchange from context and reruns the previous user prompt.
 - `/undo` removes the last exchange from context without rerunning it.
 - `/usage` summarizes token usage, tool calls, estimated cost, and slowest steps for the current session.
+- `/budget` shows live session and rolling daily spend limits.
+- `/tasks` lists durable execution tasks; `/task <id> [resume|retry|cancel]` inspects or recovers one.
+- `/why <query>` explains memory ranking, backlinks, and provenance without injecting another prompt.
 - `/insights` summarizes recent session logs.
 - `/mode <silent|balanced|paranoid|yolo>` changes the live permission mode for the current session.
 - `/goal <task>` runs a strengthened goal-loop prompt with implementation, verification, review, and artifact-existence stop conditions.
@@ -47,6 +50,9 @@ does not expose hidden reasoning.
 Long-running tools emit `tool_started`, `tool_progress`, and `tool_finished`
 activity events into the session log. Use `magent session events` to inspect the
 normalized event stream used by desktop integrations.
+
+Model calls and tools that have not completed emit a quiet elapsed-time heartbeat every
+ten seconds. The heartbeat is liveness and diagnostic metadata, not model reasoning.
 
 ## Theme
 

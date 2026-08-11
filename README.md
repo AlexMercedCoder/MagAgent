@@ -64,6 +64,9 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Runs isolated real-agent eval suites with independent validators, timing/token metrics, and
   reproducible offline and live-provider reports
 - Maintains a **persistent memory graph** per user that grows smarter over time
+- Measures memory precision, stale/contradictory recall, scope, provenance, backlinks, explanations, and token budgets with reproducible local evals
+- Emits timed model/tool liveness heartbeats and supports in-session task recovery, spend checks, and recall explanations
+- Enforces quick and release performance budgets for startup, project inspection, memory search, durable event throughput, and concurrent work
 - Connects to **20 provider options** (local and cloud) via a single config
 - Has **40 built-in tools** out of the box — no plugins or configuration required
 - Includes **10 pre-built skill libraries** for docs, spreadsheets, PDFs, images, video, data analysis, REST APIs, databases, desktop automation, and Git

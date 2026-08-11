@@ -22,6 +22,8 @@ def build_release_evidence(
     root: str | Path = ".",
     *,
     eval_report: str | Path | None = None,
+    memory_report: str | Path | None = None,
+    performance_report: str | Path | None = None,
     coverage_percent: float | None = None,
     coverage_required: float = 70.0,
     tests: str = "",
@@ -33,6 +35,8 @@ def build_release_evidence(
     project = Path(root).resolve()
     eval_data = _read_json(eval_report) if eval_report else None
     eval_evidence = _eval_evidence(eval_report, eval_data) if eval_report and eval_data else None
+    memory_data = _read_json(memory_report) if memory_report else None
+    performance_data = _read_json(performance_report) if performance_report else None
     artifact_data = [_artifact(project, item) for item in artifacts or []]
     git = _git_evidence(project)
     checks = {
@@ -44,6 +48,8 @@ def build_release_evidence(
             "status": "recorded" if eval_data else "missing",
             "report": eval_evidence,
         },
+        "memory": _report_check(memory_report, memory_data),
+        "performance": _report_check(performance_report, performance_data),
         "tests": {"ok": bool(tests), "status": tests or "missing"},
         "coverage": {
             "ok": coverage_percent is not None and coverage_percent >= coverage_required,
@@ -111,6 +117,26 @@ def _eval_evidence(path: str | Path, report: dict[str, Any]) -> dict[str, Any]:
         "path": str(source),
         "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
         "summary": {key: report.get(key) for key in keys if key in report},
+    }
+
+
+def _report_check(
+    path: str | Path | None,
+    report: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if not path or not report:
+        return {"ok": False, "status": "missing", "report": None}
+    source = Path(path).resolve()
+    return {
+        "ok": bool(report.get("ok")),
+        "status": "recorded",
+        "report": {
+            "path": str(source),
+            "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            "schema": report.get("schema"),
+            "metrics": report.get("metrics", {}),
+            "gates": report.get("gates", {}),
+        },
     }
 
 

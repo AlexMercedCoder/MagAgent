@@ -190,7 +190,14 @@ class ToolLoopRuntimeMixin:
                     console.print(f"[yellow]  budget {budget.warning}[/yellow]")
 
                 llm_started = time.monotonic()
-                response = await self._model_round(messages, tool_defs, on_text=on_text)
+                self._log_model_activity_event("model_round_started", llm_round)
+                response = await self._await_activity(
+                    self._model_round(messages, tool_defs, on_text=on_text),
+                    label=f"model round {llm_round}",
+                    narrate=narrate,
+                    event_kind="model",
+                    round_number=llm_round,
+                )
                 llm_elapsed = self._log_timing(
                     "llm_call",
                     llm_started,
@@ -207,6 +214,9 @@ class ToolLoopRuntimeMixin:
                         f"{_format_duration(llm_elapsed)} ({total_tool_calls} tools so far)[/dim]"
                     )
                 self._log_llm_usage(response)
+                self._log_model_activity_event(
+                    "model_round_finished", llm_round, duration_ms=llm_elapsed
+                )
             except Exception as e:
                 return f"[Provider error: {e}]", messages, total_tool_calls
 
@@ -355,7 +365,14 @@ class ToolLoopRuntimeMixin:
                 if narrate and activity_label and self.tools.show_tool_calls:
                     console.print(f"[dim]    intent: {escape(activity_label)}[/dim]")
                 tool_started = time.monotonic()
-                result = await self._execute_tool_call(tool_name, tool_args)
+                result = await self._await_activity(
+                    self._execute_tool_call(tool_name, tool_args),
+                    label=tool_name,
+                    narrate=narrate,
+                    event_kind="tool",
+                    tool_name=tool_name,
+                    tool_args=tool_args,
+                )
                 result_str = self._compress_tool_result(tool_name, result)
                 tool_elapsed = self._log_timing(
                     f"tool.{tool_name}",
@@ -816,6 +833,73 @@ class ToolLoopRuntimeMixin:
                 detail=_tool_timing_metadata(tool_name, tool_args, {}),
             )
         )
+
+    def _log_model_activity_event(
+        self,
+        event_type: str,
+        round_number: int,
+        *,
+        duration_ms: float | None = None,
+    ) -> None:
+        self.logger.log_activity_event(
+            activity_event(
+                event_type,  # type: ignore[arg-type]
+                turn=self.turn_count,
+                round_number=round_number,
+                duration_ms=duration_ms,
+            )
+        )
+
+    async def _await_activity(
+        self,
+        awaitable: Any,
+        *,
+        label: str,
+        narrate: bool,
+        event_kind: str,
+        round_number: int = 0,
+        tool_name: str = "",
+        tool_args: dict[str, Any] | None = None,
+        interval_seconds: float = 10.0,
+    ) -> Any:
+        """Await work while proving liveness at a quiet, bounded cadence."""
+        task = asyncio.ensure_future(awaitable)
+        started = time.monotonic()
+        try:
+            while not task.done():
+                done, _pending = await asyncio.wait({task}, timeout=interval_seconds)
+                if done:
+                    break
+                elapsed = time.monotonic() - started
+                if narrate:
+                    console.print(
+                        f"[dim]  still running {escape(label)} "
+                        f"({_format_duration(elapsed * 1000)})[/dim]"
+                    )
+                if event_kind == "tool":
+                    self._log_tool_progress_event(
+                        tool_name,
+                        tool_args or {},
+                        elapsed,
+                        "running",
+                    )
+                else:
+                    self.logger.log_activity_event(
+                        activity_event(
+                            "model_round_started",
+                            turn=self.turn_count,
+                            round_number=round_number,
+                            duration_ms=elapsed * 1000,
+                            detail={"status": "running", "heartbeat": True},
+                        )
+                    )
+            return await task
+        except BaseException:
+            if not task.done():
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+            raise
 
     def _log_tool_progress_event(
         self,

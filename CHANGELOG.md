@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.80.0
+
+- Added thresholded `magent.memory-eval.v2` retrieval evaluations for ranking, stale and contradictory facts, project scope, provenance, backlinks, explanations, and context budgets, plus a reproducible checked-in MagGraph fixture.
+- Preserved node scope and provenance in hybrid, native, and semantic search results and added backlink-aware `/why` and `magent.memory-recall.v2` desktop packets.
+- Added `magent performance budget` with quick and release profiles covering cold imports, project inspection, memory search, 10,000-event throughput, ordered reads, and four concurrent task writers.
+- Added periodic model/tool liveness heartbeats and stable start, progress, and finish events so common operations no longer appear hung.
+- Added interactive `/tasks`, `/task`, `/budget`, and `/why` controls for recovery, spend visibility, and recall diagnostics without leaving the session.
+- Updated the CLI, machine contracts, packaged documentation, roadmap, test corpus, and release evidence for daily-driver quality.
+
 ## 0.70.0
 
 - Added TrustedRouter and Prime Intellect as first-class OpenAI-compatible providers, including support tiers, dated evidence, credential aliases, Prime team routing, setup flows, machine-readable matrices, and generated documentation.

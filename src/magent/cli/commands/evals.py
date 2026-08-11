@@ -91,6 +91,9 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
     def eval_memory_cmd(
         suite: str = typer.Argument(..., help="Labeled memory eval JSON file."),
         user: str | None = typer.Option(None, "--user", "-u"),
+        memory_dir: str = typer.Option("", "--memory-dir", help="Evaluate a fixture graph."),
+        project: str = typer.Option("", "--project", help="Expected project scope."),
+        report_out: str = typer.Option("", "--report-out", help="Write the JSON report."),
     ) -> None:
         """Measure recall precision, stale hits, explanations, and context budget."""
         from magent.config import get_current_user, user_memory_dir
@@ -98,5 +101,13 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
         from magent.memory_evals import run_memory_eval
 
         username = user or get_current_user() or "default"
-        manager = MemoryManager(user_memory_dir(username), username=username)
-        console.print_json(data=run_memory_eval(manager, suite))
+        root = Path(memory_dir).expanduser().resolve() if memory_dir else user_memory_dir(username)
+        manager = MemoryManager(root, username=username, project_slug=project or None)
+        report = run_memory_eval(manager, suite)
+        if report_out:
+            target = Path(report_out).expanduser().resolve()
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+            report["report_path"] = str(target)
+        console.print_json(data=report)
+        raise typer.Exit(0 if report["ok"] else 1)

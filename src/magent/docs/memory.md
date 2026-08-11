@@ -68,17 +68,28 @@ unsupported-capability error rather than applying a partial fallback batch.
 
 ## Retrieval Evals
 
-Run `magent eval memory evals/memory.json` with labeled cases such as:
+Run `magent eval memory evals/memory.json` with labeled cases, or evaluate a
+reproducible fixture with `--memory-dir`. Use `--report-out` to retain release evidence.
 
 ```json
 {
   "name": "project-memory",
+  "thresholds": {
+    "precision_min": 0.8,
+    "recall_min": 1.0,
+    "stale_hit_rate_max": 0.0,
+    "explanation_coverage_min": 1.0,
+    "budget_pass_rate_min": 1.0
+  },
   "cases": [
     {
       "id": "current-release-decision",
       "query": "how do we publish releases",
       "expected_ids": ["release_process"],
-      "forbidden_ids": ["old_release_process"],
+      "stale_ids": ["old_release_process"],
+      "contradiction_ids": ["unsafe_release_process"],
+      "expected_project": "demo",
+      "require_provenance": true,
       "limit": 5,
       "max_context_tokens": 800
     }
@@ -86,6 +97,15 @@ Run `magent eval memory evals/memory.json` with labeled cases such as:
 }
 ```
 
-The report includes precision, recall, stale-hit rate, explanation coverage, average
-context tokens, and token-budget pass rate. It is local and deterministic except for
-the configured semantic embedding adapter.
+The v2 report includes precision, recall, mean reciprocal rank, stale and contradiction
+hit rates, project-scope accuracy, explanation, provenance and backlink coverage,
+average context tokens, and token-budget pass rate. Suite thresholds become explicit
+release gates. It is local and deterministic except for a configured semantic embedding
+adapter.
+
+The repository baseline can be reproduced with:
+
+```bash
+magent eval memory evals/memory-quality-v2.json \
+  --memory-dir evals/fixtures/memory-demo --project demo
+```

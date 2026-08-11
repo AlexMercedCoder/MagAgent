@@ -14,6 +14,10 @@ def test_release_evidence_records_local_proof(tmp_path: Path, monkeypatch) -> No
     artifact.write_bytes(b"wheel")
     eval_path = tmp_path / "eval.json"
     eval_path.write_text(json.dumps({"ok": True, "passed": 30, "total": 30}), encoding="utf-8")
+    memory_path = tmp_path / "memory.json"
+    memory_path.write_text('{"ok": true, "schema": "magent.memory-eval.v2"}', encoding="utf-8")
+    performance_path = tmp_path / "performance.json"
+    performance_path.write_text('{"ok": true, "schema": "magent.performance-budget.v1"}', encoding="utf-8")
     monkeypatch.setattr(
         "magent.release_evidence.documentation_drift_report", lambda root: {"ok": True}
     )
@@ -24,6 +28,8 @@ def test_release_evidence_records_local_proof(tmp_path: Path, monkeypatch) -> No
     report = build_release_evidence(
         tmp_path,
         eval_report=eval_path,
+        memory_report=memory_path,
+        performance_report=performance_path,
         coverage_percent=72.4,
         tests="730 passed",
         ci_url="https://example.test/actions/1",
@@ -46,7 +52,7 @@ def test_release_evidence_exposes_missing_and_bad_artifact(tmp_path: Path, monke
     report = build_release_evidence(tmp_path, artifacts=["missing.whl"])
 
     assert report["ok"] is False
-    assert {"evals", "tests", "coverage", "ci", "artifacts"} <= set(report["blocking"])
+    assert {"evals", "memory", "performance", "tests", "coverage", "ci", "artifacts"} <= set(report["blocking"])
 
 
 def test_release_evidence_allows_recorded_medium_exception(tmp_path: Path, monkeypatch) -> None:
@@ -54,6 +60,10 @@ def test_release_evidence_allows_recorded_medium_exception(tmp_path: Path, monke
     artifact.write_bytes(b"wheel")
     eval_path = tmp_path / "eval.json"
     eval_path.write_text('{"ok": true}', encoding="utf-8")
+    memory_path = tmp_path / "memory.json"
+    memory_path.write_text('{"ok": true}', encoding="utf-8")
+    performance_path = tmp_path / "performance.json"
+    performance_path.write_text('{"ok": true}', encoding="utf-8")
     monkeypatch.setattr(
         "magent.release_evidence.documentation_drift_report", lambda root: {"ok": True}
     )
@@ -64,6 +74,8 @@ def test_release_evidence_allows_recorded_medium_exception(tmp_path: Path, monke
     report = build_release_evidence(
         tmp_path,
         eval_report=eval_path,
+        memory_report=memory_path,
+        performance_report=performance_path,
         coverage_percent=64.9,
         coverage_required=64,
         tests="all passed",

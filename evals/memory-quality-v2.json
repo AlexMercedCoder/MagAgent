@@ -1,0 +1,48 @@
+{
+  "schema": "magent.memory-eval.v2",
+  "name": "memory-daily-driver",
+  "description": "Explainable, scoped, current recall for release-critical project facts.",
+  "thresholds": {
+    "precision_min": 0.5,
+    "recall_min": 1.0,
+    "mean_reciprocal_rank_min": 0.75,
+    "stale_hit_rate_max": 0.0,
+    "contradiction_hit_rate_max": 0.0,
+    "project_scope_accuracy_min": 1.0,
+    "explanation_coverage_min": 1.0,
+    "provenance_coverage_min": 1.0,
+    "backlink_coverage_min": 0.5,
+    "budget_pass_rate_min": 1.0
+  },
+  "cases": [
+    {
+      "id": "release-process",
+      "query": "release",
+      "expected_ids": ["demo_release_process"],
+      "stale_ids": ["old_release_process"],
+      "contradiction_ids": ["old_release_process"],
+      "expected_project": "demo",
+      "require_provenance": true,
+      "limit": 1,
+      "max_context_tokens": 700
+    },
+    {
+      "id": "test-preference",
+      "query": "pytest",
+      "expected_ids": ["demo_test_preference"],
+      "expected_project": "demo",
+      "require_provenance": true,
+      "limit": 1,
+      "max_context_tokens": 700
+    },
+    {
+      "id": "permission-decision",
+      "query": "permission",
+      "expected_ids": ["demo_permission_policy"],
+      "expected_project": "demo",
+      "require_provenance": true,
+      "limit": 1,
+      "max_context_tokens": 700
+    }
+  ]
+}

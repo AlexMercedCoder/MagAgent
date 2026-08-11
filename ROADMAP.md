@@ -3,7 +3,7 @@
 > Canonical roadmap for all remaining MagAgent work through `1.0.0`.
 >
 > Last reviewed: 2026-08-11
-> Current release: `0.70.0`
+> Current release: `0.80.0`
 
 ## Product Promise
 
@@ -127,6 +127,12 @@ gateway routing and artifact execution coverage carry forward as focused 0.80 ha
 
 **Outcome:** ordinary terminal and desktop workflows feel responsive, understandable, and
 recoverable, while memory produces measurable value within a bounded token budget.
+
+**Status:** release candidate implemented with thresholded memory-quality evidence,
+scope/provenance-preserving recall, backlink explanations, model/tool liveness heartbeats,
+interactive task recovery and spend controls, versioned desktop recall packets, and quick
+plus 10,000-event performance budgets. Final test, coverage, package, and cross-platform
+evidence is recorded in the 0.80 release record and generated reports.
 
 ### Memory Quality
 

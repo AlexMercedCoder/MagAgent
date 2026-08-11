@@ -175,6 +175,7 @@ def platform_contracts() -> dict[str, Any]:
             "ecosystem_readiness": {"version": "mag.ecosystem-readiness.v1", "status": "beta"},
             "config_schema": {"version": "1", "status": "beta"},
             "memory_batch": {"version": "1", "status": "beta", "requires": "maggraph>=0.4.1"},
+            "memory_recall": {"version": "2", "status": "beta", "requires": "maggraph>=0.4.1"},
             "agentic_graph": {
                 "version": "1.0",
                 "status": "draft-standard",
@@ -352,7 +353,35 @@ def memory_node(username: str, node_id: str) -> dict[str, Any]:
         "ok": True,
         "user": username,
         "node": node,
+        "backlinks": mgr.backlinks(node_id),
         "traversal": mgr.traverse_node(node_id, depth=1),
+    }
+
+
+def memory_recall(
+    username: str,
+    query: str,
+    *,
+    project: str = "",
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Return render-ready recall results plus the bounded context packet."""
+    mgr = MemoryManager(
+        user_memory_dir(username),
+        username=username,
+        project_slug=project or None,
+    )
+    results = mgr.search(query, max_results=max(1, min(limit, 50)), mode="hybrid")
+    context = mgr.recall(query)
+    return {
+        "ok": True,
+        "schema": "magent.memory-recall.v2",
+        "user": username,
+        "project": project,
+        "query": query,
+        "results": results,
+        "context": context,
+        "context_stats": dict(mgr.last_recall_stats),
     }
 
 

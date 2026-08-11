@@ -3,16 +3,40 @@
 from __future__ import annotations
 
 import json
+import os
+import platform
 import subprocess
 import sys
+import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from importlib import metadata
 from pathlib import Path
 from typing import Any
 
+from magent import __version__
 from magent.config import load_config, load_global_config
 from magent.project_scan import scan_estimate
 from magent.workbench_maintenance import workbench_stats
+
+PERFORMANCE_BUDGETS: dict[str, dict[str, float]] = {
+    "quick": {
+        "cold_cli_import_ms_max": 1800.0,
+        "project_inspection_ms_max": 1800.0,
+        "memory_search_average_ms_max": 250.0,
+        "event_write_per_second_min": 100.0,
+        "event_read_1000_ms_max": 500.0,
+        "four_concurrent_tasks_ms_max": 3000.0,
+    },
+    "release": {
+        "cold_cli_import_ms_max": 1500.0,
+        "project_inspection_ms_max": 1500.0,
+        "memory_search_average_ms_max": 150.0,
+        "event_write_per_second_min": 150.0,
+        "event_read_1000_ms_max": 350.0,
+        "four_concurrent_tasks_ms_max": 2000.0,
+    },
+}
 
 
 def install_shape(samples: int = 3) -> dict[str, Any]:
@@ -41,7 +65,8 @@ def install_shape(samples: int = 3) -> dict[str, Any]:
         timings.append(float(json.loads(completed.stdout.strip().splitlines()[-1])["ms"]))
     return {
         "ok": True,
-        "version": distribution.version,
+        "version": __version__,
+        "installed_distribution_version": distribution.version,
         "package_bytes": package_bytes,
         "cold_cli_import_ms": {
             "samples": [round(value, 2) for value in timings],
@@ -89,6 +114,131 @@ def performance_doctor(store: Any, username: str, project: str | Path = ".") -> 
             "selective_tools": config.selective_tools,
         },
         "recommendations": recommendations,
+    }
+
+
+def performance_budget(
+    store: Any,
+    username: str,
+    project: str | Path = ".",
+    *,
+    profile: str = "quick",
+) -> dict[str, Any]:
+    """Exercise daily-driver hot paths and compare them with published budgets."""
+    if profile not in PERFORMANCE_BUDGETS:
+        raise ValueError(f"Unknown performance profile: {profile}")
+    event_count = 10_000 if profile == "release" else 1_000
+    install = install_shape(samples=1)
+    doctor = performance_doctor(store, username, project)
+    memory = _memory_search_benchmark(username)
+    runtime = _task_runtime_benchmark(event_count)
+    metrics = {
+        "cold_cli_import_ms": float(install["cold_cli_import_ms"]["average"]),
+        "project_inspection_ms": round(sum(doctor["timings_ms"].values()), 3),
+        "memory_search_average_ms": memory["average_ms"],
+        "event_write_per_second": runtime["event_write_per_second"],
+        "event_read_1000_ms": runtime["event_read_1000_ms"],
+        "four_concurrent_tasks_ms": runtime["four_concurrent_tasks_ms"],
+    }
+    budgets = PERFORMANCE_BUDGETS[profile]
+    gates = {
+        key: (
+            metrics[key.removesuffix("_max")] <= limit
+            if key.endswith("_max")
+            else metrics[key.removesuffix("_min")] >= limit
+        )
+        for key, limit in budgets.items()
+    }
+    return _redact_home_paths(
+        {
+            "schema": "magent.performance-budget.v1",
+            "ok": all(gates.values()),
+            "profile": profile,
+            "version": install["version"],
+            "environment": {
+                "platform": platform.platform(),
+                "python": platform.python_version(),
+                "cpu_count": os.cpu_count(),
+            },
+            "workload": {"task_events": event_count, "concurrent_tasks": 4},
+            "metrics": metrics,
+            "budgets": budgets,
+            "gates": gates,
+            "details": {"install": install, "doctor": doctor, "memory": memory, "runtime": runtime},
+        }
+    )
+
+
+def _redact_home_paths(value: Any) -> Any:
+    """Keep shareable performance reports free of user-specific home paths."""
+    home = str(Path.home())
+    if isinstance(value, str):
+        return value.replace(home, "~")
+    if isinstance(value, dict):
+        return {key: _redact_home_paths(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_home_paths(item) for item in value]
+    return value
+
+
+def _memory_search_benchmark(username: str, samples: int = 10) -> dict[str, Any]:
+    from magent.config import user_memory_dir
+    from magent.memory import MemoryManager
+
+    manager = MemoryManager(user_memory_dir(username), username=username)
+    timings: list[float] = []
+    result_count = 0
+    for _ in range(samples):
+        started = time.perf_counter()
+        results = manager.search("current project decisions", max_results=5, mode="hybrid")
+        timings.append(_elapsed_ms(started))
+        result_count = max(result_count, len(results))
+    return {
+        "available": manager.available,
+        "samples": samples,
+        "average_ms": round(sum(timings) / max(len(timings), 1), 3),
+        "maximum_ms": round(max(timings, default=0.0), 3),
+        "result_count": result_count,
+    }
+
+
+def _task_runtime_benchmark(event_count: int) -> dict[str, Any]:
+    from magent.task_runtime import TaskRuntime
+
+    with tempfile.TemporaryDirectory(prefix="magent-performance-") as tmp:
+        runtime = TaskRuntime(tmp)
+        task = runtime.create("benchmark", "Event throughput benchmark", project=tmp)
+        started = time.perf_counter()
+        for index in range(event_count):
+            runtime.record_event(task["id"], "benchmark.tick", detail={"index": index})
+        write_ms = _elapsed_ms(started)
+
+        started = time.perf_counter()
+        events = runtime.events(task["id"], after=max(0, event_count - 1000), limit=1000)
+        read_ms = _elapsed_ms(started)
+
+        def task_writer(index: int) -> int:
+            worker = TaskRuntime(tmp)
+            created = worker.create("benchmark", f"Concurrent writer {index}", project=tmp)
+            for event_index in range(25):
+                worker.record_event(
+                    created["id"], "benchmark.concurrent", detail={"index": event_index}
+                )
+            return len(worker.events(created["id"], limit=100))
+
+        started = time.perf_counter()
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            concurrent_counts = list(pool.map(task_writer, range(4)))
+        concurrent_ms = _elapsed_ms(started)
+
+    return {
+        "events_written": event_count,
+        "event_write_ms": write_ms,
+        "event_write_per_second": round(event_count / max(write_ms / 1000, 0.001), 2),
+        "events_read": len(events),
+        "event_read_1000_ms": read_ms,
+        "four_concurrent_tasks_ms": concurrent_ms,
+        "concurrent_event_counts": concurrent_counts,
     }
 
 

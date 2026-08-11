@@ -5,7 +5,12 @@ from pathlib import Path
 
 from magent import config as magent_config
 from magent import workbench
-from magent.performance import performance_doctor
+from magent.performance import (
+    _redact_home_paths,
+    _task_runtime_benchmark,
+    performance_budget,
+    performance_doctor,
+)
 from magent.project_scan import iter_project_files, scan_estimate
 from magent.workbench_maintenance import compact_workbench, prune_workbench, workbench_stats
 
@@ -73,3 +78,58 @@ def test_performance_doctor_reports_local_state(tmp_path: Path, monkeypatch) -> 
     assert result["ok"] is True
     assert result["repo"]["files_seen"] == 1
     assert "load_global_config_ms" in result["timings_ms"]
+
+
+def test_task_runtime_benchmark_exercises_events_and_concurrency() -> None:
+    result = _task_runtime_benchmark(25)
+
+    assert result["events_written"] == 25
+    assert result["events_read"] >= 25
+    assert result["event_write_per_second"] > 0
+    assert result["concurrent_event_counts"] == [26, 26, 26, 26]
+
+
+def test_performance_budget_applies_named_gates(tmp_path: Path, monkeypatch) -> None:
+    from magent import performance
+
+    monkeypatch.setattr(
+        performance,
+        "install_shape",
+        lambda samples=1: {
+            "version": "0.80.0",
+            "cold_cli_import_ms": {"average": 100.0},
+        },
+    )
+    monkeypatch.setattr(
+        performance,
+        "performance_doctor",
+        lambda *args: {"timings_ms": {"config": 10.0}, "ok": True},
+    )
+    monkeypatch.setattr(
+        performance,
+        "_memory_search_benchmark",
+        lambda username: {"average_ms": 5.0},
+    )
+    monkeypatch.setattr(
+        performance,
+        "_task_runtime_benchmark",
+        lambda count: {
+            "event_write_per_second": 500.0,
+            "event_read_1000_ms": 10.0,
+            "four_concurrent_tasks_ms": 20.0,
+        },
+    )
+
+    report = performance_budget(object(), "alice", tmp_path, profile="release")
+
+    assert report["ok"] is True
+    assert report["workload"]["task_events"] == 10_000
+    assert all(report["gates"].values())
+
+
+def test_performance_reports_redact_home_paths() -> None:
+    home = str(Path.home())
+
+    result = _redact_home_paths({"path": f"{home}/project", "nested": [f"{home}/memory"]})
+
+    assert result == {"path": "~/project", "nested": ["~/memory"]}

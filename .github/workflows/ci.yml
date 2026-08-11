@@ -86,12 +86,29 @@ jobs:
         if: matrix.python-version == '3.12'
         run: magent system security-report --output security-assurance.json
 
+      - name: Memory quality and performance gates
+        if: matrix.python-version == '3.12'
+        run: |
+          magent user create ci
+          magent eval memory evals/memory-quality-v2.json --memory-dir evals/fixtures/memory-demo --project demo --report-out memory-quality.json
+          magent performance budget --profile quick --project . --report-out performance-budget.json
+
       - name: Upload security evidence
         if: always() && matrix.python-version == '3.12'
         uses: actions/upload-artifact@v6
         with:
           name: security-assurance-${{ matrix.python-version }}
           path: security-assurance.json
+          if-no-files-found: error
+
+      - name: Upload daily-driver evidence
+        if: always() && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v6
+        with:
+          name: daily-driver-evidence-${{ matrix.python-version }}
+          path: |
+            memory-quality.json
+            performance-budget.json
           if-no-files-found: error
 
       - name: Coverage

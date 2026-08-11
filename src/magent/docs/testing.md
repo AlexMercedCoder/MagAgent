@@ -29,9 +29,10 @@ database connections are closed after every test, while production processes reg
 the same cleanup for shutdown. Semantic-memory SQLite operations use short-lived,
 transactional connections that always release their file handles.
 
-The 0.70.0 baseline is 777 passing tests with 67.73% branch-aware coverage. The configured
-64% floor remains the enforced regression gate. The roadmap's 72% overall target was not
-reached and is recorded as a medium release exception, not hidden by lowering a threshold.
+The 0.80.0 baseline is 785 passing tests with 67% branch-aware coverage. The configured
+floor is ratcheted from 64% to 67% for this release. The earlier roadmap's 72% overall target
+remains unmet and visible; the release does not disguise that gap by changing the historical
+target.
 Current high-risk module evidence includes provider requests at 92%, persistence at 88%,
 network policy at 87%, permissions at 84%, and gateway routing and artifact execution at 76%.
 The next coverage work should close those focused gaps before broad CLI line coverage.
@@ -50,6 +51,8 @@ High-confidence coverage focuses on:
 - non-interactive ask audits and provider tool-use smoke checks
 - opt-in orchestrated goal plan creation, dry-run preview, retry/resume, background queueing, model-role diagnostics, and sub-agent step packet contracts
 - isolated AgentSession task execution, independent artifact validators, per-task fault containment, and release evidence assembly
+- thresholded memory ranking, stale/contradiction avoidance, scope, provenance, backlink, explanation, and token-budget gates
+- model/tool liveness heartbeats, four concurrent task writers, and 10,000-event performance budgets
 
 CI installs the MCP extra, runs the MCP integration fixtures, and uploads the deterministic
 real-agent eval report. Credentialed Nous Portal qualification runs in the separate scheduled

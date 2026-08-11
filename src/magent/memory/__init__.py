@@ -673,6 +673,7 @@ class MemoryManager:
             results = []
             for item in self.index.search(query=query, include_suppressed=False, limit=max_results):
                 data = dict(item)
+                self._enrich_search_result(data)
                 data.setdefault("type", data.get("node_type", ""))
                 data["snippet"] = str(data.get("summary") or "").replace("\n", " ")
                 data["reason"] = _search_reason(data)
@@ -714,6 +715,7 @@ class MemoryManager:
                 limit=max_results,
             ):
                 data = dict(item)
+                self._enrich_search_result(data)
                 data["matched"] = list(data.get("reasons") or [])
                 data["reason"] = ", ".join(data["matched"]) or "hybrid graph search"
                 data["snippet"] = str(data.get("summary") or "").replace("\n", " ")
@@ -739,6 +741,7 @@ class MemoryManager:
         index = self._semantic_index()
         results = [item.as_dict() for item in index.search(query, top_k=max_results, mode=mode)]
         for item in results:
+            self._enrich_search_result(item)
             item.setdefault("matched", ["semantic"])
             item.setdefault("reason", "semantic sidecar match")
             with contextlib.suppress(Exception):
@@ -746,6 +749,31 @@ class MemoryManager:
         if not results and mode != "keyword":
             return self.search(query, max_results=max_results, mode="keyword")
         return results
+
+    def _enrich_search_result(self, item: dict[str, Any]) -> None:
+        """Attach scope and provenance omitted by compact ranker responses."""
+        node_id = str(item.get("id") or "")
+        if not node_id:
+            return
+        node = self.read_node(node_id)
+        if not node:
+            return
+        for key in (
+            "project",
+            "source",
+            "source_task",
+            "source_session",
+            "source_tool",
+            "extraction_method",
+            "confidence",
+            "canonical_id",
+            "valid_from",
+            "valid_to",
+            "superseded_by",
+            "path",
+        ):
+            if node.get(key) not in (None, "", []):
+                item.setdefault(key, node[key])
 
     def semantic_status(self) -> dict[str, Any]:
         if not self.username:

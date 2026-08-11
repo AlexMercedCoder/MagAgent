@@ -46,6 +46,7 @@ Important command paths:
 - `magent readiness`: show setup, docs, project, provider, and model readiness.
 - `magent readiness --smoke`: include a tiny live provider tool-use smoke.
 - `magent performance doctor`: inspect startup, repo, workbench, memory, and config performance.
+- `magent performance budget --profile quick|release`: run local daily-driver performance gates.
 - `magent performance install-shape`: measure installed package bytes and cold CLI import time.
 - `magent tools doctor`: report optional capability readiness and exact extra install commands.
 - `magent cache doctor`: inspect prompt-cache readiness for the current provider/model.
@@ -54,6 +55,7 @@ Important command paths:
 - `magent workbench prune`: prune old high-volume workbench records.
 - `magent workbench compact`: rewrite JSON workbench stores and report bytes reclaimed.
 - `magent session events`: show normalized session events for UI and diagnostics.
+- Interactive `/tasks`, `/task <id> [action]`, `/budget`, and `/why <query>` expose recovery, spend, and recall diagnostics without leaving the session.
 - `magent config show`: show global and current-user config files.
 - `magent config ux`: show a friendly control-center summary for provider, model roles, permissions, memory, subagents, context, and jobs.
 - `magent config get`: return redacted machine-readable global/user/merged config.

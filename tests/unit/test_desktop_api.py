@@ -114,6 +114,36 @@ def test_memory_batch_desktop_contract(monkeypatch, tmp_path: Path) -> None:
     assert result == {"ok": True, "preview": True, "operations": operations}
 
 
+def test_memory_recall_desktop_contract_includes_explanations(monkeypatch, tmp_path: Path) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("alice")
+
+    class FakeManager:
+        def __init__(self, *args, **kwargs):
+            self.last_recall_stats = {"nodes": 1, "tokens": 12, "budget": 4000}
+
+        def search(self, query, *, max_results, mode):
+            return [
+                {
+                    "id": "decision",
+                    "reason": "project match",
+                    "backlinks": ["release"],
+                    "source": "session/review",
+                }
+            ]
+
+        def recall(self, query):
+            return "# Why These Memories\n\n- decision matched project"
+
+    monkeypatch.setattr(desktop_api, "MemoryManager", FakeManager)
+
+    result = desktop_api.memory_recall("alice", "release decision", project="demo")
+
+    assert result["schema"] == "magent.memory-recall.v2"
+    assert result["results"][0]["backlinks"] == ["release"]
+    assert result["context_stats"]["tokens"] == 12
+
+
 def test_desktop_execution_task_contract(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
     magent_config.create_user("alice")
@@ -138,4 +168,5 @@ def test_platform_contracts_publish_stable_task_and_plugin_versions() -> None:
     assert result["contracts"]["task_event"]["version"] == "magent.task-event.v1"
     assert result["contracts"]["plugin_manifest"]["version"] == "1"
     assert result["contracts"]["ecosystem_readiness"]["version"] == "mag.ecosystem-readiness.v1"
+    assert result["contracts"]["memory_recall"]["version"] == "2"
     assert "remote-skills" in result["contracts"]["mcp"]["experimental"]

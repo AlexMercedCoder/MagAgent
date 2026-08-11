@@ -350,6 +350,7 @@ Generated from the active Typer command tree.
 
 ## performance
 
+- `magent performance budget`
 - `magent performance doctor`
 - `magent performance install-shape`
 

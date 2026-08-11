@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mag-agent"
-version = "0.70.0"
+version = "0.80.0"
 description = "MagAgent — CLI AI coding agent with persistent MagGraph memory. Like the Magpie: intelligent, tool-using, and never forgets."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -210,4 +210,4 @@ skip_covered = true
 # Ratchet: raise this as coverage improves, never lower it. The new
 # regression suites (classifier bypasses, CLI surface, durability, safe names)
 # lifted the measured figure, so the floor moves up with them.
-fail_under = 64
+fail_under = 67

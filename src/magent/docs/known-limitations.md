@@ -12,6 +12,11 @@
   experimental contracts can change in a minor release with migration notes.
 - A release evidence report is a snapshot. It does not replace reviewing unresolved issues,
   upstream outages, platform-specific behavior, or the release's documented exceptions.
-- The 0.70.0 suite passes 777 tests at 67.73% branch-aware coverage, below the roadmap's 72%
-  target. The enforced 64% regression floor passes; gateway routing and artifact execution
-  remain the highest-priority security-adjacent coverage gaps at 76% each.
+- The 0.80.0 suite passes 785 tests at 67% branch-aware coverage, below the earlier 72%
+  roadmap target. The enforced floor is now 67%; gateway routing and artifact execution
+  remain focused coverage opportunities at 76% each.
+- Local performance budgets measure MagAgent-controlled work, not provider or internet latency.
+  Results vary by filesystem, antivirus, power mode, repository shape, and concurrent host load.
+- Memory quality evidence uses a small deterministic fixture to enforce ranking and safety
+  contracts. It does not claim that every personal graph or embedding model has identical recall
+  quality; users can maintain project-specific labeled suites.

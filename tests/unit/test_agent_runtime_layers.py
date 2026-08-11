@@ -9,6 +9,7 @@ import pytest
 from magent.agent_runtime import support
 from magent.agent_runtime.context import ContextRuntimeMixin
 from magent.agent_runtime.lifecycle import LifecycleRuntimeMixin
+from magent.agent_runtime.tool_loop import ToolLoopRuntimeMixin
 
 
 class Calls:
@@ -23,6 +24,10 @@ class Calls:
 
 
 class Runtime(ContextRuntimeMixin, LifecycleRuntimeMixin):
+    pass
+
+
+class ToolRuntime(ToolLoopRuntimeMixin):
     pass
 
 
@@ -87,6 +92,65 @@ def runtime() -> Runtime:
 
 async def _async_none(*_args, **_kwargs):
     return None
+
+
+@pytest.mark.asyncio
+async def test_activity_wait_emits_liveness_heartbeat() -> None:
+    import asyncio
+
+    value = ToolRuntime()
+    value.logger = Calls()
+    value.turn_count = 3
+
+    async def slow_value():
+        await asyncio.sleep(0.025)
+        return "done"
+
+    result = await value._await_activity(
+        slow_value(),
+        label="test tool",
+        narrate=False,
+        event_kind="tool",
+        tool_name="read_file",
+        tool_args={"path": "a.py"},
+        interval_seconds=0.005,
+    )
+
+    assert result == "done"
+    events = [item[1][0] for item in value.logger.items if item[0] == "log_activity_event"]
+    assert any(event["type"] == "tool_progress" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_activity_wait_cancels_underlying_work() -> None:
+    import asyncio
+
+    value = ToolRuntime()
+    value.logger = Calls()
+    value.turn_count = 3
+    cancelled = asyncio.Event()
+
+    async def unfinished():
+        try:
+            await asyncio.sleep(60)
+        finally:
+            cancelled.set()
+
+    waiter = asyncio.create_task(
+        value._await_activity(
+            unfinished(),
+            label="test tool",
+            narrate=False,
+            event_kind="tool",
+            interval_seconds=1,
+        )
+    )
+    await asyncio.sleep(0)
+    waiter.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await waiter
+    assert cancelled.is_set()
 
 
 @pytest.mark.parametrize(

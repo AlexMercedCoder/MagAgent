@@ -43,6 +43,12 @@ cancellation, then recording the durable `execution cancel` transition.
 - `magent memory batch --operations-json '[...]' --preview`
 - `magent memory batch --operations-json '[...]'`
 
+Python hosts can call `desktop_api.memory_recall(user, query, project=...)` for a
+`magent.memory-recall.v2` packet containing ranked results, explanations, provenance,
+backlinks, bounded Markdown context, and context token statistics. Node detail also
+returns backlinks explicitly. Desktop clients should render this contract rather than
+reimplementing graph ranking.
+
 `memory update-node --preview` returns old/new body hashes and char counts without writing. Use that before applying desktop edits.
 
 ## SQLite
@@ -82,3 +88,6 @@ Python hosts can use `desktop_api.session_messaging_state`,
 `desktop_api.session_message_send`, and `desktop_api.session_message_review`. These
 facades never expose roster capabilities and keep desktop clients out of transport
 internals.
+
+`magent system contracts` publishes the task, event, memory recall, memory batch,
+configuration, plugin, MCP, and Agentic Graph compatibility levels used by desktop clients.

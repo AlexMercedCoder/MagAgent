@@ -792,10 +792,13 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 "  [cyan]/compose[/cyan]         — Write a formatted multiline prompt\n"
                 "  [cyan]/goal <task>[/cyan]     — Start a verify/review goal loop prompt\n"
                 "  [cyan]/jobs[/cyan]            — Show background jobs\n"
+                "  [cyan]/tasks[/cyan]           — Show durable agent tasks\n"
+                "  [cyan]/task <id> [action][/cyan] — Inspect, resume, retry, or cancel a task\n"
                 "  [cyan]/context [q][/cyan]     — Audit active context and memory\n"
                 "  [cyan]/config[/cyan]          — Show config control-center summary\n"
                 "  [cyan]/statusline[/cyan]      — Preview statusline payload\n"
                 "  [cyan]/usage[/cyan]           — Show token/tool/timing usage for this session\n"
+                "  [cyan]/budget[/cyan]          — Show live session and daily spend guardrails\n"
                 "  [cyan]/insights[/cyan]        — Show recent session diagnostics\n"
                 "  [cyan]/session[/cyan]         — Show this session's durable identity\n"
                 "  [cyan]/peers[/cyan]           — List other live local sessions\n"
@@ -805,6 +808,7 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 "  [cyan]/refuse <id>[/cyan]     — Refuse a held peer message\n"
                 "  [cyan]/receipts[/cyan]        — Show this session's delivery receipts\n"
                 "  [cyan]/memory[/cyan]          — Show memory stats\n"
+                "  [cyan]/why <query>[/cyan]     — Explain recalled memory and backlinks\n"
                 "  [cyan]/skills[/cyan]          — List active skills\n"
                 "  [cyan]/model[/cyan]           — Show current model\n"
                 "  [cyan]/user[/cyan]            — Show current user\n"
@@ -900,6 +904,49 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
         _print_jobs_summary(jobs_summary(_store()))
         return True
 
+    if command == "/tasks":
+        from magent.task_runtime import TaskRuntime
+
+        tasks = TaskRuntime(_store()).list_tasks(limit=20)
+        table = Table("ID", "State", "Kind", "Task", "Updated")
+        for item in tasks:
+            table.add_row(
+                item["id"],
+                item["state"],
+                item["kind"],
+                str(item["title"])[:60],
+                str(item.get("updated_at") or "")[:19],
+            )
+        console.print(table if tasks else "[dim]No durable tasks yet.[/dim]")
+        return True
+
+    if command == "/task":
+        task_parts = arg.split()
+        if not task_parts:
+            console.print("[yellow]Usage: /task <id> [resume|retry|cancel][/yellow]")
+            return True
+        from magent.task_runtime import TaskRuntime, TaskRuntimeError
+
+        runtime = TaskRuntime(_store())
+        task_id = task_parts[0]
+        action = task_parts[1].lower() if len(task_parts) > 1 else "show"
+        try:
+            if action == "show":
+                item = runtime.get(task_id)
+            elif action in {"resume", "retry", "cancel"}:
+                item = getattr(runtime, action)(task_id, reason=f"{action.title()} from interactive session")
+            else:
+                console.print("[yellow]Action must be show, resume, retry, or cancel.[/yellow]")
+                return True
+        except TaskRuntimeError as exc:
+            console.print(f"[red]{exc}[/red]")
+            return True
+        if item is None:
+            console.print(f"[red]Task not found: {task_id}[/red]")
+        else:
+            console.print_json(data={"ok": True, "task": item})
+        return True
+
     if command == "/context":
         from magent.context import context_map
         from magent.daily_driver import context_audit
@@ -931,6 +978,13 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
         _print_session_usage(session_usage(session.logger.path))
         return True
 
+    if command == "/budget":
+        status = session._spend.check()
+        data = status.as_dict()
+        data["enabled"] = session._spend.enabled
+        console.print_json(data=data)
+        return True
+
     if command == "/insights":
         from magent.session_controls import recent_insights
 
@@ -948,6 +1002,23 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
     if command == "/memory":
         stats = session.memory.stats()
         _print_memory_stats(stats, get_current_user() or "?")
+        return True
+
+    if command == "/why":
+        if not arg.strip():
+            console.print("[yellow]Usage: /why <memory query>[/yellow]")
+            return True
+        results = session.memory.search(arg, max_results=5, mode="hybrid")
+        table = Table("Memory", "Why recalled", "Backlinks", "Source")
+        for item in results:
+            metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+            table.add_row(
+                str(item.get("id") or ""),
+                str(item.get("reason") or item.get("reasons") or "graph match"),
+                ", ".join(str(link) for link in item.get("backlinks", [])) or "none",
+                str(item.get("source") or item.get("path") or metadata.get("source") or "local graph"),
+            )
+        console.print(table if results else "[dim]No memory matched that query.[/dim]")
         return True
 
     if command == "/skills":
@@ -2296,6 +2367,8 @@ def release_notes_cmd(
 def release_evidence_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     eval_report: str = typer.Option("", "--eval-report"),
+    memory_report: str = typer.Option("", "--memory-report"),
+    performance_report: str = typer.Option("", "--performance-report"),
     coverage: float | None = typer.Option(None, "--coverage", min=0, max=100),
     coverage_required: float = typer.Option(70, "--coverage-required", min=0, max=100),
     tests: str = typer.Option(
@@ -2312,6 +2385,8 @@ def release_evidence_cmd(
     report = build_release_evidence(
         project,
         eval_report=eval_report or None,
+        memory_report=memory_report or None,
+        performance_report=performance_report or None,
         coverage_percent=coverage,
         coverage_required=coverage_required,
         tests=tests,
