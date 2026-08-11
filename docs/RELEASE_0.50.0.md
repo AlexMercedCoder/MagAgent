@@ -1,6 +1,6 @@
 # MagAgent 0.50.0 Release Record
 
-**Status:** Prepared for release on 2026-08-10.
+**Status:** Released on 2026-08-10.
 
 ## Scope
 
@@ -23,6 +23,7 @@ Machine-readable reports are committed at:
 
 - `docs/reports/0.50.0-agent-evals.json`
 - `docs/reports/0.50.0-nous-live-evals.json`
+- `docs/reports/0.50.0-release-evidence.json`
 
 ## Known Exception
 
@@ -52,3 +53,9 @@ python -m twine check dist/*
 - MagGraph 0.4.x remains the supported memory family; `maggraph>=0.4.1` is required.
 - Task, event, plugin, MCP, and desktop machine contracts are unchanged.
 - Legacy command-only eval suites remain supported alongside `magent.agent-eval.v1`.
+
+## Publication
+
+- Git tag and GitHub release: `v0.50.0`
+- PyPI package: `mag-agent==0.50.0`
+- Published artifacts: source distribution and `py3-none-any` wheel

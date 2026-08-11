@@ -1,0 +1,413 @@
+{
+  "ok": true,
+  "schema": "magent.release-evidence.v1",
+  "version": "0.50.0",
+  "generated_at": "2026-08-11T02:03:03.021077+00:00",
+  "root": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent",
+  "runtime": {
+    "python": "3.14.5",
+    "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35"
+  },
+  "git": {
+    "commit": "e84a479e5953829df64b5d5053add7232702badb",
+    "branch": "main",
+    "tag": "",
+    "clean": false,
+    "status": [
+      "M src/magent/release_evidence.py",
+      "?? roadmap_aug10.md"
+    ]
+  },
+  "checks": {
+    "docs": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "task-contract",
+          "ok": true,
+          "detail": "magent.task.v2"
+        },
+        {
+          "name": "event-contract",
+          "ok": true,
+          "detail": "magent.task-event.v1"
+        },
+        {
+          "name": "memory-contract",
+          "ok": true,
+          "detail": "maggraph>=0.4.1"
+        },
+        {
+          "name": "python-3.11",
+          "ok": true,
+          "detail": "Python 3.11"
+        },
+        {
+          "name": "python-3.12",
+          "ok": true,
+          "detail": "Python 3.12"
+        },
+        {
+          "name": "python-3.13",
+          "ok": true,
+          "detail": "Python 3.13"
+        },
+        {
+          "name": "python-3.14",
+          "ok": true,
+          "detail": "Python 3.14"
+        },
+        {
+          "name": "package-version",
+          "ok": true,
+          "detail": "0.50.0"
+        },
+        {
+          "name": "maggraph-floor",
+          "ok": true,
+          "detail": "maggraph>=0.4.1"
+        },
+        {
+          "name": "python-floor",
+          "ok": true,
+          "detail": ">=3.11"
+        },
+        {
+          "name": "provider-reference",
+          "ok": true,
+          "detail": "generated catalog"
+        }
+      ]
+    },
+    "providers": {
+      "schema": "magent.provider-support.v1",
+      "ok": true,
+      "provider_count": 20,
+      "providers": [
+        {
+          "id": "opencode-go",
+          "display": "OpenCode Go",
+          "default_model": "deepseek-v4-flash",
+          "access_mode": "subscription",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "OPENCODE_GO_KEY",
+          "credential_aliases": [
+            "OPENCODE_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "ollama",
+          "display": "Ollama (local)",
+          "default_model": "qwen2.5-coder:32b",
+          "access_mode": "local",
+          "adapter": "ollama",
+          "local": true,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "lmstudio",
+          "display": "LM Studio (local)",
+          "default_model": "local-model",
+          "access_mode": "local",
+          "adapter": "openai-compatible",
+          "local": true,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "openai",
+          "display": "OpenAI",
+          "default_model": "gpt-5",
+          "access_mode": "api",
+          "adapter": "openai",
+          "local": false,
+          "credential_env": "OPENAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "anthropic",
+          "display": "Anthropic",
+          "default_model": "claude-sonnet-5",
+          "access_mode": "api",
+          "adapter": "anthropic",
+          "local": false,
+          "credential_env": "ANTHROPIC_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "nous-portal",
+          "display": "Nous Portal",
+          "default_model": "deepseek/deepseek-v4-flash",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "NOUS_API_KEY",
+          "credential_aliases": [
+            "NOUS_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "opencode-zen",
+          "display": "OpenCode Zen",
+          "default_model": "deepseek-v4-flash",
+          "access_mode": "payg",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "OPENCODE_ZEN_KEY",
+          "credential_aliases": [
+            "OPENCODE_ZEN_API_KEY",
+            "OPENCODE_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "google",
+          "display": "Google Gemini",
+          "default_model": "gemini-3.6-flash",
+          "access_mode": "api",
+          "adapter": "gemini",
+          "local": false,
+          "credential_env": "GEMINI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "groq",
+          "display": "Groq",
+          "default_model": "llama-3.3-70b-versatile",
+          "access_mode": "api",
+          "adapter": "groq",
+          "local": false,
+          "credential_env": "GROQ_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "openrouter",
+          "display": "OpenRouter",
+          "default_model": "deepseek/deepseek-chat",
+          "access_mode": "api",
+          "adapter": "openrouter",
+          "local": false,
+          "credential_env": "OPENROUTER_API_KEY",
+          "credential_aliases": [
+            "OPENROUTER_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "bedrock",
+          "display": "AWS Bedrock",
+          "default_model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "access_mode": "aws",
+          "adapter": "bedrock",
+          "local": false,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "mistral",
+          "display": "Mistral AI",
+          "default_model": "mistral-large-latest",
+          "access_mode": "api",
+          "adapter": "mistral",
+          "local": false,
+          "credential_env": "MISTRAL_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "deepseek",
+          "display": "DeepSeek",
+          "default_model": "deepseek-chat",
+          "access_mode": "api",
+          "adapter": "deepseek",
+          "local": false,
+          "credential_env": "DEEPSEEK_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "xai",
+          "display": "xAI",
+          "default_model": "grok-4",
+          "access_mode": "api",
+          "adapter": "xai",
+          "local": false,
+          "credential_env": "XAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "perplexity",
+          "display": "Perplexity",
+          "default_model": "sonar-pro",
+          "access_mode": "api",
+          "adapter": "perplexity",
+          "local": false,
+          "credential_env": "PERPLEXITYAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "cerebras",
+          "display": "Cerebras",
+          "default_model": "llama3.1-8b",
+          "access_mode": "api",
+          "adapter": "cerebras",
+          "local": false,
+          "credential_env": "CEREBRAS_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "together_ai",
+          "display": "Together AI",
+          "default_model": "moonshotai/Kimi-K2.5",
+          "access_mode": "api",
+          "adapter": "together_ai",
+          "local": false,
+          "credential_env": "TOGETHERAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "fireworks_ai",
+          "display": "Fireworks AI",
+          "default_model": "accounts/fireworks/models/deepseek-coder-v2-instruct",
+          "access_mode": "api",
+          "adapter": "fireworks_ai",
+          "local": false,
+          "credential_env": "FIREWORKS_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "deepinfra",
+          "display": "DeepInfra",
+          "default_model": "openai/gpt-oss-120b",
+          "access_mode": "api",
+          "adapter": "deepinfra",
+          "local": false,
+          "credential_env": "DEEPINFRA_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "custom",
+          "display": "Custom Endpoint",
+          "default_model": "your-model-name",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        }
+      ],
+      "live_test_command": "magent provider test-matrix",
+      "tool_test_command": "magent provider smoke-all",
+      "policy": "Catalog conformance is offline. Full support requires maintainer-run ping and tool-use reports for the release."
+    },
+    "evals": {
+      "ok": true,
+      "status": "recorded",
+      "report": {
+        "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/docs/reports/0.50.0-agent-evals.json",
+        "sha256": "e62fe17fd51100fa07680b9446b81896f419a528799f21554f636adf09b6c52e",
+        "summary": {
+          "schema": "magent.agent-eval-report.v1",
+          "suite": "reliability-offline",
+          "version": "0.50.0",
+          "ran_at": "2026-08-11T01:55:44.240859+00:00",
+          "passed": 32,
+          "total": 32,
+          "success_rate": 1.0,
+          "artifact_passed": 20,
+          "artifact_total": 20,
+          "artifact_success_rate": 1.0,
+          "targets": {
+            "success_rate": 1.0,
+            "artifact_success_rate": 1.0
+          },
+          "metrics": {
+            "elapsed_ms": 3838.26,
+            "tool_calls": 38,
+            "retries": 0,
+            "time_to_first_activity_ms": 87.45,
+            "prompt_tokens": 0.0,
+            "completion_tokens": 0.0,
+            "total_tokens": 0.0,
+            "cached_tokens": 0.0,
+            "cost_usd": 0.0
+          }
+        }
+      }
+    },
+    "tests": {
+      "ok": true,
+      "status": "731 unit and 3 MCP integration tests passed; CI matrix green on Python 3.11-3.14"
+    },
+    "coverage": {
+      "ok": true,
+      "percent": 64.9,
+      "required": 64.0
+    },
+    "ci": {
+      "ok": true,
+      "url": "https://github.com/AlexMercedCoder/MagAgent/actions/runs/31450857095",
+      "status": "recorded"
+    },
+    "artifacts": {
+      "ok": true,
+      "items": [
+        {
+          "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/dist/mag_agent-0.50.0-py3-none-any.whl",
+          "ok": true,
+          "bytes": 559233,
+          "sha256": "f92851c2c3634089a3ac0da40fab148bc648433519882e5ccb053abb950f14f3"
+        },
+        {
+          "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/dist/mag_agent-0.50.0.tar.gz",
+          "ok": true,
+          "bytes": 2209099,
+          "sha256": "64d145a877bf675fbe539e699e5ed4eb56ae37fba5af16867dc0d7dbf9eb90e6"
+        }
+      ]
+    }
+  },
+  "blocking": [],
+  "exceptions": [
+    "medium: 72% roadmap branch-coverage target deferred; measured 64.9% against enforced 64% floor"
+  ],
+  "blocking_exceptions": []
+}

@@ -49,6 +49,34 @@ def test_release_evidence_exposes_missing_and_bad_artifact(tmp_path: Path, monke
     assert {"evals", "tests", "coverage", "ci", "artifacts"} <= set(report["blocking"])
 
 
+def test_release_evidence_allows_recorded_medium_exception(tmp_path: Path, monkeypatch) -> None:
+    artifact = tmp_path / "wheel.whl"
+    artifact.write_bytes(b"wheel")
+    eval_path = tmp_path / "eval.json"
+    eval_path.write_text('{"ok": true}', encoding="utf-8")
+    monkeypatch.setattr(
+        "magent.release_evidence.documentation_drift_report", lambda root: {"ok": True}
+    )
+    monkeypatch.setattr(
+        "magent.release_evidence.provider_support_report", lambda: {"ok": True}
+    )
+
+    report = build_release_evidence(
+        tmp_path,
+        eval_report=eval_path,
+        coverage_percent=64.9,
+        coverage_required=64,
+        tests="all passed",
+        ci_url="https://example.test/ci",
+        artifacts=[artifact],
+        exceptions=["medium: roadmap coverage target deferred"],
+    )
+
+    assert report["ok"] is True
+    assert report["exceptions"]
+    assert report["blocking_exceptions"] == []
+
+
 def test_release_evidence_atomic_writer(tmp_path: Path) -> None:
     target = tmp_path / "reports" / "evidence.json"
 

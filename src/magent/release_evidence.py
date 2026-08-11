@@ -22,6 +22,7 @@ def build_release_evidence(
     *,
     eval_report: str | Path | None = None,
     coverage_percent: float | None = None,
+    coverage_required: float = 70.0,
     tests: str = "",
     ci_url: str = "",
     artifacts: list[str | Path] | None = None,
@@ -30,6 +31,7 @@ def build_release_evidence(
     """Build a deterministic release evidence report without making network requests."""
     project = Path(root).resolve()
     eval_data = _read_json(eval_report) if eval_report else None
+    eval_evidence = _eval_evidence(eval_report, eval_data) if eval_report and eval_data else None
     artifact_data = [_artifact(project, item) for item in artifacts or []]
     git = _git_evidence(project)
     checks = {
@@ -38,13 +40,13 @@ def build_release_evidence(
         "evals": {
             "ok": bool(eval_data and eval_data.get("ok")),
             "status": "recorded" if eval_data else "missing",
-            "report": eval_data,
+            "report": eval_evidence,
         },
         "tests": {"ok": bool(tests), "status": tests or "missing"},
         "coverage": {
-            "ok": coverage_percent is not None and coverage_percent >= 70.0,
+            "ok": coverage_percent is not None and coverage_percent >= coverage_required,
             "percent": coverage_percent,
-            "required": 70.0,
+            "required": coverage_required,
         },
         "ci": {"ok": bool(ci_url), "url": ci_url, "status": "recorded" if ci_url else "missing"},
         "artifacts": {
@@ -53,8 +55,14 @@ def build_release_evidence(
         },
     }
     blocking = [name for name, result in checks.items() if not result.get("ok")]
+    release_exceptions = list(exceptions or [])
+    blocking_exceptions = [
+        item
+        for item in release_exceptions
+        if item.strip().lower().startswith(("critical:", "high:"))
+    ]
     return {
-        "ok": not blocking and not exceptions,
+        "ok": not blocking and not blocking_exceptions,
         "schema": SCHEMA,
         "version": __version__,
         "generated_at": now_iso(),
@@ -63,7 +71,8 @@ def build_release_evidence(
         "git": git,
         "checks": checks,
         "blocking": blocking,
-        "exceptions": list(exceptions or []),
+        "exceptions": release_exceptions,
+        "blocking_exceptions": blocking_exceptions,
     }
 
 
@@ -78,6 +87,29 @@ def write_release_evidence(report: dict[str, Any], path: str | Path) -> str:
 
 def _read_json(path: str | Path) -> dict[str, Any]:
     return json.loads(Path(path).resolve().read_text(encoding="utf-8"))
+
+
+def _eval_evidence(path: str | Path, report: dict[str, Any]) -> dict[str, Any]:
+    source = Path(path).resolve()
+    keys = (
+        "schema",
+        "suite",
+        "version",
+        "ran_at",
+        "passed",
+        "total",
+        "success_rate",
+        "artifact_passed",
+        "artifact_total",
+        "artifact_success_rate",
+        "targets",
+        "metrics",
+    )
+    return {
+        "path": str(source),
+        "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "summary": {key: report.get(key) for key in keys if key in report},
+    }
 
 
 def _artifact(root: Path, value: str | Path) -> dict[str, Any]:

@@ -19,5 +19,7 @@ documentation drift checks, and packaged-wheel smoke tests before publishing.
 
 `magent release evidence` creates `magent.release-evidence.v1` JSON. It records the source
 commit, runtime, docs and provider contract checks, eval report, test and coverage summaries,
-CI URL, artifact hashes, and explicit exceptions. Missing evidence is reported as missing;
+CI URL, artifact hashes, and severity-prefixed exceptions. `critical:` and `high:` exceptions
+block the evidence gate; recorded `medium:` and `low:` exceptions remain visible without
+overriding a passing enforced gate. Missing evidence is reported as missing;
 the command never infers that an external check passed.
