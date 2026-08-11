@@ -1,6 +1,7 @@
 """Tests for built-in tool safety and schemas."""
 
 import asyncio
+import shlex
 import sys
 import zipfile
 from pathlib import Path
@@ -783,7 +784,7 @@ async def test_open_file_and_git_delegate_to_shell(monkeypatch, tmp_path: Path) 
     git = await tools.git_op("status", "--short")
 
     assert opened["ok"] is True
-    assert commands[0] == f"/usr/bin/xdg-open {tmp_path / 'notes.txt'}"
+    assert commands[0] == f"/usr/bin/xdg-open {shlex.quote(str(tmp_path / 'notes.txt'))}"
     assert git["ok"] is True
     assert commands[1] == "git status --short"
 
