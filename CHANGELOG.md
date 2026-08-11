@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.70.0
+
+- Added TrustedRouter and Prime Intellect as first-class OpenAI-compatible providers, including support tiers, dated evidence, credential aliases, Prime team routing, setup flows, machine-readable matrices, and generated documentation.
+- Added a deterministic `magent system security-report` covering command-policy bypass probes, SSRF controls, path containment, fail-closed gateways, secret handling, and atomic persistence; release evidence now embeds its result.
+- Expanded security and durability regression coverage across shell parsing, redirects, response limits, gateway authorization and lifecycle, graph containment, provider error redaction, and workbench recovery.
+- Added public-wheel acceptance on Linux, macOS, and Windows and generalized the credentialed provider-qualification workflow for all primary providers.
+- Published the current threat model, provider support semantics, known limitations, and 0.70 release evidence while consolidating the remaining path to 1.0 into one roadmap.
+
 ## 0.60.0
 
 - Split the agent runtime into typed context, tool-loop, lifecycle, and support modules while preserving `AgentSession` compatibility.

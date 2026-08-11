@@ -29,9 +29,12 @@ database connections are closed after every test, while production processes reg
 the same cleanup for shutdown. Semantic-memory SQLite operations use short-lived,
 transactional connections that always release their file handles.
 
-The current baseline is 715 passing tests with 65.91% branch coverage. The configured
-64% floor is a regression gate, not the end target; new extracted runtime modules
-should aim for at least 85% behavioral coverage.
+The 0.70.0 baseline is 777 passing tests with 67.73% branch-aware coverage. The configured
+64% floor remains the enforced regression gate. The roadmap's 72% overall target was not
+reached and is recorded as a medium release exception, not hidden by lowering a threshold.
+Current high-risk module evidence includes provider requests at 92%, persistence at 88%,
+network policy at 87%, permissions at 84%, and gateway routing and artifact execution at 76%.
+The next coverage work should close those focused gaps before broad CLI line coverage.
 
 High-confidence coverage focuses on:
 

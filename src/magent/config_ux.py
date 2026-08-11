@@ -16,6 +16,7 @@ from magent.config import (
 from magent.provider_catalog import (
     PROVIDER_CATALOG,
     PROVIDER_ORDER,
+    PROVIDER_SUPPORT,
     default_access_modes,
     default_models,
     provider_env_aliases,
@@ -179,6 +180,12 @@ def provider_matrix() -> dict[str, Any]:
                 "env_aliases": list(provider_env_aliases(provider_id)),
                 "env_present_name": readiness.get("env_present_name", ""),
                 "detected": detected.get(provider_id, {}),
+                "support_tier": PROVIDER_SUPPORT.get(provider_id, {}).get(
+                    "tier", "experimental"
+                ),
+                "evidence_date": PROVIDER_SUPPORT.get(provider_id, {}).get(
+                    "evidence_date", ""
+                ),
             }
         )
     return {"ok": True, "providers": rows}
@@ -198,6 +205,7 @@ def provider_explain(provider_id: str) -> dict[str, Any]:
         "provider": provider_id,
         "metadata": metadata,
         "configured": provider_id in cfg.get("providers", {}),
+        "support": PROVIDER_SUPPORT.get(provider_id, {}),
         "access_modes": provider_access_modes(provider_id),
         "env_present": readiness["env_present"],
         "credential_configured": readiness["credential_configured"],
@@ -270,6 +278,7 @@ def set_default_provider(
     api_key_keyring: str = "",
     base_url: str = "",
     access_mode: str = "",
+    team_id: str = "",
 ) -> dict[str, Any]:
     """Set default provider/model and provider entry in global config."""
     cfg = load_global_config()
@@ -289,6 +298,8 @@ def set_default_provider(
         entry["api_key_keyring"] = api_key_keyring
     if base_url:
         entry["base_url"] = base_url
+    if team_id:
+        entry["team_id"] = team_id
     save_global_config(cfg)
     if api_key:
         _tighten_global_config_permissions()
@@ -310,6 +321,7 @@ def configure_provider_entry(
     api_key_keyring: str = "",
     base_url: str = "",
     access_mode: str = "",
+    team_id: str = "",
 ) -> dict[str, Any]:
     """Configure provider credentials without changing the default chat provider."""
     provider_id = provider_id.strip()
@@ -331,6 +343,8 @@ def configure_provider_entry(
         entry["api_key_keyring"] = api_key_keyring
     if base_url:
         entry["base_url"] = base_url
+    if team_id:
+        entry["team_id"] = team_id
     save_global_config(cfg)
     if api_key:
         _tighten_global_config_permissions()

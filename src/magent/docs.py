@@ -110,6 +110,7 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
         "session-messaging",
         "agentic-graphs",
         "hardening",
+        "threat-model",
         "known-limitations",
         "release-policy",
     }
@@ -221,18 +222,24 @@ def render_command_reference(command_names: list[str]) -> str:
 
 def render_provider_reference() -> str:
     """Generate provider reference Markdown from the provider catalog."""
-    from magent.provider_catalog import PROVIDER_CATALOG, PROVIDER_ORDER, provider_env_aliases
+    from magent.provider_catalog import (
+        PROVIDER_CATALOG,
+        PROVIDER_ORDER,
+        PROVIDER_SUPPORT,
+        provider_env_aliases,
+    )
 
     lines = [
         "# Provider Reference",
         "",
         "Generated from `magent.provider_catalog`.",
         "",
-        "| Provider | ID | Default Model | Access | Env | Runtime |",
-        "|---|---|---|---|---|---|",
+        "| Provider | ID | Default Model | Access | Env | Runtime | Tier | Evidence |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for provider_id in PROVIDER_ORDER:
         metadata = PROVIDER_CATALOG[provider_id]
+        support = PROVIDER_SUPPORT.get(provider_id, {})
         lines.append(
             "| "
             + " | ".join(
@@ -243,6 +250,8 @@ def render_provider_reference() -> str:
                     metadata["access_mode"],
                     f"`{metadata.get('env', '')}`" if metadata.get("env") else "",
                     metadata["litellm"],
+                    str(support.get("tier", "experimental")),
+                    str(support.get("evidence_date", "")),
                 ]
             )
             + " |"

@@ -1,6 +1,6 @@
 # Security And Hardening
 
-MagAgent 0.35.1 tightens every boundary where agent-generated input can reach the host,
+MagAgent 0.70.0 revalidates every boundary where agent-generated input can reach the host,
 network, gateways, plugins, local services, or durable state.
 
 ## Inspect Shell Policy
@@ -96,10 +96,12 @@ pytest tests/unit -q
 pytest tests/unit --cov=magent --cov-report=term-missing
 magent docs generate-reference --check
 magent docs doctor
+magent system security-report --output security-report.json
 python -m build
 python -m twine check dist/*
 ```
 
 Focused regression suites cover permission bypasses, gateway authorization, local UI tokens,
 plugin and session path containment, durable state, provider conformance, CLI registration, and
-safe resource naming.
+safe resource naming. See `magent docs show threat-model` for trust boundaries,
+threats, mitigations, residual risks, and the release-blocking policy.

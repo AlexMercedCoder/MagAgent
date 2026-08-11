@@ -33,6 +33,8 @@ def test_build_litellm_model_for_supported_provider_ids() -> None:
     assert _build_litellm_model("google", "gemini/gemini-2.5") == "gemini/gemini-2.5"
     assert _build_litellm_model("groq", "llama") == "groq/llama"
     assert _build_litellm_model("openrouter", "deepseek/chat") == "openrouter/deepseek/chat"
+    assert _build_litellm_model("trusted-router", "trustedrouter/cheap") == "openai/trustedrouter/cheap"
+    assert _build_litellm_model("prime-intellect", "meta-llama/model") == "openai/meta-llama/model"
     assert _build_litellm_model("bedrock", "anthropic.claude") == "bedrock/anthropic.claude"
     assert _build_litellm_model("mistral", "mistral-large-latest") == "mistral/mistral-large-latest"
     assert _build_litellm_model("deepseek", "deepseek-chat") == "deepseek/deepseek-chat"
@@ -79,11 +81,28 @@ def test_provider_catalog_exposes_new_easy_provider_batch() -> None:
         "together_ai",
         "fireworks_ai",
         "deepinfra",
+        "trusted-router",
+        "prime-intellect",
     }
 
     assert expected <= set(PROVIDER_DISPLAY_NAMES)
     assert PROVIDER_BASE_URLS["lmstudio"] == "http://localhost:1234/v1"
+    assert PROVIDER_BASE_URLS["trusted-router"] == "https://api.trustedrouter.com/v1"
+    assert PROVIDER_BASE_URLS["prime-intellect"] == "https://api.pinference.ai/api/v1"
     assert validate_provider_catalog()["ok"] is True
+
+
+def test_prime_intellect_team_header_is_optional() -> None:
+    personal = _build_api_kwargs("prime-intellect", "model", {}, api_key="key")
+    team = _build_api_kwargs(
+        "prime-intellect",
+        "model",
+        {"team_id": "team-123"},
+        api_key="key",
+    )
+
+    assert "extra_headers" not in personal
+    assert team["extra_headers"] == {"X-Prime-Team-ID": "team-123"}
 
 
 def test_provider_request_kwargs_adds_cache_hints() -> None:
@@ -139,7 +158,10 @@ def test_model_capabilities_identify_image_models() -> None:
 
 @pytest.mark.asyncio
 async def test_provider_complete_stream_and_extract_fn(monkeypatch) -> None:
+    calls = []
+
     async def fake_acompletion(**kwargs):
+        calls.append(kwargs)
         if kwargs.get("stream"):
             async def chunks():
                 yield SimpleNamespace(
@@ -170,6 +192,7 @@ async def test_provider_complete_stream_and_extract_fn(monkeypatch) -> None:
     extract = provider.as_extract_fn()
     assert await extract([{"role": "user", "content": "extract"}]) == "complete"
     assert await provider_health_check(provider) is True
+    assert calls[-1]["max_tokens"] == 256
 
 
 @pytest.mark.asyncio
@@ -186,6 +209,25 @@ async def test_provider_wraps_litellm_errors(monkeypatch) -> None:
 
     with pytest.raises(ProviderError):
         await provider.complete([{"role": "user", "content": "hi"}])
+
+
+@pytest.mark.asyncio
+async def test_provider_errors_scrub_credentials(monkeypatch) -> None:
+    async def fake_acompletion(**kwargs):
+        raise RuntimeError("Authorization: Bearer sk-secretsecretsecretsecret")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "litellm",
+        SimpleNamespace(acompletion=fake_acompletion, suppress_debug_info=False),
+    )
+    provider = Provider("custom", "model", provider_cfg={"base_url": "https://example.test"})
+
+    with pytest.raises(ProviderError) as captured:
+        await provider.complete([{"role": "user", "content": "hi"}])
+
+    assert "secretsecret" not in str(captured.value)
+    assert "***" in str(captured.value)
 
     assert await provider_health_check(provider) is False
 

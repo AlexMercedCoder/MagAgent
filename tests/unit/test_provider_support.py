@@ -13,6 +13,18 @@ def test_provider_support_report_is_complete_and_secret_free() -> None:
     assert report["ok"] is True
     assert report["provider_count"] == len(PROVIDER_ORDER)
     assert {item["id"] for item in report["providers"]} == set(PROVIDER_ORDER)
+    assert {item["support_tier"] for item in report["providers"]} <= {
+        "qualified",
+        "compatible",
+        "experimental",
+    }
+    assert all(item["evidence_date"] for item in report["providers"])
+    assert {"trusted-router", "prime-intellect"} <= {
+        item["id"] for item in report["providers"]
+    }
+    nous = next(item for item in report["providers"] if item["id"] == "nous-portal")
+    assert nous["live_conformance"] == "passed"
+    assert nous["evidence_source"].endswith("0.50.0-nous-live-evals.json")
     serialized = json.dumps(report).lower()
     assert "sk-" not in serialized
     assert "bearer " not in serialized

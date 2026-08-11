@@ -11,7 +11,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![CI](https://github.com/AlexMercedCoder/MagAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexMercedCoder/MagAgent/actions/workflows/ci.yml)
 
-[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Agentic Graphs](#agentic-graphs) · [Gateway](#remote-gateway) · [1.0 Roadmap](ROADMAP_TO_1.0.md) · [Ecosystem Roadmap](ROADMAP.md) · [Docs](docs/)
+[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Agentic Graphs](#agentic-graphs) · [Gateway](#remote-gateway) · [Roadmap to 1.0](ROADMAP.md) · [Docs](docs/)
 
 </div>
 

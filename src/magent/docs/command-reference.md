@@ -488,6 +488,7 @@ Generated from the active Typer command tree.
 - `magent system contracts`
 - `magent system ecosystem-report`
 - `magent system info`
+- `magent system security-report`
 
 ## task
 

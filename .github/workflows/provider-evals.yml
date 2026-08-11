@@ -3,21 +3,34 @@ name: Provider Qualification
 on:
   workflow_dispatch:
     inputs:
-      model:
-        description: Nous Portal model
+      provider:
+        description: Provider id to qualify
         required: false
-        default: deepseek/deepseek-v4-flash
+        default: nous-portal
+      model:
+        description: Provider model
+        required: false
+        default: ""
   schedule:
     - cron: "17 9 * * 1"
 
 jobs:
-  nous-live-evals:
+  live-provider-evals:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     env:
       NOUS_API_KEY: ${{ secrets.NOUS_API_KEY }}
-      EVAL_MODEL: ${{ inputs.model || 'deepseek/deepseek-v4-flash' }}
+      TRUSTEDROUTER_API_KEY: ${{ secrets.TRUSTEDROUTER_API_KEY }}
+      PRIME_INTELLECT_API_KEY: ${{ secrets.PRIME_INTELLECT_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENCODE_GO_KEY: ${{ secrets.OPENCODE_GO_KEY }}
+      OPENCODE_ZEN_KEY: ${{ secrets.OPENCODE_ZEN_KEY }}
+      EVAL_PROVIDER: ${{ inputs.provider || 'nous-portal' }}
+      EVAL_MODEL: ${{ inputs.model || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -30,23 +43,36 @@ jobs:
         id: credential
         shell: bash
         run: |
-          if [ -n "$NOUS_API_KEY" ]; then
+          case "$EVAL_PROVIDER" in
+            nous-portal) key="$NOUS_API_KEY" ;;
+            trusted-router) key="$TRUSTEDROUTER_API_KEY" ;;
+            prime-intellect) key="$PRIME_INTELLECT_API_KEY" ;;
+            openai) key="$OPENAI_API_KEY" ;;
+            anthropic) key="$ANTHROPIC_API_KEY" ;;
+            google) key="$GEMINI_API_KEY" ;;
+            openrouter) key="$OPENROUTER_API_KEY" ;;
+            opencode-go) key="$OPENCODE_GO_KEY" ;;
+            opencode-zen) key="$OPENCODE_ZEN_KEY" ;;
+            *) key="" ;;
+          esac
+          if [ -n "$key" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "NOUS_API_KEY is not configured; live qualification skipped."
+            echo "Credential for $EVAL_PROVIDER is not configured; live qualification skipped."
           fi
       - name: Run live AgentSession evals
         if: steps.credential.outputs.available == 'true'
         run: |
-          magent eval run evals/reliability-live.json \
-            --provider nous-portal \
-            --model "$EVAL_MODEL" \
-            --report-out provider-eval-report.json
+          args=(eval run evals/reliability-live.json --provider "$EVAL_PROVIDER" --report-out provider-eval-report.json)
+          if [ -n "$EVAL_MODEL" ]; then
+            args+=(--model "$EVAL_MODEL")
+          fi
+          magent "${args[@]}"
       - name: Upload qualification report
         if: always() && steps.credential.outputs.available == 'true'
         uses: actions/upload-artifact@v6
         with:
-          name: provider-eval-report
+          name: provider-eval-report-${{ env.EVAL_PROVIDER }}
           path: provider-eval-report.json
           if-no-files-found: error

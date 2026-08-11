@@ -315,6 +315,22 @@ def test_provider_ux_matrix_recommend_env_and_explain(tmp_path: Path, monkeypatc
     assert catalog["ok"] is True
 
 
+def test_prime_intellect_team_id_is_configurable(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+
+    result = config_ux.set_default_provider(
+        "prime-intellect",
+        "meta-llama/llama-3.1-70b-instruct",
+        api_key_env="PRIME_INTELLECT_API_KEY",
+        team_id="team-42",
+    )
+    cfg = magent_config.load_global_config()
+
+    assert result["ok"] is True
+    assert result["config"]["team_id"] == "team-42"
+    assert cfg["providers"]["prime-intellect"]["team_id"] == "team-42"
+
+
 def test_config_safety_backup_diff_and_restore(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
     monkeypatch.setattr(config_safety, "CONFIG_DIR", magent_config.CONFIG_DIR)

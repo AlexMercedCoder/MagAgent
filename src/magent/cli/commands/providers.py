@@ -19,14 +19,17 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
         """Show provider catalog, access mode, env, and configured state."""
         from magent.config_ux import provider_matrix
 
-        table = Table("Provider", "Default Model", "Access", "Env", "Ready", "Configured")
+        table = Table(
+            "Provider", "Default Model", "Access", "Tier", "Evidence", "Ready", "Configured"
+        )
         for item in provider_matrix()["providers"]:
             ready = "yes" if item["ready"] else "no"
             table.add_row(
                 item["id"],
                 item["default_model"],
                 item["access_mode"],
-                item["env"],
+                item["support_tier"],
+                item["evidence_date"],
                 ready,
                 "yes" if item["configured"] else "no",
             )

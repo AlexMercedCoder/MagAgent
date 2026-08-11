@@ -12,6 +12,7 @@ from typing import Any
 from magent import __version__
 from magent.docs import documentation_drift_report
 from magent.provider_catalog import provider_support_report
+from magent.security_assurance import security_assurance_report
 from magent.workbench_store import now_iso
 
 SCHEMA = "magent.release-evidence.v1"
@@ -37,6 +38,7 @@ def build_release_evidence(
     checks = {
         "docs": documentation_drift_report(project),
         "providers": provider_support_report(),
+        "security": security_assurance_report(),
         "evals": {
             "ok": bool(eval_data and eval_data.get("ok")),
             "status": "recorded" if eval_data else "missing",

@@ -211,6 +211,24 @@ def system_contracts_cmd() -> None:
     console.print_json(data=platform_contracts())
 
 
+@system_app.command("security-report")
+def system_security_report_cmd(
+    output: str | None = typer.Option(None, "--output", "-o", help="Write the JSON report."),
+) -> None:
+    """Run credential-free security boundary probes."""
+    from magent.security_assurance import (
+        security_assurance_report,
+        write_security_assurance_report,
+    )
+
+    report = security_assurance_report()
+    if output:
+        report["saved_to"] = write_security_assurance_report(report, output)
+    console.print_json(data=report)
+    if not report["ok"]:
+        raise typer.Exit(1)
+
+
 @system_app.command("ecosystem-report")
 def system_ecosystem_report_cmd(
     root: str = typer.Option(".", "--root", help="Mag ecosystem workspace or MagAgent checkout."),
@@ -2534,6 +2552,7 @@ def provider_set_cmd(
     api_key: str = typer.Option("", "--api-key"),
     api_key_keyring: str = typer.Option("", "--api-key-keyring"),
     base_url: str = typer.Option("", "--base-url"),
+    team_id: str = typer.Option("", "--team-id", help="Optional provider team identifier"),
     access_mode: str = typer.Option(
         "", "--access", help="api, codex, payg, subscription, or local"
     ),
@@ -2550,6 +2569,7 @@ def provider_set_cmd(
             api_key_keyring=api_key_keyring,
             base_url=base_url,
             access_mode=access_mode,
+            team_id=team_id,
         )
     )
 
@@ -2577,6 +2597,9 @@ def provider_wizard_cmd():
     except (ValueError, IndexError):
         access_mode = modes[0]["id"]
     model = Prompt.ask("Default model", default=selected["default_model"])
+    team_id = ""
+    if selected["id"] == "prime-intellect":
+        team_id = Prompt.ask("Prime Intellect team ID (optional)", default="").strip()
     api_key_env = ""
     api_key = ""
     if access_mode not in {"codex", "local"}:
@@ -2606,6 +2629,7 @@ def provider_wizard_cmd():
         api_key_env=api_key_env,
         api_key=api_key,
         access_mode=access_mode,
+        team_id=team_id,
     )
     console.print_json(data=result)
 

@@ -82,6 +82,18 @@ jobs:
           raise SystemExit(result.exit_code)
           PY
 
+      - name: Security assurance probes
+        if: matrix.python-version == '3.12'
+        run: magent system security-report --output security-assurance.json
+
+      - name: Upload security evidence
+        if: always() && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v6
+        with:
+          name: security-assurance-${{ matrix.python-version }}
+          path: security-assurance.json
+          if-no-files-found: error
+
       - name: Coverage
         if: matrix.python-version == '3.12'
         run: python -m pytest tests/unit tests/integration --cov=magent --cov-report=term-missing:skip-covered
@@ -97,3 +109,28 @@ jobs:
           /tmp/magent-core/bin/python -m pip install dist/*.whl
           /tmp/magent-core/bin/magent --version
           /tmp/magent-core/bin/magent tools doctor
+
+  packaged-acceptance:
+    name: Packaged acceptance (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Build wheel
+        run: python -m pip install --upgrade pip build pytest && python -m build --wheel
+      - name: Install public-shape wheel
+        run: python -c "import glob, subprocess, sys; subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--force-reinstall', glob.glob('dist/*.whl')[0]])"
+      - name: CLI and security smoke
+        run: |
+          magent --version
+          magent tools doctor
+          magent system security-report
+      - name: Cross-platform contract tests
+        run: python -m pytest -q tests/unit/test_permissions_bypass.py tests/unit/test_safe_names.py tests/unit/test_durability_and_state.py tests/unit/test_auth_store.py tests/unit/test_tools_safety.py tests/unit/test_provider_support.py tests/unit/test_security_assurance.py

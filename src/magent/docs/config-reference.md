@@ -9,7 +9,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'0.35.1'`
+- `agent.version` default: `'0.70.0'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 - `agent.max_model_rounds_per_turn` default: `16`
@@ -174,6 +174,8 @@ Use `magent provider matrix` and `magent provider test-matrix` for live readines
 - `google`
 - `groq`
 - `openrouter`
+- `trusted-router`
+- `prime-intellect`
 - `bedrock`
 - `mistral`
 - `deepseek`

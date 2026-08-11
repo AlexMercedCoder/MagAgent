@@ -32,11 +32,13 @@ magent docs doctor
 - [Desktop Integration](../src/magent/docs/desktop-integration.md)
 - [Agentic Graphs](../src/magent/docs/agentic-graphs.md)
 - [Security And Hardening](../src/magent/docs/hardening.md)
+- [Threat Model](../src/magent/docs/threat-model.md)
 - [MagAgent 0.34.0 Release Record](RELEASE_0.34.0.md)
 - [MagAgent 0.35.0 Release Record](RELEASE_0.35.0.md)
 - [MagAgent 0.35.1 Release Record](RELEASE_0.35.1.md)
 - [MagAgent 0.50.0 Release Record](RELEASE_0.50.0.md)
 - [MagAgent 0.60.0 Release Record](RELEASE_0.60.0.md)
+- [MagAgent 0.70.0 Release Record](RELEASE_0.70.0.md)
 
 Common setup tasks now have CLI-first flows:
 
@@ -79,8 +81,7 @@ magent graph plan repair.agraph.yaml
 
 ## Architecture And Workflow
 
-- [MagAgent Roadmap To 1.0](../ROADMAP_TO_1.0.md)
-- [Mag Ecosystem Roadmap](../ROADMAP.md)
+- [MagAgent Roadmap to 1.0](../ROADMAP.md)
 - [Architecture](../src/magent/docs/architecture.md)
 - [Architecture Exceptions](../src/magent/docs/architecture-exceptions.md)
 - [Workbench](../src/magent/docs/workbench.md)

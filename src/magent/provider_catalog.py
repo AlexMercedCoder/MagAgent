@@ -90,6 +90,24 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
         "access_mode": "api",
         "litellm": "openrouter",
     },
+    "trusted-router": {
+        "label": "TrustedRouter (private, attested OpenAI-compatible routing)",
+        "display": "TrustedRouter",
+        "default_model": "trustedrouter/cheap",
+        "env": "TRUSTEDROUTER_API_KEY",
+        "access_mode": "api",
+        "base_url": "https://api.trustedrouter.com/v1",
+        "litellm": "openai-compatible",
+    },
+    "prime-intellect": {
+        "label": "Prime Intellect Inference",
+        "display": "Prime Intellect",
+        "default_model": "meta-llama/llama-3.1-70b-instruct",
+        "env": "PRIME_INTELLECT_API_KEY",
+        "access_mode": "api",
+        "base_url": "https://api.pinference.ai/api/v1",
+        "litellm": "openai-compatible",
+    },
     "bedrock": {
         "label": "AWS Bedrock (uses AWS credentials/profile)",
         "display": "AWS Bedrock",
@@ -181,6 +199,8 @@ PROVIDER_ORDER = [
     "google",
     "groq",
     "openrouter",
+    "trusted-router",
+    "prime-intellect",
     "bedrock",
     "mistral",
     "deepseek",
@@ -204,7 +224,43 @@ PROVIDER_ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "opencode-zen": ("OPENCODE_ZEN_API_KEY", "OPENCODE_KEY"),
     "nous-portal": ("NOUS_KEY",),
     "openrouter": ("OPENROUTER_KEY",),
+    "trusted-router": ("TRUSTED_ROUTER_API_KEY",),
+    "prime-intellect": ("PRIMEINTELLECT_API_KEY", "PRIME_API_KEY"),
 }
+
+# Catalog presence is not a live-support claim. These tiers are intentionally
+# conservative and are surfaced by the CLI, generated docs, release evidence,
+# and machine clients. A provider moves to ``qualified`` only with a dated,
+# sanitized completion/tool-use report.
+PROVIDER_SUPPORT: dict[str, dict[str, Any]] = {
+    provider_id: {
+        "tier": "compatible",
+        "evidence_date": "2026-08-11",
+        "capabilities": ["completion", "streaming", "tools", "usage"],
+        "limitations": ["Live qualification is required for the selected model."],
+    }
+    for provider_id in PROVIDER_ORDER
+}
+PROVIDER_SUPPORT["nous-portal"] = {
+    "tier": "qualified",
+    "evidence_date": "2026-08-11",
+    "evidence_source": "docs/reports/0.50.0-nous-live-evals.json",
+    "capabilities": [
+        "completion",
+        "streaming",
+        "tools",
+        "usage",
+        "artifact-creation",
+    ],
+    "limitations": ["Qualification applies to the tested model and account tier."],
+}
+for _local_provider in ("ollama", "lmstudio"):
+    PROVIDER_SUPPORT[_local_provider] = {
+        "tier": "compatible",
+        "evidence_date": "2026-08-11",
+        "capabilities": ["completion", "streaming", "tools"],
+        "limitations": ["Behavior depends on the locally installed model and server version."],
+    }
 
 
 def provider_metadata(provider_id: str) -> dict[str, Any]:
@@ -297,6 +353,7 @@ def provider_support_report() -> dict[str, Any]:
     providers = []
     for provider_id in PROVIDER_ORDER:
         metadata = PROVIDER_CATALOG[provider_id]
+        support = PROVIDER_SUPPORT.get(provider_id, {})
         providers.append(
             {
                 "id": provider_id,
@@ -308,7 +365,14 @@ def provider_support_report() -> dict[str, Any]:
                 "credential_env": metadata.get("env", ""),
                 "credential_aliases": list(provider_env_aliases(provider_id)),
                 "catalog_conformance": "passed" if not any(issue["provider"] == provider_id for issue in validation["issues"]) else "failed",
-                "live_conformance": "not-run",
+                "live_conformance": (
+                    "passed" if support.get("tier") == "qualified" else "not-run"
+                ),
+                "support_tier": support.get("tier", "experimental"),
+                "evidence_date": support.get("evidence_date", ""),
+                "evidence_source": support.get("evidence_source", ""),
+                "capabilities": list(support.get("capabilities", [])),
+                "limitations": list(support.get("limitations", [])),
             }
         )
     return {
@@ -318,5 +382,10 @@ def provider_support_report() -> dict[str, Any]:
         "providers": providers,
         "live_test_command": "magent provider test-matrix",
         "tool_test_command": "magent provider smoke-all",
+        "tiers": {
+            "qualified": "Completion, streaming, tools, cancellation, retries, usage, and caching are release-qualified for a tested model.",
+            "compatible": "Catalog and adapter contracts pass; live behavior remains model/account dependent.",
+            "experimental": "Known upstream or implementation limitations remain.",
+        },
         "policy": "Catalog conformance is offline. Full support requires maintainer-run ping and tool-use reports for the release.",
     }

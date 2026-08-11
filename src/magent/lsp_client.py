@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from magent import __version__
+
 
 class LspError(RuntimeError):
     """Raised when an LSP process or request fails."""
@@ -69,7 +71,7 @@ class LspClient:
             "initialize",
             {
                 "processId": None,
-                "clientInfo": {"name": "MagAgent", "version": "0.60.0"},
+                "clientInfo": {"name": "MagAgent", "version": __version__},
                 "rootUri": self.root.as_uri(),
                 "workspaceFolders": [{"uri": self.root.as_uri(), "name": self.root.name}],
                 "initializationOptions": self.initialization_options,

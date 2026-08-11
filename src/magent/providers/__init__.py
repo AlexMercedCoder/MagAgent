@@ -17,6 +17,7 @@ from magent.provider_catalog import (
     provider_display_names,
     provider_metadata,
 )
+from magent.secret_scrub import scrub_secrets
 
 console = Console()
 
@@ -88,6 +89,11 @@ def _build_api_kwargs(
         kwargs["api_key"] = resolved_key
     elif provider in OPENAI_COMPATIBLE_PROVIDERS or provider == "ollama":
         kwargs["api_key"] = "sk-magent"  # dummy for local/custom OpenAI-compat endpoints
+
+    # Prime Intellect team accounts require this header. Keeping it in provider
+    # config means the same setting works through CLI, desktop, and daemon paths.
+    if provider == "prime-intellect" and provider_cfg.get("team_id"):
+        kwargs["extra_headers"] = {"X-Prime-Team-ID": str(provider_cfg["team_id"])}
 
     return kwargs
 
@@ -166,7 +172,9 @@ class Provider:
             from magent.provider_cooldown import cooldown_from_exception
 
             cooldown_from_exception(self.provider_id, e)
-            raise ProviderError(f"Provider '{self.provider_id}' error: {e}") from e
+            raise ProviderError(
+                f"Provider '{self.provider_id}' error: {scrub_secrets(str(e))}"
+            ) from e
 
     async def stream(
         self,
@@ -199,7 +207,9 @@ class Provider:
             from magent.provider_cooldown import cooldown_from_exception
 
             cooldown_from_exception(self.provider_id, e)
-            raise ProviderError(f"Streaming error from '{self.provider_id}': {e}") from e
+            raise ProviderError(
+                f"Streaming error from '{self.provider_id}': {scrub_secrets(str(e))}"
+            ) from e
 
     def as_extract_fn(self):
         """Return an async callable for memory extraction (non-streaming)."""
@@ -259,7 +269,9 @@ async def test_provider(provider: Provider) -> bool:
     try:
         response = await provider.complete(
             [{"role": "user", "content": "Say 'OK' and nothing else."}],
-            max_tokens=50,
+            # Reasoning models can consume a small completion allowance before
+            # emitting visible text, producing a false-negative health check.
+            max_tokens=256,
         )
         return bool(response.strip())
     except Exception:
