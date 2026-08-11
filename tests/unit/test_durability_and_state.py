@@ -57,6 +57,52 @@ class TestWorkbenchStoreDurability:
         assert store.mutate("things", [], change) == 1
         assert store.mutate("things", [], change) == 2
 
+    def test_mutate_accepts_a_direct_replacement(self, store: WorkbenchStore) -> None:
+        assert store.mutate("settings", {}, lambda _current: {"theme": "dark"}) is None
+        assert store.read("settings", {}) == {"theme": "dark"}
+
+    def test_update_item_updates_matches_and_preserves_missing(self, store: WorkbenchStore) -> None:
+        item = store.append("tasks", {"title": "old"})
+
+        updated = store.update_item("tasks", item["id"], title="new")
+        missing = store.update_item("tasks", "task_9999", title="ignored")
+
+        assert updated is not None
+        assert updated["title"] == "new"
+        assert updated["updated_at"]
+        assert missing is None
+        assert store.read("tasks", [])[0]["title"] == "new"
+
+    def test_failed_atomic_replace_removes_temporary_file(
+        self, store: WorkbenchStore, monkeypatch
+    ) -> None:
+        def fail_replace(_source: Path, _target: Path) -> None:
+            raise OSError("disk unavailable")
+
+        monkeypatch.setattr(store_module.os, "replace", fail_replace)
+
+        with pytest.raises(OSError, match="disk unavailable"):
+            store.write("tasks", [{"id": "task_0001"}])
+
+        assert not list(store.root.glob("*.tmp"))
+
+    @pytest.mark.skipif(os.name != "posix", reason="advisory locks are POSIX here")
+    def test_lock_timeout_warns_and_proceeds(self, store: WorkbenchStore, monkeypatch) -> None:
+        assert store_module.fcntl is not None
+
+        def busy_lock(_descriptor: int, operation: int) -> None:
+            if operation & store_module.fcntl.LOCK_NB:
+                raise BlockingIOError
+
+        times = iter((0.0, store_module.LOCK_TIMEOUT_SECONDS + 1.0))
+        monkeypatch.setattr(store_module.fcntl, "flock", busy_lock)
+        monkeypatch.setattr(store_module.time, "monotonic", lambda: next(times))
+
+        with store.lock("tasks"):
+            pass
+
+        assert "Timed out waiting" in store.warnings[-1]
+
     def test_singular_uses_removesuffix(self) -> None:
         """`rstrip("s")` ate every trailing s: "progress" became "progre"."""
         assert _singular("tasks") == "task"

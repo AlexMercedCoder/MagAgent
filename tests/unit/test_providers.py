@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from magent.model_capabilities import model_capabilities
-from magent.provider_catalog import validate_provider_catalog
+from magent.provider_catalog import canonical_provider_id, validate_provider_catalog
 from magent.providers import (
     PROVIDER_BASE_URLS,
     PROVIDER_DISPLAY_NAMES,
@@ -47,6 +47,13 @@ def test_build_litellm_model_for_supported_provider_ids() -> None:
     )
     assert _build_litellm_model("deepinfra", "openai/gpt-oss-120b") == "deepinfra/openai/gpt-oss-120b"
     assert _build_litellm_model("custom", "model") == "openai/model"
+
+
+def test_provider_ids_normalize_common_cli_aliases() -> None:
+    assert canonical_provider_id("nous") == "nous-portal"
+    assert canonical_provider_id("Gemini") == "google"
+    assert canonical_provider_id("prime_intellect") == "prime-intellect"
+    assert canonical_provider_id("unknown") == "unknown"
 
 
 def test_build_api_kwargs_sets_base_and_keys() -> None:

@@ -37,3 +37,11 @@ MagAgent prefers the canonical environment variable shown in the table, but it a
 - `openrouter` also accepts `OPENROUTER_KEY`.
 - `trusted-router` also accepts `TRUSTED_ROUTER_API_KEY`.
 - `prime-intellect` also accepts `PRIMEINTELLECT_API_KEY`, `PRIME_API_KEY`.
+
+Common provider ID aliases are normalized before configuration and runtime lookup:
+
+- `gemini` maps to `google`.
+- `lm-studio` maps to `lmstudio`.
+- `nous` maps to `nous-portal`.
+- `prime` maps to `prime-intellect`.
+- `trustedrouter` maps to `trusted-router`.

@@ -230,6 +230,7 @@ def render_provider_reference() -> str:
     """Generate provider reference Markdown from the provider catalog."""
     from magent.provider_catalog import (
         PROVIDER_CATALOG,
+        PROVIDER_ID_ALIASES,
         PROVIDER_ORDER,
         PROVIDER_SUPPORT,
         provider_env_aliases,
@@ -284,6 +285,18 @@ def render_provider_reference() -> str:
                 "MagAgent prefers the canonical environment variable shown in the table, but it also accepts common aliases. Diagnostics report which non-secret variable name was found.",
                 "",
                 *alias_lines,
+            ]
+        )
+    if PROVIDER_ID_ALIASES:
+        lines.extend(
+            [
+                "",
+                "Common provider ID aliases are normalized before configuration and runtime lookup:",
+                "",
+                *[
+                    f"- `{alias}` maps to `{canonical}`."
+                    for alias, canonical in sorted(PROVIDER_ID_ALIASES.items())
+                ],
             ]
         )
     return "\n".join(lines).strip() + "\n"

@@ -47,6 +47,32 @@ def test_discover_provider_models_fetches_and_caches(monkeypatch) -> None:
     assert cached["cached"] is True
 
 
+def test_discovery_normalizes_alias_and_rejects_unknown_provider(monkeypatch) -> None:
+    monkeypatch.setattr(
+        provider_models,
+        "_fetch_openai_compatible_models",
+        lambda *_args, **_kwargs: ["deepseek/deepseek-v4-flash"],
+    )
+    config = Config()
+    store = Store()
+
+    alias = discover_provider_models(config, store, "nous", refresh=True)
+    unknown_config = SimpleNamespace(
+        provider_config=lambda _provider: {},
+        resolve_api_key=lambda _provider: None,
+    )
+    unknown = discover_provider_models(unknown_config, store, "nouse", refresh=True)
+
+    assert alias["provider"] == "nous-portal"
+    assert alias["ok"] is True
+    assert unknown == {
+        "ok": False,
+        "provider": "nouse",
+        "models": [],
+        "error": "Unknown provider",
+    }
+
+
 def test_recommend_provider_model_prefers_health_then_hints() -> None:
     store = Store()
     store.write(

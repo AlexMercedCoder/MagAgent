@@ -209,8 +209,15 @@ def _task_runtime_benchmark(event_count: int) -> dict[str, Any]:
         runtime = TaskRuntime(tmp)
         task = runtime.create("benchmark", "Event throughput benchmark", project=tmp)
         started = time.perf_counter()
-        for index in range(event_count):
-            runtime.record_event(task["id"], "benchmark.tick", detail={"index": index})
+        batch_size = min(100, event_count)
+        for start in range(0, event_count, batch_size):
+            runtime.record_events(
+                task["id"],
+                [
+                    {"type": "benchmark.tick", "detail": {"index": index}}
+                    for index in range(start, min(start + batch_size, event_count))
+                ],
+            )
         write_ms = _elapsed_ms(started)
 
         started = time.perf_counter()
@@ -233,6 +240,7 @@ def _task_runtime_benchmark(event_count: int) -> dict[str, Any]:
 
     return {
         "events_written": event_count,
+        "event_write_batch_size": batch_size,
         "event_write_ms": write_ms,
         "event_write_per_second": round(event_count / max(write_ms / 1000, 0.001), 2),
         "events_read": len(events),

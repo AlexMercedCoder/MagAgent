@@ -125,6 +125,74 @@ def test_agent_eval_suite_enforces_targets_and_reports_failures(tmp_path: Path) 
     assert report["tasks"][0]["validations"][0]["exists"] is False
 
 
+def test_agent_eval_suite_rejects_provider_error_response_even_when_artifact_exists(
+    tmp_path: Path,
+) -> None:
+    suite = tmp_path / "suite.json"
+    write_suite(
+        suite,
+        [
+            {
+                "id": "repair",
+                "prompt": "Fix total.py",
+                "files": {"total.py": "def total(values):\n    return sum(values)\n"},
+                "validators": [{"type": "file_contains", "path": "total.py", "text": "sum"}],
+            }
+        ],
+    )
+
+    report = run_agent_eval_suite(
+        tmp_path,
+        suite,
+        runner=lambda *_args, **_kwargs: {
+            "ok": True,
+            "response": "[Provider error: invalid model ID]",
+            "error": "",
+            "usage": {},
+            "audit": {},
+        },
+    )
+
+    assert report["ok"] is False
+    assert report["passed"] == 0
+    assert report["tasks"][0]["execution"]["error"] == "Provider error: invalid model ID"
+
+
+def test_agent_eval_profiles_separate_core_from_optional_capabilities(tmp_path: Path) -> None:
+    suite = tmp_path / "suite.json"
+    write_suite(
+        suite,
+        [
+            {"id": "core", "prompt": "core"},
+            {"id": "docs", "prompt": "docs", "profiles": ["full"]},
+        ],
+    )
+
+    runner = lambda *_args, **_kwargs: {  # noqa: E731
+        "ok": True,
+        "response": "done",
+        "usage": {},
+        "audit": {},
+    }
+    core = run_agent_eval_suite(tmp_path, suite, runner=runner, profile="core")
+    full = run_agent_eval_suite(tmp_path, suite, runner=runner, profile="full")
+
+    assert (core["profile"], core["total"], core["skipped_tasks"]) == (
+        "core",
+        1,
+        ["docs"],
+    )
+    assert (full["profile"], full["total"], full["skipped"]) == ("full", 2, 0)
+
+
+def test_agent_eval_rejects_unknown_profile(tmp_path: Path) -> None:
+    suite = tmp_path / "suite.json"
+    write_suite(suite, [])
+
+    with pytest.raises(ValueError, match="core.*full"):
+        run_agent_eval_suite(tmp_path, suite, profile="everything")
+
+
 def test_agent_eval_validates_zip_member_and_sanitizes_workspace(tmp_path: Path) -> None:
     suite = tmp_path / "suite.json"
     write_suite(

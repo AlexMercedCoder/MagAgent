@@ -5,6 +5,7 @@ Uses LiteLLM for unified access to all providers.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -247,6 +248,28 @@ class Provider:
 
 class ProviderError(Exception):
     pass
+
+
+def provider_error_from_response(response: str) -> str:
+    """Extract the provider failure encoded by the interactive agent loop."""
+    text = str(response or "").strip()
+    if text.startswith("[Provider error:") and text.endswith("]"):
+        return text[1:-1]
+    return ""
+
+
+async def flush_provider_logging() -> None:
+    """Drain LiteLLM's process-global callback worker before a one-shot loop closes."""
+    if "litellm" not in sys.modules:
+        return
+    try:
+        from litellm.litellm_core_utils.logging_worker import GLOBAL_LOGGING_WORKER
+
+        await GLOBAL_LOGGING_WORKER.flush()
+        await GLOBAL_LOGGING_WORKER.stop()
+    except Exception:
+        # Logging callbacks are best-effort and must never fail an agent task.
+        return
 
 
 def build_provider(

@@ -32,6 +32,11 @@ class SlowSession:
         return None
 
 
+class ProviderErrorSession(SlowSession):
+    async def chat(self, prompt: str) -> str:
+        return "[Provider error: invalid model ID]"
+
+
 def test_provider_tool_smoke_times_out(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(provider_smoke, "AgentSession", SlowSession)
     monkeypatch.setattr(
@@ -56,3 +61,30 @@ def test_provider_tool_smoke_times_out(tmp_path: Path, monkeypatch) -> None:
 
     assert result["ok"] is False
     assert "timed out" in result["error"]
+
+
+def test_provider_tool_smoke_rejects_provider_error_response(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(provider_smoke, "AgentSession", ProviderErrorSession)
+    monkeypatch.setattr(
+        provider_smoke,
+        "build_provider",
+        lambda config, provider, model: SimpleNamespace(model=model or "model"),
+    )
+    monkeypatch.setattr(
+        provider_smoke,
+        "build_extraction_provider",
+        lambda config: SimpleNamespace(model="extract"),
+    )
+    monkeypatch.setattr(provider_smoke, "flush_provider_logging", lambda: asyncio.sleep(0))
+
+    result = run_provider_tool_smoke(
+        "alice",
+        SimpleNamespace(),
+        Store(),
+        "nous",
+        project=tmp_path,
+    )
+
+    assert result["ok"] is False
+    assert result["provider"] == "nous-portal"
+    assert result["error"] == "Provider error: invalid model ID"

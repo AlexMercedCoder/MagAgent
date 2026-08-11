@@ -12,6 +12,8 @@ from magent.agent import AgentSession
 from magent.ask_audit import audit_one_shot_task
 from magent.cli.command_context import build_extraction_provider, build_provider
 from magent.model_health import record_model_health
+from magent.provider_catalog import canonical_provider_id
+from magent.providers import flush_provider_logging, provider_error_from_response
 
 SMOKE_PROMPT = "Use write_file to create smoke.txt containing exactly OK. Do not run shell commands."
 
@@ -35,6 +37,7 @@ def run_provider_tool_smoke(
     root = Path(project or root_ctx.name).resolve()  # type: ignore[union-attr]
     root.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
+    provider_id = canonical_provider_id(provider_id)
     provider = build_provider(config, provider_id, model)
     session = AgentSession(
         username=username,
@@ -51,6 +54,7 @@ def run_provider_tool_smoke(
             return await session.chat(SMOKE_PROMPT)
         finally:
             await session.end_session()
+            await flush_provider_logging()
 
     error = ""
     response = ""
@@ -60,6 +64,7 @@ def run_provider_tool_smoke(
         error = f"Provider smoke timed out after {timeout_seconds}s"
     except Exception as e:
         error = str(e)
+    error = error or provider_error_from_response(response)
     latency_ms = int((time.perf_counter() - started) * 1000)
     smoke_path = root / "smoke.txt"
     content = smoke_path.read_text(encoding="utf-8").strip() if smoke_path.exists() else ""

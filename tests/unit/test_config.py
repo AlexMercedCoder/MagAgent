@@ -258,6 +258,23 @@ def test_configure_provider_entry_does_not_change_default_provider(tmp_path: Pat
     assert cfg["providers"]["openai"]["api_key_env"] == "OPENAI_API_KEY"
 
 
+def test_provider_configuration_normalizes_aliases_and_rejects_typos(
+    tmp_path: Path, monkeypatch
+) -> None:
+    redirect_config(monkeypatch, tmp_path)
+
+    alias = config_ux.set_default_provider("nous", api_key_env="NOUS_API_KEY")
+    typo = config_ux.set_default_provider("nouse", api_key_env="NOUS_API_KEY")
+    custom = config_ux.configure_provider_entry("private-router", base_url="http://localhost:9999/v1")
+    cfg = magent_config.load_global_config()
+
+    assert alias["provider"] == "nous-portal"
+    assert cfg["defaults"]["provider"] == "nous-portal"
+    assert typo["ok"] is False
+    assert "Unknown provider" in typo["error"]
+    assert custom["ok"] is True
+
+
 def test_config_ux_provider_access_modes_and_doctor_actions(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
     monkeypatch.setenv("OPENCODE_GO_KEY", "secret")

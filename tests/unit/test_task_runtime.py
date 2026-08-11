@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from magent.task_runtime import (
     TASK_SCHEMA_VERSION,
     TaskRuntime,
     TaskRuntimeError,
+    _load_json,
 )
 
 
@@ -99,3 +101,82 @@ def test_concurrent_event_writers_keep_a_single_ordered_stream(tmp_path: Path) -
     events = runtime.events(task["id"])
     assert len(events) == 25
     assert [event["sequence"] for event in events] == list(range(1, 26))
+
+
+def test_task_runtime_uses_wal_with_full_sync(tmp_path: Path) -> None:
+    runtime = TaskRuntime(tmp_path)
+
+    connection = sqlite3.connect(runtime.path)
+    try:
+        assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    finally:
+        connection.close()
+    with runtime._connect() as connection:
+        assert connection.execute("PRAGMA synchronous").fetchone()[0] == 2
+
+
+def test_task_runtime_appends_event_batches_atomically(tmp_path: Path) -> None:
+    runtime = TaskRuntime(tmp_path)
+    task = runtime.create("ask", "Batch", project=tmp_path)
+
+    appended = runtime.record_events(
+        task["id"],
+        [
+            {"type": "progress", "detail": {"percent": 25}},
+            {"type": "progress", "detail": {"percent": 50}},
+        ],
+    )
+
+    assert [event["sequence"] for event in appended] == [2, 3]
+    assert [event["detail"]["percent"] for event in appended] == [25, 50]
+    assert [event["sequence"] for event in runtime.events(task["id"])] == [1, 2, 3]
+
+
+def test_task_runtime_rejects_unknown_and_missing_records(tmp_path: Path) -> None:
+    runtime = TaskRuntime(tmp_path)
+
+    with pytest.raises(TaskRuntimeError, match="Unknown task state"):
+        runtime.create("ask", "Bad", project=tmp_path, state="unknown")  # type: ignore[arg-type]
+    with pytest.raises(TaskRuntimeError, match="Task not found"):
+        runtime.record_event("missing", "progress")
+    with pytest.raises(TaskRuntimeError, match="Unknown task state"):
+        runtime.transition("missing", "unknown")  # type: ignore[arg-type]
+    with pytest.raises(TaskRuntimeError, match="Task not found"):
+        runtime.transition("missing", "running")
+    with pytest.raises(TaskRuntimeError, match="Task not found"):
+        runtime.update_context("missing", usage={"tokens": 1})
+
+    assert runtime.record_events("missing", []) == []
+    with pytest.raises(TaskRuntimeError, match="1000-event limit"):
+        runtime.record_events("missing", [{"type": "progress"}] * 1001)
+
+
+def test_task_runtime_filters_noops_and_controls(tmp_path: Path) -> None:
+    runtime = TaskRuntime(tmp_path)
+    parent = runtime.create("goal", "Parent", project=tmp_path, project_id="project-one")
+    child = runtime.create(
+        "step",
+        "Child",
+        project=tmp_path,
+        project_id="project-one",
+        parent_task_id=parent["id"],
+    )
+    runtime.create("other", "Other", project=tmp_path, project_id="project-two")
+
+    assert runtime.transition(parent["id"], "queued")["state"] == "queued"
+    assert [item["id"] for item in runtime.list_tasks(project_id="project-one", limit=1)] == [
+        child["id"]
+    ]
+    assert [item["id"] for item in runtime.list_tasks(state="queued", parent_task_id=parent["id"])] == [
+        child["id"]
+    ]
+
+    runtime.transition(child["id"], "running")
+    assert runtime.pause(child["id"])["state"] == "waiting"
+    assert runtime.resume(child["id"])["state"] == "running"
+    assert runtime.cancel(child["id"])["state"] == "cancelled"
+
+
+def test_task_runtime_json_fallback_handles_corrupt_values() -> None:
+    assert _load_json("not-json", {"safe": True}) == {"safe": True}
+    assert _load_json(None, []) == []  # type: ignore[arg-type]

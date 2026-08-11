@@ -7,7 +7,7 @@ reproducible supply-chain evidence.
 ## Release scope
 
 - proposed 1.0 stable, beta, and experimental contract inventory
-- migration previews, private backups, exact rollback, and malicious-archive rejection
+- migration previews, private backups, migration-state rollback, and malicious-archive rejection
 - persistent-state schema marker and refusal of unsafe downgrades
 - dependency audit, secret scan, CycloneDX SBOM, SHA-256 manifest, and in-toto provenance
 - `magent.release-evidence.v2` and expanded hosted release-candidate gates
@@ -27,3 +27,7 @@ branch-aware coverage, with the CI regression floor raised to 68%.
 Stable candidate contracts are frozen after this release except for urgent security or data
 loss fixes with migration guidance. Legacy state remains readable and can be upgraded with a
 private backup. State created by an unsupported newer schema is refused.
+
+Rollback restores migration-managed files from the selected backup and removes a schema
+marker introduced by that migration. Private backup archives and migration audit history
+remain available for recovery and traceability.

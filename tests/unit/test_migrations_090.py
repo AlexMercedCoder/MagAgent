@@ -29,7 +29,7 @@ def legacy_state(root: Path) -> Path:
     return profile
 
 
-def test_backup_first_migration_and_exact_rollback(tmp_path: Path) -> None:
+def test_backup_first_migration_and_state_rollback(tmp_path: Path) -> None:
     profile = legacy_state(tmp_path)
 
     preview = migrate_state(tmp_path)

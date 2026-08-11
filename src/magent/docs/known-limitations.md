@@ -12,9 +12,10 @@
   experimental contracts can change in a minor release with migration notes.
 - A release evidence report is a snapshot. It does not replace reviewing unresolved issues,
   upstream outages, platform-specific behavior, or the release's documented exceptions.
-- The 0.90.0 suite passes 801 tests at 68.16% branch-aware coverage. That remains below
-  the roadmap's 80% release-candidate target, so coverage is still a 1.0 blocker even
-  though the enforced regression floor has increased to 68%.
+- Overall branch-aware coverage remains below the roadmap's 80% release-candidate target,
+  so coverage is still a 1.0 blocker even though critical permission and persistence
+  modules now meet or exceed their focused 90% targets. See the current release record for
+  exact suite results.
 - Multi-week soak evidence, a complete live-provider qualification corpus, local-only
   model qualification, and maintainer-managed artifact signing remain 1.0 release gates.
 - Local performance budgets measure MagAgent-controlled work, not provider or internet latency.
@@ -22,3 +23,6 @@
 - Memory quality evidence uses a small deterministic fixture to enforce ranking and safety
   contracts. It does not claim that every personal graph or embedding model has identical recall
   quality; users can maintain project-specific labeled suites.
+- State rollback restores files captured before migration and removes migration-created
+  schema markers. Private backup archives and append-only migration audit history are
+  intentionally retained rather than erased by rollback.

@@ -4,6 +4,7 @@ from magent.permissions import (
     RiskTier,
     classify_file_op,
     classify_shell_command,
+    shell_pattern_matches,
 )
 
 
@@ -49,6 +50,37 @@ class TestClassifyShellCommand:
         tier = classify_shell_command("my-custom-deploy-script --prod")
         assert tier == RiskTier.CONFIRM
 
+    def test_python_and_pip_commands_distinguish_probes_from_installs(self):
+        assert classify_shell_command("python -m pip list") == RiskTier.SILENT
+        assert classify_shell_command("python3 -m pip install demo") == RiskTier.AUTO
+        assert classify_shell_command("pip3 list") == RiskTier.SILENT
+        assert classify_shell_command("pip install demo") == RiskTier.AUTO
+        assert classify_shell_command("python -c 'print(2 + 2)'") == RiskTier.SILENT
+        assert classify_shell_command("python -c 'print(open(\"x\").read())'") == RiskTier.CONFIRM
+        assert classify_shell_command("python -c ''") == RiskTier.CONFIRM
+        assert classify_shell_command("python -c 'x = 1'") == RiskTier.CONFIRM
+        assert classify_shell_command("python -c 'print(x=len([]))'") == RiskTier.CONFIRM
+        assert classify_shell_command("python -c 'not valid python'") == RiskTier.CONFIRM
+
+    def test_network_flag_shapes_are_classified_explicitly(self):
+        assert classify_shell_command("curl --request GET https://example.com") == RiskTier.AUTO
+        assert classify_shell_command("curl --request POST https://example.com") == RiskTier.CONFIRM
+        assert classify_shell_command("wget --output-document=- https://example.com") == RiskTier.AUTO
+        assert classify_shell_command("wget --spider https://example.com") == RiskTier.AUTO
+        assert classify_shell_command("curl --silent https://example.com") == RiskTier.AUTO
+        assert classify_shell_command("curl --connect-timeout 2 https://example.com") == RiskTier.AUTO
+        assert classify_shell_command("curl --frobnicate https://example.com") == RiskTier.CONFIRM
+        assert classify_shell_command("curl -XGET https://example.com") == RiskTier.AUTO
+        assert classify_shell_command("curl -XPOST https://example.com") == RiskTier.CONFIRM
+        assert classify_shell_command("curl -H 'Accept: text/plain' https://example.com") == RiskTier.AUTO
+        assert classify_shell_command("curl -Z https://example.com") == RiskTier.CONFIRM
+
+    def test_empty_and_output_commands_fail_toward_confirmation(self):
+        assert classify_shell_command("") == RiskTier.CONFIRM
+        assert classify_shell_command("sort -o result.txt input.txt") == RiskTier.CONFIRM
+        assert shell_pattern_matches("git *", "git status $(rm -rf /tmp/x)") is False
+        assert shell_pattern_matches("'", "git status") is False
+
 
 class TestClassifyFileOp:
     def test_read_always_silent(self):
@@ -65,3 +97,6 @@ class TestClassifyFileOp:
 
     def test_delete_outside_cwd_is_block(self):
         assert classify_file_op("delete", "/etc/passwd", "/project") == RiskTier.BLOCK
+
+    def test_unknown_operation_defaults_to_confirmation(self):
+        assert classify_file_op("chmod", "script.py", "/project") == RiskTier.CONFIRM

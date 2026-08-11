@@ -107,6 +107,8 @@
     {
       "id": "artifact-docx",
       "category": "artifact",
+      "profiles": ["full"],
+      "requires_extras": ["docs"],
       "prompt": "Create report.docx with a reliability summary.",
       "artifact_task": true,
       "script": [
@@ -118,6 +120,8 @@
     {
       "id": "artifact-pptx",
       "category": "artifact",
+      "profiles": ["full"],
+      "requires_extras": ["docs"],
       "prompt": "Create briefing.pptx with a title and summary slide.",
       "artifact_task": true,
       "script": [
@@ -157,6 +161,8 @@
     {
       "id": "artifact-image",
       "category": "artifact",
+      "profiles": ["full"],
+      "requires_extras": ["media"],
       "prompt": "Create badge.png as a local status badge.",
       "artifact_task": true,
       "script": [
@@ -182,10 +188,12 @@
     {
       "id": "artifact-xlsx",
       "category": "artifact",
+      "profiles": ["full"],
+      "requires_extras": ["docs"],
       "prompt": "Create metrics.xlsx with name and value columns and a passed row.",
       "artifact_task": true,
       "script": [
-        {"tool": "run_shell", "arguments": {"command": "python -c \"from openpyxl import Workbook; book=Workbook(); sheet=book.active; sheet.append(['name','value']); sheet.append(['passed',31]); book.save('metrics.xlsx')\""}},
+        {"tool": "run_python", "arguments": {"code": "from openpyxl import Workbook\nbook = Workbook()\nsheet = book.active\nsheet.append(['name', 'value'])\nsheet.append(['passed', 31])\nbook.save('metrics.xlsx')\n"}},
         {"content": "Created metrics.xlsx."}
       ],
       "validators": [
@@ -380,7 +388,7 @@
       "prompt": "Inspect data.json and report the project name.",
       "files": {"data.json": "{\"project\": {\"name\": \"MagAgent\"}}\n"},
       "script": [
-        {"tool": "json_query", "arguments": {"path": "data.json", "expression": "project.name"}},
+        {"tool": "json_query", "arguments": {"path_or_json": "data.json", "query": "project.name"}},
         {"content": "The project name is MagAgent."}
       ],
       "validators": [{"type": "response_contains", "text": "MagAgent"}]

@@ -40,6 +40,9 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
         timeout: int = typer.Option(180, "--timeout", min=1, help="Per-task timeout in seconds."),
         report_out: str = typer.Option("", "--report-out", help="Write the report as JSON."),
         keep_workspaces: bool = typer.Option(False, "--keep-workspaces"),
+        profile: str = typer.Option(
+            "full", "--profile", help="Capability profile: core or full."
+        ),
     ) -> None:
         """Run a verification suite or isolated real-agent task suite."""
         from magent.evals import compare_eval_runs, run_eval_suite
@@ -60,6 +63,7 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
                 model=model,
                 timeout_seconds=timeout,
                 keep_workspaces=keep_workspaces,
+                profile=profile,
             )
             if report_out:
                 report["report_path"] = write_agent_eval_report(report, report_out)

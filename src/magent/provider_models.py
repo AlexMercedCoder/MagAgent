@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from magent.model_health import recommend_model_from_health
-from magent.provider_catalog import PROVIDER_CATALOG
+from magent.provider_catalog import PROVIDER_CATALOG, canonical_provider_id
 from magent.workbench_store import now_iso
 
 MODEL_CATALOG_STORE = "provider_model_catalogs"
@@ -51,6 +51,11 @@ def discover_provider_models(
     timeout: int = 20,
 ) -> dict[str, Any]:
     """Discover provider models, using a cache unless refresh is requested."""
+    provider_id = canonical_provider_id(provider_id)
+    if provider_id not in PROVIDER_CATALOG and not config.provider_config(provider_id).get(
+        "base_url"
+    ):
+        return {"ok": False, "provider": provider_id, "models": [], "error": "Unknown provider"}
     if not refresh:
         cached = cached_provider_models(store, provider_id)
         if cached:
@@ -78,6 +83,7 @@ def recommend_provider_model(
     goal: str = "tool-use",
 ) -> dict[str, Any]:
     """Recommend a model using health observations first, then catalog/discovery hints."""
+    provider_id = canonical_provider_id(provider_id)
     health = recommend_model_from_health(store, provider=provider_id, task_type=goal)
     if health.get("ok"):
         return {"ok": True, "source": "health", **health}

@@ -1,9 +1,19 @@
 # Changelog
 
+## 0.91.0
+
+- Fixed false-positive provider qualification: bracketed provider errors now fail agent evals and tool smokes even when stale artifacts exist.
+- Added canonical provider aliases and fail-fast diagnostics for unknown provider IDs while preserving explicitly configured custom OpenAI-compatible providers.
+- Added `core` and `full` offline eval profiles so a clean base wheel can prove its supported contract without importing optional document/media dependencies; full qualification still exercises all 32 tasks.
+- Reworked durable task event writes around bounded, transactional batches, preserving WAL and full synchronization while making the 10,000-event release budget practical on normal developer hardware.
+- Hardened LiteLLM one-shot lifecycle cleanup to avoid leaked logging coroutines after provider smokes and evals.
+- Expanded branch coverage for task persistence, workbench durability, permissions, shell policy, provider routing, eval failure handling, and batch limits.
+- Clarified that state rollback restores migration-managed state while intentionally retaining private backups and migration audit history.
+
 ## 0.90.0
 
 - Froze the proposed 1.0 contract candidate with a machine-readable inventory covering public imports, CLI commands, config keys, task/event schemas, plugins, memory, MCP, and desktop APIs.
-- Added backup-first persistent-state migrations, private archives, migration history, exact rollback, archive containment, and actionable refusal when an older runtime encounters newer state.
+- Added backup-first persistent-state migrations, private archives, migration history, migration-state rollback, archive containment, and actionable refusal when an older runtime encounters newer state.
 - Added `magent system compatibility`, `magent system migrate`, and `magent system rollback` for upgrade and recovery without manual config editing.
 - Added project dependency auditing, tracked-file secret scanning, CycloneDX 1.6 SBOMs, SHA-256 manifests, and in-toto/SLSA-shaped provenance through `magent release supply-chain`.
 - Upgraded release evidence to `magent.release-evidence.v2`, requiring contract, migration, memory, performance, security, supply-chain, artifact, test, coverage, and CI evidence.

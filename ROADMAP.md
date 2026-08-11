@@ -3,7 +3,7 @@
 > Canonical roadmap for all remaining MagAgent work through `1.0.0`.
 >
 > Last reviewed: 2026-08-11
-> Current release: `0.90.0`
+> Current release: `0.91.0`
 
 ## Product Promise
 
@@ -236,6 +236,19 @@ maintainer-backed signing remain 1.0 qualification gates rather than implied suc
 - Signed release candidates install and pass acceptance tests on supported platforms.
 - The 1.0 upgrade and rollback procedure has been rehearsed from published artifacts.
 
+## 0.91.0: Release-Candidate Hardening
+
+**Status:** released as a focused corrective pass over the 0.90 candidate. Provider errors
+now fail qualification, common provider aliases are canonicalized, clean base wheels run an
+explicit core eval profile, and the complete optional-capability profile remains mandatory.
+Durable event ingestion uses bounded transactions while interactive events retain immediate
+full-sync durability. Task persistence, workbench persistence, migrations, command policy,
+and permissions now meet the focused core coverage target.
+
+The remaining 1.0 gates are intentionally unchanged: overall branch coverage, multi-week
+soak evidence, full live-provider qualification, local-only model qualification,
+cross-platform hosted acceptance on the final commit, and maintainer-backed signing.
+
 ## 1.0.0: Supported Local Agent Platform
 
 **Outcome:** publish the frozen contracts and an evidence-backed compatibility promise.
@@ -277,6 +290,7 @@ maintainer-backed signing remain 1.0 qualification gates rather than implied suc
 | `0.70.0` | Qualified and hardened integrations | Security report, provider tiers, integration suites, three-OS wheel acceptance |
 | `0.80.0` | Daily-driver quality | Memory evals, CLI/desktop E2E, streaming UX, performance budgets |
 | `0.90.0` | Release candidate | Contract freeze, migrations, supply-chain evidence, signed acceptance builds |
+| `0.91.0` | Candidate hardening | Fail-closed provider evals, exact-wheel profiles, persistence and performance evidence |
 | `1.0.0` | Supported platform | Public evidence, compatibility promise, rehearsed operations |
 
 ## Scope Held Until After 1.0

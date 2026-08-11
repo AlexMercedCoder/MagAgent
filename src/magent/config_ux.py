@@ -17,6 +17,7 @@ from magent.provider_catalog import (
     PROVIDER_CATALOG,
     PROVIDER_ORDER,
     PROVIDER_SUPPORT,
+    canonical_provider_id,
     default_access_modes,
     default_models,
     provider_env_aliases,
@@ -281,6 +282,13 @@ def set_default_provider(
     team_id: str = "",
 ) -> dict[str, Any]:
     """Set default provider/model and provider entry in global config."""
+    provider_id = canonical_provider_id(provider_id)
+    if provider_id not in PROVIDER_CATALOG and not base_url:
+        return {
+            "ok": False,
+            "error": f"Unknown provider: {provider_id}. A custom provider requires --base-url.",
+            "known": PROVIDER_ORDER,
+        }
     cfg = load_global_config()
     model = model or DEFAULT_MODELS.get(provider_id, "")
     access_mode = access_mode or DEFAULT_ACCESS_MODE.get(provider_id, "api")
@@ -324,9 +332,15 @@ def configure_provider_entry(
     team_id: str = "",
 ) -> dict[str, Any]:
     """Configure provider credentials without changing the default chat provider."""
-    provider_id = provider_id.strip()
+    provider_id = canonical_provider_id(provider_id)
     if not provider_id:
         return {"ok": False, "error": "provider_id is required"}
+    if provider_id not in PROVIDER_CATALOG and not base_url:
+        return {
+            "ok": False,
+            "error": f"Unknown provider: {provider_id}. A custom provider requires --base-url.",
+            "known": PROVIDER_ORDER,
+        }
     cfg = load_global_config()
     entry = cfg.setdefault("providers", {}).setdefault(provider_id, {})
     if model:

@@ -13,7 +13,8 @@ python -m pytest -q
 python -m ruff check src tests
 python -m pytest tests/unit --cov=magent --cov-report=term-missing:skip-covered
 magent docs doctor
-magent eval run evals/reliability-offline.json --report-out agent-eval-report.json
+magent eval run evals/reliability-offline.json --profile core --report-out core-evals.json
+magent eval run evals/reliability-offline.json --profile full --report-out full-evals.json
 magent readiness
 magent provider test-matrix
 magent provider tool-smoke <provider> --model <cheap-model>
@@ -29,10 +30,11 @@ database connections are closed after every test, while production processes reg
 the same cleanup for shutdown. Semantic-memory SQLite operations use short-lived,
 transactional connections that always release their file handles.
 
-The 0.90.0 baseline is 801 passing tests with 68.16% branch-aware coverage. The configured
-floor is 68%; it is a regression ratchet, not the 1.0 target. The roadmap keeps 80% as the
-release-candidate target and 90% for core modules. Coverage work should close that focused
-gap before 1.0 rather than broadening the product surface.
+The configured full-package coverage floor is a regression ratchet, not the 1.0 target.
+The roadmap keeps 80% as the release-candidate target and 90% for core modules. The 0.91
+hardening pass brings task persistence to 100%, workbench persistence to 97%, migrations
+to 90%, command policy to 100%, and the permissions package above 90% in focused
+branch-aware runs. Release records contain the exact full-suite result for each version.
 
 High-confidence coverage focuses on:
 
@@ -48,6 +50,8 @@ High-confidence coverage focuses on:
 - non-interactive ask audits and provider tool-use smoke checks
 - opt-in orchestrated goal plan creation, dry-run preview, retry/resume, background queueing, model-role diagnostics, and sub-agent step packet contracts
 - isolated AgentSession task execution, independent artifact validators, per-task fault containment, and release evidence assembly
+- provider-error recognition, canonical provider aliases, and unknown-provider refusal
+- clean base-wheel `core` evals plus complete optional-capability `full` evals
 - thresholded memory ranking, stale/contradiction avoidance, scope, provenance, backlink, explanation, and token-budget gates
 - model/tool liveness heartbeats, four concurrent task writers, and 10,000-event performance budgets
 

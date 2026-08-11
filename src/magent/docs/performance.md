@@ -9,6 +9,11 @@ inspection, hybrid memory search, 10,000 durable task events, an ordered
 1,000-event read, and four concurrent task writers. Results include the platform,
 Python version, CPU count, measurements, budgets, and individual pass/fail gates.
 
+The event-throughput workload uses bounded batches of at most 1,000 events, each committed
+as one SQLite transaction. Interactive lifecycle events still use immediately durable
+single-event transactions. This measures the bulk ingestion path used for imported and
+high-volume task streams without weakening crash durability for ordinary interactive work.
+
 Optional document, media, desktop, browser, gateway, MCP, and LSP dependencies are excluded from the core install. See `magent docs show installation-shapes` and run `magent tools doctor` for readiness.
 
 MagAgent is designed to stay usable on normal developer laptops. Heavy provider,

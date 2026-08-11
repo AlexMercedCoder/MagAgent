@@ -228,6 +228,17 @@ PROVIDER_ENV_ALIASES: dict[str, tuple[str, ...]] = {
     "prime-intellect": ("PRIMEINTELLECT_API_KEY", "PRIME_API_KEY"),
 }
 
+# Human-facing aliases accepted at CLI/runtime boundaries. Configuration and
+# evidence always record the canonical ID so a shorthand cannot silently fall
+# through to LiteLLM's generic OpenAI adapter.
+PROVIDER_ID_ALIASES: dict[str, str] = {
+    "gemini": "google",
+    "lm-studio": "lmstudio",
+    "nous": "nous-portal",
+    "prime": "prime-intellect",
+    "trustedrouter": "trusted-router",
+}
+
 # Catalog presence is not a live-support claim. These tiers are intentionally
 # conservative and are surfaced by the CLI, generated docs, release evidence,
 # and machine clients. A provider moves to ``qualified`` only with a dated,
@@ -265,6 +276,12 @@ for _local_provider in ("ollama", "lmstudio"):
 
 def provider_metadata(provider_id: str) -> dict[str, Any]:
     return PROVIDER_CATALOG.get(provider_id, {})
+
+
+def canonical_provider_id(provider_id: str) -> str:
+    """Normalize a user-facing provider ID without accepting arbitrary typos."""
+    normalized = str(provider_id or "").strip().lower().replace("_", "-")
+    return PROVIDER_ID_ALIASES.get(normalized, normalized)
 
 
 def provider_choices() -> list[tuple[str, str]]:

@@ -80,6 +80,13 @@ class TaskRuntime:
         root = store.root if isinstance(store, WorkbenchStore) else Path(store)
         root.mkdir(parents=True, exist_ok=True)
         self.path = root / "task_runtime.sqlite3"
+        # Journal mode persists in the database. Set it once instead of taking
+        # the journal lock again for every short-lived event connection.
+        connection = sqlite3.connect(self.path, timeout=10)
+        try:
+            connection.execute("PRAGMA journal_mode = WAL")
+        finally:
+            connection.close()
         self._initialize()
 
     def create(
@@ -186,13 +193,46 @@ class TaskRuntime:
         *,
         detail: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        return self.record_events(
+            task_id,
+            [{"type": event_type, "detail": detail or {}}],
+        )[0]
+
+    def record_events(
+        self,
+        task_id: str,
+        events: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Append a bounded event batch in one durable transaction."""
+        if not events:
+            return []
+        if len(events) > 1000:
+            raise TaskRuntimeError("Event batch exceeds the 1000-event limit")
         with self._connect(write=True) as connection:
             row = connection.execute("SELECT state FROM tasks WHERE id = ?", (task_id,)).fetchone()
             if not row:
                 raise TaskRuntimeError(f"Task not found: {task_id}")
-            return self._append_event(
-                connection, task_id, event_type, str(row["state"]), detail or {}
-            )
+            sequence_row = connection.execute(
+                "SELECT COALESCE(MAX(sequence), 0) AS sequence FROM task_events WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            sequence = int(sequence_row["sequence"])
+            appended: list[dict[str, Any]] = []
+            for item in events:
+                sequence += 1
+                raw_detail = item.get("detail")
+                detail = raw_detail if isinstance(raw_detail, dict) else {}
+                appended.append(
+                    self._append_event(
+                        connection,
+                        task_id,
+                        str(item.get("type") or "event"),
+                        str(row["state"]),
+                        detail,
+                        sequence=sequence,
+                    )
+                )
+            return appended
 
     def transition(
         self,
@@ -353,7 +393,6 @@ class TaskRuntime:
         try:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA journal_mode = WAL")
             if write:
                 connection.execute("BEGIN IMMEDIATE")
             yield connection
@@ -407,12 +446,15 @@ class TaskRuntime:
         event_type: str,
         state: str,
         detail: dict[str, Any],
+        *,
+        sequence: int | None = None,
     ) -> dict[str, Any]:
-        row = connection.execute(
-            "SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM task_events WHERE task_id = ?",
-            (task_id,),
-        ).fetchone()
-        sequence = int(row["sequence"])
+        if sequence is None:
+            row = connection.execute(
+                "SELECT COALESCE(MAX(sequence), 0) + 1 AS sequence FROM task_events WHERE task_id = ?",
+                (task_id,),
+            ).fetchone()
+            sequence = int(row["sequence"])
         event = {
             "event_id": f"evt_{uuid.uuid4().hex[:16]}",
             "task_id": task_id,

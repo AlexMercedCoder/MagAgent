@@ -16,7 +16,8 @@ from typing import Any, Protocol
 
 from magent.ask_audit import audit_one_shot_task
 from magent.config import DEFAULT_GLOBAL_CONFIG, Config, get_current_user, load_config
-from magent.providers import Provider
+from magent.provider_catalog import canonical_provider_id, provider_metadata
+from magent.providers import Provider, flush_provider_logging, provider_error_from_response
 from magent.session_controls import session_usage
 from magent.workbench_store import now_iso
 
@@ -121,13 +122,16 @@ def _live_config() -> Config:
 
 
 def _provider_for(config: Config, provider_id: str, model: str) -> Provider:
-    selected_provider = provider_id or config.default_provider
+    selected_provider = canonical_provider_id(provider_id or config.default_provider)
     selected_model = model or config.default_model
+    provider_config = config.provider_config(selected_provider)
+    if not provider_metadata(selected_provider) and not provider_config.get("base_url"):
+        raise ValueError(f"Unknown provider: {selected_provider}")
     return Provider(
         selected_provider,
         selected_model,
         config.resolve_api_key(selected_provider),
-        config.provider_config(selected_provider),
+        provider_config,
     )
 
 
@@ -207,14 +211,7 @@ def _run_agent_task_inner(
             )
         finally:
             await session.end_session()
-            current = asyncio.current_task()
-            pending = [
-                task for task in asyncio.all_tasks() if task is not current and not task.done()
-            ]
-            for background in pending:
-                background.cancel()
-            if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
+            await flush_provider_logging()
 
     error = ""
     response = ""
@@ -225,6 +222,7 @@ def _run_agent_task_inner(
     except Exception as exc:
         error = f"{type(exc).__name__}: {exc}"
         session.logger.close()
+    error = error or provider_error_from_response(response)
     elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
     usage = session_usage(session.logger.path)
     audit = audit_one_shot_task(str(task.get("prompt") or ""), workspace, session.scratchpad)
@@ -333,8 +331,11 @@ def run_agent_eval_suite(
     model: str = "",
     timeout_seconds: int = 180,
     keep_workspaces: bool = False,
+    profile: str = "full",
 ) -> dict[str, Any]:
     """Run a versioned real-agent suite in isolated workspaces."""
+    if profile not in {"core", "full"}:
+        raise ValueError("Agent eval profile must be 'core' or 'full'")
     root_path = Path(root).resolve()
     path = Path(suite_path)
     if not path.is_absolute():
@@ -342,7 +343,18 @@ def run_agent_eval_suite(
     suite = json.loads(path.read_text(encoding="utf-8"))
     if suite.get("schema") != AGENT_EVAL_SCHEMA:
         raise ValueError(f"Expected schema {AGENT_EVAL_SCHEMA!r}")
-    tasks = suite.get("tasks") if isinstance(suite.get("tasks"), list) else []
+    all_tasks = suite.get("tasks") if isinstance(suite.get("tasks"), list) else []
+    tasks = [
+        task
+        for task in all_tasks
+        if isinstance(task, dict)
+        and profile in (task.get("profiles") or ["core", "full"])
+    ]
+    skipped_tasks = [
+        str(task.get("id") or "task")
+        for task in all_tasks
+        if isinstance(task, dict) and task not in tasks
+    ]
     task_runner = runner or run_agent_task
     run_root = Path(tempfile.mkdtemp(prefix="magent-agent-eval-"))
     results: list[dict[str, Any]] = []
@@ -374,6 +386,10 @@ def run_agent_eval_suite(
                 }
             execution = _sanitize_workspace_paths(execution, workspace)
             execution = _sanitize_workspace_paths(execution, run_root)
+            response_error = provider_error_from_response(str(execution.get("response") or ""))
+            if response_error:
+                execution["ok"] = False
+                execution["error"] = str(execution.get("error") or response_error)[:1000]
             validations = _validate_task(task, workspace, execution)
             ok = bool(execution.get("ok")) and all(item["ok"] for item in validations)
             results.append(
@@ -407,11 +423,14 @@ def run_agent_eval_suite(
         "suite": str(suite.get("name") or path.stem),
         "suite_schema": AGENT_EVAL_SCHEMA,
         "suite_path": str(path),
+        "profile": profile,
         "version": _current_version(),
         "ran_at": now_iso(),
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
         "passed": passed,
         "total": len(results),
+        "skipped": len(skipped_tasks),
+        "skipped_tasks": skipped_tasks,
         "success_rate": round(success_rate, 4),
         "artifact_passed": artifact_passed,
         "artifact_total": len(artifacts),

@@ -43,6 +43,7 @@ magent docs doctor
 - [MagAgent 0.70.0 Release Record](RELEASE_0.70.0.md)
 - [MagAgent 0.80.0 Release Record](RELEASE_0.80.0.md)
 - [MagAgent 0.90.0 Release Record](RELEASE_0.90.0.md)
+- [MagAgent 0.91.0 Release Record](RELEASE_0.91.0.md)
 
 Common setup tasks now have CLI-first flows:
 

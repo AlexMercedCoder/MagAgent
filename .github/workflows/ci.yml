@@ -65,7 +65,7 @@ jobs:
           python - <<'PY'
           from magent.agent_evals import run_agent_eval_suite, write_agent_eval_report
 
-          report = run_agent_eval_suite(".", "evals/reliability-offline.json")
+          report = run_agent_eval_suite(".", "evals/reliability-offline.json", profile="full")
           write_agent_eval_report(report, "agent-eval-report.json")
           print(f"passed={report['passed']}/{report['total']} artifacts={report['artifact_passed']}/{report['artifact_total']}")
           raise SystemExit(0 if report["ok"] else 1)
@@ -157,6 +157,17 @@ jobs:
           /tmp/magent-core/bin/python -m pip install dist/*.whl
           /tmp/magent-core/bin/magent --version
           /tmp/magent-core/bin/magent tools doctor
+          /tmp/magent-core/bin/python - <<'PY'
+          from magent.agent_evals import run_agent_eval_suite
+
+          report = run_agent_eval_suite(".", "evals/reliability-offline.json", profile="core")
+          print(
+              f"core passed={report['passed']}/{report['total']} "
+              f"artifacts={report['artifact_passed']}/{report['artifact_total']} "
+              f"skipped={report['skipped']}"
+          )
+          raise SystemExit(0 if report["ok"] else 1)
+          PY
 
   packaged-acceptance:
     name: Packaged acceptance (${{ matrix.os }})

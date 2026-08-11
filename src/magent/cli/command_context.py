@@ -15,7 +15,12 @@ from rich.console import Console
 from rich.prompt import Confirm
 
 from magent.config import get_current_user, load_config, user_memory_dir
-from magent.provider_catalog import provider_env_candidates, provider_metadata
+from magent.provider_catalog import (
+    PROVIDER_ORDER,
+    canonical_provider_id,
+    provider_env_candidates,
+    provider_metadata,
+)
 
 console = Console()
 
@@ -40,6 +45,15 @@ class ProviderCredentialError(RuntimeError):
         super().__init__(message)
 
 
+class UnknownProviderError(ValueError):
+    """Raised before an unknown provider can fall through to a generic adapter."""
+
+    def __init__(self, provider_id: str):
+        self.provider_id = provider_id
+        known = ", ".join(PROVIDER_ORDER)
+        super().__init__(f"Unknown provider '{provider_id}'. Known providers: {known}")
+
+
 def require_user() -> str:
     user = get_current_user()
     if not user:
@@ -60,10 +74,11 @@ def store():
 def build_provider(config: Any, provider_id: str | None, model: str | None):
     from magent.providers import build_provider as _build_provider
 
-    p_id = provider_id or config.default_provider
+    p_id = canonical_provider_id(provider_id or config.default_provider)
     m = model or config.default_model
     api_key = config.resolve_api_key(p_id)
     p_cfg = config.provider_config(p_id)
+    _ensure_known_provider(p_id, p_cfg)
     _ensure_provider_credentials(p_id, api_key, p_cfg)
     return _build_provider(p_id, m, api_key, p_cfg)
 
@@ -73,8 +88,10 @@ def build_provider_for_role(config: Any, role: str):
     from magent.providers import build_provider as _build_provider
 
     p_id, m = config.provider_and_model_for_role(role)
+    p_id = canonical_provider_id(p_id)
     api_key = config.resolve_api_key(p_id)
     p_cfg = config.provider_config(p_id)
+    _ensure_known_provider(p_id, p_cfg)
     _ensure_provider_credentials(p_id, api_key, p_cfg)
     return _build_provider(p_id, m, api_key, p_cfg)
 
@@ -82,10 +99,11 @@ def build_provider_for_role(config: Any, role: str):
 def build_extraction_provider(config: Any):
     from magent.providers import build_provider as _build_provider
 
-    p_id = config.extraction_provider
+    p_id = canonical_provider_id(config.extraction_provider)
     m = config.extraction_model
     api_key = config.resolve_api_key(p_id)
     p_cfg = config.provider_config(p_id)
+    _ensure_known_provider(p_id, p_cfg)
     _ensure_provider_credentials(p_id, api_key, p_cfg)
     return _build_provider(p_id, m, api_key, p_cfg)
 
@@ -100,6 +118,15 @@ def _ensure_provider_credentials(provider_id: str, api_key: str | None, p_cfg: d
     if env_var or metadata.get("env"):
         candidates = provider_env_candidates(provider_id, p_cfg.get("api_key_env", ""))
         raise ProviderCredentialError(provider_id, " or ".join(candidates) if candidates else env_var)
+
+
+def _ensure_known_provider(provider_id: str, provider_cfg: dict[str, Any]) -> None:
+    """Allow catalog providers and explicitly configured custom endpoints only."""
+    if provider_metadata(provider_id):
+        return
+    if provider_cfg.get("base_url"):
+        return
+    raise UnknownProviderError(provider_id)
 
 
 def known_command_names(app) -> list[str]:
