@@ -73,12 +73,14 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
     required = {
         "overview",
         "architecture",
+        "architecture-exceptions",
         "commands",
         "memory",
         "semantic-memory",
         "workbench",
         "checkpoints",
         "configuration",
+        "installation-shapes",
         "troubleshooting",
         "recipes",
         "tutorial",
@@ -127,7 +129,10 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
             ) == render_command_reference(command_names)
     drift = documentation_drift_report()
     return {
-        "ok": not missing_topics and not missing_commands and command_reference_current and drift["ok"],
+        "ok": not missing_topics
+        and not missing_commands
+        and command_reference_current
+        and drift["ok"],
         "topics": len(topics),
         "missing_topics": missing_topics,
         "missing_commands": missing_commands,
@@ -176,11 +181,18 @@ def documentation_drift_report(root: str | Path = ".") -> dict[str, Any]:
         )
     else:
         checks.append(
-            {"name": "source-metadata", "ok": True, "status": "skipped", "detail": "pyproject.toml not present"}
+            {
+                "name": "source-metadata",
+                "ok": True,
+                "status": "skipped",
+                "detail": "pyproject.toml not present",
+            }
         )
 
     provider_reference = read_topic("providers")
-    add("provider-reference", provider_reference == render_provider_reference(), "generated catalog")
+    add(
+        "provider-reference", provider_reference == render_provider_reference(), "generated catalog"
+    )
     return {"ok": all(check["ok"] for check in checks), "checks": checks}
 
 
@@ -240,7 +252,9 @@ def render_provider_reference() -> str:
         aliases = provider_env_aliases(provider_id)
         if aliases:
             alias_lines.append(
-                f"- `{provider_id}` also accepts " + ", ".join(f"`{alias}`" for alias in aliases) + "."
+                f"- `{provider_id}` also accepts "
+                + ", ".join(f"`{alias}`" for alias in aliases)
+                + "."
             )
     lines.extend(
         [
@@ -355,7 +369,7 @@ def _display_default(value: Any) -> Any:
     if isinstance(value, str):
         home = str(Path.home())
         if value.startswith(home):
-            return "~" + value[len(home):]
+            return "~" + value[len(home) :]
     return value
 
 

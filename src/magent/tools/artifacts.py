@@ -63,7 +63,11 @@ def _normalize_visual_items(value: list[dict[str, Any]] | str | None) -> list[di
         parsed = value
     if isinstance(parsed, dict):
         parsed = [parsed]
-    return [dict(item) for item in parsed if isinstance(item, dict)] if isinstance(parsed, list) else []
+    return (
+        [dict(item) for item in parsed if isinstance(item, dict)]
+        if isinstance(parsed, list)
+        else []
+    )
 
 
 def _svg_attr(value: Any, default: str = "") -> str:
@@ -84,7 +88,7 @@ def _svg_from_elements(width: int, height: int, title: str, elements: list[dict[
         stroke_width = _svg_attr(item.get("stroke_width") or item.get("stroke-width"), "2")
         if kind in {"rect", "rectangle", "card"}:
             parts.append(
-                '<rect '
+                "<rect "
                 f'x="{_svg_attr(item.get("x"), "0")}" y="{_svg_attr(item.get("y"), "0")}" '
                 f'width="{_svg_attr(item.get("width") or item.get("w"), "120")}" '
                 f'height="{_svg_attr(item.get("height") or item.get("h"), "80")}" '
@@ -94,7 +98,7 @@ def _svg_from_elements(width: int, height: int, title: str, elements: list[dict[
         elif kind in {"circle", "ellipse"}:
             if kind == "ellipse" or item.get("rx") or item.get("ry"):
                 parts.append(
-                    '<ellipse '
+                    "<ellipse "
                     f'cx="{_svg_attr(item.get("cx") or item.get("x"), "60")}" '
                     f'cy="{_svg_attr(item.get("cy") or item.get("y"), "60")}" '
                     f'rx="{_svg_attr(item.get("rx"), "40")}" ry="{_svg_attr(item.get("ry"), "28")}" '
@@ -102,7 +106,7 @@ def _svg_from_elements(width: int, height: int, title: str, elements: list[dict[
                 )
             else:
                 parts.append(
-                    '<circle '
+                    "<circle "
                     f'cx="{_svg_attr(item.get("cx") or item.get("x"), "60")}" '
                     f'cy="{_svg_attr(item.get("cy") or item.get("y"), "60")}" '
                     f'r="{_svg_attr(item.get("r") or item.get("radius"), "32")}" '
@@ -110,7 +114,7 @@ def _svg_from_elements(width: int, height: int, title: str, elements: list[dict[
                 )
         elif kind == "line":
             parts.append(
-                '<line '
+                "<line "
                 f'x1="{_svg_attr(item.get("x1"), "0")}" y1="{_svg_attr(item.get("y1"), "0")}" '
                 f'x2="{_svg_attr(item.get("x2"), "100")}" y2="{_svg_attr(item.get("y2"), "100")}" '
                 f'stroke="{stroke}" stroke-width="{stroke_width}" />'
@@ -123,7 +127,7 @@ def _svg_from_elements(width: int, height: int, title: str, elements: list[dict[
         else:
             text = html.escape(str(item.get("text") or item.get("label") or ""))
             parts.append(
-                '<text '
+                "<text "
                 f'x="{_svg_attr(item.get("x"), "24")}" y="{_svg_attr(item.get("y"), "32")}" '
                 f'fill="{_svg_attr(item.get("color") or item.get("fill"), "#111827")}" '
                 f'font-size="{_svg_attr(item.get("font_size") or item.get("font-size"), "18")}" '
@@ -133,7 +137,9 @@ def _svg_from_elements(width: int, height: int, title: str, elements: list[dict[
     return "\n".join(parts) + "\n"
 
 
-def _mermaid_from_graph(title: str, nodes: list[dict[str, Any]], edges: list[dict[str, Any]], direction: str) -> str:
+def _mermaid_from_graph(
+    title: str, nodes: list[dict[str, Any]], edges: list[dict[str, Any]], direction: str
+) -> str:
     lines = [f"flowchart {direction or 'TD'}"]
     if title:
         lines.append(f"%% {title}")
@@ -144,8 +150,12 @@ def _mermaid_from_graph(title: str, nodes: list[dict[str, Any]], edges: list[dic
         known.add(node_id)
         lines.append(f'    {node_id}["{label.replace(chr(34), chr(39))}"]')
     for index, edge in enumerate(edges, start=1):
-        source = re.sub(r"\W+", "_", str(edge.get("from") or edge.get("source") or f"n{index}")).strip("_")
-        target = re.sub(r"\W+", "_", str(edge.get("to") or edge.get("target") or f"n{index + 1}")).strip("_")
+        source = re.sub(
+            r"\W+", "_", str(edge.get("from") or edge.get("source") or f"n{index}")
+        ).strip("_")
+        target = re.sub(
+            r"\W+", "_", str(edge.get("to") or edge.get("target") or f"n{index + 1}")
+        ).strip("_")
         label = str(edge.get("label") or "").replace('"', "'")
         connector = f'-- "{label}" -->' if label else "-->"
         if source and target:
@@ -285,7 +295,8 @@ class ArtifactToolsMixin:
         except ModuleNotFoundError as e:
             return {
                 "ok": False,
-                "error": f"Missing document dependency `{e.name}`. Install or upgrade MagAgent to include document support.",
+                "error": f"Missing document dependency `{e.name}`.",
+                "install": 'python -m pip install "mag-agent[docs]"',
                 "path": str(abs_path),
             }
         except Exception as e:
@@ -358,7 +369,11 @@ class ArtifactToolsMixin:
                     bold=True,
                     color=_pptx_rgb(0x86, 0x46, 0x16),
                 )
-                bullets = [str(item).strip() for item in slide_data.get("bullets") or [] if str(item).strip()]
+                bullets = [
+                    str(item).strip()
+                    for item in slide_data.get("bullets") or []
+                    if str(item).strip()
+                ]
                 content = str(slide_data.get("content") or "").strip()
                 if content and not bullets:
                     bullets = _split_paragraphs(content)
@@ -385,7 +400,8 @@ class ArtifactToolsMixin:
         except ModuleNotFoundError as e:
             return {
                 "ok": False,
-                "error": f"Missing presentation dependency `{e.name}`. Install or upgrade MagAgent to include presentation support.",
+                "error": f"Missing presentation dependency `{e.name}`.",
+                "install": 'python -m pip install "mag-agent[docs]"',
                 "path": str(abs_path),
             }
         except Exception as e:
@@ -530,7 +546,8 @@ class ArtifactToolsMixin:
         except ModuleNotFoundError as e:
             return {
                 "ok": False,
-                "error": f"Missing image dependency `{e.name}`. Install or upgrade MagAgent to include image support.",
+                "error": f"Missing image dependency `{e.name}`.",
+                "install": 'python -m pip install "mag-agent[media]"',
                 "path": str(abs_path),
             }
         except Exception as e:

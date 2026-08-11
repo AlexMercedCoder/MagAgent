@@ -12,7 +12,7 @@ MagAgent is organized around four local layers. Keeping these layers distinct ma
 
 ### CLI And TUI
 
-`magent.cli.app` composes the Typer app and command groups. `magent.cli.main` imports that app and owns command implementations, callbacks, and interactive session entry points. `magent.tui` owns Rich rendering helpers such as the startup banner, response panels, status lines, and streaming output.
+`magent.cli.app` composes the Typer app and command groups. `magent.cli.main` remains the console compatibility facade and interactive-session entry point; focused registrations live under `magent.cli.commands.*`. `magent.tui` owns Rich rendering helpers such as the startup banner, response panels, status lines, and streaming output.
 
 Future command modules should register command groups from `magent.cli.commands.*` while preserving `magent.cli.main:app` as the console entry point.
 
@@ -58,7 +58,7 @@ so file caps, git-aware discovery, and ignored directories remain consistent.
 
 ### Agent Runtime
 
-`magent.agent` coordinates provider calls, memory recall, tool dispatch, checkpoints, and memory writes for interactive and one-shot sessions.
+`magent.agent.AgentSession` is the stable compatibility facade. Its runtime is split into typed layers under `magent.agent_runtime`: `context.py` owns prompt/context/provider request assembly, `tool_loop.py` owns provider rounds and bounded tool execution, `lifecycle.py` owns conversation/memory/subagent/session lifecycle, and `support.py` owns shared prompt constants and pure helpers.
 
 `magent.subagents` lets the main agent delegate focused work to child sessions. The runner enforces the configured sub-agent cap and parallelism defaults before spawning child sessions.
 
@@ -76,7 +76,7 @@ tasks. Default goal loops do not use this path.
 
 `magent.hooks` runs project-local lifecycle hooks around tool calls, edits, command failures, memory candidates, and release checks. Runtime modules should emit hook events through this facade instead of executing hook commands directly.
 
-`magent.lsp` owns local code-intelligence helpers. It detects installed language servers and provides bounded fallbacks for symbols, diagnostics, definitions, and references. Review and diagnostics flows consume this module instead of duplicating syntax checks.
+`magent.lsp_client` owns synchronous JSON-RPC framing, process lifecycle, initialization, capability negotiation, document synchronization, cancellation, bounded notification collection, restart, and shutdown. `magent.lsp` selects installed Python, TypeScript/JavaScript, Rust, or Go servers and exposes capability-aware symbols, diagnostics, definitions, references, hover, and rename. It retains accurately labeled AST/text fallbacks. Review and diagnostics flows consume this module instead of duplicating syntax checks.
 
 The agent should depend on stable facades:
 
@@ -105,7 +105,7 @@ state-changing UX flows should follow the same pattern.
 JSON compaction for high-volume local stores. New history-like stores should be
 included there when they can grow indefinitely.
 
-`magent.workbench_domains.*` exposes domain-specific import modules for plans, patches, checkpoints, project helpers, code/test intelligence, and release/workspace helpers. These modules currently preserve compatibility while providing stable targets for future extraction.
+`magent.workbench_domains.*` exposes domain-specific import modules for plans, patches, checkpoints, project helpers, code/test intelligence, and release/workspace helpers. Compatibility re-exports remain in `magent.workbench`; the temporary facade exception and extraction conditions are tracked in `architecture-exceptions.md`.
 
 ### Context
 
@@ -229,6 +229,10 @@ from magent.workbench_domains.plans import save_plan
 ```
 
 When internals move, add compatibility tests before refactoring. This protects downstream users and keeps releases patch-safe.
+
+## Dependency Direction
+
+Runtime and tool-domain modules may not import `magent.cli` or `magent.ui`. CLI/UI layers compose domain services; they do not own runtime behavior. `tests/unit/test_runtime_architecture.py` enforces this rule and the runtime module size budget.
 
 ## Refactor Order
 

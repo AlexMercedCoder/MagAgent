@@ -278,7 +278,9 @@ Generated from the active Typer command tree.
 
 - `magent lsp definition`
 - `magent lsp diagnostics`
+- `magent lsp hover`
 - `magent lsp references`
+- `magent lsp rename`
 - `magent lsp status`
 - `magent lsp symbols`
 
@@ -349,6 +351,7 @@ Generated from the active Typer command tree.
 ## performance
 
 - `magent performance doctor`
+- `magent performance install-shape`
 
 ## permission
 
@@ -504,6 +507,7 @@ Generated from the active Typer command tree.
 
 - `magent tools backend`
 - `magent tools disable`
+- `magent tools doctor`
 - `magent tools enable`
 - `magent tools explain`
 - `magent tools gateway`

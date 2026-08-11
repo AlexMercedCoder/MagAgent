@@ -98,6 +98,7 @@ from magent.cli.commands.performance import register_performance_commands
 from magent.cli.commands.permissions import register_permission_commands
 from magent.cli.commands.plugins import register_plugin_commands
 from magent.cli.commands.providers import register_provider_ux_commands
+from magent.cli.commands.tools import register_tool_commands
 from magent.cli.commands.workbench import register_workbench_commands
 from magent.cli.render import (
     _print_config_center,
@@ -139,6 +140,12 @@ register_permission_commands(permission_app)
 register_performance_commands(performance_app)
 register_plugin_commands(plugin_app)
 register_workbench_commands(workbench_app)
+register_tool_commands(
+    tools_app,
+    store=store,
+    load_active_config=lambda: load_config(require_user()),
+    console=console,
+)
 
 
 # ─────────────────────────────────────────────
@@ -207,7 +214,9 @@ def system_contracts_cmd() -> None:
 @system_app.command("ecosystem-report")
 def system_ecosystem_report_cmd(
     root: str = typer.Option(".", "--root", help="Mag ecosystem workspace or MagAgent checkout."),
-    output: str | None = typer.Option(None, "--output", "-o", help="Write the JSON report to this path."),
+    output: str | None = typer.Option(
+        None, "--output", "-o", help="Write the JSON report to this path."
+    ),
 ) -> None:
     """Generate deterministic local evidence and list external release gates."""
     from magent.ecosystem_readiness import ecosystem_readiness, write_ecosystem_report
@@ -514,7 +523,9 @@ def research_cmd(
         typer.Option("--question", "-q", help="Optional focused research question."),
     ] = None,
     max_sources: int = typer.Option(6, "--max-sources", "-n", min=1, max=20),
-    fetch_sources: bool = typer.Option(True, "--fetch/--no-fetch", help="Fetch and excerpt source pages."),
+    fetch_sources: bool = typer.Option(
+        True, "--fetch/--no-fetch", help="Fetch and excerpt source pages."
+    ),
     json_output: bool = typer.Option(False, "--json/--no-json"),
     write: bool | None = typer.Option(
         None,
@@ -542,7 +553,9 @@ def research_cmd(
         _print_research_result(result)
         should_write = write
         if should_write is None and sys.stdin.isatty() and result.get("ok"):
-            should_write = Confirm.ask("Write this research report to the active directory?", default=False)
+            should_write = Confirm.ask(
+                "Write this research report to the active directory?", default=False
+            )
         if should_write:
             path = _write_research_report(result, out=out)
             console.print(f"[green]✓ Wrote research report:[/green] {path}")
@@ -569,7 +582,11 @@ def update_cmd(run: bool = typer.Option(False, "--run", help="Run the detected u
 
 
 def _write_research_report(result: dict, *, out: str | None = None) -> Path:
-    path = Path(out).expanduser() if out else Path.cwd() / f"{_slugify_filename(str(result.get('topic') or 'research'))}.md"
+    path = (
+        Path(out).expanduser()
+        if out
+        else Path.cwd() / f"{_slugify_filename(str(result.get('topic') or 'research'))}.md"
+    )
     path = path.resolve(strict=False)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(_research_report_markdown(result), encoding="utf-8")
@@ -884,7 +901,9 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
     if command == "/statusline":
         from magent.daily_driver import render_statusline, statusline_data
 
-        data = statusline_data(config, username=get_current_user() or "user", cwd=os.getcwd(), store=_store())
+        data = statusline_data(
+            config, username=get_current_user() or "user", cwd=os.getcwd(), store=_store()
+        )
         console.print(render_statusline(data))
         return True
 
@@ -1180,7 +1199,9 @@ def project_list_cmd():
     """List saved project profiles."""
     table = Table("Name", "Root", "Commands")
     for item in _store().read("projects", []):
-        table.add_row(item.get("name", ""), item.get("root", ""), ", ".join(item.get("commands", [])))
+        table.add_row(
+            item.get("name", ""), item.get("root", ""), ", ".join(item.get("commands", []))
+        )
     console.print(table)
 
 
@@ -1301,7 +1322,9 @@ def inbox_list_cmd(status: str | None = typer.Option(None, "--status")):
         items = [item for item in items if item.get("status") == status]
     table = Table("ID", "Status", "Source", "Text")
     for item in items:
-        table.add_row(item["id"], item.get("status", ""), item.get("source", ""), item.get("text", "")[:100])
+        table.add_row(
+            item["id"], item.get("status", ""), item.get("source", ""), item.get("text", "")[:100]
+        )
     console.print(table)
 
 
@@ -1325,7 +1348,11 @@ def inbox_triage_cmd():
 
 
 @routine_app.command("add")
-def routine_add_cmd(name: str = typer.Argument(...), prompt: str = typer.Argument(...), schedule: str = typer.Option("", "--schedule")):
+def routine_add_cmd(
+    name: str = typer.Argument(...),
+    prompt: str = typer.Argument(...),
+    schedule: str = typer.Option("", "--schedule"),
+):
     """Register a recurring routine prompt."""
     item = _store().append("routines", {"name": name, "prompt": prompt, "schedule": schedule})
     console.print(f"[green]✓ Added routine {item['id']}[/green]")
@@ -1336,7 +1363,9 @@ def routine_list_cmd():
     """List routines."""
     table = Table("ID", "Name", "Schedule", "Prompt")
     for item in _store().read("routines", []):
-        table.add_row(item["id"], item.get("name", ""), item.get("schedule", ""), item.get("prompt", "")[:80])
+        table.add_row(
+            item["id"], item.get("name", ""), item.get("schedule", ""), item.get("prompt", "")[:80]
+        )
     console.print(table)
 
 
@@ -1363,7 +1392,9 @@ def followup_list_cmd():
     """List follow-ups."""
     table = Table("ID", "When", "Status", "Text")
     for item in _store().read("followups", []):
-        table.add_row(item["id"], item.get("when", ""), item.get("status", ""), item.get("text", "")[:100])
+        table.add_row(
+            item["id"], item.get("when", ""), item.get("status", ""), item.get("text", "")[:100]
+        )
     console.print(table)
 
 
@@ -1413,7 +1444,9 @@ def plan_cmd(
         help="When saving, create an executable plan compatible with plan-preview/apply.",
     ),
     command: Annotated[list[str] | None, typer.Option("--command", "-c")] = None,
-    no_diff: bool = typer.Option(False, "--no-diff", help="Do not capture the current diff for executable plans."),
+    no_diff: bool = typer.Option(
+        False, "--no-diff", help="Do not capture the current diff for executable plans."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Emit machine-readable plan data."),
 ):
     """Generate a local plan without modifying files."""
@@ -1448,7 +1481,9 @@ def plan_list_cmd(status: str | None = typer.Option(None, "--status")):
 
     table = Table("ID", "Status", "Project", "Goal")
     for item in list_plans(_store(), status=status):
-        table.add_row(item["id"], item.get("status", ""), item.get("project", ""), item.get("goal", "")[:90])
+        table.add_row(
+            item["id"], item.get("status", ""), item.get("project", ""), item.get("goal", "")[:90]
+        )
     console.print(table)
 
 
@@ -1457,9 +1492,13 @@ def plan_apply_cmd(
     plan_id: str = typer.Argument(...),
     run_checks: bool = typer.Option(False, "--run-checks"),
     dry_run: bool = typer.Option(False, "--dry-run"),
-    sandbox: str | None = typer.Option(None, "--sandbox", help="Run in worktree, copy, or container sandbox"),
+    sandbox: str | None = typer.Option(
+        None, "--sandbox", help="Run in worktree, copy, or container sandbox"
+    ),
     keep_sandbox: bool = typer.Option(False, "--keep-sandbox"),
-    image: str = typer.Option("python:3.12", "--image", help="Container image for --sandbox container"),
+    image: str = typer.Option(
+        "python:3.12", "--image", help="Container image for --sandbox container"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y"),
 ):
     """Mark a saved plan applied, optionally running its suggested checks."""
@@ -1472,7 +1511,9 @@ def plan_apply_cmd(
             console.print_json(data=sandbox_plan_preview(_store(), plan_id, mode=sandbox))
             return
         if not yes:
-            confirm = Prompt.ask(f"Run plan '{plan_id}' in {sandbox} sandbox?", choices=["y", "n"], default="n")
+            confirm = Prompt.ask(
+                f"Run plan '{plan_id}' in {sandbox} sandbox?", choices=["y", "n"], default="n"
+            )
             if confirm != "y":
                 raise typer.Exit()
         console.print_json(
@@ -1517,7 +1558,11 @@ def plan_sandbox_cmd(
         f"Run plan {plan_id} in a {mode} sandbox (executes its commands)?",
         assume_yes=yes,
     )
-    console.print_json(data=execute_plan_sandbox(_store(), plan_id, mode=mode, run_checks=run_checks, keep=keep, image=image))
+    console.print_json(
+        data=execute_plan_sandbox(
+            _store(), plan_id, mode=mode, run_checks=run_checks, keep=keep, image=image
+        )
+    )
 
 
 @app.command("plan-exec", rich_help_panel="Planning, Review & Release")
@@ -1554,7 +1599,9 @@ def plan_preview_cmd(plan_id: str = typer.Argument(...)):
 
 
 @app.command("plan-run", rich_help_panel="Planning, Review & Release")
-def plan_run_cmd(goal: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def plan_run_cmd(
+    goal: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Create a pending plan-run record with checks, review, and diff context."""
     from magent.workbench import save_plan_run
 
@@ -1576,7 +1623,9 @@ def plan_show_cmd(plan_id: str = typer.Argument(...)):
 
 
 @app.command("plan-discard", rich_help_panel="Planning, Review & Release")
-def plan_discard_cmd(plan_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")):
+def plan_discard_cmd(
+    plan_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")
+):
     """Discard a saved plan."""
     from magent.workbench import discard_plan
 
@@ -1605,21 +1654,43 @@ def run_cmd(
 def goal_cmd(
     goal: str = typer.Argument(...),
     project: str = typer.Option(".", "--project", "-p"),
-    background: bool = typer.Option(False, "--background/--no-background", help="Queue the goal as a daemon task."),
-    run: bool = typer.Option(False, "--run/--no-run", help="Run the generated goal prompt immediately."),
-    verify: bool = typer.Option(True, "--verify/--no-verify", help="Include verifier pass instructions."),
-    review: bool = typer.Option(True, "--review/--no-review", help="Include reviewer pass instructions."),
+    background: bool = typer.Option(
+        False, "--background/--no-background", help="Queue the goal as a daemon task."
+    ),
+    run: bool = typer.Option(
+        False, "--run/--no-run", help="Run the generated goal prompt immediately."
+    ),
+    verify: bool = typer.Option(
+        True, "--verify/--no-verify", help="Include verifier pass instructions."
+    ),
+    review: bool = typer.Option(
+        True, "--review/--no-review", help="Include reviewer pass instructions."
+    ),
     max_loops: int = typer.Option(3, "--max-loops", min=1, max=20),
     verifier_model: str = typer.Option("cheap", "--verifier-model-role"),
     reviewer_model: str = typer.Option("review", "--reviewer-model-role"),
-    orchestrated: bool = typer.Option(False, "--orchestrated/--no-orchestrated", help="Use staged cached-plan/sub-agent orchestration."),
-    orchestrated_steps: int = typer.Option(3, "--orchestrated-steps", min=1, max=8, help="Maximum staged sub-agent steps."),
-    planning_model_role: str = typer.Option("review", "--planning-model-role", help="Model role used for master/step planning metadata."),
-    execution_model_role: str = typer.Option("coding", "--execution-model-role", help="Model role used for sub-agent execution metadata."),
+    orchestrated: bool = typer.Option(
+        False,
+        "--orchestrated/--no-orchestrated",
+        help="Use staged cached-plan/sub-agent orchestration.",
+    ),
+    orchestrated_steps: int = typer.Option(
+        3, "--orchestrated-steps", min=1, max=8, help="Maximum staged sub-agent steps."
+    ),
+    planning_model_role: str = typer.Option(
+        "review", "--planning-model-role", help="Model role used for master/step planning metadata."
+    ),
+    execution_model_role: str = typer.Option(
+        "coding", "--execution-model-role", help="Model role used for sub-agent execution metadata."
+    ),
     provider: str | None = typer.Option(None, "--provider", help="Provider ID when using --run."),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name when using --run."),
-    permission_mode: str | None = typer.Option(None, "--permission-mode", help="Permission mode when using --run."),
-    repair_attempts: int = typer.Option(2, "--repair-attempts", min=0, max=5, help="Audit repair attempts when using --run."),
+    permission_mode: str | None = typer.Option(
+        None, "--permission-mode", help="Permission mode when using --run."
+    ),
+    repair_attempts: int = typer.Option(
+        2, "--repair-attempts", min=0, max=5, help="Audit repair attempts when using --run."
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Create a goal loop with verifier/reviewer workflow scaffolding."""
@@ -1628,7 +1699,9 @@ def goal_cmd(
 
         if run:
             if background:
-                console.print("[red]Use either --run or --background for orchestrated goals, not both.[/red]")
+                console.print(
+                    "[red]Use either --run or --background for orchestrated goals, not both.[/red]"
+                )
                 raise typer.Exit(2)
             username = _require_user()
             cfg = load_config(username)
@@ -1681,13 +1754,19 @@ def goal_cmd(
                     project=project,
                 )
                 result["queued"] = queued
-                result["goal"] = _store().update_item("goals", result["goal"]["id"], status="queued") or result["goal"]
-                result["plan"] = _store().update_item(
-                    "plans",
-                    result["plan"]["id"],
-                    status="queued",
-                    orchestration={**result["orchestration"], "status": "queued"},
-                ) or result["plan"]
+                result["goal"] = (
+                    _store().update_item("goals", result["goal"]["id"], status="queued")
+                    or result["goal"]
+                )
+                result["plan"] = (
+                    _store().update_item(
+                        "plans",
+                        result["plan"]["id"],
+                        status="queued",
+                        orchestration={**result["orchestration"], "status": "queued"},
+                    )
+                    or result["plan"]
+                )
                 result["orchestration"] = result["plan"]["orchestration"]
         if json_output:
             console.print_json(data=result)
@@ -1701,7 +1780,9 @@ def goal_cmd(
         console.print(f"[dim]Cache key:[/dim] {orchestration['cache_key']}")
         if result.get("queued"):
             console.print(f"[dim]Queued background job:[/dim] {result['queued']['id']}")
-            console.print("[dim]Inspect with `magent jobs` and run due work with `magent daemon run-once`.[/dim]")
+            console.print(
+                "[dim]Inspect with `magent jobs` and run due work with `magent daemon run-once`.[/dim]"
+            )
         else:
             console.print("[dim]Preview or run staged execution with:[/dim]")
             console.print(f"  magent goal-run {plan['id']} --dry-run")
@@ -1731,7 +1812,9 @@ def goal_cmd(
     console.print(f"[dim]Saved plan:[/dim] {plan['id']}")
     if result.get("queued"):
         console.print(f"[dim]Queued background job:[/dim] {result['queued']['id']}")
-        console.print("[dim]Inspect with `magent jobs` and run due work with `magent daemon run-once`.[/dim]")
+        console.print(
+            "[dim]Inspect with `magent jobs` and run due work with `magent daemon run-once`.[/dim]"
+        )
     elif run:
         username = _require_user()
         cfg = load_config(username)
@@ -1750,17 +1833,27 @@ def goal_cmd(
         )
     else:
         console.print("[dim]Run now with:[/dim]")
-        console.print(f"  magent goal {json.dumps(goal)} --project {json.dumps(str(Path(project).resolve()))} --run")
+        console.print(
+            f"  magent goal {json.dumps(goal)} --project {json.dumps(str(Path(project).resolve()))} --run"
+        )
         console.print("[dim]Or run the generated prompt directly:[/dim]")
-        console.print(f"  magent ask {json.dumps(goal_item['prompt'])} --project {json.dumps(str(Path(project).resolve()))} --repair-attempts 2 --strict-audit")
+        console.print(
+            f"  magent ask {json.dumps(goal_item['prompt'])} --project {json.dumps(str(Path(project).resolve()))} --repair-attempts 2 --strict-audit"
+        )
 
 
 @app.command("goal-run", rich_help_panel="Everyday Agent Work")
 def goal_run_cmd(
     plan_id: str = typer.Argument(..., help="Saved orchestrated plan id"),
-    project: str = typer.Option(".", "--project", "-p", help="Project directory fallback for provider execution."),
-    retry_step: int = typer.Option(0, "--retry-step", min=0, help="Rerun a specific 1-based step and following steps."),
-    dry_run: bool = typer.Option(False, "--dry-run/--run", help="Preview the next step packet without executing."),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory fallback for provider execution."
+    ),
+    retry_step: int = typer.Option(
+        0, "--retry-step", min=0, help="Rerun a specific 1-based step and following steps."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run/--run", help="Preview the next step packet without executing."
+    ),
     provider: str | None = typer.Option(None, "--provider", help="Provider ID override."),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name override."),
     json_output: bool = typer.Option(False, "--json"),
@@ -1859,7 +1952,9 @@ def resume_cmd(
             return
         table = Table("Session", "Started", "Turns", "Opening message")
         for item in sessions:
-            table.add_row(item["session"][:26], str(item["started"])[:19], str(item["turns"]), item["preview"])
+            table.add_row(
+                item["session"][:26], str(item["started"])[:19], str(item["turns"]), item["preview"]
+            )
         console.print(table)
         return
 
@@ -1897,7 +1992,9 @@ def resume_cmd(
 
 @app.command("statusline", rich_help_panel="Setup & Configuration")
 def statusline_cmd(
-    template: str = typer.Option("", "--template", "-t", help="Python format template for statusline fields."),
+    template: str = typer.Option(
+        "", "--template", "-t", help="Python format template for statusline fields."
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Render a compact shell statusline payload."""
@@ -1918,7 +2015,9 @@ def review_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     json_out: bool = typer.Option(False, "--json", help="Emit structured JSON"),
     save: bool = typer.Option(False, "--save", help="Save review findings to the workbench"),
-    fail_on: str | None = typer.Option(None, "--fail-on", help="Exit non-zero if findings at or above priority exist"),
+    fail_on: str | None = typer.Option(
+        None, "--fail-on", help="Exit non-zero if findings at or above priority exist"
+    ),
 ):
     """Review the local git diff for common risks."""
     from magent.workbench import review_diff, review_fails_threshold, review_summary, save_review
@@ -1998,22 +2097,33 @@ def code_index_cmd(project: str = typer.Option(".", "--project", "-p")):
 
     with console.status("[bold]Indexing code...[/bold]"):
         index = save_code_index(_store(), project)
-    console.print_json(data={"root": index["root"], "files": len(index["files"]), "symbols": len(index["symbols"])})
+    console.print_json(
+        data={"root": index["root"], "files": len(index["files"]), "symbols": len(index["symbols"])}
+    )
 
 
 @code_app.command("symbols")
-def code_symbols_cmd(query: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def code_symbols_cmd(
+    query: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Search indexed code symbols."""
     from magent.workbench import search_symbols
 
     table = Table("Kind", "Name", "Path", "Line")
     for item in search_symbols(_store(), query, project):
-        table.add_row(item.get("kind", ""), item.get("name", ""), item.get("path", ""), str(item.get("line", "")))
+        table.add_row(
+            item.get("kind", ""),
+            item.get("name", ""),
+            item.get("path", ""),
+            str(item.get("line", "")),
+        )
     console.print(table)
 
 
 @code_app.command("related")
-def code_related_cmd(file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def code_related_cmd(
+    file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Show code and tests related to a file."""
     from magent.workbench import related_code
 
@@ -2031,7 +2141,9 @@ def test_map_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 
 @test_app.command("related")
-def test_related_cmd(file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def test_related_cmd(
+    file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Show tests related to a source file."""
     from magent.workbench import related_tests
 
@@ -2040,7 +2152,9 @@ def test_related_cmd(file: str = typer.Argument(...), project: str = typer.Optio
 
 
 @test_app.command("explain")
-def test_explain_cmd(file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def test_explain_cmd(
+    file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Explain why tests are related to a source file."""
     from magent.workbench import explain_related_tests
 
@@ -2048,7 +2162,9 @@ def test_explain_cmd(file: str = typer.Argument(...), project: str = typer.Optio
 
 
 @test_app.command("run-related")
-def test_run_related_cmd(file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def test_run_related_cmd(
+    file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Run tests related to a source file."""
     from magent.workbench import run_related_tests
 
@@ -2056,7 +2172,9 @@ def test_run_related_cmd(file: str = typer.Argument(...), project: str = typer.O
 
 
 @patch_app.command("save")
-def patch_save_cmd(name: str = typer.Option("", "--name"), project: str = typer.Option(".", "--project", "-p")):
+def patch_save_cmd(
+    name: str = typer.Option("", "--name"), project: str = typer.Option(".", "--project", "-p")
+):
     """Save the current git diff to the patch queue."""
     from magent.workbench import save_patch
 
@@ -2069,7 +2187,9 @@ def patch_list_cmd():
     """List saved patches."""
     table = Table("ID", "Name", "Bytes", "Path")
     for item in _store().read("patches", []):
-        table.add_row(item["id"], item.get("name", ""), str(item.get("bytes", 0)), item.get("path", ""))
+        table.add_row(
+            item["id"], item.get("name", ""), str(item.get("bytes", 0)), item.get("path", "")
+        )
     console.print(table)
 
 
@@ -2090,7 +2210,9 @@ def patch_explain_cmd(patch_id: str = typer.Argument(...)):
 
 
 @patch_app.command("apply")
-def patch_apply_cmd(patch_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")):
+def patch_apply_cmd(
+    patch_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")
+):
     """Apply a saved patch after git apply --check passes."""
     from magent.workbench import apply_saved_patch
 
@@ -2102,7 +2224,9 @@ def patch_apply_cmd(patch_id: str = typer.Argument(...), yes: bool = typer.Optio
 
 
 @patch_app.command("revert")
-def patch_revert_cmd(patch_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")):
+def patch_revert_cmd(
+    patch_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")
+):
     """Reverse-apply a saved patch after git apply -R --check passes."""
     from magent.workbench import apply_saved_patch
 
@@ -2156,7 +2280,9 @@ def release_evidence_cmd(
     eval_report: str = typer.Option("", "--eval-report"),
     coverage: float | None = typer.Option(None, "--coverage", min=0, max=100),
     coverage_required: float = typer.Option(70, "--coverage-required", min=0, max=100),
-    tests: str = typer.Option("", "--tests", help="Recorded test result, for example '724 passed'."),
+    tests: str = typer.Option(
+        "", "--tests", help="Recorded test result, for example '724 passed'."
+    ),
     ci_url: str = typer.Option("", "--ci-url"),
     artifact: Annotated[list[str] | None, typer.Option("--artifact")] = None,
     exception: Annotated[list[str] | None, typer.Option("--exception")] = None,
@@ -2185,7 +2311,9 @@ def release_evidence_cmd(
 def context_map_cmd(
     project: str = typer.Option(".", "--project", "-p"),
     query: str = typer.Option("", "--query", "-q"),
-    json_output: bool = typer.Option(False, "--json", help="Emit the full machine-readable context payload."),
+    json_output: bool = typer.Option(
+        False, "--json", help="Emit the full machine-readable context payload."
+    ),
 ):
     """Show memory, workbench, and project state for the current project."""
     from magent.context import context_map
@@ -2236,7 +2364,9 @@ def recipe_list_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 
 @recipe_app.command("show")
-def recipe_show_cmd(name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def recipe_show_cmd(
+    name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Show a workflow recipe."""
     from magent.recipes import get_recipe
 
@@ -2251,7 +2381,9 @@ def recipe_show_cmd(name: str = typer.Argument(...), project: str = typer.Option
 def recipe_save_cmd(
     name: str = typer.Argument(...),
     description: str = typer.Option("", "--description", "-d"),
-    step: Annotated[list[str] | None, typer.Option("--step", help="Recipe step; may be repeated")] = None,
+    step: Annotated[
+        list[str] | None, typer.Option("--step", help="Recipe step; may be repeated")
+    ] = None,
     command: Annotated[
         list[str] | None,
         typer.Option("--command", "-c", help="Command; may be repeated"),
@@ -2260,11 +2392,17 @@ def recipe_save_cmd(
     """Save a reusable workflow recipe."""
     from magent.recipes import save_recipe
 
-    console.print_json(data=save_recipe(_store(), name, description=description, steps=step or [], commands=command or []))
+    console.print_json(
+        data=save_recipe(
+            _store(), name, description=description, steps=step or [], commands=command or []
+        )
+    )
 
 
 @recipe_app.command("run")
-def recipe_run_cmd(name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def recipe_run_cmd(
+    name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Create a pending execution plan from a workflow recipe."""
     from magent.recipes import run_recipe
 
@@ -2297,79 +2435,11 @@ def recipe_sandbox_cmd(
             "ok": True,
             "recipe": result["recipe"],
             "plan": result["plan"],
-            "sandbox": execute_plan_sandbox(_store(), plan_id, mode=mode, run_checks=run_checks, keep=keep, image=image),
+            "sandbox": execute_plan_sandbox(
+                _store(), plan_id, mode=mode, run_checks=run_checks, keep=keep, image=image
+            ),
         }
     )
-
-
-@tools_app.command("list")
-def tools_list_cmd():
-    """List tool capability packs and enabled state."""
-    from magent.tool_packs import list_packs
-
-    console.print_json(data={"ok": True, "packs": list_packs(_store())})
-
-
-@tools_app.command("explain")
-def tools_explain_cmd(pack: str = typer.Argument(...)):
-    """Explain a tool capability pack."""
-    from magent.tool_packs import explain_pack
-
-    result = explain_pack(pack, _store())
-    console.print_json(data=result)
-    if not result.get("ok"):
-        raise typer.Exit(1)
-
-
-@tools_app.command("enable")
-def tools_enable_cmd(pack: str = typer.Argument(...)):
-    """Enable a tool capability pack."""
-    from magent.tool_packs import set_pack_enabled
-
-    result = set_pack_enabled(_store(), pack, True)
-    console.print_json(data=result)
-    if not result.get("ok"):
-        raise typer.Exit(1)
-
-
-@tools_app.command("disable")
-def tools_disable_cmd(pack: str = typer.Argument(...)):
-    """Disable a tool capability pack."""
-    from magent.tool_packs import set_pack_enabled
-
-    result = set_pack_enabled(_store(), pack, False)
-    console.print_json(data=result)
-    if not result.get("ok"):
-        raise typer.Exit(1)
-
-
-@tools_app.command("gateway")
-def tools_gateway_cmd():
-    """Show local, subscription, and MCP tool backend readiness."""
-    from magent.tool_gateway import gateway_status
-
-    config = load_config(_require_user())
-    data = gateway_status(config)
-    table = Table("Backend", "Enabled", "Credential", "Description")
-    for item in data.get("backends", []):
-        table.add_row(
-            item.get("id", ""),
-            "yes" if item.get("enabled") else "no",
-            item.get("credential") or "-",
-            item.get("description", "")[:90],
-        )
-    console.print(table)
-
-
-@tools_app.command("backend")
-def tools_backend_cmd(name: str = typer.Argument(...)):
-    """Explain one tool backend/gateway surface."""
-    from magent.tool_gateway import explain_backend
-
-    result = explain_backend(name)
-    console.print_json(data=result)
-    if not result.get("ok"):
-        raise typer.Exit(1)
 
 
 @skill_app.command("list")
@@ -2387,7 +2457,9 @@ def skill_list_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 
 @skill_app.command("search")
-def skill_search_cmd(query: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def skill_search_cmd(
+    query: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Find skills relevant to a task or phrase."""
     from magent.skills import SkillRegistry
 
@@ -2408,7 +2480,9 @@ def skill_search_cmd(query: str = typer.Argument(...), project: str = typer.Opti
 
 
 @skill_app.command("show")
-def skill_show_cmd(name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")):
+def skill_show_cmd(
+    name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+):
     """Show one local skill's metadata and path."""
     from magent.skills import SkillRegistry
 
@@ -2460,7 +2534,9 @@ def provider_set_cmd(
     api_key: str = typer.Option("", "--api-key"),
     api_key_keyring: str = typer.Option("", "--api-key-keyring"),
     base_url: str = typer.Option("", "--base-url"),
-    access_mode: str = typer.Option("", "--access", help="api, codex, payg, subscription, or local"),
+    access_mode: str = typer.Option(
+        "", "--access", help="api, codex, payg, subscription, or local"
+    ),
 ):
     """Set the default provider and model without editing config.toml."""
     from magent.config_ux import set_default_provider
@@ -2513,7 +2589,9 @@ def provider_wizard_cmd():
         if credential_choice == "1":
             api_key = Prompt.ask("API key", password=True, default="").strip()
             if not api_key:
-                console.print("[yellow]No key entered; falling back to environment variable setup.[/yellow]")
+                console.print(
+                    "[yellow]No key entered; falling back to environment variable setup.[/yellow]"
+                )
                 api_key_env = Prompt.ask("API key environment variable", default=default_env)
         elif credential_choice == "2":
             api_key_env = Prompt.ask("API key environment variable", default=default_env)
@@ -2618,7 +2696,9 @@ def model_doctor_cmd():
     """Show model role readiness."""
     from magent.config_ux import ux_doctor
 
-    console.print_json(data={"ok": True, "model_roles": ux_doctor(get_current_user())["model_roles"]})
+    console.print_json(
+        data={"ok": True, "model_roles": ux_doctor(get_current_user())["model_roles"]}
+    )
 
 
 @model_app.command("orchestration-doctor")
@@ -2727,13 +2807,17 @@ def model_image_wizard_cmd():
     api_key = ""
     console.print("[dim]Choose how MagAgent should find this image provider credential.[/dim]")
     console.print("  [cyan]1[/cyan]. Paste key now and save it in MagAgent config")
-    console.print(f"  [cyan]2[/cyan]. Use environment variable [bold]{default_env or 'PROVIDER_API_KEY'}[/bold]")
+    console.print(
+        f"  [cyan]2[/cyan]. Use environment variable [bold]{default_env or 'PROVIDER_API_KEY'}[/bold]"
+    )
     console.print("  [cyan]3[/cyan]. Skip credential setup")
     credential_choice = Prompt.ask("Credential option", choices=["1", "2", "3"], default="2")
     if credential_choice == "1":
         api_key = Prompt.ask("API key", password=True, default="").strip()
         if not api_key:
-            console.print("[yellow]No key entered; falling back to environment variable setup.[/yellow]")
+            console.print(
+                "[yellow]No key entered; falling back to environment variable setup.[/yellow]"
+            )
             api_key_env = Prompt.ask("API key environment variable", default=default_env)
     elif credential_choice == "2":
         api_key_env = Prompt.ask("API key environment variable", default=default_env)
@@ -2917,21 +3001,31 @@ def ci_cmd(
     """Triage recent GitHub Actions runs with gh, when available."""
     from magent.workbench import ci_triage
 
-    console.print_json(data=ci_triage(project, logs=logs, repair_plan=repair_plan, store=_store(), save=save))
+    console.print_json(
+        data=ci_triage(project, logs=logs, repair_plan=repair_plan, store=_store(), save=save)
+    )
 
 
 @app.command("diagnostics", rich_help_panel="Performance & Diagnostics")
 def diagnostics_cmd(
     project: str = typer.Option(".", "--project", "-p"),
-    deep: bool = typer.Option(False, "--deep", help="Include provider, MCP, hooks, plugins, and permissions."),
-    prompt: str = typer.Option("", "--prompt", help="Optional prompt to verify expected artifacts from."),
+    deep: bool = typer.Option(
+        False, "--deep", help="Include provider, MCP, hooks, plugins, and permissions."
+    ),
+    prompt: str = typer.Option(
+        "", "--prompt", help="Optional prompt to verify expected artifacts from."
+    ),
 ):
     """Run available local diagnostics for the current project."""
     if deep:
         from magent.diagnostics import deep_diagnostics
 
         username = _require_user()
-        console.print_json(data=deep_diagnostics(username, load_config(username), _store(), project=project, prompt=prompt))
+        console.print_json(
+            data=deep_diagnostics(
+                username, load_config(username), _store(), project=project, prompt=prompt
+            )
+        )
         return
     from magent.workbench import project_diagnostics
 
@@ -2939,7 +3033,10 @@ def diagnostics_cmd(
 
 
 @app.command("docs-brief", rich_help_panel="Help & Learning")
-def docs_brief_cmd(project: str = typer.Option(".", "--project", "-p"), out: str | None = typer.Option(None, "--out")):
+def docs_brief_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    out: str | None = typer.Option(None, "--out"),
+):
     """Generate a compact project documentation brief."""
     from magent.workbench import docs_brief
 
@@ -3012,14 +3109,20 @@ def data_sqlite_query_cmd(
     from magent.desktop_api import parse_json_value, sqlite_query
 
     parsed = parse_json_value(params)
-    result = sqlite_query(user or _require_user(), sql, db_name, parsed if isinstance(parsed, list) else [])
+    result = sqlite_query(
+        user or _require_user(), sql, db_name, parsed if isinstance(parsed, list) else []
+    )
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)
 
 
 @api_app.command("save")
-def api_save_cmd(name: str = typer.Argument(...), method: str = typer.Argument(...), url: str = typer.Argument(...)):
+def api_save_cmd(
+    name: str = typer.Argument(...),
+    method: str = typer.Argument(...),
+    url: str = typer.Argument(...),
+):
     """Save an API endpoint bookmark."""
     item = _store().append("api_endpoints", {"name": name, "method": method.upper(), "url": url})
     console.print(f"[green]✓ Saved {item['id']}[/green]")
@@ -3058,9 +3161,13 @@ def session_timeline_cmd(session_id: str | None = typer.Argument(None)):
 
 @session_app.command("events")
 def session_events_cmd(
-    log_path: str | None = typer.Argument(None, help="Session JSONL path. Defaults to the newest log."),
+    log_path: str | None = typer.Argument(
+        None, help="Session JSONL path. Defaults to the newest log."
+    ),
     limit: int = typer.Option(200, "--limit", "-n"),
-    event_type: Annotated[list[str] | None, typer.Option("--type", help="Filter event type.")] = None,
+    event_type: Annotated[
+        list[str] | None, typer.Option("--type", help="Filter event type.")
+    ] = None,
 ):
     """Show normalized session events for UI and diagnostics."""
     from magent.config import LOGS_DIR
@@ -3141,13 +3248,17 @@ def _review_session_message(session_id: str, message_id: str, decision: str) -> 
 
 
 @session_app.command("accept")
-def session_accept_cmd(session_id: str = typer.Argument(...), message_id: str = typer.Argument(...)):
+def session_accept_cmd(
+    session_id: str = typer.Argument(...), message_id: str = typer.Argument(...)
+):
     """Move a held peer message into the accepted inbox."""
     _review_session_message(session_id, message_id, "accept")
 
 
 @session_app.command("refuse")
-def session_refuse_cmd(session_id: str = typer.Argument(...), message_id: str = typer.Argument(...)):
+def session_refuse_cmd(
+    session_id: str = typer.Argument(...), message_id: str = typer.Argument(...)
+):
     """Discard a held peer message."""
     _review_session_message(session_id, message_id, "refuse")
 
@@ -3281,7 +3392,9 @@ def ui_cmd(
     from magent.ui import serve_ui
 
     username = _require_user()
-    result = serve_ui(_store(), project=project, username=username, port=port, open_browser=open_browser)
+    result = serve_ui(
+        _store(), project=project, username=username, port=port, open_browser=open_browser
+    )
     console.print_json(data={key: value for key, value in result.items() if key != "server"})
     if not result.get("ok"):
         raise typer.Exit(1)
@@ -3352,7 +3465,9 @@ def checkpoint_restore_cmd(
     from magent.workbench import restore_checkpoint
 
     if not yes:
-        confirm = Prompt.ask(f"Restore checkpoint '{checkpoint_id}'?", choices=["y", "n"], default="n")
+        confirm = Prompt.ask(
+            f"Restore checkpoint '{checkpoint_id}'?", choices=["y", "n"], default="n"
+        )
         if confirm != "y":
             raise typer.Exit()
     console.print_json(data=restore_checkpoint(_store(), checkpoint_id))
@@ -3416,7 +3531,9 @@ def checkpoint_session_restore_cmd(
     from magent.workbench import checkpoint_session_restore
 
     if not yes:
-        confirm = Prompt.ask(f"Restore checkpoint session '{session_id}'?", choices=["y", "n"], default="n")
+        confirm = Prompt.ask(
+            f"Restore checkpoint session '{session_id}'?", choices=["y", "n"], default="n"
+        )
         if confirm != "y":
             raise typer.Exit()
     console.print_json(data=checkpoint_session_restore(_store(), session_id))
@@ -3681,7 +3798,9 @@ def gateway_stop():
 
 @gateway_app.command("status")
 def gateway_status(
-    sessions: bool = typer.Option(False, "--sessions", help="Show configured access and live session state."),
+    sessions: bool = typer.Option(
+        False, "--sessions", help="Show configured access and live session state."
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ):
     """Show whether the gateway is running and on which platforms."""
@@ -3699,7 +3818,9 @@ def gateway_status(
 
         try:
             config = load_config(get_current_user() or "default")
-            router = MessageRouter(read_gateway_config(config.raw() if hasattr(config, "raw") else {}))
+            router = MessageRouter(
+                read_gateway_config(config.raw() if hasattr(config, "raw") else {})
+            )
             payload["access"] = router.session_report()
         except Exception as error:
             payload["access"] = {"ok": False, "error": str(error)}
@@ -4081,7 +4202,9 @@ def mcp_resource(
                 if isinstance(content.get("text"), str):
                     console.print(Text(content["text"]))
                 elif isinstance(content.get("blob"), str):
-                    console.print(f"[dim]Binary resource: {len(content['blob'])} base64 characters[/dim]")
+                    console.print(
+                        f"[dim]Binary resource: {len(content['blob'])} base64 characters[/dim]"
+                    )
             if result.get("truncated"):
                 console.print("[yellow]Resource output was truncated at the safety limit.[/yellow]")
             cache = result.get("cache") or {}
@@ -4114,8 +4237,7 @@ def mcp_prompt(
     try:
         raw_arguments = json.loads(arguments_json)
         if not isinstance(raw_arguments, dict) or not all(
-            isinstance(key, str) and isinstance(value, str)
-            for key, value in raw_arguments.items()
+            isinstance(key, str) and isinstance(value, str) for key, value in raw_arguments.items()
         ):
             raise ValueError("arguments must be a JSON object with string values")
     except (json.JSONDecodeError, ValueError) as exc:

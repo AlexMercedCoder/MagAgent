@@ -16,6 +16,8 @@ Core ideas:
 - `magent docs list` shows built-in documentation topics.
 - `magent docs show architecture` explains the major code boundaries.
 - `magent doctor` checks your local setup.
+- `magent tools doctor` checks optional document, media, desktop, browser, gateway, MCP, and LSP capabilities.
+- `magent lsp ...` uses installed language servers for code intelligence with bounded local fallbacks.
 - `magent memory ...` inspects and manages the MagGraph memory graph.
 - `magent graph validate`, `plan`, `generate`, and `run` manage portable Agentic Graph workflows.
 - `magent context map` shows memory, workbench, and project state together.

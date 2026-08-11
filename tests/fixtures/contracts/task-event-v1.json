@@ -1,0 +1,13 @@
+{
+  "required": [
+    "event_id",
+    "task_id",
+    "sequence",
+    "schema_version",
+    "type",
+    "state",
+    "ts",
+    "detail"
+  ],
+  "schema_version": "magent.task-event.v1"
+}

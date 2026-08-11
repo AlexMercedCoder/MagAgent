@@ -1,0 +1,27 @@
+{
+  "required": [
+    "id",
+    "schema_version",
+    "kind",
+    "title",
+    "state",
+    "project_id",
+    "project_path",
+    "session_id",
+    "parent_task_id",
+    "created_at",
+    "updated_at",
+    "started_at",
+    "finished_at",
+    "planning_role",
+    "execution_role",
+    "permission_policy",
+    "attempt",
+    "usage",
+    "files_changed",
+    "checkpoints",
+    "final_audit",
+    "metadata"
+  ],
+  "schema_version": "magent.task.v2"
+}

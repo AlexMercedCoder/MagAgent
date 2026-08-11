@@ -46,6 +46,8 @@ Important command paths:
 - `magent readiness`: show setup, docs, project, provider, and model readiness.
 - `magent readiness --smoke`: include a tiny live provider tool-use smoke.
 - `magent performance doctor`: inspect startup, repo, workbench, memory, and config performance.
+- `magent performance install-shape`: measure installed package bytes and cold CLI import time.
+- `magent tools doctor`: report optional capability readiness and exact extra install commands.
 - `magent cache doctor`: inspect prompt-cache readiness for the current provider/model.
 - `magent cache status`: summarize cached token telemetry from local session logs.
 - `magent workbench stats`: show local workbench store sizes and maintenance recommendations.
@@ -148,6 +150,8 @@ Important command paths:
 - `magent lsp diagnostics`: run local diagnostics.
 - `magent lsp definition <symbol>`: find symbol definitions.
 - `magent lsp references <symbol>`: find local references.
+- `magent lsp hover <path> --line N --column N`: request hover information from an installed server.
+- `magent lsp rename <path> <new-name> --line N --column N`: preview a server workspace edit.
 - `magent daemon enqueue <kind> <value>`: add a durable background task.
 - `magent daemon list`: list background queue items.
 - `magent daemon run-once`: run due queue items once.

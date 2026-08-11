@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.60.0
+
+- Split the agent runtime into typed context, tool-loop, lifecycle, and support modules while preserving `AgentSession` compatibility.
+- Enabled `check_untyped_defs`, removed core runtime exemptions, and added typed boundary records plus stable contract fixtures.
+- Added a real local JSON-RPC LSP client for Python, TypeScript/JavaScript, Rust, and Go with capability-aware symbols, diagnostics, definitions, references, hover, rename, cancellation, restart, and clean shutdown.
+- Added bounded AST/text fallbacks, real Python and TypeScript LSP integration tests, and diagnostics integration with existing review and repair workflows.
+- Split optional document, media, desktop, browser, gateway, MCP, and LSP dependencies from the core install; added `full`, readiness diagnostics, install-shape measurements, and a fresh core-wheel CI smoke test.
+- Added dependency-direction and module-size architecture tests, extracted-runtime branch coverage above 85%, and documented compatibility-facade exceptions.
+- Avoided unnecessary hook thread executors when projects have no configured hooks.
+
 ## 0.50.0
 
 - Added `magent.agent-eval.v1`, an isolated real-AgentSession evaluation harness with

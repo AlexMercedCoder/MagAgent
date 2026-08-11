@@ -2,13 +2,53 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 import time
+from importlib import metadata
 from pathlib import Path
 from typing import Any
 
 from magent.config import load_config, load_global_config
 from magent.project_scan import scan_estimate
 from magent.workbench_maintenance import workbench_stats
+
+
+def install_shape(samples: int = 3) -> dict[str, Any]:
+    """Measure installed package bytes and cold CLI import time."""
+    distribution = metadata.distribution("mag-agent")
+    package_files = [path for path in (distribution.files or []) if "magent" in path.parts]
+    package_bytes = 0
+    for relative in package_files:
+        path = Path(str(distribution.locate_file(relative)))
+        if path.is_file():
+            package_bytes += path.stat().st_size
+
+    timings: list[float] = []
+    probe = (
+        "import json,time; start=time.perf_counter(); import magent.cli.main; "
+        "print(json.dumps({'ms':(time.perf_counter()-start)*1000}))"
+    )
+    for _sample in range(max(1, min(samples, 10))):
+        completed = subprocess.run(
+            [sys.executable, "-c", probe],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        timings.append(float(json.loads(completed.stdout.strip().splitlines()[-1])["ms"]))
+    return {
+        "ok": True,
+        "version": distribution.version,
+        "package_bytes": package_bytes,
+        "cold_cli_import_ms": {
+            "samples": [round(value, 2) for value in timings],
+            "minimum": round(min(timings), 2),
+            "average": round(sum(timings) / len(timings), 2),
+        },
+    }
 
 
 def performance_doctor(store: Any, username: str, project: str | Path = ".") -> dict[str, Any]:

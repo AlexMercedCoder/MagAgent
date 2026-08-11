@@ -2,7 +2,7 @@
 
 > Version sequence: `0.50.0`, `0.60.0`, `0.70.0`, `0.80.0`, `0.90.0`, `1.0.0`.
 >
-> The project is currently at `0.35.1`. The `0.50.0` notation is intentional:
+> The project is currently preparing `0.60.0`. The `0.50.0` notation is intentional:
 > semantic version `0.5.0` would be older than `0.35.1`.
 
 ## Purpose
@@ -113,6 +113,12 @@ complete. The 72% branch-coverage target is not claimed: measured branch-aware c
 - The release includes a reproducible baseline report for future comparison.
 
 ## 0.60.0: Coherent Runtime And Real Code Intelligence
+
+**Release status:** Implemented for 0.60.0. Agent runtime layers, enforced typing,
+stable contract fixtures, real Python/TypeScript LSP integration, bounded fallbacks,
+optional install shapes, core wheel smoke coverage, and architecture dependency rules
+are complete. Remaining oversized compatibility facades have explicit exceptions and
+closure criteria in `src/magent/docs/architecture-exceptions.md`.
 
 **Theme:** Reduce regression risk and make coding intelligence substantive.
 

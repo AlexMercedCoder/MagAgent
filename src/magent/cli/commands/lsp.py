@@ -17,7 +17,10 @@ def register_lsp_commands(lsp_app: typer.Typer) -> None:
         console.print_json(data=lsp_status())
 
     @lsp_app.command("symbols")
-    def lsp_symbols_cmd(query: str = typer.Option("", "--query", "-q"), project: str = typer.Option(".", "--project", "-p")) -> None:
+    def lsp_symbols_cmd(
+        query: str = typer.Option("", "--query", "-q"),
+        project: str = typer.Option(".", "--project", "-p"),
+    ) -> None:
         """Show symbols using LSP when available, with AST fallback."""
         from magent.lsp import lsp_symbols
 
@@ -34,15 +37,44 @@ def register_lsp_commands(lsp_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @lsp_app.command("definition")
-    def lsp_definition_cmd(symbol: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")) -> None:
+    def lsp_definition_cmd(
+        symbol: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    ) -> None:
         """Find symbol definitions."""
         from magent.lsp import lsp_definition
 
         console.print_json(data=lsp_definition(project, symbol))
 
     @lsp_app.command("references")
-    def lsp_references_cmd(symbol: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")) -> None:
+    def lsp_references_cmd(
+        symbol: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    ) -> None:
         """Find text references to a symbol."""
         from magent.lsp import lsp_references
 
         console.print_json(data=lsp_references(project, symbol))
+
+    @lsp_app.command("hover")
+    def lsp_hover_cmd(
+        path: str = typer.Argument(...),
+        line: int = typer.Option(..., "--line", min=1),
+        column: int = typer.Option(..., "--column", min=1),
+        project: str = typer.Option(".", "--project", "-p"),
+    ) -> None:
+        """Return hover information from a connected language server."""
+        from magent.lsp import lsp_hover
+
+        console.print_json(data=lsp_hover(project, path, line, column))
+
+    @lsp_app.command("rename")
+    def lsp_rename_cmd(
+        path: str = typer.Argument(...),
+        new_name: str = typer.Argument(...),
+        line: int = typer.Option(..., "--line", min=1),
+        column: int = typer.Option(..., "--column", min=1),
+        project: str = typer.Option(".", "--project", "-p"),
+    ) -> None:
+        """Preview a capability-aware LSP workspace rename edit."""
+        from magent.lsp import lsp_rename
+
+        console.print_json(data=lsp_rename(project, path, line, column, new_name))

@@ -15,7 +15,7 @@ import shutil as shutil
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from rich.console import Console
 
@@ -37,6 +37,7 @@ from magent.tools.types import DEFAULT_TOOL_BUDGETS, OPAQUE_RESULT_KEYS, ToolRes
 from magent.tools.web import WebToolsMixin
 
 console = Console()
+
 
 def _running_tool_status(tool_name: str, args: dict[str, Any], elapsed: float) -> str:
     label = tool_name
@@ -216,7 +217,11 @@ class ToolExecutor(
         )
 
     def _permission_denied(self, perm: PermissionResult) -> ToolResult:
-        error = "Permission required" if perm.reason == "permission-required" else "Permission denied by user"
+        error = (
+            "Permission required"
+            if perm.reason == "permission-required"
+            else "Permission denied by user"
+        )
         return {
             "ok": False,
             "error": error,
@@ -238,21 +243,15 @@ class ToolExecutor(
         from magent.tools.catalog import built_in_tool_definitions
         from magent.tools.registry import reconcile_required_with_signatures
 
-        return cast(
-            list[dict[str, Any]],
-            reconcile_required_with_signatures(
-                filter_tool_definitions_for_user(built_in_tool_definitions(), self.username),
-                self,
-            ),
+        return reconcile_required_with_signatures(
+            filter_tool_definitions_for_user(built_in_tool_definitions(), self.username),
+            self,
         )
 
     def get_tool_definitions_for_message(self, message: str) -> list[dict[str, Any]]:
         from magent.tools.catalog import select_tool_definitions_for_message
 
-        return cast(
-            list[dict[str, Any]],
-            select_tool_definitions_for_message(self.get_tool_definitions(), message),
-        )
+        return select_tool_definitions_for_message(self.get_tool_definitions(), message)
 
     async def dispatch(self, tool_name: str, tool_args: dict[str, Any]) -> ToolResult:
         """Dispatch a tool call by name."""
@@ -264,7 +263,11 @@ class ToolExecutor(
             return graph_authorization
         raw = bool(a.pop("raw", False))
         definition = next(
-            (item for item in self.get_tool_definitions() if item.get("function", {}).get("name") == tool_name),
+            (
+                item
+                for item in self.get_tool_definitions()
+                if item.get("function", {}).get("name") == tool_name
+            ),
             None,
         )
         if definition:
@@ -361,9 +364,7 @@ class ToolExecutor(
             "db_schema": lambda: self.db_schema(a["table"], a.get("db_name", "default")),
             "db_list_databases": lambda: self.db_list_databases(),
             "git_op": lambda: self.git_op(a["subcommand"], *a.get("args", [])),
-            "magent_docs_search": lambda: self.magent_docs_search(
-                a["query"], a.get("limit", 5)
-            ),
+            "magent_docs_search": lambda: self.magent_docs_search(a["query"], a.get("limit", 5)),
             "list_sessions": lambda: self.list_sessions(),
             "send_session_message": lambda: self.send_session_message(
                 a["target"], a["message"], a.get("task_id", "")

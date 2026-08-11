@@ -1,0 +1,458 @@
+{
+  "ok": true,
+  "schema": "magent.release-evidence.v1",
+  "version": "0.60.0",
+  "generated_at": "2026-08-11T03:41:42.886504+00:00",
+  "root": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent",
+  "runtime": {
+    "python": "3.14.5",
+    "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35"
+  },
+  "git": {
+    "commit": "9c0c8d6327efc37fb334db8b0f84d657b1e0f568",
+    "branch": "main",
+    "tag": "v0.50.0",
+    "clean": false,
+    "status": [
+      "M .github/workflows/ci.yml",
+      " M CHANGELOG.md",
+      " M README.md",
+      " M ROADMAP_TO_1.0.md",
+      " M docs/README.md",
+      " M pyproject.toml",
+      " M src/magent/__init__.py",
+      " M src/magent/agent.py",
+      " M src/magent/agent_evals.py",
+      " M src/magent/agraph/execute.py",
+      " M src/magent/browser.py",
+      " M src/magent/cli/commands/lsp.py",
+      " M src/magent/cli/commands/performance.py",
+      " M src/magent/cli/main.py",
+      " M src/magent/daemon.py",
+      " M src/magent/docs.py",
+      " M src/magent/docs/architecture.md",
+      " M src/magent/docs/command-reference.md",
+      " M src/magent/docs/commands.md",
+      " M src/magent/docs/lsp.md",
+      " M src/magent/docs/overview.md",
+      " M src/magent/docs/performance.md",
+      " M src/magent/gateway/router.py",
+      " M src/magent/hooks.py",
+      " M src/magent/lsp.py",
+      " M src/magent/mcp/bridge.py",
+      " M src/magent/memory/__init__.py",
+      " M src/magent/performance.py",
+      " M src/magent/tools/artifacts.py",
+      " M src/magent/tools/executor.py",
+      " M src/magent/tools/system.py",
+      " M tests/unit/test_agent_loop.py",
+      "?? docs/RELEASE_0.60.0.md",
+      "?? docs/reports/0.60.0-agent-evals.json",
+      "?? docs/reports/0.60.0-install-shape.json",
+      "?? roadmap_aug10.md",
+      "?? src/magent/agent_runtime/",
+      "?? src/magent/capability_readiness.py",
+      "?? src/magent/cli/commands/tools.py",
+      "?? src/magent/docs/architecture-exceptions.md",
+      "?? src/magent/docs/installation-shapes.md",
+      "?? src/magent/lsp_client.py",
+      "?? src/magent/runtime_contracts.py",
+      "?? tests/fixtures/contracts/",
+      "?? tests/fixtures/fake_lsp_server.py",
+      "?? tests/integration/test_lsp_real.py",
+      "?? tests/unit/test_agent_runtime_layers.py",
+      "?? tests/unit/test_lsp_client.py",
+      "?? tests/unit/test_runtime_architecture.py"
+    ]
+  },
+  "checks": {
+    "docs": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "task-contract",
+          "ok": true,
+          "detail": "magent.task.v2"
+        },
+        {
+          "name": "event-contract",
+          "ok": true,
+          "detail": "magent.task-event.v1"
+        },
+        {
+          "name": "memory-contract",
+          "ok": true,
+          "detail": "maggraph>=0.4.1"
+        },
+        {
+          "name": "python-3.11",
+          "ok": true,
+          "detail": "Python 3.11"
+        },
+        {
+          "name": "python-3.12",
+          "ok": true,
+          "detail": "Python 3.12"
+        },
+        {
+          "name": "python-3.13",
+          "ok": true,
+          "detail": "Python 3.13"
+        },
+        {
+          "name": "python-3.14",
+          "ok": true,
+          "detail": "Python 3.14"
+        },
+        {
+          "name": "package-version",
+          "ok": true,
+          "detail": "0.60.0"
+        },
+        {
+          "name": "maggraph-floor",
+          "ok": true,
+          "detail": "maggraph>=0.4.1"
+        },
+        {
+          "name": "python-floor",
+          "ok": true,
+          "detail": ">=3.11"
+        },
+        {
+          "name": "provider-reference",
+          "ok": true,
+          "detail": "generated catalog"
+        }
+      ]
+    },
+    "providers": {
+      "schema": "magent.provider-support.v1",
+      "ok": true,
+      "provider_count": 20,
+      "providers": [
+        {
+          "id": "opencode-go",
+          "display": "OpenCode Go",
+          "default_model": "deepseek-v4-flash",
+          "access_mode": "subscription",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "OPENCODE_GO_KEY",
+          "credential_aliases": [
+            "OPENCODE_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "ollama",
+          "display": "Ollama (local)",
+          "default_model": "qwen2.5-coder:32b",
+          "access_mode": "local",
+          "adapter": "ollama",
+          "local": true,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "lmstudio",
+          "display": "LM Studio (local)",
+          "default_model": "local-model",
+          "access_mode": "local",
+          "adapter": "openai-compatible",
+          "local": true,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "openai",
+          "display": "OpenAI",
+          "default_model": "gpt-5",
+          "access_mode": "api",
+          "adapter": "openai",
+          "local": false,
+          "credential_env": "OPENAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "anthropic",
+          "display": "Anthropic",
+          "default_model": "claude-sonnet-5",
+          "access_mode": "api",
+          "adapter": "anthropic",
+          "local": false,
+          "credential_env": "ANTHROPIC_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "nous-portal",
+          "display": "Nous Portal",
+          "default_model": "deepseek/deepseek-v4-flash",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "NOUS_API_KEY",
+          "credential_aliases": [
+            "NOUS_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "opencode-zen",
+          "display": "OpenCode Zen",
+          "default_model": "deepseek-v4-flash",
+          "access_mode": "payg",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "OPENCODE_ZEN_KEY",
+          "credential_aliases": [
+            "OPENCODE_ZEN_API_KEY",
+            "OPENCODE_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "google",
+          "display": "Google Gemini",
+          "default_model": "gemini-3.6-flash",
+          "access_mode": "api",
+          "adapter": "gemini",
+          "local": false,
+          "credential_env": "GEMINI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "groq",
+          "display": "Groq",
+          "default_model": "llama-3.3-70b-versatile",
+          "access_mode": "api",
+          "adapter": "groq",
+          "local": false,
+          "credential_env": "GROQ_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "openrouter",
+          "display": "OpenRouter",
+          "default_model": "deepseek/deepseek-chat",
+          "access_mode": "api",
+          "adapter": "openrouter",
+          "local": false,
+          "credential_env": "OPENROUTER_API_KEY",
+          "credential_aliases": [
+            "OPENROUTER_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "bedrock",
+          "display": "AWS Bedrock",
+          "default_model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "access_mode": "aws",
+          "adapter": "bedrock",
+          "local": false,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "mistral",
+          "display": "Mistral AI",
+          "default_model": "mistral-large-latest",
+          "access_mode": "api",
+          "adapter": "mistral",
+          "local": false,
+          "credential_env": "MISTRAL_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "deepseek",
+          "display": "DeepSeek",
+          "default_model": "deepseek-chat",
+          "access_mode": "api",
+          "adapter": "deepseek",
+          "local": false,
+          "credential_env": "DEEPSEEK_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "xai",
+          "display": "xAI",
+          "default_model": "grok-4",
+          "access_mode": "api",
+          "adapter": "xai",
+          "local": false,
+          "credential_env": "XAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "perplexity",
+          "display": "Perplexity",
+          "default_model": "sonar-pro",
+          "access_mode": "api",
+          "adapter": "perplexity",
+          "local": false,
+          "credential_env": "PERPLEXITYAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "cerebras",
+          "display": "Cerebras",
+          "default_model": "llama3.1-8b",
+          "access_mode": "api",
+          "adapter": "cerebras",
+          "local": false,
+          "credential_env": "CEREBRAS_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "together_ai",
+          "display": "Together AI",
+          "default_model": "moonshotai/Kimi-K2.5",
+          "access_mode": "api",
+          "adapter": "together_ai",
+          "local": false,
+          "credential_env": "TOGETHERAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "fireworks_ai",
+          "display": "Fireworks AI",
+          "default_model": "accounts/fireworks/models/deepseek-coder-v2-instruct",
+          "access_mode": "api",
+          "adapter": "fireworks_ai",
+          "local": false,
+          "credential_env": "FIREWORKS_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "deepinfra",
+          "display": "DeepInfra",
+          "default_model": "openai/gpt-oss-120b",
+          "access_mode": "api",
+          "adapter": "deepinfra",
+          "local": false,
+          "credential_env": "DEEPINFRA_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        },
+        {
+          "id": "custom",
+          "display": "Custom Endpoint",
+          "default_model": "your-model-name",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run"
+        }
+      ],
+      "live_test_command": "magent provider test-matrix",
+      "tool_test_command": "magent provider smoke-all",
+      "policy": "Catalog conformance is offline. Full support requires maintainer-run ping and tool-use reports for the release."
+    },
+    "evals": {
+      "ok": true,
+      "status": "recorded",
+      "report": {
+        "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/docs/reports/0.60.0-agent-evals.json",
+        "sha256": "9660cb6e8234fdffcc97fef59878c2eb6dfba9158c413429c5d6c323c85b2116",
+        "summary": {
+          "schema": "magent.agent-eval-report.v1",
+          "suite": "reliability-offline",
+          "version": "0.60.0",
+          "ran_at": "2026-08-11T03:29:32.525407+00:00",
+          "passed": 32,
+          "total": 32,
+          "success_rate": 1.0,
+          "artifact_passed": 20,
+          "artifact_total": 20,
+          "artifact_success_rate": 1.0,
+          "targets": {
+            "success_rate": 1.0,
+            "artifact_success_rate": 1.0
+          },
+          "metrics": {
+            "elapsed_ms": 4481.31,
+            "tool_calls": 37,
+            "retries": 0,
+            "time_to_first_activity_ms": 112.07,
+            "prompt_tokens": 0.0,
+            "completion_tokens": 0.0,
+            "total_tokens": 0.0,
+            "cached_tokens": 0.0,
+            "cost_usd": 0.0
+          }
+        }
+      }
+    },
+    "tests": {
+      "ok": true,
+      "status": "760 passed (755 unit, 5 integration)"
+    },
+    "coverage": {
+      "ok": true,
+      "percent": 67.45,
+      "required": 64.0
+    },
+    "ci": {
+      "ok": true,
+      "url": "https://github.com/AlexMercedCoder/MagAgent/actions",
+      "status": "recorded"
+    },
+    "artifacts": {
+      "ok": true,
+      "items": [
+        {
+          "path": "/tmp/magent-dist-0.60.0-final/mag_agent-0.60.0-py3-none-any.whl",
+          "ok": true,
+          "bytes": 580067,
+          "sha256": "57fca80569f2f4c56e8387b3dae46500688b41ea338c90a2436f4c10fdf998a8"
+        },
+        {
+          "path": "/tmp/magent-dist-0.60.0-final/mag_agent-0.60.0.tar.gz",
+          "ok": true,
+          "bytes": 2237452,
+          "sha256": "a80e3620679eef05460002182b1752430672ddc40101de0f86de3b39dd83b061"
+        }
+      ]
+    }
+  },
+  "blocking": [],
+  "exceptions": [],
+  "blocking_exceptions": []
+}

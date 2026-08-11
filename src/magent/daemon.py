@@ -125,12 +125,11 @@ def run_once(store: Any, *, limit: int = 1) -> dict[str, Any]:
             runtime.transition(execution_task_id, "running", detail={"queue_id": task_id})
 
         try:
-            result = _execute_item(
-                item,
-                control_state=lambda task_id=execution_task_id: str(
-                    (runtime.get(task_id) or {}).get("state", "")
-                ),
-            )
+
+            def control_state(task_id: str = execution_task_id) -> str:
+                return str((runtime.get(task_id) or {}).get("state", ""))
+
+            result = _execute_item(item, control_state=control_state)
         except Exception as exc:  # never leave an item stuck in "running"
             result = {"ok": False, "error": str(exc)}
 
@@ -222,7 +221,15 @@ def _execute_item(
     elif kind == "orchestrated_goal":
         command = ["magent", "goal-run", payload.get("id", ""), "--project", project, "--json"]
     elif kind == "agraph":
-        command = ["magent", "graph", "run", payload.get("path", ""), "--project", project, "--json"]
+        command = [
+            "magent",
+            "graph",
+            "run",
+            payload.get("path", ""),
+            "--project",
+            project,
+            "--json",
+        ]
         if payload.get("yes"):
             command.append("--yes")
     elif kind == "plan":

@@ -138,7 +138,6 @@ class FakeConfig:
     file_mutation_verifier = True
 
 
-
 def make_session() -> AgentSession:
     session = AgentSession.__new__(AgentSession)
     session._mcp_start_task = None
@@ -312,7 +311,7 @@ async def test_dispatch_tool_call_strips_activity_but_keeps_audit_metadata(monke
         hook_payloads.append((project, event, payload))
         return []
 
-    monkeypatch.setattr("magent.agent.run_hooks_async", fake_run_hooks)
+    monkeypatch.setattr("magent.agent_runtime.tool_loop.run_hooks_async", fake_run_hooks)
     session = make_session()
     result = await session._dispatch_tool_call(
         "write_file",
@@ -346,7 +345,9 @@ async def test_dispatch_tool_call_strips_activity_but_keeps_audit_metadata(monke
 
 
 @pytest.mark.asyncio
-async def test_run_tool_loop_summarizes_successful_tools_when_provider_is_silent(monkeypatch) -> None:
+async def test_run_tool_loop_summarizes_successful_tools_when_provider_is_silent(
+    monkeypatch,
+) -> None:
     responses = [
         SimpleNamespace(choices=[SimpleNamespace(message=tool_call_message())]),
         SimpleNamespace(choices=[SimpleNamespace(message=empty_final_message())]),
@@ -470,8 +471,12 @@ async def test_run_tool_loop_stops_repeated_missing_write_content(monkeypatch) -
     assert len(session.tools.calls) == 2
     assert "Missing required argument 'content'" in text
     assert "File write verification" in text
-    assert any("Do not repeat `write_file` with only `path`" in str(m.get("content", "")) for m in messages)
-    assert any("do not call research/search/read tools" in str(m.get("content", "")) for m in messages)
+    assert any(
+        "Do not repeat `write_file` with only `path`" in str(m.get("content", "")) for m in messages
+    )
+    assert any(
+        "do not call research/search/read tools" in str(m.get("content", "")) for m in messages
+    )
 
 
 @pytest.mark.asyncio
@@ -505,7 +510,9 @@ async def test_file_verifier_clears_relative_failure_after_absolute_success(monk
 
 
 @pytest.mark.asyncio
-async def test_run_tool_loop_recovers_missing_write_content_with_no_tools_artifact(monkeypatch) -> None:
+async def test_run_tool_loop_recovers_missing_write_content_with_no_tools_artifact(
+    monkeypatch,
+) -> None:
     calls = []
     html = "<!doctype html><html><body><h1>Oranges</h1></body></html>"
 
@@ -543,7 +550,10 @@ def test_recovered_artifact_content_rejects_filename_placeholder() -> None:
     from magent.agent import _clean_recovered_artifact_content, _is_missing_write_file_content
 
     assert _clean_recovered_artifact_content("oranges.html", "oranges.html") == ""
-    assert _clean_recovered_artifact_content("```html\n<html>ok</html>\n```", "oranges.html") == "<html>ok</html>"
+    assert (
+        _clean_recovered_artifact_content("```html\n<html>ok</html>\n```", "oranges.html")
+        == "<html>ok</html>"
+    )
     assert _is_missing_write_file_content(
         "write_file",
         {"ok": False, "error": "Missing required arguments for write_file: content"},
@@ -552,7 +562,9 @@ def test_recovered_artifact_content_rejects_filename_placeholder() -> None:
 
 def test_deepseek_prompt_gets_tool_use_enforcement() -> None:
     session = make_session()
-    session.provider = SimpleNamespace(_base_kwargs={}, provider_id="opencode-go", model="deepseek-v4-flash")
+    session.provider = SimpleNamespace(
+        _base_kwargs={}, provider_id="opencode-go", model="deepseek-v4-flash"
+    )
 
     prompt = session._build_stable_prompt()
 
@@ -598,7 +610,9 @@ async def test_run_tool_loop_executes_dsml_pseudo_tool_markup(monkeypatch) -> No
     assert session.tools.calls[0][1]["path"] == "history-of-cheese.html"
     assert "<!DOCTYPE html>" in session.tools.calls[0][1]["content"]
     assert session.scratchpad["files_touched"] == ["/repo/app.py"]
-    assert not any("<｜DSML｜tool_calls>" in str(message.get("content", "")) for message in messages)
+    assert not any(
+        "<｜DSML｜tool_calls>" in str(message.get("content", "")) for message in messages
+    )
 
 
 @pytest.mark.asyncio
@@ -626,8 +640,14 @@ async def test_run_tool_loop_retries_truncated_dsml_without_dumping_content(monk
     assert text == "finished"
     assert tool_count == 0
     assert session.tools.calls == []
-    assert any("incomplete DSML tool markup" in str(message.get("content", "")) for message in messages)
-    assert not any("history-of-cheese.html" in str(message.get("content", "")) for message in messages if message.get("role") == "assistant")
+    assert any(
+        "incomplete DSML tool markup" in str(message.get("content", "")) for message in messages
+    )
+    assert not any(
+        "history-of-cheese.html" in str(message.get("content", ""))
+        for message in messages
+        if message.get("role") == "assistant"
+    )
 
 
 @pytest.mark.asyncio
@@ -679,7 +699,11 @@ async def test_run_tool_loop_returns_provider_error(monkeypatch) -> None:
 def test_prune_stale_tool_results_replaces_old_reads() -> None:
     session = make_session()
     messages = [
-        {"role": "tool", "name": "read_file", "content": '{"path": "/repo/app.py", "content": "old"}'},
+        {
+            "role": "tool",
+            "name": "read_file",
+            "content": '{"path": "/repo/app.py", "content": "old"}',
+        },
         {"role": "tool", "name": "search_codebase", "content": "/repo/app.py:old"},
     ]
 
@@ -752,7 +776,9 @@ async def test_stream_chat_does_not_make_second_finalizing_model_call(monkeypatc
 async def test_stream_chat_executes_dsml_pseudo_tool_markup(monkeypatch) -> None:
     responses = [
         SimpleNamespace(choices=[SimpleNamespace(message=dsml_write_file_message())]),
-        SimpleNamespace(choices=[SimpleNamespace(message=final_message_with_content("wrote file"))]),
+        SimpleNamespace(
+            choices=[SimpleNamespace(message=final_message_with_content("wrote file"))]
+        ),
     ]
 
     async def fake_acompletion(**kwargs):
@@ -821,7 +847,9 @@ async def test_model_round_streams_deltas_to_the_caller(monkeypatch) -> None:
 
     class FakeChunk:
         def __init__(self, content):
-            self.choices = [SimpleNamespace(delta=SimpleNamespace(content=content, tool_calls=None))]
+            self.choices = [
+                SimpleNamespace(delta=SimpleNamespace(content=content, tool_calls=None))
+            ]
 
     class FakeStream:
         def __aiter__(self):
@@ -850,7 +878,9 @@ async def test_model_round_streams_deltas_to_the_caller(monkeypatch) -> None:
 
     session = make_session()
     seen: list[str] = []
-    response = await session._model_round([{"role": "user", "content": "hi"}], None, on_text=seen.append)
+    response = await session._model_round(
+        [{"role": "user", "content": "hi"}], None, on_text=seen.append
+    )
 
     assert seen == ["Hel", "lo ", "world"], "deltas must reach the caller as they arrive"
     assert response.choices[0].message.content == "Hello world"
@@ -874,7 +904,9 @@ async def test_model_round_costs_one_call_when_streaming_is_unsupported(monkeypa
     monkeypatch.setattr(litellm, "acompletion", fake_acompletion)
 
     session = make_session()
-    response = await session._model_round([{"role": "user", "content": "hi"}], None, on_text=lambda _c: None)
+    response = await session._model_round(
+        [{"role": "user", "content": "hi"}], None, on_text=lambda _c: None
+    )
 
     assert response.choices[0].message.content == "one shot"
     assert len(calls) == 1
@@ -886,7 +918,9 @@ async def test_model_round_without_a_listener_does_not_stream(monkeypatch) -> No
 
     async def fake_acompletion(**kwargs):
         calls.append(kwargs)
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="x", tool_calls=None))])
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="x", tool_calls=None))]
+        )
 
     import litellm
 

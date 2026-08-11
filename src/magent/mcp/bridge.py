@@ -15,7 +15,7 @@ import sys
 import threading
 from contextlib import AsyncExitStack, suppress
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 _MAX_RESOURCE_CHARS = 200_000
 
@@ -147,9 +147,7 @@ async def _transport(profile: dict[str, Any], stack: AsyncExitStack) -> Any:
         env = None
         if overrides:
             inherited = {
-                name: value
-                for name, value in os.environ.items()
-                if name in _INHERITED_ENV_VARS
+                name: value for name, value in os.environ.items() if name in _INHERITED_ENV_VARS
             }
             env = {**inherited, **overrides}
         params = StdioServerParameters(
@@ -192,9 +190,7 @@ def _tool_catalog(result: Any) -> list[dict[str, Any]]:
         item = {
             "name": str(tool.name),
             "description": str(tool.description or ""),
-            "input_schema": _dump(
-                getattr(tool, "input_schema", getattr(tool, "inputSchema", {}))
-            ),
+            "input_schema": _dump(getattr(tool, "input_schema", getattr(tool, "inputSchema", {}))),
             "output_schema": _dump(
                 getattr(tool, "output_schema", getattr(tool, "outputSchema", None))
             ),
@@ -210,8 +206,7 @@ def _catalog_meta(result: Any) -> dict[str, Any]:
         "fetched_at": datetime.now(UTC).isoformat(),
         "ttl_ms": int(getattr(result, "ttl_ms", getattr(result, "ttlMs", 0)) or 0),
         "cache_scope": str(
-            getattr(result, "cache_scope", getattr(result, "cacheScope", "private"))
-            or "private"
+            getattr(result, "cache_scope", getattr(result, "cacheScope", "private")) or "private"
         ),
         "next_cursor": getattr(result, "next_cursor", getattr(result, "nextCursor", None)),
     }
@@ -300,9 +295,9 @@ async def _serve(profile: dict[str, Any], source: _InputPump) -> None:
                 connector,
                 mode=_mode(str(profile.get("protocol_mode", "auto"))),
                 message_handler=forward_legacy_message,
-                elicitation_callback=handle_elicitation,
-                sampling_callback=handle_sampling,
-                list_roots_callback=handle_roots,
+                elicitation_callback=cast(Any, handle_elicitation),
+                sampling_callback=cast(Any, handle_sampling),
+                list_roots_callback=cast(Any, handle_roots),
             )
         )
         tools = await asyncio.wait_for(client.list_tools(), timeout=timeout)
@@ -374,6 +369,7 @@ async def _serve(profile: dict[str, Any], source: _InputPump) -> None:
                 request_id = request.get("id")
                 try:
                     operation = request.get("op")
+                    result: Any
                     if operation == "stop":
                         _write({"ok": True, "id": request_id})
                         return
@@ -424,7 +420,7 @@ async def _serve(profile: dict[str, Any], source: _InputPump) -> None:
 
                         reference_type = str(request.get("reference_type") or "prompt")
                         if reference_type == "resource":
-                            reference = ResourceTemplateReference(
+                            reference: Any = ResourceTemplateReference(
                                 uri=str(request.get("reference", ""))
                             )
                         else:

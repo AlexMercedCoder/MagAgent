@@ -136,6 +136,12 @@ async def run_hooks_async(
     Hook subprocesses ran synchronously inside the async loop, blocking every
     other task for up to `timeout` seconds per hook.
     """
+    # Avoid creating the default thread executor for the overwhelmingly common
+    # no-hook path. Besides the per-tool overhead, Python 3.14 can wait on that
+    # executor during short-lived CLI process shutdown.
+    if event not in HOOK_EVENTS or not load_hooks(project).get(event):
+        return []
+
     import asyncio
 
     return await asyncio.to_thread(run_hooks, project, event, payload, timeout=timeout)

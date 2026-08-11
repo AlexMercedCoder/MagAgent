@@ -81,8 +81,8 @@ class MemoryManager:
         self.semantic_model = semantic_model
         self.project_slug = project_slug
         self.last_recall_stats: dict[str, int] = {"nodes": 0, "tokens": 0, "budget": budget_tokens}
-        self._index = None
-        self._semantic = None
+        self._index: Any | None = None
+        self._semantic: Any | None = None
         self._init_graph()
 
     def _init_graph(self) -> None:
@@ -104,6 +104,13 @@ class MemoryManager:
     @property
     def available(self) -> bool:
         return self._index is not None
+
+    @property
+    def index(self) -> Any:
+        """Return the initialized graph index after an availability guard."""
+        if self._index is None:
+            raise RuntimeError("Memory graph is unavailable")
+        return self._index
 
     # ─────────────────────────────────────────────
     # Pre-task recall
@@ -195,15 +202,15 @@ class MemoryManager:
         node_ids = self._expanded_node_ids(anchor_ids, depth=depth)
         lines.extend(
             [
-            "## Compact Matches",
-            "",
+                "## Compact Matches",
+                "",
             ]
         )
 
         loaded: list[Any] = []
         for node_id in node_ids:
             try:
-                loaded.append(self._index.read_node(node_id))
+                loaded.append(self.index.read_node(node_id))
             except Exception:
                 continue
 
@@ -242,14 +249,16 @@ class MemoryManager:
         rendered = "\n".join(lines).strip()
         return truncate_to_tokens(rendered, budget, "[...memory truncated for context budget...]")
 
-    def _recall_bundles(self, anchors: list[dict[str, Any]], body_chars: int) -> list[dict[str, Any]]:
+    def _recall_bundles(
+        self, anchors: list[dict[str, Any]], body_chars: int
+    ) -> list[dict[str, Any]]:
         """Return MagGraph recall bundles when available."""
         if not hasattr(self._index, "recall_bundle"):
             return []
         bundles: list[dict[str, Any]] = []
         for anchor in anchors:
             try:
-                bundle = self._index.recall_bundle(
+                bundle = self.index.recall_bundle(
                     anchor["id"],
                     reason=anchor.get("reason", ""),
                     body_chars=body_chars,
@@ -265,7 +274,7 @@ class MemoryManager:
         seen_ids: set[str] = set()
         for anchor_id in anchor_ids:
             try:
-                result = self._index.traverse(anchor_id, depth=depth, order="bfs")
+                result = self.index.traverse(anchor_id, depth=depth, order="bfs")
                 for node in result.nodes:
                     if node.id not in seen_ids:
                         seen_ids.add(node.id)
@@ -292,7 +301,7 @@ class MemoryManager:
             return []
 
         try:
-            all_ids = self._index.list_nodes()
+            all_ids = self.index.list_nodes()
         except Exception:
             return []
 
@@ -313,7 +322,7 @@ class MemoryManager:
             if any(nid == node_id for _, nid in scored):
                 continue
             try:
-                node = self._index.read_node(node_id)
+                node = self.index.read_node(node_id)
                 body_words = set(re.sub(r"[^\w\s]", " ", node.body.lower()).split())
                 score = len(query_words & body_words) / max(len(query_words), 1)
                 if score > 0.1:
@@ -323,7 +332,13 @@ class MemoryManager:
 
         scored.sort(reverse=True)
         keyword_results = [
-            {"id": nid, "type": "", "score": score, "matched": ["fallback_keyword"], "reason": "fallback keyword scan"}
+            {
+                "id": nid,
+                "type": "",
+                "score": score,
+                "matched": ["fallback_keyword"],
+                "reason": "fallback keyword scan",
+            }
             for score, nid in scored[:max_anchors]
         ]
         return keyword_results[:max_anchors]
@@ -374,9 +389,12 @@ class MemoryManager:
                     link for link in links if f"[[{link}]]" not in body and f"[[{link}|" not in body
                 ]
                 if missing_wikilinks:
-                    body = body.rstrip() + "\n\nRelated: " + ", ".join(
-                        f"[[{link}]]" for link in missing_wikilinks
-                    ) + "\n"
+                    body = (
+                        body.rstrip()
+                        + "\n\nRelated: "
+                        + ", ".join(f"[[{link}]]" for link in missing_wikilinks)
+                        + "\n"
+                    )
 
             # Inject project link if applicable
             if project_slug and project_slug not in links:
@@ -395,7 +413,7 @@ class MemoryManager:
             try:
                 existing = self.read_node(node_id)
                 if existing:
-                    self._index.update_node(node_id, body)
+                    self.index.update_node(node_id, body)
                     self._refresh_changed_file(node_id)
                 elif hasattr(self._index, "create_memory_node"):
                     kind = self._memory_kind_for_item(item)
@@ -422,7 +440,7 @@ class MemoryManager:
                     )
                     self._refresh_changed_file(node_id)
                 else:
-                    self._index.create_node(
+                    self.index.create_node(
                         node_id,
                         node_type=node_type,
                         body=body,
@@ -455,7 +473,7 @@ class MemoryManager:
                     },
                 )
             else:
-                self._index.create_node(
+                self.index.create_node(
                     node_id,
                     node_type=NODE_SESSION_SUMMARY,
                     body=body,
@@ -474,7 +492,7 @@ class MemoryManager:
     ) -> Any:
         kwargs = {key: value for key, value in context.items() if value is not None}
         try:
-            return self._index.create_memory_node(
+            return self.index.create_memory_node(
                 node_id,
                 kind=kind,
                 body=body,
@@ -482,7 +500,7 @@ class MemoryManager:
                 **kwargs,
             )
         except TypeError:
-            return self._index.create_memory_node(
+            return self.index.create_memory_node(
                 node_id,
                 kind=kind,
                 body=body,
@@ -511,7 +529,7 @@ class MemoryManager:
             return result
 
         try:
-            all_ids = self._index.list_nodes()
+            all_ids = self.index.list_nodes()
             result["nodes"] = len(all_ids)
 
             total_bytes = 0
@@ -520,7 +538,7 @@ class MemoryManager:
 
             for node_id in all_ids:
                 try:
-                    node = self._index.read_node(node_id)
+                    node = self.index.read_node(node_id)
                     body_bytes = len(node.body.encode())
                     total_bytes += body_bytes
                     if body_bytes > largest:
@@ -592,7 +610,7 @@ class MemoryManager:
         if not self.available or not hasattr(self._index, "changed_since"):
             return []
         try:
-            return [dict(item) for item in self._index.changed_since(since_unix)]
+            return [dict(item) for item in self.index.changed_since(since_unix)]
         except Exception:
             return []
 
@@ -600,7 +618,9 @@ class MemoryManager:
     # Search
     # ─────────────────────────────────────────────
 
-    def search(self, query: str, max_results: int = 10, mode: str = "keyword") -> list[dict[str, Any]]:
+    def search(
+        self, query: str, max_results: int = 10, mode: str = "keyword"
+    ) -> list[dict[str, Any]]:
         """Search over memory nodes using keyword, semantic, or hybrid mode."""
         if not self.available:
             return []
@@ -625,9 +645,9 @@ class MemoryManager:
         results: list[dict[str, Any]] = []
 
         try:
-            for node_id in self._index.list_nodes():
+            for node_id in self.index.list_nodes():
                 try:
-                    node = self._index.read_node(node_id)
+                    node = self.index.read_node(node_id)
                     if query_lower in node_id.lower() or query_lower in node.body.lower():
                         results.append(
                             {
@@ -651,13 +671,13 @@ class MemoryManager:
             return []
         try:
             results = []
-            for item in self._index.search(query=query, include_suppressed=False, limit=max_results):
+            for item in self.index.search(query=query, include_suppressed=False, limit=max_results):
                 data = dict(item)
                 data.setdefault("type", data.get("node_type", ""))
                 data["snippet"] = str(data.get("summary") or "").replace("\n", " ")
                 data["reason"] = _search_reason(data)
                 with contextlib.suppress(Exception):
-                    data["backlinks"] = self._index.backlinks(data["id"])
+                    data["backlinks"] = self.index.backlinks(data["id"])
                 results.append(data)
             return results
         except Exception:
@@ -680,12 +700,11 @@ class MemoryManager:
                     for item in semantic_items
                 }
         seed_ids = [
-            item["id"]
-            for item in self._native_search(query, max_results=min(max_results, 3))
+            item["id"] for item in self._native_search(query, max_results=min(max_results, 3))
         ]
         try:
             results = []
-            for item in self._index.hybrid_search(
+            for item in self.index.hybrid_search(
                 query=query,
                 project=getattr(self, "project_slug", None),
                 seed_ids=seed_ids,
@@ -699,7 +718,7 @@ class MemoryManager:
                 data["reason"] = ", ".join(data["matched"]) or "hybrid graph search"
                 data["snippet"] = str(data.get("summary") or "").replace("\n", " ")
                 with contextlib.suppress(Exception):
-                    data["backlinks"] = self._index.backlinks(data["id"])
+                    data["backlinks"] = self.index.backlinks(data["id"])
                 results.append(data)
             return results
         except Exception:
@@ -723,7 +742,7 @@ class MemoryManager:
             item.setdefault("matched", ["semantic"])
             item.setdefault("reason", "semantic sidecar match")
             with contextlib.suppress(Exception):
-                item["backlinks"] = self._index.backlinks(item["id"])
+                item["backlinks"] = self.index.backlinks(item["id"])
         if not results and mode != "keyword":
             return self.search(query, max_results=max_results, mode="keyword")
         return results
@@ -755,7 +774,7 @@ class MemoryManager:
         if not self.available:
             return None
         try:
-            node = self._index.read_node(node_id)
+            node = self.index.read_node(node_id)
             metadata = dict(node.to_dict()) if hasattr(node, "to_dict") else {}
             return {
                 **metadata,
@@ -784,9 +803,7 @@ class MemoryManager:
                 continue
             same_identity = candidate_id and candidate_id == node_id
             same_canonical = (
-                candidate_canonical
-                and node_canonical
-                and candidate_canonical == node_canonical
+                candidate_canonical and node_canonical and candidate_canonical == node_canonical
             )
             if (same_identity or same_canonical) and candidate_body != node_body:
                 conflicts.append(node_id)
@@ -816,13 +833,20 @@ class MemoryManager:
                 if f"[[{link}]]" not in next_body and f"[[{link}|" not in next_body
             ]
             if missing:
-                next_body = next_body.rstrip() + "\n\nRelated: " + ", ".join(
-                    f"[[{link}]]" for link in missing
-                ) + "\n"
+                next_body = (
+                    next_body.rstrip()
+                    + "\n\nRelated: "
+                    + ", ".join(f"[[{link}]]" for link in missing)
+                    + "\n"
+                )
         try:
-            self._index.update_node(node_id, next_body)
+            self.index.update_node(node_id, next_body)
             self._refresh_changed_file(node_id)
-            return {"ok": True, "id": node_id, "links": links if links is not None else node.get("links", [])}
+            return {
+                "ok": True,
+                "id": node_id,
+                "links": links if links is not None else node.get("links", []),
+            }
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -830,7 +854,7 @@ class MemoryManager:
         if not self.available:
             return ""
         try:
-            result = self._index.traverse(node_id, depth=depth, order="bfs")
+            result = self.index.traverse(node_id, depth=depth, order="bfs")
             return result.to_markdown(self._index)
         except Exception as e:
             return f"Error traversing '{node_id}': {e}"
@@ -839,7 +863,7 @@ class MemoryManager:
         if not self.available:
             return False
         try:
-            self._index.delete_node(node_id)
+            self.index.delete_node(node_id)
             return True
         except Exception:
             return False
@@ -848,7 +872,7 @@ class MemoryManager:
         if not self.available:
             return []
         try:
-            return self._index.list_nodes()
+            return self.index.list_nodes()
         except Exception:
             return []
 
@@ -888,7 +912,7 @@ class MemoryManager:
         """Append source body into target and delete source."""
         if self.available and hasattr(self._index, "merge_nodes"):
             try:
-                self._index.merge_nodes(target_id, source_id)
+                self.index.merge_nodes(target_id, source_id)
                 self._refresh_changed_file(target_id)
                 return {"ok": True, "target": target_id, "deleted": source_id}
             except Exception as e:
@@ -904,8 +928,8 @@ class MemoryManager:
             + f"\n\nMerged-from: [[{source_id}]]\n"
         )
         try:
-            self._index.update_node(target_id, merged_body)
-            self._index.delete_node(source_id)
+            self.index.update_node(target_id, merged_body)
+            self.index.delete_node(source_id)
             return {"ok": True, "target": target_id, "deleted": source_id}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -922,7 +946,7 @@ class MemoryManager:
                 "error": "Installed MagGraph does not support reviewed memory batches",
             }
         try:
-            return dict(self._index.apply_memory_batch(operations, preview=preview))
+            return dict(self.index.apply_memory_batch(operations, preview=preview))
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -951,7 +975,7 @@ class MemoryManager:
     def suppress_node(self, node_id: str, reason: str = "") -> dict[str, Any]:
         if self.available and hasattr(self._index, "suppress_node"):
             try:
-                self._index.suppress_node(node_id, reason=reason or None)
+                self.index.suppress_node(node_id, reason=reason or None)
                 self._refresh_changed_file(node_id)
                 return {"ok": True, "id": node_id, "reason": reason}
             except Exception as e:
@@ -961,7 +985,7 @@ class MemoryManager:
             return {"ok": False, "error": f"Node not found: {node_id}"}
         body = node["body"].rstrip() + f"\n\nSuppressed: true\nSuppressReason: {reason}\n"
         try:
-            self._index.update_node(node_id, body)
+            self.index.update_node(node_id, body)
             return {"ok": True, "id": node_id, "reason": reason}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -969,7 +993,7 @@ class MemoryManager:
     def unsuppress_node(self, node_id: str) -> dict[str, Any]:
         if self.available and hasattr(self._index, "unsuppress_node"):
             try:
-                self._index.unsuppress_node(node_id)
+                self.index.unsuppress_node(node_id)
                 self._refresh_changed_file(node_id)
                 return {"ok": True, "id": node_id}
             except Exception as e:
@@ -984,7 +1008,7 @@ class MemoryManager:
             and not line.strip().lower().startswith("suppressreason:")
         ).rstrip()
         try:
-            self._index.update_node(node_id, body + "\n")
+            self.index.update_node(node_id, body + "\n")
             return {"ok": True, "id": node_id}
         except Exception as e:
             return {"ok": False, "error": str(e)}
@@ -994,7 +1018,7 @@ class MemoryManager:
         if not self.available or not hasattr(self._index, "backlinks"):
             return []
         try:
-            return list(self._index.backlinks(node_id))
+            return list(self.index.backlinks(node_id))
         except Exception:
             return []
 
@@ -1018,7 +1042,7 @@ class MemoryManager:
         candidates = [str(rel_path), str(self.memory_dir / str(rel_path))]
         for candidate in candidates:
             with contextlib.suppress(Exception):
-                self._index.update_file(candidate)
+                self.index.update_file(candidate)
                 return
 
 

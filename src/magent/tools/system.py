@@ -61,7 +61,11 @@ class SystemToolsMixin:
                 "cwd": self.cwd,
             }
         except ImportError:
-            return {"ok": False, "error": "psutil not installed. Use install_package('psutil')."}
+            return {
+                "ok": False,
+                "error": "System metrics support is not installed.",
+                "install": 'python -m pip install "mag-agent[desktop]"',
+            }
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
@@ -107,7 +111,11 @@ class SystemToolsMixin:
                 return {"ok": True, "title": title, "message": message}
             return {"ok": False, "error": stderr.decode("utf-8", errors="replace").strip()}
 
-        return {"ok": False, "error": "No notification backend available (plyer or notify-send)"}
+        return {
+            "ok": False,
+            "error": "No notification backend is available (plyer or notify-send).",
+            "install": 'python -m pip install "mag-agent[desktop]"',
+        }
 
     async def clipboard_read(self) -> ToolResult:
         """Read the current system clipboard contents."""
@@ -178,6 +186,10 @@ class SystemToolsMixin:
                 "path": str(abs_path),
             }
         except ImportError:
-            return {"ok": False, "error": "Pillow not installed. Use install_package('Pillow')."}
+            return {
+                "ok": False,
+                "error": "Image support is not installed.",
+                "install": 'python -m pip install "mag-agent[media]"',
+            }
         except Exception as e:
             return {"ok": False, "error": str(e)}

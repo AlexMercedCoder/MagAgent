@@ -1,26 +1,40 @@
 # Code Intelligence
 
-MagAgent includes local code-intelligence commands under `magent lsp`.
+MagAgent includes a real local Language Server Protocol client under `magent lsp`.
 
 ## Commands
 
-- `magent lsp status`: show known language-server commands and whether they are installed.
-- `magent lsp symbols`: list Python classes and functions using a local AST fallback.
-- `magent lsp symbols --query name`: filter symbols.
-- `magent lsp diagnostics`: report Python syntax diagnostics.
-- `magent lsp definition <symbol>`: find matching symbol definitions.
-- `magent lsp references <symbol>`: search local source references.
+- `magent lsp status`: show server commands, availability, languages, and extensions.
+- `magent lsp symbols [--query name]`: request workspace symbols.
+- `magent lsp diagnostics`: collect bounded workspace diagnostics.
+- `magent lsp definition <symbol>`: locate a symbol and request definitions.
+- `magent lsp references <symbol>`: request references including declarations.
+- `magent lsp hover <path> --line N --column N`: request hover information.
+- `magent lsp rename <path> <new-name> --line N --column N`: preview a workspace edit.
 
-## Behavior
+Line and column values are one-based at the CLI boundary. Rename returns an edit for review; it does not apply the edit automatically.
 
-The implementation is LSP-aware and local-first:
+## Servers
 
-- it detects common language-server executables such as `pylsp`, `pyright-langserver`, `typescript-language-server`, `rust-analyzer`, and `gopls`
-- it provides no-server fallbacks for symbols, definitions, references, and diagnostics
-- it feeds diagnostics into review and project diagnostics flows
+MagAgent starts installed servers as local subprocesses:
 
-The fallback path is intentionally dependency-light and bounded by MagAgent's shared project scanner, so large repositories do not require a full language-server startup just to get basic intelligence.
+| Language | Server commands |
+|---|---|
+| Python | `pyright-langserver --stdio`, then `pylsp` |
+| TypeScript/JavaScript | `typescript-language-server --stdio` |
+| Rust | `rust-analyzer` |
+| Go | `gopls serve` |
+
+Install Python LSP support with `python -m pip install "mag-agent[lsp]"`. TypeScript users should install compatible `typescript` and `typescript-language-server` npm packages. Rust and Go servers are discovered from `PATH`.
+
+The client negotiates capabilities, opens/changes/closes documents, answers common server-to-client requests, cancels timed-out requests, supports restart, and performs clean shutdown. TypeScript server discovery locates a sibling global TypeScript installation when necessary.
+
+## Fallbacks And Bounds
+
+When a compatible server is absent or fails, Python symbols/definitions/diagnostics use a bounded AST fallback and references use bounded text search. Every response includes `source: lsp`, `source: ast-fallback`, or `source: text-fallback` plus a fallback reason.
+
+Diagnostics reuse one server process per language and collect notifications in one workspace-wide four-second window. The scanner opens at most 100 supported files, preventing a missing publish event from adding a per-file timeout.
 
 ## Review Integration
 
-`magent review --json` and `magent diagnostics` include local diagnostics. This gives test-repair and review workflows a shared source of syntax failures before the agent spends tokens on deeper analysis.
+`magent review --json`, release checks, project diagnostics, and repair workflows consume this shared diagnostic surface. Real Python and TypeScript process round trips run in CI; deterministic JSON-RPC lifecycle tests use a fixture server.

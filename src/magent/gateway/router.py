@@ -32,7 +32,9 @@ class RateLimiter:
 
     def _prune(self, now: float) -> None:
         window = now - 60.0
-        for user_id in [key for key, stamps in self._buckets.items() if not stamps or max(stamps) <= window]:
+        for user_id in [
+            key for key, stamps in self._buckets.items() if not stamps or max(stamps) <= window
+        ]:
             del self._buckets[user_id]
         # Hard ceiling in case a flood outruns natural expiry.
         while len(self._buckets) > self.max_tracked_users:
@@ -199,7 +201,10 @@ class MessageRouter:
             patterns.append(command)
         permissions["trusted_shell_patterns"] = patterns
         save_user_profile(self._username, profile)
-        if msg.channel_id in self._session_cache and command not in self._session_cache[msg.channel_id].tools.trusted_shell_patterns:
+        if (
+            msg.channel_id in self._session_cache
+            and command not in self._session_cache[msg.channel_id].tools.trusted_shell_patterns
+        ):
             self._session_cache[msg.channel_id].tools.trusted_shell_patterns.append(command)
         return f"Approved for future sessions: `{command}`"
 
@@ -249,15 +254,14 @@ class MessageRouter:
                     project=".",
                 )
                 return (
-                    f"Queued background task {task['id']} "
-                    f"(execution {task['execution_task_id']})"
+                    f"Queued background task {task['id']} (execution {task['execution_task_id']})"
                 )
             session = self._get_session(msg.channel_id)
             from magent.execution_bridge import SessionTaskBridge
-            from magent.workbench_store import WorkbenchStore
+            from magent.workbench_store import WorkbenchStore as RuntimeStore
 
             bridge = SessionTaskBridge(
-                WorkbenchStore(self._username),
+                RuntimeStore(self._username),
                 session,
                 kind="gateway_message",
                 title=msg.text[:500],
@@ -280,7 +284,9 @@ class MessageRouter:
             # The detail stays local; the chat platform gets a reference, because
             # provider exception strings can carry request URLs, headers and keys.
             reference = correlation_id()
-            console.print(f"[red]Gateway session error (ref {reference}): {scrub_secrets(str(e))}[/red]")
+            console.print(
+                f"[red]Gateway session error (ref {reference}): {scrub_secrets(str(e))}[/red]"
+            )
             return f"❌ {safe_error_message(e, reference=reference)}"
 
     def _handle_graph_command(self, msg: IncomingMessage) -> str | None:
@@ -315,7 +321,11 @@ class MessageRouter:
         task = enqueue_task(
             WorkbenchStore(self._username),
             "agraph",
-            {"path": str(path), "yes": "--yes" in parts, "source": f"{msg.platform}/{msg.channel_id}"},
+            {
+                "path": str(path),
+                "yes": "--yes" in parts,
+                "source": f"{msg.platform}/{msg.channel_id}",
+            },
             project=project,
         )
         return f"Queued Agentic Graph {task['id']} (execution {task['execution_task_id']})."

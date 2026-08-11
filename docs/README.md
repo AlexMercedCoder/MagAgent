@@ -22,6 +22,7 @@ magent docs doctor
 - [Configuration](../src/magent/docs/configuration.md)
 - [Troubleshooting](../src/magent/docs/troubleshooting.md)
 - [Performance](../src/magent/docs/performance.md)
+- [Installation Shapes](../src/magent/docs/installation-shapes.md)
 - [Prompt Caching](../src/magent/docs/prompt-caching.md)
 - [Agent Definitions](../src/magent/docs/agents.md)
 - [Hooks](../src/magent/docs/hooks.md)
@@ -35,6 +36,7 @@ magent docs doctor
 - [MagAgent 0.35.0 Release Record](RELEASE_0.35.0.md)
 - [MagAgent 0.35.1 Release Record](RELEASE_0.35.1.md)
 - [MagAgent 0.50.0 Release Record](RELEASE_0.50.0.md)
+- [MagAgent 0.60.0 Release Record](RELEASE_0.60.0.md)
 
 Common setup tasks now have CLI-first flows:
 
@@ -80,6 +82,7 @@ magent graph plan repair.agraph.yaml
 - [MagAgent Roadmap To 1.0](../ROADMAP_TO_1.0.md)
 - [Mag Ecosystem Roadmap](../ROADMAP.md)
 - [Architecture](../src/magent/docs/architecture.md)
+- [Architecture Exceptions](../src/magent/docs/architecture-exceptions.md)
 - [Workbench](../src/magent/docs/workbench.md)
 - [Context Map](../src/magent/docs/context.md)
 - [Project Playbooks](../src/magent/docs/playbooks.md)

@@ -80,7 +80,9 @@ class GraphExecutor:
         self._node_records: dict[str, dict[str, Any]] = {}
         self._completed_for_compensation: list[tuple[str, dict[str, Any]]] = []
         self._resume_nodes: dict[str, dict[str, Any]] = {}
-        self._workspace: ContextVar[Path] = ContextVar("magent_agraph_workspace", default=self.project)
+        self._workspace: ContextVar[Path] = ContextVar(
+            "magent_agraph_workspace", default=self.project
+        )
         self._agent_steps: ContextVar[int] = ContextVar("magent_agraph_agent_steps", default=0)
         # Per-node usage, so budgets are not charged for sibling nodes.
         self._node_usage: ContextVar[dict[str, Any] | None] = ContextVar(
@@ -107,7 +109,9 @@ class GraphExecutor:
         document = source if isinstance(source, GraphDocument) else load_graph(source)
         report = validate_graph(document)
         if not report.ok:
-            raise GraphRunError("; ".join(f"{item.code} {item.message}" for item in report.errors[:8]), "AG001")
+            raise GraphRunError(
+                "; ".join(f"{item.code} {item.message}" for item in report.errors[:8]), "AG001"
+            )
         plan = plan_graph(document)
         if dry_run:
             return {"ok": True, "dry_run": True, "plan": plan.as_dict()}
@@ -130,7 +134,8 @@ class GraphExecutor:
             self._resume_nodes = {
                 str(item.get("scope_path") or item.get("node_id")): item
                 for item in resume_record.get("nodes") or []
-                if item.get("status") == "succeeded" and not _contains_redaction(item.get("outputs"))
+                if item.get("status") == "succeeded"
+                and not _contains_redaction(item.get("outputs"))
             }
         if self._root_task_id:
             root_task = self.runtime.get(self._root_task_id)
@@ -142,7 +147,9 @@ class GraphExecutor:
             if root_task and root_task["state"] in {"waiting", "blocked"}:
                 self.runtime.resume(self._root_task_id, reason="Agentic Graph execution started")
             elif root_task and root_task["state"] != "running":
-                self.runtime.transition(self._root_task_id, "running", reason="Agentic Graph execution started")
+                self.runtime.transition(
+                    self._root_task_id, "running", reason="Agentic Graph execution started"
+                )
         else:
             self._root_task_id = self.runtime.create(
                 "agentic_graph",
@@ -150,19 +157,31 @@ class GraphExecutor:
                 project=self.project,
                 state="running",
                 permission_policy=str(getattr(self.config, "permission_mode", "balanced")),
-                metadata={"run_id": run_id, "graph_id": document.graph_id, "graph_digest": document.digest},
+                metadata={
+                    "run_id": run_id,
+                    "graph_id": document.graph_id,
+                    "graph_digest": document.digest,
+                },
             )["id"]
         self.store.append("graph_runs", self._record)
         try:
             scope = self._base_scope(document.data, bound_params)
             statuses, outputs = await self._run_scope(document.data, scope, scope_path="")
             self._record["edges_taken"] = [
-                {"from": edge["from"], "to": edge["to"], "kind": edge["kind"], "active": bool(edge["active"]), "when_result": edge["active"], "at": now_iso()}
+                {
+                    "from": edge["from"],
+                    "to": edge["to"],
+                    "kind": edge["kind"],
+                    "active": bool(edge["active"]),
+                    "when_result": edge["active"],
+                    "at": now_iso(),
+                }
                 for edge in edge_table(document.data, statuses, scope)
                 if edge["active"] is not None
             ]
             self._record["outputs"] = _redact_values(
-                document.data.get("outputs") or {}, self._resolve_graph_outputs(document.data, scope)
+                document.data.get("outputs") or {},
+                self._resolve_graph_outputs(document.data, scope),
             )
             graph_success = document.data.get("success") or {}
             if graph_success.get("criteria"):
@@ -173,14 +192,23 @@ class GraphExecutor:
                     mode=str(graph_success.get("mode", "all")),
                     count=int(graph_success.get("count", 1) or 1),
                 )
-                self._record["graph_success"] = {"passed": passed, "mode": graph_success.get("mode", "all"), "results": [item.as_dict() for item in results]}
+                self._record["graph_success"] = {
+                    "passed": passed,
+                    "mode": graph_success.get("mode", "all"),
+                    "results": [item.as_dict() for item in results],
+                }
             else:
                 passed = all(status in {"succeeded", "skipped"} for status in statuses.values())
-            failed = any(status in {"failed", "blocked", "cancelled"} for status in statuses.values()) or not passed
+            failed = (
+                any(status in {"failed", "blocked", "cancelled"} for status in statuses.values())
+                or not passed
+            )
             self._finish("failed" if failed else "succeeded")
             if failed:
                 await self._compensate(scope)
-                self.runtime.transition(self._root_task_id, "failed", reason="Graph execution failed")
+                self.runtime.transition(
+                    self._root_task_id, "failed", reason="Graph execution failed"
+                )
             else:
                 self.runtime.transition(
                     self._root_task_id,
@@ -189,7 +217,9 @@ class GraphExecutor:
                 )
         except asyncio.CancelledError:
             self._finish("cancelled")
-            self.runtime.transition(self._root_task_id, "cancelled", reason="Graph execution cancelled")
+            self.runtime.transition(
+                self._root_task_id, "cancelled", reason="Graph execution cancelled"
+            )
             # Persist before re-raising: the record was left saying "running"
             # forever, because the raise skipped the write below.
             with contextlib.suppress(Exception):
@@ -203,7 +233,11 @@ class GraphExecutor:
                 self.runtime.transition(self._root_task_id, "failed", reason=str(exc))
         self._persist_record()
         validate_run_record(self._record)
-        return {"ok": self._record["status"] == "succeeded", "run": self._record, "task_id": self._root_task_id}
+        return {
+            "ok": self._record["status"] == "succeeded",
+            "run": self._record,
+            "task_id": self._root_task_id,
+        }
 
     async def _run_scope(
         self,
@@ -247,13 +281,18 @@ class GraphExecutor:
             if not selected:
                 if all(status != "pending" for status in statuses.values()):
                     break
-                unresolved = [node_id for node_id, status in statuses.items() if status == "pending"]
+                unresolved = [
+                    node_id for node_id, status in statuses.items() if status == "pending"
+                ]
                 for node_id in unresolved:
                     statuses[node_id] = "blocked"
                     self._diagnostic("RT021", "error", "node cannot become ready", node_id=node_id)
                 break
             results = await asyncio.gather(
-                *(self._execute_node(node_id, nodes[node_id], scope, scope_path) for node_id in selected),
+                *(
+                    self._execute_node(node_id, nodes[node_id], scope, scope_path)
+                    for node_id in selected
+                ),
                 return_exceptions=True,
             )
             for node_id, result in zip(selected, results, strict=True):
@@ -266,14 +305,18 @@ class GraphExecutor:
                     # because the node was never added at all.
                     outputs[node_id] = {}
                     scope["nodes"][node_id] = {"outputs": {}, "status": "failed"}
-                    self._diagnostic(getattr(result, "code", "RT001"), "error", str(result), node_id=node_id)
+                    self._diagnostic(
+                        getattr(result, "code", "RT001"), "error", str(result), node_id=node_id
+                    )
                     continue
                 status, node_outputs = result
                 statuses[node_id] = status
                 outputs[node_id] = node_outputs
                 scope["nodes"][node_id] = {"outputs": node_outputs, "status": status}
             policy = document.get("policy") or {}
-            if policy.get("on_node_failure", "halt") == "halt" and any(status == "failed" for status in statuses.values()):
+            if policy.get("on_node_failure", "halt") == "halt" and any(
+                status == "failed" for status in statuses.values()
+            ):
                 for node_id, status in statuses.items():
                     if status == "pending":
                         statuses[node_id] = "skipped"
@@ -289,9 +332,11 @@ class GraphExecutor:
     ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
         depth = self._composition_depth.get() + 1
         limit = int(
-            (((self._document.data if self._document else {}).get("constraints") or {}).get(
-                "max_subgraph_depth", 5
-            ))
+            (
+                ((self._document.data if self._document else {}).get("constraints") or {}).get(
+                    "max_subgraph_depth", 5
+                )
+            )
             or 5
         )
         if depth > limit:
@@ -368,10 +413,17 @@ class GraphExecutor:
                     workspace_token = self._workspace.set(workspace)
                     try:
                         await self._checkpoint(node, "before_start", scope, human_events)
-                        outputs = await self._run_node_body(full_id, node, resolved_inputs, scope, route, task["id"], feedback)
+                        outputs = await self._run_node_body(
+                            full_id, node, resolved_inputs, scope, route, task["id"], feedback
+                        )
                         forced_status = str(outputs.pop("_status", ""))
                         self._enforce_usage_budgets(node, usage_before)
-                        await self._checkpoint(node, "after_outputs", {**scope, "self": {"outputs": outputs}}, human_events)
+                        await self._checkpoint(
+                            node,
+                            "after_outputs",
+                            {**scope, "self": {"outputs": outputs}},
+                            human_events,
+                        )
                         success = node.get("success") or {}
                         passed, criteria_results = await self._criteria(
                             success.get("criteria") or [],
@@ -380,7 +432,11 @@ class GraphExecutor:
                             mode=str(success.get("mode", "all")),
                             count=int(success.get("count", 1) or 1),
                         )
-                        required_outputs = {name for name, spec in (node.get("outputs") or {}).items() if spec.get("required", True)}
+                        required_outputs = {
+                            name
+                            for name, spec in (node.get("outputs") or {}).items()
+                            if spec.get("required", True)
+                        }
                         missing = sorted(required_outputs - outputs.keys())
                         if missing:
                             passed = False
@@ -398,16 +454,34 @@ class GraphExecutor:
             attempts.append(
                 {
                     "attempt": attempt_number,
-                    "status": status if status in {"succeeded", "failed", "timeout", "budget_exceeded", "criteria_failed", "cancelled"} else "failed",
+                    "status": status
+                    if status
+                    in {
+                        "succeeded",
+                        "failed",
+                        "timeout",
+                        "budget_exceeded",
+                        "criteria_failed",
+                        "cancelled",
+                    }
+                    else "failed",
                     "started_at": started,
                     "finished_at": now_iso(),
                     "routed": route.as_dict() if route else None,
-                    "success": {"passed": status == "succeeded", "mode": (node.get("success") or {}).get("mode", "all"), "results": [item.as_dict() for item in criteria_results]},
+                    "success": {
+                        "passed": status == "succeeded",
+                        "mode": (node.get("success") or {}).get("mode", "all"),
+                        "results": [item.as_dict() for item in criteria_results],
+                    },
                     "usage": _usage_delta(usage_before, self._record["usage"]),
                     "error": error,
                 }
             )
-            attempts[-1] = {key: value for key, value in attempts[-1].items() if value is not None and value != ""}
+            attempts[-1] = {
+                key: value
+                for key, value in attempts[-1].items()
+                if value is not None and value != ""
+            }
             if status == "succeeded":
                 break
             feedback = _failed_feedback(criteria_results, error)
@@ -417,7 +491,11 @@ class GraphExecutor:
                 break
             if attempt_number < maximum:
                 await asyncio.sleep(_retry_delay(retry, attempt_number))
-        final = status if status in {"succeeded", "skipped", "awaiting_human"} else await self._fallback(node_id, node, outputs, scope)
+        final = (
+            status
+            if status in {"succeeded", "skipped", "awaiting_human"}
+            else await self._fallback(node_id, node, outputs, scope)
+        )
         if final == "succeeded":
             self.runtime.transition(task["id"], "validating", reason="Node criteria evaluated")
             self.runtime.transition(
@@ -431,11 +509,17 @@ class GraphExecutor:
         elif final == "awaiting_human":
             self.runtime.transition(task["id"], "awaiting_human", reason="Human action required")
         else:
-            self.runtime.transition(task["id"], "failed", reason=attempts[-1].get("error", "Node failed"))
+            self.runtime.transition(
+                task["id"], "failed", reason=attempts[-1].get("error", "Node failed")
+            )
             last_error = str(attempts[-1].get("error", "Node failed"))
             code_match = re.search(r"\b((?:RT|AG)\d{3})\b", last_error)
-            self._diagnostic(code_match.group(1) if code_match else "RT001", "error", last_error, node_id=full_id)
-        self._append_node_record(full_id, node, final, resolved_inputs, attempts, outputs, human_events)
+            self._diagnostic(
+                code_match.group(1) if code_match else "RT001", "error", last_error, node_id=full_id
+            )
+        self._append_node_record(
+            full_id, node, final, resolved_inputs, attempts, outputs, human_events
+        )
         return final, outputs
 
     async def _run_node_body(
@@ -467,7 +551,15 @@ class GraphExecutor:
             raise GraphRunError(f"unsupported node type {node_type!r}", "AG303")
         return await asyncio.wait_for(coroutine, timeout=timeout) if timeout else await coroutine
 
-    async def _run_task(self, full_id: str, node: dict[str, Any], inputs: dict[str, Any], route: Route | None, task_id: str, feedback: str) -> dict[str, Any]:
+    async def _run_task(
+        self,
+        full_id: str,
+        node: dict[str, Any],
+        inputs: dict[str, Any],
+        route: Route | None,
+        task_id: str,
+        feedback: str,
+    ) -> dict[str, Any]:
         if route is None:
             raise GraphRunError("task node has no route", "RT011")
         prompt = _node_prompt(node, inputs, feedback)
@@ -482,12 +574,24 @@ class GraphExecutor:
             hint = spec.get("path_hint")
             if name not in outputs and hint:
                 workspace = self._workspace.get()
-                path = (workspace / str(resolve_value(hint, {"inputs": inputs}))).resolve(strict=False)
+                path = (workspace / str(resolve_value(hint, {"inputs": inputs}))).resolve(
+                    strict=False
+                )
                 if path.exists() and (path == workspace or workspace in path.parents):
                     outputs[name] = str(path.relative_to(workspace))
-        return {name: value for name, value in outputs.items() if name in (node.get("outputs") or {})}
+        return {
+            name: value for name, value in outputs.items() if name in (node.get("outputs") or {})
+        }
 
-    async def _run_decision(self, full_id: str, node: dict[str, Any], inputs: dict[str, Any], scope: dict[str, Any], route: Route | None, task_id: str) -> dict[str, Any]:
+    async def _run_decision(
+        self,
+        full_id: str,
+        node: dict[str, Any],
+        inputs: dict[str, Any],
+        scope: dict[str, Any],
+        route: Route | None,
+        task_id: str,
+    ) -> dict[str, Any]:
         block = node.get("decision") or {}
         branches = block.get("branches") or []
         selected = ""
@@ -500,15 +604,15 @@ class GraphExecutor:
             labels = [str(branch["label"]) for branch in branches]
             if route is None:
                 raise GraphRunError("decision node has no route", "RT011")
-            response = await self.agent_runner(full_id, _decision_prompt(node, inputs, labels), route, task_id)
+            response = await self.agent_runner(
+                full_id, _decision_prompt(node, inputs, labels), route, task_id
+            )
             parsed = response if isinstance(response, dict) else (_json_object(str(response)) or {})
             # An empty model response used to raise IndexError on splitlines()[0]
             # instead of falling through to default_branch.
             raw_lines = str(response).strip().strip('"').splitlines()
             selected = (
-                str(parsed.get("decision", ""))
-                if parsed
-                else (raw_lines[0] if raw_lines else "")
+                str(parsed.get("decision", "")) if parsed else (raw_lines[0] if raw_lines else "")
             )
             declared = set(node.get("outputs") or {})
             response_outputs = parsed.get("outputs", {}) if isinstance(parsed, dict) else {}
@@ -528,12 +632,19 @@ class GraphExecutor:
         if selected not in {str(branch["label"]) for branch in branches}:
             selected = str(block.get("default_branch", ""))
         if not selected:
-            raise GraphRunError("decision returned an undeclared branch and has no default", "RT022")
-        return {"decision": selected, **(outputs if block.get("evaluator", "agent") != "expression" else {})}
+            raise GraphRunError(
+                "decision returned an undeclared branch and has no default", "RT022"
+            )
+        return {
+            "decision": selected,
+            **(outputs if block.get("evaluator", "agent") != "expression" else {}),
+        }
 
     async def _run_gate(self, node: dict[str, Any], scope: dict[str, Any]) -> dict[str, Any]:
         gate = node.get("gate") or {}
-        prompt = str(resolve_value(gate.get("prompt", node.get("description", "Approve this gate?")), scope))
+        prompt = str(
+            resolve_value(gate.get("prompt", node.get("description", "Approve this gate?")), scope)
+        )
         approved = self.assume_yes
         if not approved and self.approval:
             call = self.approval(prompt, gate)
@@ -560,7 +671,9 @@ class GraphExecutor:
             outputs[name] = evaluate_expression(str(expression), scope)
         return outputs
 
-    async def _run_loop(self, full_id: str, node: dict[str, Any], inputs: dict[str, Any], scope: dict[str, Any]) -> dict[str, Any]:
+    async def _run_loop(
+        self, full_id: str, node: dict[str, Any], inputs: dict[str, Any], scope: dict[str, Any]
+    ) -> dict[str, Any]:
         block = node.get("loop") or {}
         body = block.get("body") or {}
         maximum = int(block.get("max_iterations", 1) or 1)
@@ -568,9 +681,16 @@ class GraphExecutor:
         completed = 0
         child_scope: dict[str, Any] = {}
         for iteration in range(1, maximum + 1):
-            loop_scope = {**scope, **local_params, "loop": {"iteration": iteration}, "params": local_params}
+            loop_scope = {
+                **scope,
+                **local_params,
+                "loop": {"iteration": iteration},
+                "params": local_params,
+            }
             mode = block.get("mode", "repeat")
-            if mode == "while" and not bool(evaluate_expression(str(block.get("condition", "false")), loop_scope)):
+            if mode == "while" and not bool(
+                evaluate_expression(str(block.get("condition", "false")), loop_scope)
+            ):
                 break
             _statuses, _outputs = await self._run_nested_scope(
                 body, loop_scope, scope_path=f"{full_id}[{iteration}]"
@@ -579,7 +699,9 @@ class GraphExecutor:
             completed = iteration
             for name, expression in (block.get("carry") or {}).items():
                 local_params[name] = evaluate_expression(str(expression), loop_scope)
-            if mode == "until" and bool(evaluate_expression(str(block.get("condition", "false")), loop_scope)):
+            if mode == "until" and bool(
+                evaluate_expression(str(block.get("condition", "false")), loop_scope)
+            ):
                 break
         else:
             if block.get("mode") != "repeat":
@@ -590,10 +712,11 @@ class GraphExecutor:
                 if action == "succeed_partial":
                     pass
                 elif action == "escalate":
+                    approval = self.approval
                     accepted = self.assume_yes or (
-                        bool(self.approval)
+                        approval is not None
                         and bool(
-                            await self.approval(
+                            await approval(
                                 "Loop reached max_iterations. Accept the partial result?", block
                             )
                         )
@@ -602,11 +725,16 @@ class GraphExecutor:
                         raise GraphRunError("loop reached max_iterations", "RT031")
                 else:
                     raise GraphRunError("loop reached max_iterations", "RT031")
-        outputs = {name: evaluate_expression(str(expression), child_scope or scope) for name, expression in (block.get("collect") or {}).items()}
+        outputs = {
+            name: evaluate_expression(str(expression), child_scope or scope)
+            for name, expression in (block.get("collect") or {}).items()
+        }
         outputs["iterations"] = completed
         return outputs
 
-    async def _run_map(self, full_id: str, node: dict[str, Any], inputs: dict[str, Any], scope: dict[str, Any]) -> dict[str, Any]:
+    async def _run_map(
+        self, full_id: str, node: dict[str, Any], inputs: dict[str, Any], scope: dict[str, Any]
+    ) -> dict[str, Any]:
         block = node.get("map") or {}
         values = evaluate_expression(str(block.get("over", "[]")), {**scope, "inputs": inputs})
         if not isinstance(values, list):
@@ -614,7 +742,15 @@ class GraphExecutor:
         maximum = int(block.get("max_items", len(values) or 1) or 1)
         if len(values) > maximum:
             raise GraphRunError(f"map has {len(values)} items, above max_items {maximum}", "RT032")
-        semaphore = asyncio.Semaphore(max(1, min(int(block.get("max_parallel", 1) or 1), int(getattr(self.config, "max_parallel_subagents", 1)))))
+        semaphore = asyncio.Semaphore(
+            max(
+                1,
+                min(
+                    int(block.get("max_parallel", 1) or 1),
+                    int(getattr(self.config, "max_parallel_subagents", 1)),
+                ),
+            )
+        )
 
         async def run_item(index: int, value: Any) -> dict[str, Any]:
             async with semaphore:
@@ -624,7 +760,10 @@ class GraphExecutor:
                 statuses, _outputs = await self._run_nested_scope(
                     block.get("body") or {}, item_scope, scope_path=f"{full_id}[{index}]"
                 )
-                if any(status == "failed" for status in statuses.values()) and block.get("on_item_failure", "fail") == "fail":
+                if (
+                    any(status == "failed" for status in statuses.values())
+                    and block.get("on_item_failure", "fail") == "fail"
+                ):
                     raise GraphRunError(f"map item {index} failed", "RT033")
                 return item_scope
 
@@ -643,15 +782,23 @@ class GraphExecutor:
         item_scopes = item_results
         outputs: dict[str, Any] = {}
         for name, expression in (block.get("collect") or {}).items():
-            outputs[name] = [evaluate_expression(str(expression), item_scope) for item_scope in item_scopes]
+            outputs[name] = [
+                evaluate_expression(str(expression), item_scope) for item_scope in item_scopes
+            ]
         outputs["items"] = len(values)
         return outputs
 
-    async def _run_subgraph(self, full_id: str, node: dict[str, Any], inputs: dict[str, Any], scope: dict[str, Any]) -> dict[str, Any]:
+    async def _run_subgraph(
+        self, full_id: str, node: dict[str, Any], inputs: dict[str, Any], scope: dict[str, Any]
+    ) -> dict[str, Any]:
         block = node.get("subgraph") or {}
         fragment: dict[str, Any]
         if block.get("use"):
-            fragment = ((self._document.data.get("subgraphs") or {}).get(block["use"]) if self._document else None) or {}
+            fragment = (
+                (self._document.data.get("subgraphs") or {}).get(block["use"])
+                if self._document
+                else None
+            ) or {}
         elif block.get("inline"):
             fragment = block["inline"]
         elif block.get("ref"):
@@ -659,7 +806,11 @@ class GraphExecutor:
             uri = str(ref.get("uri", ""))
             if "://" in uri:
                 raise GraphRunError("remote subgraph references are not supported", "RT040")
-            base = self._document.path.parent if self._document and self._document.path else self.project
+            base = (
+                self._document.path.parent
+                if self._document and self._document.path
+                else self.project
+            )
             ref_path = (base / uri).resolve()
             if ref_path != base.resolve() and base.resolve() not in ref_path.parents:
                 raise GraphRunError("subgraph reference escapes its document directory", "RT040")
@@ -677,9 +828,7 @@ class GraphExecutor:
             for name, value in (block.get("params") or {}).items()
         }
         child_scope = {**scope, "params": child_params or inputs}
-        statuses, _outputs = await self._run_nested_scope(
-            fragment, child_scope, scope_path=full_id
-        )
+        statuses, _outputs = await self._run_nested_scope(fragment, child_scope, scope_path=full_id)
         if any(status == "failed" for status in statuses.values()):
             raise GraphRunError("subgraph failed", "RT043")
         child_scope["outputs"] = self._resolve_graph_outputs(fragment, child_scope)
@@ -692,7 +841,9 @@ class GraphExecutor:
             for name, spec in mapping.items()
         }
 
-    async def _fallback(self, node_id: str, node: dict[str, Any], outputs: dict[str, Any], scope: dict[str, Any]) -> str:
+    async def _fallback(
+        self, node_id: str, node: dict[str, Any], outputs: dict[str, Any], scope: dict[str, Any]
+    ) -> str:
         failure = node.get("failure") or {}
         for fallback in failure.get("fallback") or []:
             if fallback.get("when") and not bool(evaluate_expression(str(fallback["when"]), scope)):
@@ -700,13 +851,22 @@ class GraphExecutor:
             strategy = fallback.get("strategy")
             if strategy == "skip":
                 return "skipped"
-            if strategy == "degrade_outputs" and all(name in outputs for name in fallback.get("outputs") or []):
+            if strategy == "degrade_outputs" and all(
+                name in outputs for name in fallback.get("outputs") or []
+            ):
                 return "succeeded"
             if strategy == "relax_criteria":
                 relaxed = []
                 selected = set(fallback.get("criteria") or [])
-                for criterion in ((node.get("success") or {}).get("criteria") or []):
-                    relaxed.append({**criterion, "severity": "advisory" if criterion.get("id") in selected else criterion.get("severity", "required")})
+                for criterion in (node.get("success") or {}).get("criteria") or []:
+                    relaxed.append(
+                        {
+                            **criterion,
+                            "severity": "advisory"
+                            if criterion.get("id") in selected
+                            else criterion.get("severity", "required"),
+                        }
+                    )
                 success = node.get("success") or {}
                 passed, _results = await self._criteria(
                     relaxed,
@@ -718,7 +878,9 @@ class GraphExecutor:
                 if passed:
                     return "succeeded"
             if strategy == "human_takeover":
-                if self.approval and await self.approval(fallback.get("description", f"Take over node {node_id}?"), fallback):
+                if self.approval and await self.approval(
+                    fallback.get("description", f"Take over node {node_id}?"), fallback
+                ):
                     return "succeeded"
                 return "awaiting_human"
             if strategy == "alternate_node":
@@ -731,11 +893,17 @@ class GraphExecutor:
                         node_id=node_id,
                     )
                     continue
-                alternate = (self._document.data.get("nodes") or {}).get(alternate_id) if self._document else None
+                alternate = (
+                    (self._document.data.get("nodes") or {}).get(alternate_id)
+                    if self._document
+                    else None
+                )
                 if alternate:
                     self._fallback_chain.append(alternate_id)
                     try:
-                        status, replacement = await self._execute_node(alternate_id, alternate, scope, "fallback")
+                        status, replacement = await self._execute_node(
+                            alternate_id, alternate, scope, "fallback"
+                        )
                     finally:
                         self._fallback_chain.pop()
                     outputs.update(replacement)
@@ -747,7 +915,13 @@ class GraphExecutor:
         if exhausted == "succeed_degraded":
             return "succeeded"
         if exhausted == "escalate" and self.approval:
-            return "succeeded" if await self.approval(f"Accept failed node {node_id}?", failure.get("escalation") or {}) else "failed"
+            return (
+                "succeeded"
+                if await self.approval(
+                    f"Accept failed node {node_id}?", failure.get("escalation") or {}
+                )
+                else "failed"
+            )
         return "failed"
 
     async def _criteria(
@@ -788,15 +962,19 @@ class GraphExecutor:
         result = await executor.dispatch("run_shell", {"command": command, "timeout": timeout})
         return {**result, "returncode": result.get("returncode", 0 if result.get("ok") else -1)}
 
-    async def _judge(self, rubric: str, inputs: list[Any], criterion: dict[str, Any]) -> tuple[float, str]:
+    async def _judge(
+        self, rubric: str, inputs: list[Any], criterion: dict[str, Any]
+    ) -> tuple[float, str]:
         node = {"intelligence": criterion.get("judge_intelligence") or {"tier": "advanced"}}
         route = route_for_node(self.config, node)
-        prompt = f"Judge the material against this rubric. Return JSON {{\"score\": 0.0, \"reason\": \"...\"}}.\nRubric: {rubric}\nMaterial: {json.dumps(inputs, default=str)}"
+        prompt = f'Judge the material against this rubric. Return JSON {{"score": 0.0, "reason": "..."}}.\nRubric: {rubric}\nMaterial: {json.dumps(inputs, default=str)}'
         response = await self.agent_runner("judge", prompt, route, self._root_task_id)
         parsed = _json_object(str(response)) or {}
         return float(parsed.get("score", 0)), str(parsed.get("reason", response))
 
-    async def _default_agent_runner(self, node_id: str, prompt: str, route: Route, task_id: str) -> str:
+    async def _default_agent_runner(
+        self, node_id: str, prompt: str, route: Route, task_id: str
+    ) -> Any:
         from magent.agent import AgentSession
         from magent.cli.command_context import build_extraction_provider, build_provider_for_role
 
@@ -837,7 +1015,9 @@ class GraphExecutor:
                 result[name] = spec["default"]
         return result
 
-    def _resolve_graph_outputs(self, document: dict[str, Any], scope: dict[str, Any]) -> dict[str, Any]:
+    def _resolve_graph_outputs(
+        self, document: dict[str, Any], scope: dict[str, Any]
+    ) -> dict[str, Any]:
         outputs = {}
         for name, spec in (document.get("outputs") or {}).items():
             expression = spec.get("from") if isinstance(spec, dict) else spec
@@ -870,7 +1050,9 @@ class GraphExecutor:
 
     def _preflight(self, document: GraphDocument, plan: Any) -> None:
         constraints = document.data.get("constraints") or {}
-        if constraints.get("max_node_executions") and plan.worst_case_node_executions > int(constraints["max_node_executions"]):
+        if constraints.get("max_node_executions") and plan.worst_case_node_executions > int(
+            constraints["max_node_executions"]
+        ):
             raise GraphRunError("worst-case node executions exceed graph budget", "RT012")
         # Cost estimates are advisory and may include mutually exclusive branches.
         # Actual usage is enforced before and after each node execution.
@@ -890,7 +1072,9 @@ class GraphExecutor:
         available_skills = {skill.name for skill in registry.skills}
         missing_skills = sorted(set(requirements.get("skills") or []) - available_skills)
         if missing_skills:
-            raise GraphRunError(f"required skills are unavailable: {', '.join(missing_skills)}", "RT012")
+            raise GraphRunError(
+                f"required skills are unavailable: {', '.join(missing_skills)}", "RT012"
+            )
         declared_secrets = _declared_secret_names(self._document.data if self._document else {})
         for secret in requirements.get("secrets") or []:
             if secret not in declared_secrets:
@@ -901,9 +1085,7 @@ class GraphExecutor:
     def _tool_policy(self, node: dict[str, Any], scope: dict[str, Any]) -> GraphToolPolicy:
         requirements = node.get("requirements") or {}
         allowed = {
-            tool
-            for item in requirements.get("tools") or []
-            for tool in tools_for_requirement(item)
+            tool for item in requirements.get("tools") or [] for tool in tools_for_requirement(item)
         }
         checkpoints = [
             item for item in node.get("human") or [] if item.get("at") == "before_side_effects"
@@ -932,7 +1114,11 @@ class GraphExecutor:
             allowed_tools=allowed,
             permissions=tuple(str(item) for item in requirements.get("permissions") or []),
             approval=approve if checkpoint else None,
-            approval_prompt=str(resolve_value(checkpoint.get("prompt", "Approve side effects for this graph node?"), scope)),
+            approval_prompt=str(
+                resolve_value(
+                    checkpoint.get("prompt", "Approve side effects for this graph node?"), scope
+                )
+            ),
             observer=observe,
         )
 
@@ -946,7 +1132,9 @@ class GraphExecutor:
         for checkpoint in node.get("human") or []:
             if checkpoint.get("at") != stage:
                 continue
-            if checkpoint.get("when") and not bool(evaluate_expression(str(checkpoint["when"]), scope)):
+            if checkpoint.get("when") and not bool(
+                evaluate_expression(str(checkpoint["when"]), scope)
+            ):
                 continue
             mode = str(checkpoint.get("mode", "approve"))
             prompt = str(resolve_value(checkpoint.get("prompt", f"Continue after {stage}?"), scope))
@@ -972,7 +1160,9 @@ class GraphExecutor:
                     "checkpoint_id": str(checkpoint.get("id", "")),
                     "at_stage": stage,
                     "mode": mode,
-                    "outcome": "notified" if mode == "notify" else ("approved" if approved else "rejected"),
+                    "outcome": "notified"
+                    if mode == "notify"
+                    else ("approved" if approved else "rejected"),
                     "actor": "user" if mode != "notify" else "harness",
                     "at": now_iso(),
                 }
@@ -987,19 +1177,29 @@ class GraphExecutor:
         supported = {"shared", "worktree", "sandbox", "container"}
         if isolation not in supported:
             raise GraphRunError(f"unsupported isolation {isolation!r}", "RT014")
-        if constraints.get("determinism") == "strict" and (constraints.get("temperature", 0) != 0 or "seed" not in constraints):
+        if constraints.get("determinism") == "strict" and (
+            constraints.get("temperature", 0) != 0 or "seed" not in constraints
+        ):
             raise GraphRunError("strict determinism requires temperature 0 and a seed", "RT013")
 
     def _check_global_budget(self, document: dict[str, Any]) -> None:
         constraints = document.get("constraints") or {}
         elapsed = time.monotonic() - self._started
-        if constraints.get("max_wall_clock_seconds") and elapsed > float(constraints["max_wall_clock_seconds"]):
+        if constraints.get("max_wall_clock_seconds") and elapsed > float(
+            constraints["max_wall_clock_seconds"]
+        ):
             raise GraphRunError("graph wall-clock budget exceeded", "RT030")
-        if constraints.get("max_node_executions") and self._record["usage"]["node_executions"] >= int(constraints["max_node_executions"]):
+        if constraints.get("max_node_executions") and self._record["usage"][
+            "node_executions"
+        ] >= int(constraints["max_node_executions"]):
             raise GraphRunError("graph node-execution budget exceeded", "RT030")
-        if constraints.get("max_total_tokens") and self._record["usage"].get("total_tokens", 0) >= int(constraints["max_total_tokens"]):
+        if constraints.get("max_total_tokens") and self._record["usage"].get(
+            "total_tokens", 0
+        ) >= int(constraints["max_total_tokens"]):
             raise GraphRunError("graph token budget exceeded", "RT030")
-        if constraints.get("max_cost_usd") and self._record["usage"].get("cost_usd", 0) >= float(constraints["max_cost_usd"]):
+        if constraints.get("max_cost_usd") and self._record["usage"].get("cost_usd", 0) >= float(
+            constraints["max_cost_usd"]
+        ):
             raise GraphRunError("graph cost budget exceeded", "RT030")
 
     def _consume_usage(self, usage: dict[str, Any]) -> None:
@@ -1010,7 +1210,9 @@ class GraphExecutor:
         # never incurred.
         node_usage = self._node_usage.get()
         for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
-            target = {"prompt_tokens": "input_tokens", "completion_tokens": "output_tokens"}.get(key, key)
+            target = {"prompt_tokens": "input_tokens", "completion_tokens": "output_tokens"}.get(
+                key, key
+            )
             amount = int(usage.get(key, 0) or 0)
             self._record["usage"][target] = int(self._record["usage"].get(target, 0)) + amount
             if node_usage is not None:
@@ -1026,7 +1228,11 @@ class GraphExecutor:
         constraints = node.get("constraints") or {}
         # Per-node accumulation when available, so siblings cannot bill us.
         node_usage = self._node_usage.get()
-        delta = dict(node_usage) if node_usage is not None else _usage_delta(before, self._record["usage"])
+        delta = (
+            dict(node_usage)
+            if node_usage is not None
+            else _usage_delta(before, self._record["usage"])
+        )
         checks = (
             ("max_input_tokens", "input_tokens", "input-token"),
             ("max_output_tokens", "output_tokens", "output-token"),
@@ -1037,12 +1243,18 @@ class GraphExecutor:
             limit = constraints.get(limit_key)
             if limit and float(delta.get(usage_key, 0)) > float(limit):
                 raise GraphRunError(f"node {label} budget exceeded", "RT030")
-        if constraints.get("max_agent_steps") and self._agent_steps.get() > int(constraints["max_agent_steps"]):
+        if constraints.get("max_agent_steps") and self._agent_steps.get() > int(
+            constraints["max_agent_steps"]
+        ):
             raise GraphRunError("node agent-step budget exceeded", "RT030")
         graph_constraints = (self._document.data.get("constraints") if self._document else {}) or {}
-        if graph_constraints.get("max_total_tokens") and int(self._record["usage"].get("total_tokens", 0)) > int(graph_constraints["max_total_tokens"]):
+        if graph_constraints.get("max_total_tokens") and int(
+            self._record["usage"].get("total_tokens", 0)
+        ) > int(graph_constraints["max_total_tokens"]):
             raise GraphRunError("graph token budget exceeded", "RT030")
-        if graph_constraints.get("max_cost_usd") and float(self._record["usage"].get("cost_usd", 0)) > float(graph_constraints["max_cost_usd"]):
+        if graph_constraints.get("max_cost_usd") and float(
+            self._record["usage"].get("cost_usd", 0)
+        ) > float(graph_constraints["max_cost_usd"]):
             raise GraphRunError("graph cost budget exceeded", "RT030")
 
     async def _compensate(self, scope: dict[str, Any]) -> None:
@@ -1056,12 +1268,34 @@ class GraphExecutor:
                 with contextlib.suppress(Exception):
                     await self._execute_node(str(compensation), target, scope, "compensation")
 
-    def _append_node_record(self, full_id: str, node: dict[str, Any], status: str, inputs: dict[str, Any], attempts: list[dict[str, Any]], outputs: dict[str, Any] | None = None, human_events: list[dict[str, Any]] | None = None) -> None:
+    def _append_node_record(
+        self,
+        full_id: str,
+        node: dict[str, Any],
+        status: str,
+        inputs: dict[str, Any],
+        attempts: list[dict[str, Any]],
+        outputs: dict[str, Any] | None = None,
+        human_events: list[dict[str, Any]] | None = None,
+    ) -> None:
         record = {
             "node_id": full_id.split(".")[-1].split("[")[0],
             "scope_path": full_id,
             "type": node.get("type", "task"),
-            "status": status if status in {"pending", "ready", "running", "awaiting_human", "succeeded", "failed", "skipped", "cancelled", "blocked"} else "failed",
+            "status": status
+            if status
+            in {
+                "pending",
+                "ready",
+                "running",
+                "awaiting_human",
+                "succeeded",
+                "failed",
+                "skipped",
+                "cancelled",
+                "blocked",
+            }
+            else "failed",
             "started_at": attempts[0]["started_at"] if attempts else now_iso(),
             "finished_at": now_iso(),
             "inputs": _redact_values(node.get("inputs") or {}, inputs),
@@ -1189,11 +1423,17 @@ def _contains_redaction(value: Any) -> bool:
 
 
 def _secret_value(name: str) -> str:
-    return os.environ.get(name) or os.environ.get(name.upper()) or os.environ.get(f"MAGENT_SECRET_{name.upper()}", "")
+    return (
+        os.environ.get(name)
+        or os.environ.get(name.upper())
+        or os.environ.get(f"MAGENT_SECRET_{name.upper()}", "")
+    )
 
 
 def _redact_secrets(value: Any, document: dict[str, Any]) -> Any:
-    secrets = [secret for name in _declared_secret_names(document) if (secret := _secret_value(name))]
+    secrets = [
+        secret for name in _declared_secret_names(document) if (secret := _secret_value(name))
+    ]
     if isinstance(value, dict):
         return {key: _redact_secrets(item, document) for key, item in value.items()}
     if isinstance(value, list):
@@ -1216,7 +1456,10 @@ def _declared_secret_names(document: dict[str, Any]) -> set[str]:
 
 def _node_prompt(node: dict[str, Any], inputs: dict[str, Any], feedback: str) -> str:
     outputs = node.get("outputs") or {}
-    contract = {name: {"type": spec.get("type", "json"), "description": spec.get("description", "")} for name, spec in outputs.items()}
+    contract = {
+        name: {"type": spec.get("type", "json"), "description": spec.get("description", "")}
+        for name, spec in outputs.items()
+    }
     parts = [
         "You are executing one bounded Agentic Graph node.",
         f"Task: {node.get('title', '')}\n{node.get('description', '')}",
@@ -1294,7 +1537,9 @@ def _sum_usage(attempts: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _json_object(text: str) -> dict[str, Any] | None:
     candidates = [text.strip()]
-    candidates.extend(match.group(1) for match in re.finditer(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL))
+    candidates.extend(
+        match.group(1) for match in re.finditer(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+    )
     start, end = text.find("{"), text.rfind("}")
     if start >= 0 and end > start:
         candidates.append(text[start : end + 1])
@@ -1310,5 +1555,9 @@ def _json_object(text: str) -> dict[str, Any] | None:
 
 def _failed_feedback(results: list[CriterionResult], error: str) -> str:
     lines = [error] if error else []
-    lines.extend(f"- {item.id}: {item.error or item.evidence or 'criterion failed'}" for item in results if not item.passed and item.severity == "required")
+    lines.extend(
+        f"- {item.id}: {item.error or item.evidence or 'criterion failed'}"
+        for item in results
+        if not item.passed and item.severity == "required"
+    )
     return "\n".join(lines)

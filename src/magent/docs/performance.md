@@ -1,5 +1,9 @@
 # Performance
 
+Use `magent performance install-shape` to measure installed package bytes and repeated cold imports of the CLI. Use `--samples` to adjust the sample count. Release evidence compares a clean core install with the 0.50 baseline; the full integration shape is tested separately.
+
+Optional document, media, desktop, browser, gateway, MCP, and LSP dependencies are excluded from the core install. See `magent docs show installation-shapes` and run `magent tools doctor` for readiness.
+
 MagAgent is designed to stay usable on normal developer laptops. Heavy provider,
 browser, gateway, and memory dependencies are loaded lazily where possible, and
 repo-wide scans use bounded file iteration.

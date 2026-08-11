@@ -151,15 +151,24 @@ def _run_agent_task_inner(
     started = time.perf_counter()
 
     class EvalSession(AgentSession):
-        async def _model_round(self, messages: list[dict[str, Any]], tool_defs: Any, **kwargs: Any) -> Any:
-            del messages, tool_defs, kwargs
+        async def _model_round(
+            self, messages: list[dict[str, Any]], tool_defs: Any, **kwargs: Any
+        ) -> Any:
+            del messages, tool_defs
             if not script:
                 return await super()._model_round([], None)
             index = int(getattr(self, "_eval_script_index", 0))
             if index >= len(script):
                 return _script_response({"content": "Evaluation script completed."}, index)
+            step = script[index]
+            if kwargs.get("max_tokens", 4096) > 4096 and step.get("tool") == "write_file":
+                arguments = step.get("arguments") or {}
+                content = str(arguments.get("content") or "")
+                if content:
+                    self._eval_script_index = index + 1
+                    return _script_response({"content": content}, index)
             self._eval_script_index = index + 1
-            return _script_response(script[index], index)
+            return _script_response(step, index)
 
     session_class = EvalSession if script else AgentSession
     session = session_class(
@@ -199,7 +208,9 @@ def _run_agent_task_inner(
         finally:
             await session.end_session()
             current = asyncio.current_task()
-            pending = [task for task in asyncio.all_tasks() if task is not current and not task.done()]
+            pending = [
+                task for task in asyncio.all_tasks() if task is not current and not task.done()
+            ]
             for background in pending:
                 background.cancel()
             if pending:
@@ -255,6 +266,7 @@ def _run_agent_task_inner(
 def _isolated_agent_paths(workspace: Path):
     """Keep eval logs and memory out of the user's real MagAgent state."""
     import magent.agent as agent_module
+    import magent.agent_runtime.tool_loop as tool_loop_module
     import magent.config as config_module
     import magent.logging as logging_module
 
@@ -266,7 +278,8 @@ def _isolated_agent_paths(workspace: Path):
     old_config_logs = config_module.LOGS_DIR
     old_logging_logs = logging_module.LOGS_DIR
     old_memory_dir = agent_module.user_memory_dir
-    old_hooks = agent_module.run_hooks_async
+    tool_loop_any: Any = tool_loop_module
+    old_tool_hooks = tool_loop_any.run_hooks_async
     console_capture = agent_module.console.capture()
 
     async def no_hooks(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
@@ -279,7 +292,7 @@ def _isolated_agent_paths(workspace: Path):
     config_module.LOGS_DIR = logs
     logging_module.LOGS_DIR = logs
     agent_module.user_memory_dir = eval_memory_dir
-    agent_module.run_hooks_async = no_hooks
+    tool_loop_any.run_hooks_async = no_hooks
     console_capture.__enter__()
     try:
         yield
@@ -288,7 +301,7 @@ def _isolated_agent_paths(workspace: Path):
         config_module.LOGS_DIR = old_config_logs
         logging_module.LOGS_DIR = old_logging_logs
         agent_module.user_memory_dir = old_memory_dir
-        agent_module.run_hooks_async = old_hooks
+        tool_loop_any.run_hooks_async = old_tool_hooks
 
 
 def run_agent_task(
@@ -449,14 +462,20 @@ def _validate_task(
             elif kind == "file_contains":
                 target = _contained(workspace, str(validator.get("path") or ""))
                 needle = str(validator.get("text") or "")
-                ok = target.is_file() and needle in target.read_text(encoding="utf-8", errors="replace")
+                ok = target.is_file() and needle in target.read_text(
+                    encoding="utf-8", errors="replace"
+                )
                 detail = {"path": str(validator.get("path") or ""), "contains": needle[:200]}
             elif kind == "file_min_bytes":
                 target = _contained(workspace, str(validator.get("path") or ""))
                 minimum = max(0, int(validator.get("min_bytes") or 1))
                 size = target.stat().st_size if target.is_file() else 0
                 ok = size >= minimum
-                detail = {"path": str(validator.get("path") or ""), "bytes": size, "minimum": minimum}
+                detail = {
+                    "path": str(validator.get("path") or ""),
+                    "bytes": size,
+                    "minimum": minimum,
+                }
             elif kind == "json_valid":
                 target = _contained(workspace, str(validator.get("path") or ""))
                 json.loads(target.read_text(encoding="utf-8"))
@@ -498,7 +517,9 @@ def _aggregate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
             [item.get("time_to_first_activity_ms") for item in executions]
         ),
         **{
-            key: round(sum(float((item.get("usage") or {}).get(key) or 0) for item in executions), 6)
+            key: round(
+                sum(float((item.get("usage") or {}).get(key) or 0) for item in executions), 6
+            )
             for key in usage_keys
         },
     }
@@ -530,7 +551,9 @@ def _contained(root: Path, relative: str) -> Path:
 
 
 def _safe_name(value: str) -> str:
-    text = "".join(character if character.isalnum() or character in "-_" else "-" for character in value)
+    text = "".join(
+        character if character.isalnum() or character in "-_" else "-" for character in value
+    )
     return text.strip("-")[:80] or "task"
 
 

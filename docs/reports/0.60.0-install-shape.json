@@ -1,0 +1,38 @@
+{
+  "schema": "magent.install-shape.v1",
+  "python": "3.14.5",
+  "platform": "linux-x86_64",
+  "baseline": {
+    "version": "0.50.0",
+    "site_packages_bytes": 403485284,
+    "installed_distributions": 106,
+    "cold_cli_import_ms": {
+      "samples": [384.08, 359.07, 367.17, 360.81, 473.45],
+      "minimum": 359.07,
+      "average": 388.92
+    }
+  },
+  "candidate": {
+    "version": "0.60.0",
+    "site_packages_bytes": 296012278,
+    "installed_distributions": 76,
+    "package_bytes": 4494786,
+    "cold_cli_import_ms": {
+      "samples": [274.25, 289.89, 314.18, 353.05, 303.18],
+      "minimum": 274.25,
+      "average": 306.91
+    }
+  },
+  "change": {
+    "site_packages_percent": -26.64,
+    "installed_distributions_percent": -28.3,
+    "average_cold_cli_import_percent": -21.09
+  },
+  "verification": {
+    "core_ready": true,
+    "core_optional_capabilities_available": 0,
+    "core_optional_capabilities_reported": 7,
+    "full_optional_capabilities_available": 7,
+    "full_optional_modules_imported": 18
+  }
+}

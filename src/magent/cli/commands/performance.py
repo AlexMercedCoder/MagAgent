@@ -10,6 +10,15 @@ console = Console()
 
 
 def register_performance_commands(performance_app: typer.Typer) -> None:
+    @performance_app.command("install-shape")
+    def performance_install_shape_cmd(
+        samples: int = typer.Option(3, "--samples", min=1, max=10),
+    ) -> None:
+        """Measure installed package size and cold CLI startup cost."""
+        from magent.performance import install_shape
+
+        console.print_json(data=install_shape(samples))
+
     @performance_app.command("doctor")
     def performance_doctor_cmd(
         project: str = typer.Option(".", "--project", "-p"),

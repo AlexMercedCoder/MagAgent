@@ -53,7 +53,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Saves and runs reusable workflow recipes for release prep, bug triage, docs audits, dependency upgrades, and test repair
 - Defines reusable primary agents and subagents from `.magent/agents/*.md`, with `@review`, `@explore`, and `@docs` invocation
 - Runs project hooks around tools, edits, command failures, memory candidates, and release checks
-- Adds LSP-aware code intelligence commands for symbols, diagnostics, definitions, and references
+- Runs real local LSP clients for Python, TypeScript/JavaScript, Rust, and Go, with capability-aware symbols, diagnostics, definitions, references, hover, and rename
 - Queues background asks, recipes, plans, shell tasks, followups, and gateway tasks through `magent daemon`
 - Installs local extension packs for agents, recipes, skills, tools, and MCP configuration through `magent plugin`
 - Imports MCP, Claude, OpenCode, Gemini, Codex skill, and portable Pi package assets into MagAgent-native plugins with normalized registry metadata
@@ -98,12 +98,19 @@ Every session, MagAgent extracts facts, preferences, and patterns from your conv
 ```bash
 pip install mag-agent
 
+# Everything, including documents, media, browser, desktop, gateway, MCP, and Python LSP:
+pip install "mag-agent[full]"
+
 # With gateway support (Slack/Discord/Telegram):
 pip install "mag-agent[gateway]"
 
 # Recommended: isolate with pipx
 pipx install mag-agent
 ```
+
+The core install keeps optional document, media, desktop, gateway, browser, MCP,
+and LSP dependencies out of the default environment. Run `magent tools doctor`
+for readiness and exact install commands, or see [Installation Shapes](src/magent/docs/installation-shapes.md).
 
 ### First-time setup
 
