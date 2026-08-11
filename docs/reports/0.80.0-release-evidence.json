@@ -1,0 +1,800 @@
+{
+  "ok": true,
+  "schema": "magent.release-evidence.v1",
+  "version": "0.80.0",
+  "generated_at": "2026-08-11T13:49:48.413084+00:00",
+  "root": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent",
+  "runtime": {
+    "python": "3.14.5",
+    "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35"
+  },
+  "git": {
+    "commit": "71834ac7338811b9802f0b90e7148059f94fbdda",
+    "branch": "main",
+    "tag": "",
+    "clean": true,
+    "status": []
+  },
+  "checks": {
+    "docs": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "task-contract",
+          "ok": true,
+          "detail": "magent.task.v2"
+        },
+        {
+          "name": "event-contract",
+          "ok": true,
+          "detail": "magent.task-event.v1"
+        },
+        {
+          "name": "memory-contract",
+          "ok": true,
+          "detail": "maggraph>=0.4.1"
+        },
+        {
+          "name": "python-3.11",
+          "ok": true,
+          "detail": "Python 3.11"
+        },
+        {
+          "name": "python-3.12",
+          "ok": true,
+          "detail": "Python 3.12"
+        },
+        {
+          "name": "python-3.13",
+          "ok": true,
+          "detail": "Python 3.13"
+        },
+        {
+          "name": "python-3.14",
+          "ok": true,
+          "detail": "Python 3.14"
+        },
+        {
+          "name": "package-version",
+          "ok": true,
+          "detail": "0.80.0"
+        },
+        {
+          "name": "maggraph-floor",
+          "ok": true,
+          "detail": "maggraph>=0.4.1"
+        },
+        {
+          "name": "python-floor",
+          "ok": true,
+          "detail": ">=3.11"
+        },
+        {
+          "name": "provider-reference",
+          "ok": true,
+          "detail": "generated catalog"
+        }
+      ]
+    },
+    "providers": {
+      "schema": "magent.provider-support.v1",
+      "ok": true,
+      "provider_count": 22,
+      "providers": [
+        {
+          "id": "opencode-go",
+          "display": "OpenCode Go",
+          "default_model": "deepseek-v4-flash",
+          "access_mode": "subscription",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "OPENCODE_GO_KEY",
+          "credential_aliases": [
+            "OPENCODE_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "ollama",
+          "display": "Ollama (local)",
+          "default_model": "qwen2.5-coder:32b",
+          "access_mode": "local",
+          "adapter": "ollama",
+          "local": true,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools"
+          ],
+          "limitations": [
+            "Behavior depends on the locally installed model and server version."
+          ]
+        },
+        {
+          "id": "lmstudio",
+          "display": "LM Studio (local)",
+          "default_model": "local-model",
+          "access_mode": "local",
+          "adapter": "openai-compatible",
+          "local": true,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools"
+          ],
+          "limitations": [
+            "Behavior depends on the locally installed model and server version."
+          ]
+        },
+        {
+          "id": "openai",
+          "display": "OpenAI",
+          "default_model": "gpt-5",
+          "access_mode": "api",
+          "adapter": "openai",
+          "local": false,
+          "credential_env": "OPENAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "anthropic",
+          "display": "Anthropic",
+          "default_model": "claude-sonnet-5",
+          "access_mode": "api",
+          "adapter": "anthropic",
+          "local": false,
+          "credential_env": "ANTHROPIC_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "nous-portal",
+          "display": "Nous Portal",
+          "default_model": "deepseek/deepseek-v4-flash",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "NOUS_API_KEY",
+          "credential_aliases": [
+            "NOUS_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "passed",
+          "support_tier": "qualified",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "docs/reports/0.50.0-nous-live-evals.json",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage",
+            "artifact-creation"
+          ],
+          "limitations": [
+            "Qualification applies to the tested model and account tier."
+          ]
+        },
+        {
+          "id": "opencode-zen",
+          "display": "OpenCode Zen",
+          "default_model": "deepseek-v4-flash",
+          "access_mode": "payg",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "OPENCODE_ZEN_KEY",
+          "credential_aliases": [
+            "OPENCODE_ZEN_API_KEY",
+            "OPENCODE_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "google",
+          "display": "Google Gemini",
+          "default_model": "gemini-3.6-flash",
+          "access_mode": "api",
+          "adapter": "gemini",
+          "local": false,
+          "credential_env": "GEMINI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "groq",
+          "display": "Groq",
+          "default_model": "llama-3.3-70b-versatile",
+          "access_mode": "api",
+          "adapter": "groq",
+          "local": false,
+          "credential_env": "GROQ_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "openrouter",
+          "display": "OpenRouter",
+          "default_model": "deepseek/deepseek-chat",
+          "access_mode": "api",
+          "adapter": "openrouter",
+          "local": false,
+          "credential_env": "OPENROUTER_API_KEY",
+          "credential_aliases": [
+            "OPENROUTER_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "trusted-router",
+          "display": "TrustedRouter",
+          "default_model": "trustedrouter/cheap",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "TRUSTEDROUTER_API_KEY",
+          "credential_aliases": [
+            "TRUSTED_ROUTER_API_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "prime-intellect",
+          "display": "Prime Intellect",
+          "default_model": "meta-llama/llama-3.1-70b-instruct",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "PRIME_INTELLECT_API_KEY",
+          "credential_aliases": [
+            "PRIMEINTELLECT_API_KEY",
+            "PRIME_API_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "bedrock",
+          "display": "AWS Bedrock",
+          "default_model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "access_mode": "aws",
+          "adapter": "bedrock",
+          "local": false,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "mistral",
+          "display": "Mistral AI",
+          "default_model": "mistral-large-latest",
+          "access_mode": "api",
+          "adapter": "mistral",
+          "local": false,
+          "credential_env": "MISTRAL_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "deepseek",
+          "display": "DeepSeek",
+          "default_model": "deepseek-chat",
+          "access_mode": "api",
+          "adapter": "deepseek",
+          "local": false,
+          "credential_env": "DEEPSEEK_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "xai",
+          "display": "xAI",
+          "default_model": "grok-4",
+          "access_mode": "api",
+          "adapter": "xai",
+          "local": false,
+          "credential_env": "XAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "perplexity",
+          "display": "Perplexity",
+          "default_model": "sonar-pro",
+          "access_mode": "api",
+          "adapter": "perplexity",
+          "local": false,
+          "credential_env": "PERPLEXITYAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "cerebras",
+          "display": "Cerebras",
+          "default_model": "llama3.1-8b",
+          "access_mode": "api",
+          "adapter": "cerebras",
+          "local": false,
+          "credential_env": "CEREBRAS_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "together_ai",
+          "display": "Together AI",
+          "default_model": "moonshotai/Kimi-K2.5",
+          "access_mode": "api",
+          "adapter": "together_ai",
+          "local": false,
+          "credential_env": "TOGETHERAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "fireworks_ai",
+          "display": "Fireworks AI",
+          "default_model": "accounts/fireworks/models/deepseek-coder-v2-instruct",
+          "access_mode": "api",
+          "adapter": "fireworks_ai",
+          "local": false,
+          "credential_env": "FIREWORKS_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "deepinfra",
+          "display": "DeepInfra",
+          "default_model": "openai/gpt-oss-120b",
+          "access_mode": "api",
+          "adapter": "deepinfra",
+          "local": false,
+          "credential_env": "DEEPINFRA_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "custom",
+          "display": "Custom Endpoint",
+          "default_model": "your-model-name",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        }
+      ],
+      "live_test_command": "magent provider test-matrix",
+      "tool_test_command": "magent provider smoke-all",
+      "tiers": {
+        "qualified": "Completion, streaming, tools, cancellation, retries, usage, and caching are release-qualified for a tested model.",
+        "compatible": "Catalog and adapter contracts pass; live behavior remains model/account dependent.",
+        "experimental": "Known upstream or implementation limitations remain."
+      },
+      "policy": "Catalog conformance is offline. Full support requires maintainer-run ping and tool-use reports for the release."
+    },
+    "security": {
+      "schema": "magent.security-assurance.v1",
+      "version": "0.80.0",
+      "generated_at": "2026-08-11T13:49:48.412926+00:00",
+      "ok": true,
+      "checks": [
+        {
+          "key": "command-policy",
+          "ok": true,
+          "detail": "5 mutating/substitution command probes require confirmation or are blocked."
+        },
+        {
+          "key": "network-policy",
+          "ok": true,
+          "detail": "Rejected 4/4 local, metadata, and non-HTTP URL probes."
+        },
+        {
+          "key": "path-containment",
+          "ok": true,
+          "detail": "Rejected 4/4 unsafe path components."
+        },
+        {
+          "key": "gateway-default",
+          "ok": true,
+          "detail": "An empty gateway allowlist fails closed."
+        },
+        {
+          "key": "atomic-persistence",
+          "ok": true,
+          "detail": "Atomic persistence round-trip completed without temporary-file residue."
+        }
+      ],
+      "scope": "Deterministic local probes; external penetration testing and provider qualification are separate gates."
+    },
+    "evals": {
+      "ok": true,
+      "status": "recorded",
+      "report": {
+        "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/docs/reports/0.80.0-agent-evals.json",
+        "sha256": "df31418f289038716634b587cfcb6f585e81a91fe114580f95234b810528d0a7",
+        "summary": {
+          "schema": "magent.agent-eval-report.v1",
+          "suite": "reliability-offline",
+          "version": "0.80.0",
+          "ran_at": "2026-08-11T13:36:54.700157+00:00",
+          "passed": 32,
+          "total": 32,
+          "success_rate": 1.0,
+          "artifact_passed": 20,
+          "artifact_total": 20,
+          "artifact_success_rate": 1.0,
+          "targets": {
+            "success_rate": 1.0,
+            "artifact_success_rate": 1.0
+          },
+          "metrics": {
+            "elapsed_ms": 3506.6,
+            "tool_calls": 37,
+            "retries": 0,
+            "time_to_first_activity_ms": 80.89,
+            "prompt_tokens": 0.0,
+            "completion_tokens": 0.0,
+            "total_tokens": 0.0,
+            "cached_tokens": 0.0,
+            "cost_usd": 0.0
+          }
+        }
+      }
+    },
+    "memory": {
+      "ok": true,
+      "status": "recorded",
+      "report": {
+        "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/docs/reports/0.80.0-memory-quality.json",
+        "sha256": "4e4dcda0ff059d0de0b4cbfe83eb89556f34c467ecdc1d07f2ee5c75d368bb59",
+        "schema": "magent.memory-eval.v2",
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "mean_reciprocal_rank": 1.0,
+          "stale_hit_rate": 0.0,
+          "contradiction_hit_rate": 0.0,
+          "project_scope_accuracy": 1.0,
+          "explanation_coverage": 1.0,
+          "provenance_coverage": 1.0,
+          "backlink_coverage": 0.6667,
+          "average_context_tokens": 284.67,
+          "budget_pass_rate": 1.0
+        },
+        "gates": {
+          "precision_min": true,
+          "recall_min": true,
+          "mean_reciprocal_rank_min": true,
+          "stale_hit_rate_max": true,
+          "contradiction_hit_rate_max": true,
+          "project_scope_accuracy_min": true,
+          "explanation_coverage_min": true,
+          "provenance_coverage_min": true,
+          "backlink_coverage_min": true,
+          "budget_pass_rate_min": true
+        }
+      }
+    },
+    "performance": {
+      "ok": true,
+      "status": "recorded",
+      "report": {
+        "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/docs/reports/0.80.0-performance.json",
+        "sha256": "27a42730c553e6046cc439bb86e2334106a357c38fc68e07c7a24a64ebe8fa12",
+        "schema": "magent.performance-budget.v1",
+        "metrics": {
+          "cold_cli_import_ms": 214.23,
+          "project_inspection_ms": 13.723,
+          "memory_search_average_ms": 1.22,
+          "event_write_per_second": 191.9,
+          "event_read_1000_ms": 5.57,
+          "four_concurrent_tasks_ms": 466.307
+        },
+        "gates": {
+          "cold_cli_import_ms_max": true,
+          "project_inspection_ms_max": true,
+          "memory_search_average_ms_max": true,
+          "event_write_per_second_min": true,
+          "event_read_1000_ms_max": true,
+          "four_concurrent_tasks_ms_max": true
+        }
+      }
+    },
+    "tests": {
+      "ok": true,
+      "status": "785 passed"
+    },
+    "coverage": {
+      "ok": true,
+      "percent": 67.43,
+      "required": 67.0
+    },
+    "ci": {
+      "ok": true,
+      "url": "https://github.com/AlexMercedCoder/MagAgent/actions/runs/31497856384",
+      "status": "recorded"
+    },
+    "artifacts": {
+      "ok": true,
+      "items": [
+        {
+          "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/dist/mag_agent-0.80.0-py3-none-any.whl",
+          "ok": true,
+          "bytes": 592707,
+          "sha256": "c8312aa14539abb142ff9df52244c03ed459637bdd84f08a6d6567b81ddbebc9"
+        },
+        {
+          "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/dist/mag_agent-0.80.0.tar.gz",
+          "ok": true,
+          "bytes": 2239835,
+          "sha256": "b4f492e776bb72fe45c181584a2169bef9217c4210164b345bfdf53f4d18d90a"
+        }
+      ]
+    }
+  },
+  "blocking": [],
+  "exceptions": [
+    "Earlier 72% branch coverage aspiration remains unmet; enforced release floor is 67%."
+  ],
+  "blocking_exceptions": []
+}
