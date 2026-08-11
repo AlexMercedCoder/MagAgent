@@ -1,0 +1,157 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:5b52dc87-5850-27ac-2afa-153d66d6a0ca",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-08-11T18:45:54.691666+00:00",
+    "component": {
+      "type": "application",
+      "name": "mag-agent",
+      "version": "0.91.0",
+      "purl": "pkg:pypi/mag-agent@0.91.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "aiofiles",
+      "version": "25.1.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/aiofiles@25.1.0"
+    },
+    {
+      "type": "library",
+      "name": "ddgs",
+      "version": "9.14.4",
+      "licenses": [],
+      "purl": "pkg:pypi/ddgs@9.14.4"
+    },
+    {
+      "type": "library",
+      "name": "gitpython",
+      "version": "3.1.58",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/gitpython@3.1.58"
+    },
+    {
+      "type": "library",
+      "name": "httpx",
+      "version": "0.28.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "BSD-3-Clause"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/httpx@0.28.1"
+    },
+    {
+      "type": "library",
+      "name": "jinja2",
+      "version": "3.1.6",
+      "licenses": [],
+      "purl": "pkg:pypi/jinja2@3.1.6"
+    },
+    {
+      "type": "library",
+      "name": "jmespath",
+      "version": "1.1.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/jmespath@1.1.0"
+    },
+    {
+      "type": "library",
+      "name": "jsonschema",
+      "version": "4.26.0",
+      "licenses": [],
+      "purl": "pkg:pypi/jsonschema@4.26.0"
+    },
+    {
+      "type": "library",
+      "name": "litellm",
+      "version": "1.96.0",
+      "licenses": [],
+      "purl": "pkg:pypi/litellm@1.96.0"
+    },
+    {
+      "type": "library",
+      "name": "maggraph",
+      "version": "0.4.1",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT OR Apache-2.0"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/maggraph@0.4.1"
+    },
+    {
+      "type": "library",
+      "name": "prompt-toolkit",
+      "version": "3.0.53",
+      "licenses": [],
+      "purl": "pkg:pypi/prompt-toolkit@3.0.53"
+    },
+    {
+      "type": "library",
+      "name": "pyyaml",
+      "version": "6.0.3",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/pyyaml@6.0.3"
+    },
+    {
+      "type": "library",
+      "name": "rich",
+      "version": "15.0.0",
+      "licenses": [
+        {
+          "license": {
+            "name": "MIT"
+          }
+        }
+      ],
+      "purl": "pkg:pypi/rich@15.0.0"
+    },
+    {
+      "type": "library",
+      "name": "tomli-w",
+      "version": "1.2.0",
+      "licenses": [],
+      "purl": "pkg:pypi/tomli-w@1.2.0"
+    },
+    {
+      "type": "library",
+      "name": "typer",
+      "version": "0.27.1",
+      "licenses": [],
+      "purl": "pkg:pypi/typer@0.27.1"
+    }
+  ]
+}
