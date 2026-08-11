@@ -5,6 +5,9 @@ MagAgent is a terminal-native coding and productivity agent with local-first mem
 Machine clients should inspect `magent system contracts` and the built-in
 `support-policy` documentation before using versioned task, event, plugin,
 configuration, memory, or MCP surfaces.
+The 1.0 release candidate can be audited with `magent system compatibility`. Persistent
+state upgrades are backup-first through `magent system migrate`; an older MagAgent refuses
+state created by a newer schema instead of guessing.
 Maintainers can run `magent system ecosystem-report --root <workspace>` to generate a
 credential-free `mag.ecosystem-readiness.v1` artifact. Its local `ok` result never
 implies that signing, live-provider, cross-platform, or upstream MCP gates passed.

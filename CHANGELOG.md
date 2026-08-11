@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.90.0
+
+- Froze the proposed 1.0 contract candidate with a machine-readable inventory covering public imports, CLI commands, config keys, task/event schemas, plugins, memory, MCP, and desktop APIs.
+- Added backup-first persistent-state migrations, private archives, migration history, exact rollback, archive containment, and actionable refusal when an older runtime encounters newer state.
+- Added `magent system compatibility`, `magent system migrate`, and `magent system rollback` for upgrade and recovery without manual config editing.
+- Added project dependency auditing, tracked-file secret scanning, CycloneDX 1.6 SBOMs, SHA-256 manifests, and in-toto/SLSA-shaped provenance through `magent release supply-chain`.
+- Upgraded release evidence to `magent.release-evidence.v2`, requiring contract, migration, memory, performance, security, supply-chain, artifact, test, coverage, and CI evidence.
+- Expanded CI with migration acceptance, contract inventory, dependency audit, supply-chain generation, and uploaded release-candidate evidence.
+
 ## 0.80.0
 
 - Added thresholded `magent.memory-eval.v2` retrieval evaluations for ranking, stale and contradictory facts, project scope, provenance, backlinks, explanations, and context budgets, plus a reproducible checked-in MagGraph fixture.

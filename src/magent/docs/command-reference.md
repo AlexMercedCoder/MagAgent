@@ -450,6 +450,7 @@ Generated from the active Typer command tree.
 - `magent release check`
 - `magent release evidence`
 - `magent release notes`
+- `magent release supply-chain`
 
 ## routine
 
@@ -486,9 +487,12 @@ Generated from the active Typer command tree.
 
 ## system
 
+- `magent system compatibility`
 - `magent system contracts`
 - `magent system ecosystem-report`
 - `magent system info`
+- `magent system migrate`
+- `magent system rollback`
 - `magent system security-report`
 
 ## task

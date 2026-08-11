@@ -1,5 +1,14 @@
 # Commands
 
+## 1.0 release-candidate contracts
+
+- `magent system compatibility`: inventory stable, beta, and experimental surfaces.
+- `magent system migrate`: preview persistent-state migration.
+- `magent system migrate --apply`: create a private backup and migrate state.
+- `magent system rollback <backup>`: preview a path-contained rollback.
+- `magent system rollback <backup> --apply`: restore the inspected backup.
+- `magent release supply-chain`: generate SBOM, hashes, provenance, audit, and secret-scan evidence.
+
 ## Agentic Graphs
 
 - `magent graph validate <file> --strict`: validate an AGS JSON or YAML document with stable diagnostic codes.

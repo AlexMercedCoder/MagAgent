@@ -1,0 +1,154 @@
+{
+  "schema": "magent.performance-budget.v1",
+  "ok": true,
+  "profile": "release",
+  "version": "0.90.0",
+  "environment": {
+    "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
+    "python": "3.14.5",
+    "cpu_count": 12
+  },
+  "workload": {
+    "task_events": 10000,
+    "concurrent_tasks": 4
+  },
+  "metrics": {
+    "cold_cli_import_ms": 246.58,
+    "project_inspection_ms": 14.695,
+    "memory_search_average_ms": 1.295,
+    "event_write_per_second": 279.44,
+    "event_read_1000_ms": 5.493,
+    "four_concurrent_tasks_ms": 275.714
+  },
+  "budgets": {
+    "cold_cli_import_ms_max": 1500.0,
+    "project_inspection_ms_max": 1500.0,
+    "memory_search_average_ms_max": 150.0,
+    "event_write_per_second_min": 150.0,
+    "event_read_1000_ms_max": 350.0,
+    "four_concurrent_tasks_ms_max": 2000.0
+  },
+  "gates": {
+    "cold_cli_import_ms_max": true,
+    "project_inspection_ms_max": true,
+    "memory_search_average_ms_max": true,
+    "event_write_per_second_min": true,
+    "event_read_1000_ms_max": true,
+    "four_concurrent_tasks_ms_max": true
+  },
+  "details": {
+    "install": {
+      "ok": true,
+      "version": "0.90.0",
+      "installed_distribution_version": "0.90.0",
+      "package_bytes": 4661263,
+      "cold_cli_import_ms": {
+        "samples": [
+          246.58
+        ],
+        "minimum": 246.58,
+        "average": 246.58
+      }
+    },
+    "doctor": {
+      "ok": true,
+      "project": "~/development/personal/Personal/utility/2026/MagAgent",
+      "timings_ms": {
+        "load_global_config_ms": 1.376,
+        "load_merged_config_ms": 0.923,
+        "repo_scan_estimate_ms": 9.482,
+        "workbench_stats_ms": 2.914
+      },
+      "repo": {
+        "files_seen": 387,
+        "limit": 5000,
+        "truncated": false,
+        "latest_mtime": 1786458669
+      },
+      "workbench": {
+        "ok": true,
+        "root": "~/.config/magent/users/alex/workbench",
+        "stores": [
+          {
+            "store": "checkpoints",
+            "path": "~/.config/magent/users/alex/workbench/checkpoints.json",
+            "bytes": 211092,
+            "records": 412,
+            "high_volume": true
+          },
+          {
+            "store": "command_history",
+            "path": "~/.config/magent/users/alex/workbench/command_history.json",
+            "bytes": 807,
+            "records": 3,
+            "high_volume": true
+          },
+          {
+            "store": "model_health",
+            "path": "~/.config/magent/users/alex/workbench/model_health.json",
+            "bytes": 1679,
+            "records": 4,
+            "high_volume": false
+          },
+          {
+            "store": "provider_model_catalogs",
+            "path": "~/.config/magent/users/alex/workbench/provider_model_catalogs.json",
+            "bytes": 9029,
+            "records": 1,
+            "high_volume": false
+          }
+        ],
+        "total_bytes": 321151,
+        "checkpoint_bytes": 98544,
+        "recommendations": [
+          "Prune `checkpoints`; it has 412 records."
+        ]
+      },
+      "semantic_memory": {
+        "ok": true,
+        "db_path": "~/.config/magent/users/alex/workbench/vector/memory_index_d07c184706d5.sqlite",
+        "chunks": 0,
+        "nodes": 0,
+        "models": [],
+        "provider": "ollama",
+        "model": "nomic-embed-text"
+      },
+      "config": {
+        "memory_budget_tokens": 4000,
+        "repo_map_budget_tokens": 1200,
+        "semantic_memory_enabled": true,
+        "write_every_n_turns": 5,
+        "selective_tools": true
+      },
+      "recommendations": [
+        {
+          "severity": "warn",
+          "area": "workbench",
+          "message": "Prune `checkpoints`; it has 412 records.",
+          "command": "magent workbench prune --dry-run"
+        }
+      ]
+    },
+    "memory": {
+      "available": true,
+      "samples": 10,
+      "average_ms": 1.295,
+      "maximum_ms": 1.443,
+      "result_count": 5
+    },
+    "runtime": {
+      "events_written": 10000,
+      "event_write_ms": 35786.049,
+      "event_write_per_second": 279.44,
+      "events_read": 1000,
+      "event_read_1000_ms": 5.493,
+      "four_concurrent_tasks_ms": 275.714,
+      "concurrent_event_counts": [
+        26,
+        26,
+        26,
+        26
+      ]
+    }
+  }
+}

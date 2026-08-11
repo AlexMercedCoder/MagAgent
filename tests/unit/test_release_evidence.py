@@ -17,19 +17,22 @@ def test_release_evidence_records_local_proof(tmp_path: Path, monkeypatch) -> No
     memory_path = tmp_path / "memory.json"
     memory_path.write_text('{"ok": true, "schema": "magent.memory-eval.v2"}', encoding="utf-8")
     performance_path = tmp_path / "performance.json"
-    performance_path.write_text('{"ok": true, "schema": "magent.performance-budget.v1"}', encoding="utf-8")
+    performance_path.write_text(
+        '{"ok": true, "schema": "magent.performance-budget.v1"}', encoding="utf-8"
+    )
+    supply_path = tmp_path / "supply.json"
+    supply_path.write_text('{"ok": true, "schema": "magent.supply-chain.v1"}', encoding="utf-8")
     monkeypatch.setattr(
         "magent.release_evidence.documentation_drift_report", lambda root: {"ok": True}
     )
-    monkeypatch.setattr(
-        "magent.release_evidence.provider_support_report", lambda: {"ok": True}
-    )
+    monkeypatch.setattr("magent.release_evidence.provider_support_report", lambda: {"ok": True})
 
     report = build_release_evidence(
         tmp_path,
         eval_report=eval_path,
         memory_report=memory_path,
         performance_report=performance_path,
+        supply_chain_report=supply_path,
         coverage_percent=72.4,
         tests="730 passed",
         ci_url="https://example.test/actions/1",
@@ -37,7 +40,7 @@ def test_release_evidence_records_local_proof(tmp_path: Path, monkeypatch) -> No
     )
 
     assert report["ok"] is True
-    assert report["schema"] == "magent.release-evidence.v1"
+    assert report["schema"] == "magent.release-evidence.v2"
     assert report["checks"]["artifacts"]["items"][0]["sha256"]
 
 
@@ -45,14 +48,21 @@ def test_release_evidence_exposes_missing_and_bad_artifact(tmp_path: Path, monke
     monkeypatch.setattr(
         "magent.release_evidence.documentation_drift_report", lambda root: {"ok": True}
     )
-    monkeypatch.setattr(
-        "magent.release_evidence.provider_support_report", lambda: {"ok": True}
-    )
+    monkeypatch.setattr("magent.release_evidence.provider_support_report", lambda: {"ok": True})
 
     report = build_release_evidence(tmp_path, artifacts=["missing.whl"])
 
     assert report["ok"] is False
-    assert {"evals", "memory", "performance", "tests", "coverage", "ci", "artifacts"} <= set(report["blocking"])
+    assert {
+        "evals",
+        "memory",
+        "performance",
+        "supply_chain",
+        "tests",
+        "coverage",
+        "ci",
+        "artifacts",
+    } <= set(report["blocking"])
 
 
 def test_release_evidence_allows_recorded_medium_exception(tmp_path: Path, monkeypatch) -> None:
@@ -64,18 +74,19 @@ def test_release_evidence_allows_recorded_medium_exception(tmp_path: Path, monke
     memory_path.write_text('{"ok": true}', encoding="utf-8")
     performance_path = tmp_path / "performance.json"
     performance_path.write_text('{"ok": true}', encoding="utf-8")
+    supply_path = tmp_path / "supply.json"
+    supply_path.write_text('{"ok": true}', encoding="utf-8")
     monkeypatch.setattr(
         "magent.release_evidence.documentation_drift_report", lambda root: {"ok": True}
     )
-    monkeypatch.setattr(
-        "magent.release_evidence.provider_support_report", lambda: {"ok": True}
-    )
+    monkeypatch.setattr("magent.release_evidence.provider_support_report", lambda: {"ok": True})
 
     report = build_release_evidence(
         tmp_path,
         eval_report=eval_path,
         memory_report=memory_path,
         performance_report=performance_path,
+        supply_chain_report=supply_path,
         coverage_percent=64.9,
         coverage_required=64,
         tests="all passed",
@@ -104,5 +115,5 @@ def test_release_evidence_cli_returns_nonzero_for_missing_proof(tmp_path: Path) 
 
     assert result.exit_code == 1
     payload = json.loads(result.output)
-    assert payload["schema"] == "magent.release-evidence.v1"
+    assert payload["schema"] == "magent.release-evidence.v2"
     assert "evals" in payload["blocking"]

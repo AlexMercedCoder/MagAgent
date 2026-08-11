@@ -1,0 +1,579 @@
+{
+  "ok": true,
+  "schema": "magent.contract-inventory.v1",
+  "magent_version": "0.90.0",
+  "candidate": "1.0",
+  "python_imports": [
+    {
+      "module": "magent.agent",
+      "symbol": "AgentSession",
+      "status": "stable"
+    },
+    {
+      "module": "magent.tools",
+      "symbol": "ToolExecutor",
+      "status": "stable"
+    },
+    {
+      "module": "magent.workbench",
+      "symbol": "WorkbenchStore",
+      "status": "stable"
+    },
+    {
+      "module": "magent.workbench",
+      "symbol": "task_add",
+      "status": "stable"
+    },
+    {
+      "module": "magent.workbench_domains.plans",
+      "symbol": "save_plan",
+      "status": "stable"
+    }
+  ],
+  "cli": [],
+  "config": {
+    "version": "1",
+    "status": "stable",
+    "global_keys": [
+      {
+        "path": "agent.doom_loop_policy",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "agent.file_mutation_verifier",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "agent.max_failed_same_tool_per_turn",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "agent.max_identical_tool_calls_per_turn",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "agent.max_model_rounds_per_turn",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "agent.max_subagents",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "agent.max_tool_calls_per_turn",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "agent.name",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "agent.selective_tools",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "agent.tool_use_enforcement",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "agent.version",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "agraph.allow_command_criteria",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "agraph.max_parallel_nodes",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "agraph.tier_roles.advanced",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "agraph.tier_roles.frontier",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "agraph.tier_roles.minimal",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "agraph.tier_roles.standard",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "budgets.daily_usd",
+        "type": "float",
+        "status": "stable"
+      },
+      {
+        "path": "budgets.session_usd",
+        "type": "float",
+        "status": "stable"
+      },
+      {
+        "path": "budgets.warn_at",
+        "type": "float",
+        "status": "stable"
+      },
+      {
+        "path": "context.compact_every_n_turns",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "context.instructions",
+        "type": "list",
+        "status": "stable"
+      },
+      {
+        "path": "context.keep_recent_turns",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "context.max_history_tokens",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "context.prompt_cache_key_scope",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "context.prompt_cache_min_stable_tokens",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "context.prompt_cache_retention",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "context.prompt_caching",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "context.prune_stale_tool_results",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "defaults.context_window_tokens",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "defaults.memory_budget_tokens",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "defaults.model",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "defaults.permission_mode",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "defaults.provider",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "defaults.repo_map_budget_tokens",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "defaults.skill_budget_tokens",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "memory.auto_commit",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "memory.auto_write",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "memory.encrypt",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "memory.extraction_model",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "memory.extraction_provider",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "memory.recall_body_tokens",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "memory.semantic_enabled",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "memory.semantic_model",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "memory.semantic_provider",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "memory.semantic_top_k",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "memory.write_every_n_turns",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "models.cheap",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "models.coding",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "models.fallback",
+        "type": "list",
+        "status": "stable"
+      },
+      {
+        "path": "models.frontier",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "models.image_maker",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "models.memory",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "models.review",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "permissions.allowed_shell_patterns",
+        "type": "list",
+        "status": "stable"
+      },
+      {
+        "path": "permissions.shell_sandbox",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "permissions.shell_sandbox_network",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "permissions.trusted_shell_patterns",
+        "type": "list",
+        "status": "stable"
+      },
+      {
+        "path": "session_messaging.enabled",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "session_messaging.headless_accept",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "session_messaging.name",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "session_messaging.policy",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "skills.lockfile",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "subagents.max_parallel_subagents",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "subagents.max_subagents",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "subagents.model_role",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "subagents.sandbox_mode",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "tool_budgets.db_query",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "tool_budgets.default",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "tool_budgets.read_file",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "tool_budgets.read_file_range",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "tool_budgets.run_python",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "tool_budgets.run_shell",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "tool_budgets.search_codebase",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "tool_budgets.web_fetch",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "ui.show_memory_writes",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "ui.show_tool_calls",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "ui.stream_output",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "ui.theme",
+        "type": "str",
+        "status": "stable"
+      }
+    ],
+    "user_keys": [
+      {
+        "path": "memory.auto_write",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "memory.encrypt",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "memory.max_nodes",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "memory.write_every_n_turns",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "permissions.allowed_shell_patterns",
+        "type": "list",
+        "status": "stable"
+      },
+      {
+        "path": "permissions.auto_commit_memory",
+        "type": "bool",
+        "status": "stable"
+      },
+      {
+        "path": "permissions.mode",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "preferences.default_model",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "preferences.default_provider",
+        "type": "str",
+        "status": "stable"
+      },
+      {
+        "path": "preferences.memory_budget_tokens",
+        "type": "int",
+        "status": "stable"
+      },
+      {
+        "path": "preferences.theme",
+        "type": "str",
+        "status": "stable"
+      }
+    ],
+    "unknown_keys": "preserved"
+  },
+  "machine": {
+    "desktop_cli": {
+      "version": "1",
+      "status": "stable",
+      "transport": "json/jsonl"
+    },
+    "task": {
+      "version": "magent.task.v2",
+      "status": "stable"
+    },
+    "task_event": {
+      "version": "magent.task-event.v1",
+      "status": "stable"
+    },
+    "plugin_manifest": {
+      "version": "1",
+      "status": "stable"
+    },
+    "plugin_registry": {
+      "version": "magent.plugin-registry.v1",
+      "status": "beta"
+    },
+    "provider_support": {
+      "version": "magent.provider-support.v1",
+      "status": "stable"
+    },
+    "ecosystem_readiness": {
+      "version": "mag.ecosystem-readiness.v1",
+      "status": "beta"
+    },
+    "config_schema": {
+      "version": "1",
+      "status": "stable"
+    },
+    "memory_batch": {
+      "version": "1",
+      "status": "stable",
+      "requires": "maggraph>=0.4.1"
+    },
+    "memory_recall": {
+      "version": "2",
+      "status": "stable",
+      "requires": "maggraph>=0.4.1"
+    },
+    "persistent_state": {
+      "version": "1",
+      "status": "stable"
+    },
+    "supply_chain": {
+      "version": "magent.supply-chain.v1",
+      "status": "stable"
+    },
+    "agentic_graph": {
+      "version": "1.0",
+      "status": "draft-standard",
+      "conformance_level": 3,
+      "transport": "json/jsonl"
+    },
+    "mcp": {
+      "status": "dual-era-core",
+      "legacy_through": "2025-11-25",
+      "modern": "2026-07-28",
+      "experimental": [
+        "tasks",
+        "remote-skills",
+        "apps-rendering"
+      ]
+    }
+  },
+  "support": {
+    "python": [
+      "3.11",
+      "3.12",
+      "3.13",
+      "3.14"
+    ],
+    "deprecation_notice_minor_releases": 1,
+    "breaking_changes_before_1_0": "frozen after 0.90; security exceptions only"
+  },
+  "rules": {
+    "unknown_fields": "consumers must ignore unknown additive fields",
+    "deprecation": "one prior minor release for stable removals",
+    "downgrade": "newer persistent schemas are refused",
+    "beta": "may change before 1.0 with migration notes",
+    "experimental": "opt-in and outside the support promise"
+  }
+}

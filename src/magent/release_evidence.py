@@ -10,12 +10,14 @@ from pathlib import Path
 from typing import Any
 
 from magent import __version__
+from magent.contract_inventory import contract_inventory
 from magent.docs import documentation_drift_report
+from magent.migrations import migration_assurance_report
 from magent.provider_catalog import provider_support_report
 from magent.security_assurance import security_assurance_report
 from magent.workbench_store import now_iso
 
-SCHEMA = "magent.release-evidence.v1"
+SCHEMA = "magent.release-evidence.v2"
 
 
 def build_release_evidence(
@@ -24,6 +26,7 @@ def build_release_evidence(
     eval_report: str | Path | None = None,
     memory_report: str | Path | None = None,
     performance_report: str | Path | None = None,
+    supply_chain_report: str | Path | None = None,
     coverage_percent: float | None = None,
     coverage_required: float = 70.0,
     tests: str = "",
@@ -37,12 +40,15 @@ def build_release_evidence(
     eval_evidence = _eval_evidence(eval_report, eval_data) if eval_report and eval_data else None
     memory_data = _read_json(memory_report) if memory_report else None
     performance_data = _read_json(performance_report) if performance_report else None
+    supply_chain_data = _read_json(supply_chain_report) if supply_chain_report else None
     artifact_data = [_artifact(project, item) for item in artifacts or []]
     git = _git_evidence(project)
     checks = {
         "docs": documentation_drift_report(project),
         "providers": provider_support_report(),
         "security": security_assurance_report(),
+        "contracts": contract_inventory(),
+        "migrations": migration_assurance_report(),
         "evals": {
             "ok": bool(eval_data and eval_data.get("ok")),
             "status": "recorded" if eval_data else "missing",
@@ -50,6 +56,7 @@ def build_release_evidence(
         },
         "memory": _report_check(memory_report, memory_data),
         "performance": _report_check(performance_report, performance_data),
+        "supply_chain": _report_check(supply_chain_report, supply_chain_data),
         "tests": {"ok": bool(tests), "status": tests or "missing"},
         "coverage": {
             "ok": coverage_percent is not None and coverage_percent >= coverage_required,

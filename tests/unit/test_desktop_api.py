@@ -169,4 +169,6 @@ def test_platform_contracts_publish_stable_task_and_plugin_versions() -> None:
     assert result["contracts"]["plugin_manifest"]["version"] == "1"
     assert result["contracts"]["ecosystem_readiness"]["version"] == "mag.ecosystem-readiness.v1"
     assert result["contracts"]["memory_recall"]["version"] == "2"
+    assert result["contracts"]["persistent_state"] == {"version": "1", "status": "stable"}
+    assert result["contracts"]["desktop_cli"]["status"] == "stable"
     assert "remote-skills" in result["contracts"]["mcp"]["experimental"]

@@ -34,6 +34,14 @@ jobs:
       - name: Install package
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,full]"
 
+      - name: Install release-candidate audit tooling
+        if: matrix.python-version == '3.12'
+        run: python -m pip install pip-audit
+
+      - name: Dependency vulnerability audit
+        if: matrix.python-version == '3.12'
+        run: python -m pip_audit . --format json --output dependency-audit.json
+
       - name: Lint
         run: python -m ruff check src tests
 
@@ -86,6 +94,12 @@ jobs:
         if: matrix.python-version == '3.12'
         run: magent system security-report --output security-assurance.json
 
+      - name: Contract and migration assurance
+        if: matrix.python-version == '3.12'
+        run: |
+          magent system compatibility > contract-inventory.json
+          magent system migrate --root /tmp/magent-ci-state --apply > migration-acceptance.json
+
       - name: Memory quality and performance gates
         if: matrix.python-version == '3.12'
         run: |
@@ -118,6 +132,23 @@ jobs:
       - name: Build package
         if: matrix.python-version == '3.12'
         run: python -m build
+
+      - name: Supply-chain evidence
+        if: matrix.python-version == '3.12'
+        run: |
+          magent release supply-chain --project . --artifact dist/mag_agent-*.whl --artifact dist/mag_agent-*.tar.gz --audit-report dependency-audit.json --out-dir supply-chain
+
+      - name: Upload release-candidate evidence
+        if: always() && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-candidate-evidence-${{ matrix.python-version }}
+          path: |
+            dependency-audit.json
+            contract-inventory.json
+            migration-acceptance.json
+            supply-chain/
+          if-no-files-found: error
 
       - name: Core wheel smoke test
         if: matrix.python-version == '3.12'

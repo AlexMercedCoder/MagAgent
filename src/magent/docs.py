@@ -113,6 +113,8 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
         "threat-model",
         "known-limitations",
         "release-policy",
+        "compatibility",
+        "supply-chain",
     }
     missing_topics = sorted(required - slugs)
     docs_text = "\n".join(read_topic(topic.slug) for topic in topics)
@@ -161,9 +163,13 @@ def documentation_drift_report(root: str | Path = ".") -> dict[str, Any]:
     task_version = contracts["contracts"]["task"]["version"]
     event_version = contracts["contracts"]["task_event"]["version"]
     memory_requirement = contracts["contracts"]["memory_batch"]["requires"]
+    state_version = contracts["contracts"]["persistent_state"]["version"]
+    supply_version = contracts["contracts"]["supply_chain"]["version"]
     add("task-contract", task_version in support_text, task_version)
     add("event-contract", event_version in support_text, event_version)
     add("memory-contract", memory_requirement in support_text, memory_requirement)
+    add("state-contract", f"magent.state.v{state_version}" in support_text, state_version)
+    add("supply-chain-contract", supply_version in support_text, supply_version)
     for runtime in contracts["support"]["python"]:
         add(f"python-{runtime}", runtime in support_text, f"Python {runtime}")
 

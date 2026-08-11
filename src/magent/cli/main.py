@@ -211,6 +211,42 @@ def system_contracts_cmd() -> None:
     console.print_json(data=platform_contracts())
 
 
+@system_app.command("compatibility")
+def system_compatibility_cmd() -> None:
+    """Inventory the proposed 1.0 stable, beta, and experimental surfaces."""
+    from magent.contract_inventory import contract_inventory
+
+    console.print_json(data=contract_inventory(_known_command_names()))
+
+
+@system_app.command("migrate")
+def system_migrate_cmd(
+    root: str = typer.Option(str(CONFIG_DIR), "--root"),
+    apply: bool = typer.Option(False, "--apply", help="Apply after creating a private backup."),
+    backup_dir: str = typer.Option("", "--backup-dir"),
+) -> None:
+    """Preview or apply backup-first persistent-state migrations."""
+    from magent.migrations import migrate_state
+
+    result = migrate_state(root, apply=apply, backup_dir=backup_dir or None)
+    console.print_json(data=result)
+    if not result.get("ok"):
+        raise typer.Exit(1)
+
+
+@system_app.command("rollback")
+def system_rollback_cmd(
+    backup: str = typer.Argument(...),
+    root: str = typer.Option(str(CONFIG_DIR), "--root"),
+    apply: bool = typer.Option(False, "--apply", help="Restore the inspected backup."),
+) -> None:
+    """Preview or restore a migration backup with path-containment checks."""
+    from magent.migrations import rollback_state
+
+    result = rollback_state(root, backup, apply=apply)
+    console.print_json(data=result)
+
+
 @system_app.command("security-report")
 def system_security_report_cmd(
     output: str | None = typer.Option(None, "--output", "-o", help="Write the JSON report."),
@@ -934,7 +970,9 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
             if action == "show":
                 item = runtime.get(task_id)
             elif action in {"resume", "retry", "cancel"}:
-                item = getattr(runtime, action)(task_id, reason=f"{action.title()} from interactive session")
+                item = getattr(runtime, action)(
+                    task_id, reason=f"{action.title()} from interactive session"
+                )
             else:
                 console.print("[yellow]Action must be show, resume, retry, or cancel.[/yellow]")
                 return True
@@ -1016,7 +1054,12 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 str(item.get("id") or ""),
                 str(item.get("reason") or item.get("reasons") or "graph match"),
                 ", ".join(str(link) for link in item.get("backlinks", [])) or "none",
-                str(item.get("source") or item.get("path") or metadata.get("source") or "local graph"),
+                str(
+                    item.get("source")
+                    or item.get("path")
+                    or metadata.get("source")
+                    or "local graph"
+                ),
             )
         console.print(table if results else "[dim]No memory matched that query.[/dim]")
         return True
@@ -2369,6 +2412,7 @@ def release_evidence_cmd(
     eval_report: str = typer.Option("", "--eval-report"),
     memory_report: str = typer.Option("", "--memory-report"),
     performance_report: str = typer.Option("", "--performance-report"),
+    supply_chain_report: str = typer.Option("", "--supply-chain-report"),
     coverage: float | None = typer.Option(None, "--coverage", min=0, max=100),
     coverage_required: float = typer.Option(70, "--coverage-required", min=0, max=100),
     tests: str = typer.Option(
@@ -2387,6 +2431,7 @@ def release_evidence_cmd(
         eval_report=eval_report or None,
         memory_report=memory_report or None,
         performance_report=performance_report or None,
+        supply_chain_report=supply_chain_report or None,
         coverage_percent=coverage,
         coverage_required=coverage_required,
         tests=tests,
@@ -2398,6 +2443,25 @@ def release_evidence_cmd(
         report["report_path"] = write_release_evidence(report, out)
     console.print_json(data=report)
     raise typer.Exit(0 if report["ok"] else 1)
+
+
+@release_app.command("supply-chain")
+def release_supply_chain_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    artifact: Annotated[list[str] | None, typer.Option("--artifact")] = None,
+    audit_report: str = typer.Option("", "--audit-report"),
+    out_dir: str = typer.Option("dist/release-evidence", "--out-dir"),
+) -> None:
+    """Generate CycloneDX SBOM, provenance, hashes, and scan evidence."""
+    from magent.supply_chain import build_supply_chain_evidence, write_supply_chain_bundle
+
+    report = build_supply_chain_evidence(
+        project, artifacts=artifact, audit_report=audit_report or None
+    )
+    report["files"] = write_supply_chain_bundle(report, out_dir)
+    console.print_json(data=report)
+    if not report["ok"]:
+        raise typer.Exit(1)
 
 
 @context_app.command("map")

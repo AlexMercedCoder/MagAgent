@@ -3,7 +3,7 @@
 > Canonical roadmap for all remaining MagAgent work through `1.0.0`.
 >
 > Last reviewed: 2026-08-11
-> Current release: `0.80.0`
+> Current release: `0.90.0`
 
 ## Product Promise
 
@@ -190,6 +190,12 @@ evidence is recorded in the 0.80 release record and generated reports.
 ## 0.90.0: Contract Freeze and Release Candidate
 
 **Outcome:** the product shape stops moving and the complete support promise is rehearsed.
+
+**Status:** release candidate implemented with a versioned contract inventory, backup-first
+state migration and rollback, unsafe-downgrade refusal, dependency and secret audits,
+CycloneDX SBOMs, SHA-256 manifests, in-toto provenance, and CI acceptance evidence. The
+multi-week soak, 80% overall branch coverage target, full live-provider corpus, and
+maintainer-backed signing remain 1.0 qualification gates rather than implied successes.
 
 ### Stable Contract Candidate
 

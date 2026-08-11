@@ -29,13 +29,10 @@ database connections are closed after every test, while production processes reg
 the same cleanup for shutdown. Semantic-memory SQLite operations use short-lived,
 transactional connections that always release their file handles.
 
-The 0.80.0 baseline is 785 passing tests with 67% branch-aware coverage. The configured
-floor is ratcheted from 64% to 67% for this release. The earlier roadmap's 72% overall target
-remains unmet and visible; the release does not disguise that gap by changing the historical
-target.
-Current high-risk module evidence includes provider requests at 92%, persistence at 88%,
-network policy at 87%, permissions at 84%, and gateway routing and artifact execution at 76%.
-The next coverage work should close those focused gaps before broad CLI line coverage.
+The 0.90.0 baseline is 801 passing tests with 68.16% branch-aware coverage. The configured
+floor is 68%; it is a regression ratchet, not the 1.0 target. The roadmap keeps 80% as the
+release-candidate target and 90% for core modules. Coverage work should close that focused
+gap before 1.0 rather than broadening the product surface.
 
 High-confidence coverage focuses on:
 

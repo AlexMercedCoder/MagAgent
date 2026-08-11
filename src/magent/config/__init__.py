@@ -509,6 +509,13 @@ class Config:
 # ─────────────────────────────────────────────
 
 
+def _ensure_state_compatibility() -> None:
+    """Refuse state created by a newer, incompatible runtime."""
+    from magent.state_schema import assert_supported_state
+
+    assert_supported_state(CONFIG_DIR)
+
+
 def _deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge override into base."""
     result = base.copy()
@@ -521,6 +528,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 def load_global_config() -> dict[str, Any]:
+    _ensure_state_compatibility()
     if not GLOBAL_CONFIG.exists():
         cfg = DEFAULT_GLOBAL_CONFIG.copy()
     else:
@@ -534,7 +542,11 @@ def load_global_config() -> dict[str, Any]:
         if plugin_servers:
             cfg.setdefault("mcp", {}).setdefault("servers", {})
             for server_name, server_cfg in plugin_servers.items():
-                target = server_name if server_name not in cfg["mcp"]["servers"] else f"plugin__{server_name}"
+                target = (
+                    server_name
+                    if server_name not in cfg["mcp"]["servers"]
+                    else f"plugin__{server_name}"
+                )
                 cfg["mcp"]["servers"][target] = server_cfg
     except Exception:
         pass
@@ -542,6 +554,7 @@ def load_global_config() -> dict[str, Any]:
 
 
 def load_user_profile(username: str) -> dict[str, Any]:
+    _ensure_state_compatibility()
     profile_path = USERS_DIR / username / "profile.toml"
     if not profile_path.exists():
         return DEFAULT_USER_PROFILE.copy()
@@ -617,12 +630,14 @@ def delete_user(username: str) -> None:
 
 
 def save_global_config(cfg: dict[str, Any]) -> None:
+    _ensure_state_compatibility()
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     with GLOBAL_CONFIG.open("wb") as f:
         tomli_w.dump(cfg, f)
 
 
 def save_user_profile(username: str, profile: dict[str, Any]) -> None:
+    _ensure_state_compatibility()
     profile_path = USERS_DIR / username / "profile.toml"
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     with profile_path.open("wb") as f:

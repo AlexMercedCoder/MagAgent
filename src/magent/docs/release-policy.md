@@ -17,9 +17,15 @@ documentation drift checks, and packaged-wheel smoke tests before publishing.
 
 ## Evidence
 
-`magent release evidence` creates `magent.release-evidence.v1` JSON. It records the source
+`magent release evidence` creates `magent.release-evidence.v2` JSON. It records the source
 commit, runtime, docs and provider contract checks, eval report, test and coverage summaries,
-CI URL, artifact hashes, and severity-prefixed exceptions. `critical:` and `high:` exceptions
+CI URL, artifact hashes, contract and migration assurance, supply-chain evidence, and
+severity-prefixed exceptions. `critical:` and `high:` exceptions
 block the evidence gate; recorded `medium:` and `low:` exceptions remain visible without
 overriding a passing enforced gate. Missing evidence is reported as missing;
 the command never infers that an external check passed.
+
+`magent release supply-chain` consumes a JSON `pip-audit` report plus built artifacts. It
+emits a CycloneDX 1.6 SBOM, SHA-256 manifest, sanitized tracked-file secret scan, and
+in-toto/SLSA-shaped provenance. These files do not claim cryptographic signing; signing
+requires maintainer-controlled credentials and remains separately visible.

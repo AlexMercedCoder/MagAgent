@@ -131,14 +131,24 @@ def system_info() -> dict[str, Any]:
             "spec_version": "1.0",
             "conformance_level": 3,
             "supported_features": [
-                "validation", "planning", "task", "decision", "gate", "loop", "map",
-                "subgraph", "criteria", "retries", "budgets", "parallelism",
-                "run-records", "resume", "generation",
+                "validation",
+                "planning",
+                "task",
+                "decision",
+                "gate",
+                "loop",
+                "map",
+                "subgraph",
+                "criteria",
+                "retries",
+                "budgets",
+                "parallelism",
+                "run-records",
+                "resume",
+                "generation",
             ],
             "tier_to_model_role": dict(TIER_TO_MODEL_ROLE),
-            "logical_tool_mapping": {
-                name: list(tools) for name, tools in TOOL_NAME_MAP.items()
-            },
+            "logical_tool_mapping": {name: list(tools) for name, tools in TOOL_NAME_MAP.items()},
         },
         "python": sys.version.split()[0],
         "platform": {
@@ -165,17 +175,20 @@ def platform_contracts() -> dict[str, Any]:
         "ok": True,
         "schema": "magent.platform-contracts.v1",
         "magent_version": __version__,
+        "release_candidate": "1.0",
         "contracts": {
-            "desktop_cli": {"version": "1", "status": "beta", "transport": "json/jsonl"},
+            "desktop_cli": {"version": "1", "status": "stable", "transport": "json/jsonl"},
             "task": {"version": TASK_SCHEMA_VERSION, "status": "stable"},
             "task_event": {"version": EVENT_SCHEMA_VERSION, "status": "stable"},
             "plugin_manifest": {"version": "1", "status": "stable"},
             "plugin_registry": {"version": "magent.plugin-registry.v1", "status": "beta"},
-            "provider_support": {"version": "magent.provider-support.v1", "status": "beta"},
+            "provider_support": {"version": "magent.provider-support.v1", "status": "stable"},
             "ecosystem_readiness": {"version": "mag.ecosystem-readiness.v1", "status": "beta"},
-            "config_schema": {"version": "1", "status": "beta"},
-            "memory_batch": {"version": "1", "status": "beta", "requires": "maggraph>=0.4.1"},
-            "memory_recall": {"version": "2", "status": "beta", "requires": "maggraph>=0.4.1"},
+            "config_schema": {"version": "1", "status": "stable"},
+            "memory_batch": {"version": "1", "status": "stable", "requires": "maggraph>=0.4.1"},
+            "memory_recall": {"version": "2", "status": "stable", "requires": "maggraph>=0.4.1"},
+            "persistent_state": {"version": "1", "status": "stable"},
+            "supply_chain": {"version": "magent.supply-chain.v1", "status": "stable"},
             "agentic_graph": {
                 "version": "1.0",
                 "status": "draft-standard",
@@ -192,7 +205,7 @@ def platform_contracts() -> dict[str, Any]:
         "support": {
             "python": ["3.11", "3.12", "3.13", "3.14"],
             "deprecation_notice_minor_releases": 1,
-            "breaking_changes_before_1_0": "minor-version only with migration notes",
+            "breaking_changes_before_1_0": "frozen after 0.90; security exceptions only",
         },
     }
 
@@ -266,8 +279,12 @@ def config_get(username: str | None = None, *, include_raw: bool = False) -> dic
     }
     if include_raw:
         result["raw"] = {
-            "global": redact_config_text(GLOBAL_CONFIG.read_text(encoding="utf-8")) if GLOBAL_CONFIG.exists() else "",
-            "user": redact_config_text((USERS_DIR / username / "profile.toml").read_text(encoding="utf-8"))
+            "global": redact_config_text(GLOBAL_CONFIG.read_text(encoding="utf-8"))
+            if GLOBAL_CONFIG.exists()
+            else "",
+            "user": redact_config_text(
+                (USERS_DIR / username / "profile.toml").read_text(encoding="utf-8")
+            )
             if (USERS_DIR / username / "profile.toml").exists()
             else "",
         }
@@ -333,7 +350,11 @@ def memory_graph(username: str, *, query: str = "", limit: int = 100) -> dict[st
     """Return a compact graph view suitable for desktop browsing."""
     mgr = MemoryManager(user_memory_dir(username), username=username)
     stats = mgr.stats()
-    nodes = mgr.search(query or "*", max_results=limit, mode="keyword") if query else mgr.export_json()[:limit]
+    nodes = (
+        mgr.search(query or "*", max_results=limit, mode="keyword")
+        if query
+        else mgr.export_json()[:limit]
+    )
     return {
         "ok": True,
         "user": username,
@@ -443,7 +464,9 @@ def sqlite_table_schema(username: str, table: str, db_name: str = "default") -> 
     return db_schema(username, table, db_name)
 
 
-def sqlite_query(username: str, sql: str, db_name: str = "default", params: list[Any] | None = None) -> dict[str, Any]:
+def sqlite_query(
+    username: str, sql: str, db_name: str = "default", params: list[Any] | None = None
+) -> dict[str, Any]:
     return db_query(username, sql, params=params, db_name=db_name)
 
 
@@ -512,7 +535,9 @@ def execution_tasks(
     }
 
 
-def execution_task(username: str, task_id: str, *, after: int = 0, limit: int = 500) -> dict[str, Any]:
+def execution_task(
+    username: str, task_id: str, *, after: int = 0, limit: int = 500
+) -> dict[str, Any]:
     """Return one task and its ordered event stream."""
     runtime = TaskRuntime(USERS_DIR / username / "workbench")
     task = runtime.get(task_id)
@@ -521,7 +546,9 @@ def execution_task(username: str, task_id: str, *, after: int = 0, limit: int = 
     return {"ok": True, "task": task, "events": runtime.events(task_id, after=after, limit=limit)}
 
 
-def execution_task_action(username: str, task_id: str, action: str, *, reason: str = "") -> dict[str, Any]:
+def execution_task_action(
+    username: str, task_id: str, action: str, *, reason: str = ""
+) -> dict[str, Any]:
     """Pause, resume, cancel, or retry a durable execution task."""
     runtime = TaskRuntime(USERS_DIR / username / "workbench")
     if action not in {"pause", "resume", "cancel", "retry"}:

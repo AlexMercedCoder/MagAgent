@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "schema": "magent.migration-assurance.v1",
+  "state_schema": 1,
+  "checks": {
+    "legacy-upgrade": true,
+    "rollback": true,
+    "downgrade-refusal": true
+  }
+}

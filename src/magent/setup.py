@@ -113,6 +113,11 @@ def run_setup() -> None:
 
     cfg.setdefault("providers", {})[provider_id] = provider_entry
     save_global_config(cfg)
+    from magent.migrations import migrate_state
+
+    migration = migrate_state(CONFIG_DIR, apply=True)
+    if not migration.get("ok"):
+        raise RuntimeError(str(migration.get("error", "Could not migrate MagAgent state")))
     _tighten_config_permissions()
     console.print("[dim]✓ Config saved[/dim]")
 
@@ -175,7 +180,9 @@ def _get_api_key(provider_id: str) -> tuple[str | None, str | None]:
         if key.strip():
             console.print("[dim]✓ API key saved locally; config display commands redact it.[/dim]")
             return None, key.strip()
-        console.print("[yellow]No key entered; falling back to environment variable setup.[/yellow]")
+        console.print(
+            "[yellow]No key entered; falling back to environment variable setup.[/yellow]"
+        )
     if choice == "2":
         env_name = Prompt.ask("Environment variable name", default=default_env)
         console.print(f"[dim]Set it with: export {env_name}=your-key-here[/dim]")

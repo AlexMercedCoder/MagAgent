@@ -33,6 +33,8 @@ magent docs doctor
 - [Agentic Graphs](../src/magent/docs/agentic-graphs.md)
 - [Security And Hardening](../src/magent/docs/hardening.md)
 - [Threat Model](../src/magent/docs/threat-model.md)
+- [Compatibility And State Migration](../src/magent/docs/compatibility.md)
+- [Release Supply Chain](../src/magent/docs/supply-chain.md)
 - [MagAgent 0.34.0 Release Record](RELEASE_0.34.0.md)
 - [MagAgent 0.35.0 Release Record](RELEASE_0.35.0.md)
 - [MagAgent 0.35.1 Release Record](RELEASE_0.35.1.md)
@@ -40,6 +42,7 @@ magent docs doctor
 - [MagAgent 0.60.0 Release Record](RELEASE_0.60.0.md)
 - [MagAgent 0.70.0 Release Record](RELEASE_0.70.0.md)
 - [MagAgent 0.80.0 Release Record](RELEASE_0.80.0.md)
+- [MagAgent 0.90.0 Release Record](RELEASE_0.90.0.md)
 
 Common setup tasks now have CLI-first flows:
 
