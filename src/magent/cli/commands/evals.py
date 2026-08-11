@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -33,16 +35,46 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
         compare: str = typer.Option(
             "", "--compare", help="Compare against the last recorded run at this version."
         ),
+        provider: str = typer.Option("", "--provider", help="Provider for real-agent suites."),
+        model: str = typer.Option("", "--model", help="Model for real-agent suites."),
+        timeout: int = typer.Option(180, "--timeout", min=1, help="Per-task timeout in seconds."),
+        report_out: str = typer.Option("", "--report-out", help="Write the report as JSON."),
+        keep_workspaces: bool = typer.Option(False, "--keep-workspaces"),
     ) -> None:
-        """Run a local eval suite's verification commands."""
+        """Run a verification suite or isolated real-agent task suite."""
         from magent.evals import compare_eval_runs, run_eval_suite
 
-        report = run_eval_suite(project, suite, store=store())
+        suite_path = Path(suite)
+        if not suite_path.is_absolute():
+            suite_path = Path(project).resolve() / suite_path
+        raw = json.loads(suite_path.read_text(encoding="utf-8"))
+        is_agent_suite = raw.get("schema") == "magent.agent-eval.v1"
+        if is_agent_suite:
+            from magent.agent_evals import run_agent_eval_suite, write_agent_eval_report
+
+            report = run_agent_eval_suite(
+                project,
+                suite_path,
+                store=store(),
+                provider_id=provider,
+                model=model,
+                timeout_seconds=timeout,
+                keep_workspaces=keep_workspaces,
+            )
+            if report_out:
+                report["report_path"] = write_agent_eval_report(report, report_out)
+        else:
+            report = run_eval_suite(project, suite_path, store=store())
         if not compare:
             console.print_json(data=report)
             raise typer.Exit(0 if report.get("ok") else 1)
 
-        comparison = compare_eval_runs(store(), report["suite"], compare)
+        comparison = compare_eval_runs(
+            store(),
+            report["suite"],
+            compare,
+            collection="agent_eval_runs" if is_agent_suite else "eval_runs",
+        )
         console.print_json(data={"run": report, "comparison": comparison})
         # A regression against the baseline fails the command even if the run
         # itself passed more tasks than it failed.

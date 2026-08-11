@@ -1,9 +1,12 @@
 # Mag Ecosystem Roadmap
 
+For the release-by-release MagAgent stabilization sequence, see
+[`ROADMAP_TO_1.0.md`](ROADMAP_TO_1.0.md).
+
 > Canonical direction for MagAgent, MagGraph, and Mag Command Center.
 >
 > Last audited: 2026-08-10
-> Current releases: MagAgent 0.35.1, MagGraph 0.4.1, Mag Command Center 0.3.0
+> Current releases: MagAgent 0.50.0, MagGraph 0.4.1, Mag Command Center 0.3.0
 
 ## Purpose
 
@@ -48,16 +51,16 @@ The product thesis for the next several releases is:
 
 ### Risks and gaps
 
-- **Reliability is not yet measured end to end.** MagAgent has a local eval scaffold,
-  but there is no maintained corpus of representative coding, research, document,
-  memory, permission, and provider tasks with version-over-version scores.
+- **Reliability now has reproducible end-to-end baselines.** MagAgent 0.50.0 adds an
+  isolated AgentSession harness, a 32-task offline corpus, a low-cost live provider suite,
+  independent validators, version-over-version reports, and CI evidence artifacts.
 - **MagAgent still has concentrated modules.** `cli/main.py` is about 4,190 lines,
   `agent.py` about 1,770, and `workbench.py` about 1,910. These files still increase
   regression risk and slow focused testing. `tools/executor.py` is now a roughly
   450-line lifecycle and dispatch facade backed by focused capability modules.
 - **The MagAgent coverage gate should keep ratcheting upward.** The checkout-isolation
   guard, fatal resource warnings, and connection cleanup are now in place, and the
-  suite reaches 65.91% branch coverage against the 64% floor. High-blast-radius agent, gateway,
+  suite reaches about 65% branch coverage against the 64% floor. High-blast-radius agent, gateway,
   sandbox, and UI paths remain the next coverage targets.
 - **Command Center test depth is low.** Ten utility/integration tests do not exercise
   its chat lifecycle, cancellation, project/session switching, setup flows, memory

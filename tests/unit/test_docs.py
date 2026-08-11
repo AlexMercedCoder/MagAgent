@@ -8,6 +8,7 @@ from magent.cli import main as cli_main
 from magent.docs import (
     docs_doctor,
     docs_root,
+    documentation_drift_report,
     list_topics,
     read_topic,
     render_command_reference,
@@ -105,3 +106,22 @@ def test_render_config_reference_uses_defaults_and_catalog():
     assert "`defaults.provider`" in text
     assert "`balanced`" in text
     assert "`opencode-go`" in text
+
+
+def test_documentation_drift_matches_source_contracts():
+    report = documentation_drift_report()
+
+    assert report["ok"] is True
+    assert all(item["ok"] for item in report["checks"])
+
+
+def test_documentation_drift_reports_version_mismatch(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nversion = "9.9.9"\nrequires-python = ">=3.11"\ndependencies = ["maggraph>=0.4.1"]\n',
+        encoding="utf-8",
+    )
+
+    report = documentation_drift_report(tmp_path)
+
+    assert report["ok"] is False
+    assert next(item for item in report["checks"] if item["name"] == "package-version")["ok"] is False

@@ -55,12 +55,16 @@ def list_eval_suites(root: str | Path = ".") -> list[dict[str, Any]]:
 
 
 def run_eval_suite(root: str | Path, suite_path: str | Path, store: Any | None = None) -> dict[str, Any]:
-    """Run a JSON eval suite's verification commands."""
+    """Run a legacy verification suite or a real-agent eval suite."""
     root_path = Path(root).resolve()
     path = Path(suite_path)
     if not path.is_absolute():
         path = root_path / path
     suite = _load_suite(path)
+    if suite.get("schema") == "magent.agent-eval.v1":
+        from magent.agent_evals import run_agent_eval_suite
+
+        return run_agent_eval_suite(root_path, path, store=store)
     results = []
     for task in suite.get("tasks", []):
         command_results = [_run_command(root_path, command) for command in task.get("commands", [])]
@@ -98,13 +102,19 @@ def _current_version() -> str:
         return ""
 
 
-def compare_eval_runs(store: Any, suite: str, baseline: str) -> dict[str, Any]:
+def compare_eval_runs(
+    store: Any,
+    suite: str,
+    baseline: str,
+    *,
+    collection: str = "eval_runs",
+) -> dict[str, Any]:
     """Compare the latest run of `suite` against the last run at `baseline`.
 
     Lets a release claim measured capability instead of asserting it: the
     roadmap's `magent eval run --compare v0.34.0`.
     """
-    runs = [item for item in store.read("eval_runs", []) if item.get("suite") == suite]
+    runs = [item for item in store.read(collection, []) if item.get("suite") == suite]
     if not runs:
         return {"ok": False, "error": f"No recorded runs for suite {suite!r}"}
 

@@ -23,7 +23,7 @@ jobs:
           cache: pip
 
       - name: Install package
-        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,mcp]"
 
       - name: Lint
         run: python -m ruff check src tests
@@ -38,6 +38,30 @@ jobs:
         # -n auto: the suite is subprocess-heavy and parallelises well.
         run: python -m pytest tests/unit -q -n auto
 
+      - name: MCP integration tests
+        if: matrix.python-version == '3.12'
+        run: python -m pytest tests/integration -q
+
+      - name: Offline real-agent reliability evals
+        if: matrix.python-version == '3.12'
+        run: |
+          python - <<'PY'
+          from magent.agent_evals import run_agent_eval_suite, write_agent_eval_report
+
+          report = run_agent_eval_suite(".", "evals/reliability-offline.json")
+          write_agent_eval_report(report, "agent-eval-report.json")
+          print(f"passed={report['passed']}/{report['total']} artifacts={report['artifact_passed']}/{report['artifact_total']}")
+          raise SystemExit(0 if report["ok"] else 1)
+          PY
+
+      - name: Upload reliability evidence
+        if: always() && matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v6
+        with:
+          name: agent-eval-report-${{ matrix.python-version }}
+          path: agent-eval-report.json
+          if-no-files-found: error
+
       - name: Documentation drift check
         run: |
           python - <<'PY'
@@ -51,7 +75,7 @@ jobs:
 
       - name: Coverage
         if: matrix.python-version == '3.12'
-        run: python -m pytest tests/unit --cov=magent --cov-report=term-missing:skip-covered
+        run: python -m pytest tests/unit tests/integration --cov=magent --cov-report=term-missing:skip-covered
 
       - name: Build package
         if: matrix.python-version == '3.12'

@@ -1,0 +1,52 @@
+name: Provider Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Nous Portal model
+        required: false
+        default: deepseek/deepseek-v4-flash
+  schedule:
+    - cron: "17 9 * * 1"
+
+jobs:
+  nous-live-evals:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      NOUS_API_KEY: ${{ secrets.NOUS_API_KEY }}
+      EVAL_MODEL: ${{ inputs.model || 'deepseek/deepseek-v4-flash' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Check qualification credential
+        id: credential
+        shell: bash
+        run: |
+          if [ -n "$NOUS_API_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "NOUS_API_KEY is not configured; live qualification skipped."
+          fi
+      - name: Run live AgentSession evals
+        if: steps.credential.outputs.available == 'true'
+        run: |
+          magent eval run evals/reliability-live.json \
+            --provider nous-portal \
+            --model "$EVAL_MODEL" \
+            --report-out provider-eval-report.json
+      - name: Upload qualification report
+        if: always() && steps.credential.outputs.available == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: provider-eval-report
+          path: provider-eval-report.json
+          if-no-files-found: error

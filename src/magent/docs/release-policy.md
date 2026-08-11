@@ -1,0 +1,23 @@
+# Release Policy
+
+MagAgent releases are qualified by evidence, not version numbers alone. Run
+`magent release check`, the full automated test suite, the real-agent eval suite,
+documentation drift checks, and packaged-wheel smoke tests before publishing.
+
+## Severity
+
+- **Critical:** data loss, secret exposure, sandbox escape, arbitrary approval bypass, or a
+  primary execution path that cannot complete. Blocks every release.
+- **High:** repeatable failure in installation, provider setup, file editing, cancellation,
+  memory integrity, or stable machine contracts. Blocks a milestone release.
+- **Medium:** degraded but recoverable behavior with a documented workaround. May ship only
+  when recorded in release evidence and known limitations.
+- **Low:** cosmetic or narrow inconvenience that does not threaten correctness. Track it and
+  avoid obscuring it with a misleading success claim.
+
+## Evidence
+
+`magent release evidence` creates `magent.release-evidence.v1` JSON. It records the source
+commit, runtime, docs and provider contract checks, eval report, test and coverage summaries,
+CI URL, artifact hashes, and explicit exceptions. Missing evidence is reported as missing;
+the command never infers that an external check passed.

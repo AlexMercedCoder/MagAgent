@@ -1,0 +1,396 @@
+{
+  "schema": "magent.agent-eval.v1",
+  "name": "reliability-offline",
+  "description": "Thirty deterministic AgentSession tasks covering core tools, artifacts, recovery, permissions, and multi-step work.",
+  "targets": {
+    "success_rate": 1.0,
+    "artifact_success_rate": 1.0
+  },
+  "tasks": [
+    {
+      "id": "code-create-python",
+      "category": "coding",
+      "prompt": "Create calculator.py with an add function.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "calculator.py", "content": "def add(a, b):\n    return a + b\n"}},
+        {"content": "Created calculator.py."}
+      ],
+      "validators": [
+        {"type": "file_contains", "path": "calculator.py", "text": "return a + b"},
+        {"type": "audit_ok"}
+      ]
+    },
+    {
+      "id": "code-repair-python",
+      "category": "coding",
+      "prompt": "Fix calculator.py so subtract returns a - b.",
+      "files": {"calculator.py": "def subtract(a, b):\n    return a + b\n"},
+      "script": [
+        {"tool": "edit_file", "arguments": {"path": "calculator.py", "old_str": "return a + b", "new_str": "return a - b"}},
+        {"content": "Fixed the subtraction implementation."}
+      ],
+      "validators": [{"type": "file_contains", "path": "calculator.py", "text": "return a - b"}]
+    },
+    {
+      "id": "test-create",
+      "category": "test-repair",
+      "prompt": "Create test_calculator.py with a focused add test.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "test_calculator.py", "content": "from calculator import add\n\ndef test_add():\n    assert add(2, 3) == 5\n"}},
+        {"content": "Added the focused test."}
+      ],
+      "validators": [{"type": "file_contains", "path": "test_calculator.py", "text": "assert add(2, 3) == 5"}]
+    },
+    {
+      "id": "multi-file-static-app",
+      "category": "multi-file",
+      "prompt": "Create index.html, styles.css, and app.js for a tiny app.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "index.html", "content": "<!doctype html><html><head><link rel=\"stylesheet\" href=\"styles.css\"></head><body><main id=\"app\">Ready</main><script src=\"app.js\"></script></body></html>"}},
+        {"tool": "write_file", "arguments": {"path": "styles.css", "content": "body { font-family: sans-serif; }\n"}},
+        {"tool": "write_file", "arguments": {"path": "app.js", "content": "document.querySelector('#app').textContent = 'Working';\n"}},
+        {"content": "Created the three-file app."}
+      ],
+      "validators": [
+        {"type": "file_contains", "path": "index.html", "text": "styles.css"},
+        {"type": "file_exists", "path": "styles.css"},
+        {"type": "file_contains", "path": "app.js", "text": "querySelector"},
+        {"type": "audit_ok"}
+      ]
+    },
+    {
+      "id": "multi-file-python-package",
+      "category": "multi-file",
+      "prompt": "Create package.py and README.md for a greeting package.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "package.py", "content": "def greet(name):\n    return f'Hello, {name}!'\n"}},
+        {"tool": "write_file", "arguments": {"path": "README.md", "content": "# Greeting Package\n\nUse `greet(name)` to make a greeting.\n"}},
+        {"content": "Created package.py and README.md."}
+      ],
+      "validators": [
+        {"type": "file_contains", "path": "package.py", "text": "def greet"},
+        {"type": "file_contains", "path": "README.md", "text": "Greeting Package"}
+      ]
+    },
+    {
+      "id": "research-markdown",
+      "category": "research",
+      "prompt": "Write research.md with a sourced summary of local-first agents.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "research.md", "content": "# Local-First Agents\n\nLocal-first agents keep project data and execution state on the user's machine.\n\n## Sources\n\n- [Local-first software](https://www.inkandswitch.com/local-first/)\n"}},
+        {"content": "Wrote a source-backed report."}
+      ],
+      "validators": [
+        {"type": "file_contains", "path": "research.md", "text": "## Sources"},
+        {"type": "file_contains", "path": "research.md", "text": "https://"}
+      ]
+    },
+    {
+      "id": "artifact-html",
+      "category": "artifact",
+      "prompt": "Create landing.html as a complete accessible page.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "landing.html", "content": "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Reliable Local Work</title></head><body><main><h1>Reliable Local Work</h1><p>Inspect every action.</p></main></body></html>"}},
+        {"content": "Created the accessible landing page."}
+      ],
+      "validators": [
+        {"type": "file_min_bytes", "path": "landing.html", "min_bytes": 150},
+        {"type": "file_contains", "path": "landing.html", "text": "<main>"}
+      ]
+    },
+    {
+      "id": "artifact-docx",
+      "category": "artifact",
+      "prompt": "Create report.docx with a reliability summary.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "create_docx", "arguments": {"path": "report.docx", "title": "Reliability Report", "sections": [{"title": "Summary", "content": "The system completed its validation checks."}]}},
+        {"content": "Created report.docx."}
+      ],
+      "validators": [{"type": "file_min_bytes", "path": "report.docx", "min_bytes": 1000}]
+    },
+    {
+      "id": "artifact-pptx",
+      "category": "artifact",
+      "prompt": "Create briefing.pptx with a title and summary slide.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "create_pptx", "arguments": {"path": "briefing.pptx", "title": "Reliability Briefing", "slides": [{"title": "Summary", "bullets": ["Measured tasks", "Independent validation"]}]}},
+        {"content": "Created briefing.pptx."}
+      ],
+      "validators": [{"type": "file_min_bytes", "path": "briefing.pptx", "min_bytes": 1000}]
+    },
+    {
+      "id": "artifact-svg",
+      "category": "artifact",
+      "prompt": "Create status.svg with an accessible title.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "create_svg", "arguments": {"path": "status.svg", "title": "Healthy status", "width": 320, "height": 180, "elements": [{"type": "rect", "x": 20, "y": 20, "width": 280, "height": 140, "fill": "#2f855a"}, {"type": "text", "x": 100, "y": 95, "text": "Healthy", "fill": "#ffffff"}]}},
+        {"content": "Created status.svg."}
+      ],
+      "validators": [
+        {"type": "file_contains", "path": "status.svg", "text": "<title>Healthy status</title>"},
+        {"type": "file_min_bytes", "path": "status.svg", "min_bytes": 150}
+      ]
+    },
+    {
+      "id": "artifact-diagram",
+      "category": "artifact",
+      "prompt": "Create flow.mmd showing plan to execute to validate.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "create_diagram", "arguments": {"path": "flow.mmd", "title": "Reliable flow", "nodes": [{"id": "plan", "label": "Plan"}, {"id": "execute", "label": "Execute"}, {"id": "validate", "label": "Validate"}], "edges": [{"from": "plan", "to": "execute"}, {"from": "execute", "to": "validate"}], "direction": "LR"}},
+        {"content": "Created flow.mmd."}
+      ],
+      "validators": [
+        {"type": "file_contains", "path": "flow.mmd", "text": "flowchart LR"},
+        {"type": "file_contains", "path": "flow.mmd", "text": "plan --> execute"}
+      ]
+    },
+    {
+      "id": "artifact-image",
+      "category": "artifact",
+      "prompt": "Create badge.png as a local status badge.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "create_image", "arguments": {"path": "badge.png", "title": "Ready", "width": 320, "height": 180, "background": "#f7fafc", "elements": [{"type": "rectangle", "x": 30, "y": 40, "width": 260, "height": 100, "fill": "#2563eb"}, {"type": "text", "x": 120, "y": 95, "text": "READY", "fill": "#ffffff"}]}},
+        {"content": "Created badge.png."}
+      ],
+      "validators": [{"type": "file_min_bytes", "path": "badge.png", "min_bytes": 200}]
+    },
+    {
+      "id": "artifact-csv",
+      "category": "artifact",
+      "prompt": "Create metrics.csv with name and value columns.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "metrics.csv", "content": "name,value\npassed,30\nfailed,0\n"}},
+        {"content": "Created metrics.csv."}
+      ],
+      "validators": [
+        {"type": "file_contains", "path": "metrics.csv", "text": "name,value"},
+        {"type": "file_contains", "path": "metrics.csv", "text": "passed,30"}
+      ]
+    },
+    {
+      "id": "artifact-xlsx",
+      "category": "artifact",
+      "prompt": "Create metrics.xlsx with name and value columns and a passed row.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "run_shell", "arguments": {"command": "python -c \"from openpyxl import Workbook; book=Workbook(); sheet=book.active; sheet.append(['name','value']); sheet.append(['passed',31]); book.save('metrics.xlsx')\""}},
+        {"content": "Created metrics.xlsx."}
+      ],
+      "validators": [
+        {"type": "file_min_bytes", "path": "metrics.xlsx", "min_bytes": 1000},
+        {"type": "zip_contains", "path": "metrics.xlsx", "member": "xl/workbook.xml"}
+      ]
+    },
+    {
+      "id": "artifact-json",
+      "category": "artifact",
+      "prompt": "Create result.json with an ok status.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "result.json", "content": "{\"ok\": true, \"checks\": 30}\n"}},
+        {"content": "Created result.json."}
+      ],
+      "validators": [{"type": "json_valid", "path": "result.json"}, {"type": "audit_ok"}]
+    },
+    {
+      "id": "artifact-yaml",
+      "category": "artifact",
+      "prompt": "Create pipeline.yaml with test and build steps.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "pipeline.yaml", "content": "steps:\n  - test\n  - build\n"}},
+        {"content": "Created pipeline.yaml."}
+      ],
+      "validators": [{"type": "file_contains", "path": "pipeline.yaml", "text": "- test"}]
+    },
+    {
+      "id": "artifact-toml",
+      "category": "artifact",
+      "prompt": "Create settings.toml with safe mode enabled.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "settings.toml", "content": "[agent]\nsafe_mode = true\n"}},
+        {"content": "Created settings.toml."}
+      ],
+      "validators": [{"type": "file_contains", "path": "settings.toml", "text": "safe_mode = true"}]
+    },
+    {
+      "id": "artifact-sql",
+      "category": "artifact",
+      "prompt": "Create schema.sql with a tasks table.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "schema.sql", "content": "CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT NOT NULL);\n"}},
+        {"content": "Created schema.sql."}
+      ],
+      "validators": [{"type": "file_contains", "path": "schema.sql", "text": "CREATE TABLE tasks"}]
+    },
+    {
+      "id": "edit-html",
+      "category": "coding",
+      "prompt": "Update page.html so the heading says Ready.",
+      "files": {"page.html": "<h1>Draft</h1>\n"},
+      "script": [
+        {"tool": "edit_file", "arguments": {"path": "page.html", "old_str": "Draft", "new_str": "Ready"}},
+        {"content": "Updated the heading."}
+      ],
+      "validators": [{"type": "file_contains", "path": "page.html", "text": "<h1>Ready</h1>"}]
+    },
+    {
+      "id": "edit-css",
+      "category": "coding",
+      "prompt": "Update theme.css to use black text.",
+      "files": {"theme.css": "body { color: gray; }\n"},
+      "script": [
+        {"tool": "edit_file", "arguments": {"path": "theme.css", "old_str": "gray", "new_str": "black"}},
+        {"content": "Updated the text color."}
+      ],
+      "validators": [{"type": "file_contains", "path": "theme.css", "text": "color: black"}]
+    },
+    {
+      "id": "edit-javascript",
+      "category": "coding",
+      "prompt": "Fix app.js so enabled is true.",
+      "files": {"app.js": "const enabled = false;\n"},
+      "script": [
+        {"tool": "edit_file", "arguments": {"path": "app.js", "old_str": "false", "new_str": "true"}},
+        {"content": "Enabled the application."}
+      ],
+      "validators": [{"type": "file_contains", "path": "app.js", "text": "enabled = true"}]
+    },
+    {
+      "id": "read-then-edit",
+      "category": "coding",
+      "prompt": "Inspect notes.txt and replace pending with complete.",
+      "files": {"notes.txt": "status: pending\n"},
+      "script": [
+        {"tool": "read_file", "arguments": {"path": "notes.txt"}},
+        {"tool": "edit_file", "arguments": {"path": "notes.txt", "old_str": "pending", "new_str": "complete"}},
+        {"content": "Inspected and updated the status."}
+      ],
+      "validators": [{"type": "file_contains", "path": "notes.txt", "text": "status: complete"}]
+    },
+    {
+      "id": "list-then-create",
+      "category": "coding",
+      "prompt": "Inspect this directory and create summary.txt.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "list_dir", "arguments": {"path": "."}},
+        {"tool": "write_file", "arguments": {"path": "summary.txt", "content": "Workspace inspected.\n"}},
+        {"content": "Inspected the workspace and created the summary."}
+      ],
+      "validators": [{"type": "file_contains", "path": "summary.txt", "text": "Workspace inspected"}]
+    },
+    {
+      "id": "malformed-write-recovery",
+      "category": "recovery",
+      "prompt": "Create recovered.html with a complete page.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "recovered.html"}},
+        {"tool": "write_file", "arguments": {"path": "recovered.html", "content": "<!doctype html><html><body><h1>Recovered</h1><p>The complete artifact was recovered after a malformed tool call.</p></body></html>"}},
+        {"content": "Recovered the malformed write and completed the artifact."}
+      ],
+      "validators": [
+        {"type": "file_min_bytes", "path": "recovered.html", "min_bytes": 100},
+        {"type": "file_contains", "path": "recovered.html", "text": "Recovered"}
+      ]
+    },
+    {
+      "id": "placeholder-rejected",
+      "category": "recovery",
+      "prompt": "Create useful.html containing a complete useful page.",
+      "artifact_task": true,
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "useful.html", "content": "useful.html"}},
+        {"tool": "write_file", "arguments": {"path": "useful.html", "content": "<!doctype html><html><body><h1>Useful</h1><p>This is complete content.</p></body></html>"}},
+        {"content": "Created a complete page after rejecting the placeholder."}
+      ],
+      "validators": [{"type": "file_min_bytes", "path": "useful.html", "min_bytes": 70}]
+    },
+    {
+      "id": "permission-denial",
+      "category": "permissions",
+      "prompt": "Attempt the requested destructive command and report if permission is required.",
+      "permission_mode": "balanced",
+      "script": [
+        {"tool": "run_shell", "arguments": {"command": "rm -rf protected"}}
+      ],
+      "validators": [{"type": "permission_failure"}]
+    },
+    {
+      "id": "path-containment",
+      "category": "permissions",
+      "prompt": "Try to create ../escape.txt and report the safety error.",
+      "script": [
+        {"tool": "write_file", "arguments": {"path": "../escape.txt", "content": "escape"}},
+        {"content": "The unsafe path was rejected."}
+      ],
+      "validators": [{"type": "response_contains", "text": "rejected"}]
+    },
+    {
+      "id": "read-only-inspection",
+      "category": "permissions",
+      "prompt": "Read config.txt and summarize its mode.",
+      "files": {"config.txt": "mode=balanced\n"},
+      "script": [
+        {"tool": "read_file", "arguments": {"path": "config.txt"}},
+        {"content": "The configured mode is balanced."}
+      ],
+      "validators": [{"type": "response_contains", "text": "balanced"}]
+    },
+    {
+      "id": "delete-file",
+      "category": "tools",
+      "prompt": "Delete obsolete.txt.",
+      "files": {"obsolete.txt": "old\n"},
+      "script": [
+        {"tool": "delete_file", "arguments": {"path": "obsolete.txt"}},
+        {"content": "Deleted obsolete.txt."}
+      ],
+      "validators": [{"type": "response_contains", "text": "Deleted"}]
+    },
+    {
+      "id": "directory-outline",
+      "category": "code-intelligence",
+      "prompt": "Outline module.py and summarize its symbol.",
+      "files": {"module.py": "class Service:\n    def run(self):\n        return True\n"},
+      "script": [
+        {"tool": "outline_file", "arguments": {"path": "module.py"}},
+        {"content": "The module defines the Service class and its run method."}
+      ],
+      "validators": [{"type": "response_contains", "text": "Service"}]
+    },
+    {
+      "id": "json-query",
+      "category": "data",
+      "prompt": "Inspect data.json and report the project name.",
+      "files": {"data.json": "{\"project\": {\"name\": \"MagAgent\"}}\n"},
+      "script": [
+        {"tool": "json_query", "arguments": {"path": "data.json", "expression": "project.name"}},
+        {"content": "The project name is MagAgent."}
+      ],
+      "validators": [{"type": "response_contains", "text": "MagAgent"}]
+    },
+    {
+      "id": "final-response-only",
+      "category": "conversation",
+      "prompt": "Answer with the exact marker EVAL_OK.",
+      "script": [{"content": "EVAL_OK"}],
+      "validators": [{"type": "response_contains", "text": "EVAL_OK"}]
+    }
+  ]
+}

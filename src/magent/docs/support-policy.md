@@ -5,8 +5,8 @@ command is the source of truth for Command Center and third-party clients.
 
 ## Supported runtime
 
-- Python 3.11 through 3.14 are tested release targets.
-- MagGraph 0.3.x is the current memory API family.
+- Python 3.11, 3.12, 3.13, and 3.14 are tested release targets.
+- MagGraph 0.4.x is the current memory API family; MagAgent requires `maggraph>=0.4.1`.
 - Task snapshots use `magent.task.v2`; task events use `magent.task-event.v1`. Desktop clients may continue reading v1 snapshots during the additive-state migration.
 - Plugin manifests use SDK API version `1`.
 - Provider compatibility reports use `magent.provider-support.v1`.

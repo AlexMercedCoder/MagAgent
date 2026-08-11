@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.50.0
+
+- Added `magent.agent-eval.v1`, an isolated real-AgentSession evaluation harness with
+  independent validators, task-level crash containment, lifecycle evidence, usage metrics,
+  artifact verification, atomic reports, and baseline comparison support.
+- Added a 32-task deterministic reliability corpus spanning coding, test repair, multi-file
+  work, research, document, spreadsheet, and visual artifacts, malformed tool calls,
+  permissions, path containment, and data tools; the release baseline passes 32/32 and 20/20
+  artifact tasks.
+- Added a low-cost live provider suite and scheduled/manual qualification workflow. Nous Portal
+  with DeepSeek V4 Flash passes the release baseline at 5/5 tasks and 4/4 artifacts.
+- Added `magent release evidence` for source revision, docs/provider contracts, evals, tests,
+  coverage, CI links, artifact hashes, and explicit release exceptions.
+- Expanded documentation drift detection to package and MagGraph versions, Python support,
+  machine contracts, provider defaults, and generated references.
+- Added public release severity and known-limitations policies, MCP integration tests and the
+  MCP extra to CI, deterministic agent evals on pull requests, and uploaded eval evidence.
+- Added focused harness, validator, drift, evidence, and fault-containment tests while retaining
+  the existing branch-coverage floor. Raising overall branch coverage from the measured 64.9%
+  to the roadmap's 72% target remains follow-up work centered on the legacy CLI entrypoint.
+
 ## 0.35.1
 
 - Rebuilt shell classification around a structural parser so substitutions, redirects,

@@ -1,0 +1,1767 @@
+{
+  "schema": "magent.agent-eval-report.v1",
+  "ok": true,
+  "suite": "reliability-offline",
+  "suite_schema": "magent.agent-eval.v1",
+  "suite_path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/evals/reliability-offline.json",
+  "version": "0.50.0",
+  "ran_at": "2026-08-11T01:55:44.240859+00:00",
+  "elapsed_ms": 3985.16,
+  "passed": 32,
+  "total": 32,
+  "success_rate": 1.0,
+  "artifact_passed": 20,
+  "artifact_total": 20,
+  "artifact_success_rate": 1.0,
+  "targets": {
+    "success_rate": 1.0,
+    "artifact_success_rate": 1.0
+  },
+  "metrics": {
+    "elapsed_ms": 3838.26,
+    "tool_calls": 38,
+    "retries": 0,
+    "time_to_first_activity_ms": 87.45,
+    "prompt_tokens": 0.0,
+    "completion_tokens": 0.0,
+    "total_tokens": 0.0,
+    "cached_tokens": 0.0,
+    "cost_usd": 0.0
+  },
+  "tasks": [
+    {
+      "id": "code-create-python",
+      "category": "coding",
+      "prompt": "Create calculator.py with an add function.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 2852.89,
+      "execution": {
+        "ok": true,
+        "response": "Created calculator.py.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 2740.65,
+        "time_to_first_activity_ms": 2679.01,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./calculator.py"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "calculator.py"
+          ],
+          "files_touched": [
+            "./calculator.py"
+          ],
+          "existing_requested_files": [
+            "calculator.py"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "calculator.py",
+          "contains": "return a + b"
+        },
+        {
+          "type": "audit_ok",
+          "ok": true,
+          "audit": {
+            "ok": true,
+            "requested_files": [
+              "calculator.py"
+            ],
+            "files_touched": [
+              "./calculator.py"
+            ],
+            "existing_requested_files": [
+              "calculator.py"
+            ],
+            "missing_requested_files": [],
+            "permission_failures": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "code-repair-python",
+      "category": "coding",
+      "prompt": "Fix calculator.py so subtract returns a - b.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 12.64,
+      "execution": {
+        "ok": true,
+        "response": "Fixed the subtraction implementation.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 11.84,
+        "time_to_first_activity_ms": 4.0,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./calculator.py"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "calculator.py"
+          ],
+          "files_touched": [
+            "./calculator.py"
+          ],
+          "existing_requested_files": [
+            "calculator.py"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "calculator.py",
+          "contains": "return a - b"
+        }
+      ]
+    },
+    {
+      "id": "test-create",
+      "category": "test-repair",
+      "prompt": "Create test_calculator.py with a focused add test.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 12.8,
+      "execution": {
+        "ok": true,
+        "response": "Added the focused test.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 12.09,
+        "time_to_first_activity_ms": 4.16,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./test_calculator.py"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "test_calculator.py"
+          ],
+          "files_touched": [
+            "./test_calculator.py"
+          ],
+          "existing_requested_files": [
+            "test_calculator.py"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "test_calculator.py",
+          "contains": "assert add(2, 3) == 5"
+        }
+      ]
+    },
+    {
+      "id": "multi-file-static-app",
+      "category": "multi-file",
+      "prompt": "Create index.html, styles.css, and app.js for a tiny app.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 27.81,
+      "execution": {
+        "ok": true,
+        "response": "Created the three-file app.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 26.76,
+        "time_to_first_activity_ms": 3.31,
+        "tool_calls": 3,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./app.js",
+          "./index.html",
+          "./styles.css"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "index.html",
+            "styles.css",
+            "app.js"
+          ],
+          "files_touched": [
+            "./index.html",
+            "./styles.css",
+            "./app.js"
+          ],
+          "existing_requested_files": [
+            "index.html",
+            "styles.css",
+            "app.js"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "index.html",
+          "contains": "styles.css"
+        },
+        {
+          "type": "file_exists",
+          "ok": true,
+          "path": "styles.css",
+          "exists": true
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "app.js",
+          "contains": "querySelector"
+        },
+        {
+          "type": "audit_ok",
+          "ok": true,
+          "audit": {
+            "ok": true,
+            "requested_files": [
+              "index.html",
+              "styles.css",
+              "app.js"
+            ],
+            "files_touched": [
+              "./index.html",
+              "./styles.css",
+              "./app.js"
+            ],
+            "existing_requested_files": [
+              "index.html",
+              "styles.css",
+              "app.js"
+            ],
+            "missing_requested_files": [],
+            "permission_failures": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "multi-file-python-package",
+      "category": "multi-file",
+      "prompt": "Create package.py and README.md for a greeting package.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 20.5,
+      "execution": {
+        "ok": true,
+        "response": "Created package.py and README.md.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 19.66,
+        "time_to_first_activity_ms": 3.3,
+        "tool_calls": 2,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./README.md",
+          "./package.py"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "package.py",
+            "README.md"
+          ],
+          "files_touched": [
+            "./package.py",
+            "./README.md"
+          ],
+          "existing_requested_files": [
+            "package.py",
+            "README.md"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "package.py",
+          "contains": "def greet"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "README.md",
+          "contains": "Greeting Package"
+        }
+      ]
+    },
+    {
+      "id": "research-markdown",
+      "category": "research",
+      "prompt": "Write research.md with a sourced summary of local-first agents.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 11.98,
+      "execution": {
+        "ok": true,
+        "response": "Wrote a source-backed report.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 11.22,
+        "time_to_first_activity_ms": 3.28,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./research.md"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "research.md"
+          ],
+          "files_touched": [
+            "./research.md"
+          ],
+          "existing_requested_files": [
+            "research.md"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "research.md",
+          "contains": "## Sources"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "research.md",
+          "contains": "https://"
+        }
+      ]
+    },
+    {
+      "id": "artifact-html",
+      "category": "artifact",
+      "prompt": "Create landing.html as a complete accessible page.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 11.65,
+      "execution": {
+        "ok": true,
+        "response": "Created the accessible landing page.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 10.89,
+        "time_to_first_activity_ms": 3.28,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./landing.html"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "landing.html"
+          ],
+          "files_touched": [
+            "./landing.html"
+          ],
+          "existing_requested_files": [
+            "landing.html"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_min_bytes",
+          "ok": true,
+          "path": "landing.html",
+          "bytes": 189,
+          "minimum": 150
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "landing.html",
+          "contains": "<main>"
+        }
+      ]
+    },
+    {
+      "id": "artifact-docx",
+      "category": "artifact",
+      "prompt": "Create report.docx with a reliability summary.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 74.43,
+      "execution": {
+        "ok": true,
+        "response": "Created report.docx.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 73.8,
+        "time_to_first_activity_ms": 4.11,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./report.docx"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [],
+          "files_touched": [
+            "./report.docx"
+          ],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_min_bytes",
+          "ok": true,
+          "path": "report.docx",
+          "bytes": 36483,
+          "minimum": 1000
+        }
+      ]
+    },
+    {
+      "id": "artifact-pptx",
+      "category": "artifact",
+      "prompt": "Create briefing.pptx with a title and summary slide.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 101.77,
+      "execution": {
+        "ok": true,
+        "response": "Created briefing.pptx.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 101.08,
+        "time_to_first_activity_ms": 3.37,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./briefing.pptx"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [],
+          "files_touched": [
+            "./briefing.pptx"
+          ],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_min_bytes",
+          "ok": true,
+          "path": "briefing.pptx",
+          "bytes": 29549,
+          "minimum": 1000
+        }
+      ]
+    },
+    {
+      "id": "artifact-svg",
+      "category": "artifact",
+      "prompt": "Create status.svg with an accessible title.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 14.25,
+      "execution": {
+        "ok": true,
+        "response": "Created status.svg.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 13.38,
+        "time_to_first_activity_ms": 3.77,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./status.svg"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [],
+          "files_touched": [
+            "./status.svg"
+          ],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "status.svg",
+          "contains": "<title>Healthy status</title>"
+        },
+        {
+          "type": "file_min_bytes",
+          "ok": true,
+          "path": "status.svg",
+          "bytes": 342,
+          "minimum": 150
+        }
+      ]
+    },
+    {
+      "id": "artifact-diagram",
+      "category": "artifact",
+      "prompt": "Create flow.mmd showing plan to execute to validate.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 13.48,
+      "execution": {
+        "ok": true,
+        "response": "Created flow.mmd.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 12.66,
+        "time_to_first_activity_ms": 3.87,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./flow.mmd"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [],
+          "files_touched": [
+            "./flow.mmd"
+          ],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "flow.mmd",
+          "contains": "flowchart LR"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "flow.mmd",
+          "contains": "plan --> execute"
+        }
+      ]
+    },
+    {
+      "id": "artifact-image",
+      "category": "artifact",
+      "prompt": "Create badge.png as a local status badge.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 21.85,
+      "execution": {
+        "ok": true,
+        "response": "Created badge.png.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 21.09,
+        "time_to_first_activity_ms": 3.86,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./badge.png"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [],
+          "files_touched": [
+            "./badge.png"
+          ],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_min_bytes",
+          "ok": true,
+          "path": "badge.png",
+          "bytes": 1970,
+          "minimum": 200
+        }
+      ]
+    },
+    {
+      "id": "artifact-csv",
+      "category": "artifact",
+      "prompt": "Create metrics.csv with name and value columns.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 13.77,
+      "execution": {
+        "ok": true,
+        "response": "Created metrics.csv.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 12.9,
+        "time_to_first_activity_ms": 3.81,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./metrics.csv"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [],
+          "files_touched": [
+            "./metrics.csv"
+          ],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "metrics.csv",
+          "contains": "name,value"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "metrics.csv",
+          "contains": "passed,30"
+        }
+      ]
+    },
+    {
+      "id": "artifact-xlsx",
+      "category": "artifact",
+      "prompt": "Create metrics.xlsx with name and value columns and a passed row.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 389.51,
+      "execution": {
+        "ok": true,
+        "response": "Created metrics.xlsx.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 388.59,
+        "time_to_first_activity_ms": 3.76,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [],
+        "audit": {
+          "ok": true,
+          "requested_files": [],
+          "files_touched": [],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_min_bytes",
+          "ok": true,
+          "path": "metrics.xlsx",
+          "bytes": 4859,
+          "minimum": 1000
+        },
+        {
+          "type": "zip_contains",
+          "ok": true,
+          "path": "metrics.xlsx",
+          "member": "xl/workbook.xml"
+        }
+      ]
+    },
+    {
+      "id": "artifact-json",
+      "category": "artifact",
+      "prompt": "Create result.json with an ok status.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 14.06,
+      "execution": {
+        "ok": true,
+        "response": "Created result.json.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 13.27,
+        "time_to_first_activity_ms": 3.89,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./result.json"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "result.json"
+          ],
+          "files_touched": [
+            "./result.json"
+          ],
+          "existing_requested_files": [
+            "result.json"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "json_valid",
+          "ok": true,
+          "path": "result.json"
+        },
+        {
+          "type": "audit_ok",
+          "ok": true,
+          "audit": {
+            "ok": true,
+            "requested_files": [
+              "result.json"
+            ],
+            "files_touched": [
+              "./result.json"
+            ],
+            "existing_requested_files": [
+              "result.json"
+            ],
+            "missing_requested_files": [],
+            "permission_failures": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "artifact-yaml",
+      "category": "artifact",
+      "prompt": "Create pipeline.yaml with test and build steps.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 13.84,
+      "execution": {
+        "ok": true,
+        "response": "Created pipeline.yaml.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 13.05,
+        "time_to_first_activity_ms": 3.87,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./pipeline.yaml"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "pipeline.yaml"
+          ],
+          "files_touched": [
+            "./pipeline.yaml"
+          ],
+          "existing_requested_files": [
+            "pipeline.yaml"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "pipeline.yaml",
+          "contains": "- test"
+        }
+      ]
+    },
+    {
+      "id": "artifact-toml",
+      "category": "artifact",
+      "prompt": "Create settings.toml with safe mode enabled.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 12.9,
+      "execution": {
+        "ok": true,
+        "response": "Created settings.toml.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 12.16,
+        "time_to_first_activity_ms": 3.68,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./settings.toml"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "settings.toml"
+          ],
+          "files_touched": [
+            "./settings.toml"
+          ],
+          "existing_requested_files": [
+            "settings.toml"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "settings.toml",
+          "contains": "safe_mode = true"
+        }
+      ]
+    },
+    {
+      "id": "artifact-sql",
+      "category": "artifact",
+      "prompt": "Create schema.sql with a tasks table.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 15.77,
+      "execution": {
+        "ok": true,
+        "response": "Created schema.sql.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 15.01,
+        "time_to_first_activity_ms": 3.68,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./schema.sql"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "schema.sql"
+          ],
+          "files_touched": [
+            "./schema.sql"
+          ],
+          "existing_requested_files": [
+            "schema.sql"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "schema.sql",
+          "contains": "CREATE TABLE tasks"
+        }
+      ]
+    },
+    {
+      "id": "edit-html",
+      "category": "coding",
+      "prompt": "Update page.html so the heading says Ready.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 13.21,
+      "execution": {
+        "ok": true,
+        "response": "Updated the heading.\nArtifact verification:\nSome requested artifacts are unresolved:\n- `./page.html`: too small (15 bytes)",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 12.45,
+        "time_to_first_activity_ms": 3.83,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./page.html"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "page.html"
+          ],
+          "files_touched": [
+            "./page.html"
+          ],
+          "existing_requested_files": [
+            "page.html"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "page.html",
+          "contains": "<h1>Ready</h1>"
+        }
+      ]
+    },
+    {
+      "id": "edit-css",
+      "category": "coding",
+      "prompt": "Update theme.css to use black text.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 14.05,
+      "execution": {
+        "ok": true,
+        "response": "Updated the text color.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 13.35,
+        "time_to_first_activity_ms": 4.66,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./theme.css"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "theme.css"
+          ],
+          "files_touched": [
+            "./theme.css"
+          ],
+          "existing_requested_files": [
+            "theme.css"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "theme.css",
+          "contains": "color: black"
+        }
+      ]
+    },
+    {
+      "id": "edit-javascript",
+      "category": "coding",
+      "prompt": "Fix app.js so enabled is true.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 15.69,
+      "execution": {
+        "ok": true,
+        "response": "Enabled the application.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 14.9,
+        "time_to_first_activity_ms": 4.71,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./app.js"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "app.js"
+          ],
+          "files_touched": [
+            "./app.js"
+          ],
+          "existing_requested_files": [
+            "app.js"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "app.js",
+          "contains": "enabled = true"
+        }
+      ]
+    },
+    {
+      "id": "read-then-edit",
+      "category": "coding",
+      "prompt": "Inspect notes.txt and replace pending with complete.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 16.12,
+      "execution": {
+        "ok": true,
+        "response": "Inspected and updated the status.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 15.31,
+        "time_to_first_activity_ms": 3.71,
+        "tool_calls": 2,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./notes.txt"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "notes.txt"
+          ],
+          "files_touched": [
+            "./notes.txt"
+          ],
+          "existing_requested_files": [
+            "notes.txt"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "notes.txt",
+          "contains": "status: complete"
+        }
+      ]
+    },
+    {
+      "id": "list-then-create",
+      "category": "coding",
+      "prompt": "Inspect this directory and create summary.txt.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 15.64,
+      "execution": {
+        "ok": true,
+        "response": "Inspected the workspace and created the summary.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 14.78,
+        "time_to_first_activity_ms": 3.64,
+        "tool_calls": 2,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./summary.txt"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "summary.txt"
+          ],
+          "files_touched": [
+            "./summary.txt"
+          ],
+          "existing_requested_files": [
+            "summary.txt"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "summary.txt",
+          "contains": "Workspace inspected"
+        }
+      ]
+    },
+    {
+      "id": "malformed-write-recovery",
+      "category": "recovery",
+      "prompt": "Create recovered.html with a complete page.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 183.52,
+      "execution": {
+        "ok": true,
+        "response": "Recovered the malformed write and completed the artifact.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 182.56,
+        "time_to_first_activity_ms": 3.75,
+        "tool_calls": 2,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./recovered.html"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "recovered.html"
+          ],
+          "files_touched": [
+            "./recovered.html"
+          ],
+          "existing_requested_files": [
+            "recovered.html"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_min_bytes",
+          "ok": true,
+          "path": "recovered.html",
+          "bytes": 130,
+          "minimum": 100
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "recovered.html",
+          "contains": "Recovered"
+        }
+      ]
+    },
+    {
+      "id": "placeholder-rejected",
+      "category": "recovery",
+      "prompt": "Create useful.html containing a complete useful page.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 16.23,
+      "execution": {
+        "ok": true,
+        "response": "Created a complete page after rejecting the placeholder.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 15.38,
+        "time_to_first_activity_ms": 3.88,
+        "tool_calls": 2,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./useful.html"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "useful.html"
+          ],
+          "files_touched": [
+            "./useful.html"
+          ],
+          "existing_requested_files": [
+            "useful.html"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_min_bytes",
+          "ok": true,
+          "path": "useful.html",
+          "bytes": 88,
+          "minimum": 70
+        }
+      ]
+    },
+    {
+      "id": "permission-denial",
+      "category": "permissions",
+      "prompt": "Attempt the requested destructive command and report if permission is required.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 7.07,
+      "execution": {
+        "ok": true,
+        "response": "Evaluation script completed.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 6.45,
+        "time_to_first_activity_ms": 3.72,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [],
+        "audit": {
+          "ok": false,
+          "requested_files": [],
+          "files_touched": [],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": [
+            "run_shell: Permission required"
+          ]
+        }
+      },
+      "validations": [
+        {
+          "type": "permission_failure",
+          "ok": true,
+          "permission_failures": [
+            "run_shell: Permission required"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "path-containment",
+      "category": "permissions",
+      "prompt": "Try to create ../escape.txt and report the safety error.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 12.93,
+      "execution": {
+        "ok": true,
+        "response": "The unsafe path was rejected.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 12.33,
+        "time_to_first_activity_ms": 3.82,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./escape.txt"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [],
+          "files_touched": [
+            "./escape.txt"
+          ],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "response_contains",
+          "ok": true,
+          "contains": "rejected"
+        }
+      ]
+    },
+    {
+      "id": "read-only-inspection",
+      "category": "permissions",
+      "prompt": "Read config.txt and summarize its mode.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 7.22,
+      "execution": {
+        "ok": true,
+        "response": "The configured mode is balanced.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 6.55,
+        "time_to_first_activity_ms": 4.08,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "config.txt"
+          ],
+          "files_touched": [],
+          "existing_requested_files": [
+            "config.txt"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "response_contains",
+          "ok": true,
+          "contains": "balanced"
+        }
+      ]
+    },
+    {
+      "id": "delete-file",
+      "category": "tools",
+      "prompt": "Delete obsolete.txt.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 13.58,
+      "execution": {
+        "ok": true,
+        "response": "Deleted obsolete.txt.\nArtifact verification:\nSome requested artifacts are unresolved:\n- `./obsolete.txt`: missing",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 12.87,
+        "time_to_first_activity_ms": 3.76,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./obsolete.txt"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "obsolete.txt"
+          ],
+          "files_touched": [
+            "./obsolete.txt"
+          ],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "response_contains",
+          "ok": true,
+          "contains": "Deleted"
+        }
+      ]
+    },
+    {
+      "id": "directory-outline",
+      "category": "code-intelligence",
+      "prompt": "Outline module.py and summarize its symbol.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 7.6,
+      "execution": {
+        "ok": true,
+        "response": "The module defines the Service class and its run method.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 7.0,
+        "time_to_first_activity_ms": 4.27,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "module.py"
+          ],
+          "files_touched": [],
+          "existing_requested_files": [
+            "module.py"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "response_contains",
+          "ok": true,
+          "contains": "Service"
+        }
+      ]
+    },
+    {
+      "id": "json-query",
+      "category": "data",
+      "prompt": "Inspect data.json and report the project name.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 10.64,
+      "execution": {
+        "ok": true,
+        "response": "The project name is MagAgent.",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 9.97,
+        "time_to_first_activity_ms": 4.82,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "data.json"
+          ],
+          "files_touched": [],
+          "existing_requested_files": [
+            "data.json"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "response_contains",
+          "ok": true,
+          "contains": "MagAgent"
+        }
+      ]
+    },
+    {
+      "id": "final-response-only",
+      "category": "conversation",
+      "prompt": "Answer with the exact marker EVAL_OK.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 4.76,
+      "execution": {
+        "ok": true,
+        "response": "EVAL_OK",
+        "error": "",
+        "provider": "ollama",
+        "model": "qwen2.5-coder:32b",
+        "elapsed_ms": 4.26,
+        "time_to_first_activity_ms": 3.88,
+        "tool_calls": 0,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "cached_tokens": 0,
+          "cost_usd": 0.0
+        },
+        "changed_files": [],
+        "audit": {
+          "ok": true,
+          "requested_files": [],
+          "files_touched": [],
+          "existing_requested_files": [],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "response_contains",
+          "ok": true,
+          "contains": "EVAL_OK"
+        }
+      ]
+    }
+  ]
+}

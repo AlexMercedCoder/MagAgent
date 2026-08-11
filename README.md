@@ -11,7 +11,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![CI](https://github.com/AlexMercedCoder/MagAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexMercedCoder/MagAgent/actions/workflows/ci.yml)
 
-[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Agentic Graphs](#agentic-graphs) · [Gateway](#remote-gateway) · [Roadmap](ROADMAP.md) · [Docs](docs/)
+[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Agentic Graphs](#agentic-graphs) · [Gateway](#remote-gateway) · [1.0 Roadmap](ROADMAP_TO_1.0.md) · [Ecosystem Roadmap](ROADMAP.md) · [Docs](docs/)
 
 </div>
 
@@ -61,7 +61,8 @@ MagAgent is a **CLI-first AI coding agent** that:
   prompt, and resource catalogs, live invalidation, completion, and consent-gated MRTR
 - Reads project playbooks from `.magent/playbook.toml` for command routines, release checklists, review rules, and context defaults
 - Runs saved plans and recipes in worktree, copied, or Docker-backed sandboxes
-- Provides local eval suite scaffolding for repeatable repo tasks
+- Runs isolated real-agent eval suites with independent validators, timing/token metrics, and
+  reproducible offline and live-provider reports
 - Maintains a **persistent memory graph** per user that grows smarter over time
 - Connects to **20 provider options** (local and cloud) via a single config
 - Has **40 built-in tools** out of the box — no plugins or configuration required

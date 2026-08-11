@@ -1,0 +1,384 @@
+{
+  "schema": "magent.agent-eval-report.v1",
+  "ok": true,
+  "suite": "reliability-live",
+  "suite_schema": "magent.agent-eval.v1",
+  "suite_path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/evals/reliability-live.json",
+  "version": "0.50.0",
+  "ran_at": "2026-08-11T01:55:27.149857+00:00",
+  "elapsed_ms": 47360.18,
+  "passed": 5,
+  "total": 5,
+  "success_rate": 1.0,
+  "artifact_passed": 4,
+  "artifact_total": 4,
+  "artifact_success_rate": 1.0,
+  "targets": {
+    "success_rate": 0.9,
+    "artifact_success_rate": 0.95
+  },
+  "metrics": {
+    "elapsed_ms": 47203.14,
+    "tool_calls": 10,
+    "retries": 0,
+    "time_to_first_activity_ms": 4896.85,
+    "prompt_tokens": 58693.0,
+    "completion_tokens": 1509.0,
+    "total_tokens": 60202.0,
+    "cached_tokens": 49536.0,
+    "cost_usd": 0.0
+  },
+  "tasks": [
+    {
+      "id": "create-python",
+      "category": "coding",
+      "prompt": "Create calculator.py with an add(a, b) function and briefly confirm completion.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 8941.76,
+      "execution": {
+        "ok": true,
+        "response": "Done. Created `calculator.py` with an `add(a, b)` function that returns the sum of `a` and `b`.",
+        "error": "",
+        "provider": "nous-portal",
+        "model": "deepseek/deepseek-v4-flash",
+        "elapsed_ms": 8814.03,
+        "time_to_first_activity_ms": 7119.84,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 7748,
+          "completion_tokens": 242,
+          "total_tokens": 7990,
+          "cached_tokens": 7552,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./calculator.py"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "calculator.py"
+          ],
+          "files_touched": [
+            "./calculator.py"
+          ],
+          "existing_requested_files": [
+            "calculator.py"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_exists",
+          "ok": true,
+          "path": "calculator.py",
+          "exists": true
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "calculator.py",
+          "contains": "def add"
+        },
+        {
+          "type": "audit_ok",
+          "ok": true,
+          "audit": {
+            "ok": true,
+            "requested_files": [
+              "calculator.py"
+            ],
+            "files_touched": [
+              "./calculator.py"
+            ],
+            "existing_requested_files": [
+              "calculator.py"
+            ],
+            "missing_requested_files": [],
+            "permission_failures": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "repair-python",
+      "category": "repair",
+      "prompt": "Fix the bug in total.py so total([2, 3]) returns 5.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 9388.37,
+      "execution": {
+        "ok": true,
+        "response": "Fixed. The bug was an erroneous `+ 1` in the return statement, which made every total off by one. Now `total([2, 3])` correctly returns `5`.",
+        "error": "",
+        "provider": "nous-portal",
+        "model": "deepseek/deepseek-v4-flash",
+        "elapsed_ms": 9383.89,
+        "time_to_first_activity_ms": 1367.16,
+        "tool_calls": 3,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 16056,
+          "completion_tokens": 288,
+          "total_tokens": 16344,
+          "cached_tokens": 11776,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./total.py"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "total.py"
+          ],
+          "files_touched": [
+            "./total.py"
+          ],
+          "existing_requested_files": [
+            "total.py"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "total.py",
+          "contains": "return sum(values)"
+        },
+        {
+          "type": "audit_ok",
+          "ok": true,
+          "audit": {
+            "ok": true,
+            "requested_files": [
+              "total.py"
+            ],
+            "files_touched": [
+              "./total.py"
+            ],
+            "existing_requested_files": [
+              "total.py"
+            ],
+            "missing_requested_files": [],
+            "permission_failures": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "multi-file-feature",
+      "category": "multi-file",
+      "prompt": "Create greeter.py with greet(name) and test_greeter.py with a focused pytest test.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 18398.31,
+      "execution": {
+        "ok": true,
+        "response": "Done! Both files are created and the tests pass (2 passed).\n\n**`greeter.py`**\n- `greet(name: str) -> str` \u2014 returns `f\"Hello, {name}!\"`\n\n**`test_greeter.py`**\n- Two focused pytest tests covering the happy path (`greet(\"World\") == \"Hello, World!\"`) and an edge case (empty string)",
+        "error": "",
+        "provider": "nous-portal",
+        "model": "deepseek/deepseek-v4-flash",
+        "elapsed_ms": 18392.06,
+        "time_to_first_activity_ms": 9412.84,
+        "tool_calls": 4,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 16692,
+          "completion_tokens": 610,
+          "total_tokens": 17302,
+          "cached_tokens": 16128,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./greeter.py",
+          "./test_greeter.py"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "greeter.py",
+            "test_greeter.py"
+          ],
+          "files_touched": [
+            "./greeter.py",
+            "./test_greeter.py"
+          ],
+          "existing_requested_files": [
+            "greeter.py",
+            "test_greeter.py"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "greeter.py",
+          "contains": "def greet"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "test_greeter.py",
+          "contains": "def test_"
+        },
+        {
+          "type": "audit_ok",
+          "ok": true,
+          "audit": {
+            "ok": true,
+            "requested_files": [
+              "greeter.py",
+              "test_greeter.py"
+            ],
+            "files_touched": [
+              "./greeter.py",
+              "./test_greeter.py"
+            ],
+            "existing_requested_files": [
+              "greeter.py",
+              "test_greeter.py"
+            ],
+            "missing_requested_files": [],
+            "permission_failures": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "structured-json",
+      "category": "data",
+      "prompt": "Create status.json containing valid JSON with status set to ready and count set to 3.",
+      "ok": true,
+      "artifact_task": true,
+      "workspace": "",
+      "elapsed_ms": 6274.64,
+      "execution": {
+        "ok": true,
+        "response": "Created `status.json` with valid JSON:\n\n```json\n{\n  \"status\": \"ready\",\n  \"count\": 3\n}\n```\n\nThe file was written successfully (38 bytes). It contains `status` set to `\"ready\"` and `count` set to `3` as valid JSON.",
+        "error": "",
+        "provider": "nous-portal",
+        "model": "deepseek/deepseek-v4-flash",
+        "elapsed_ms": 6269.92,
+        "time_to_first_activity_ms": 4411.09,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 10414,
+          "completion_tokens": 243,
+          "total_tokens": 10657,
+          "cached_tokens": 10240,
+          "cost_usd": 0.0
+        },
+        "changed_files": [
+          "./status.json"
+        ],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "status.json"
+          ],
+          "files_touched": [
+            "./status.json"
+          ],
+          "existing_requested_files": [
+            "status.json"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "json_valid",
+          "ok": true,
+          "path": "status.json"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "path": "status.json",
+          "contains": "ready"
+        },
+        {
+          "type": "audit_ok",
+          "ok": true,
+          "audit": {
+            "ok": true,
+            "requested_files": [
+              "status.json"
+            ],
+            "files_touched": [
+              "./status.json"
+            ],
+            "existing_requested_files": [
+              "status.json"
+            ],
+            "missing_requested_files": [],
+            "permission_failures": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "read-and-summarize",
+      "category": "context",
+      "prompt": "Read NOTES.md and state the release codename in your response without changing files.",
+      "ok": true,
+      "artifact_task": false,
+      "workspace": "",
+      "elapsed_ms": 4350.02,
+      "execution": {
+        "ok": true,
+        "response": "The release codename is **Magpie**.",
+        "error": "",
+        "provider": "nous-portal",
+        "model": "deepseek/deepseek-v4-flash",
+        "elapsed_ms": 4343.24,
+        "time_to_first_activity_ms": 2173.31,
+        "tool_calls": 1,
+        "retries": 0,
+        "usage": {
+          "prompt_tokens": 7783,
+          "completion_tokens": 126,
+          "total_tokens": 7909,
+          "cached_tokens": 3840,
+          "cost_usd": 0.0
+        },
+        "changed_files": [],
+        "audit": {
+          "ok": true,
+          "requested_files": [
+            "NOTES.md"
+          ],
+          "files_touched": [],
+          "existing_requested_files": [
+            "NOTES.md"
+          ],
+          "missing_requested_files": [],
+          "permission_failures": []
+        }
+      },
+      "validations": [
+        {
+          "type": "response_contains",
+          "ok": true,
+          "contains": "Magpie"
+        }
+      ]
+    }
+  ]
+}

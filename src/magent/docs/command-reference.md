@@ -444,6 +444,7 @@ Generated from the active Typer command tree.
 ## release
 
 - `magent release check`
+- `magent release evidence`
 - `magent release notes`
 
 ## routine

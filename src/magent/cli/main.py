@@ -2150,6 +2150,35 @@ def release_notes_cmd(
     console.print_json(data=release_notes(project, since=since))
 
 
+@release_app.command("evidence")
+def release_evidence_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    eval_report: str = typer.Option("", "--eval-report"),
+    coverage: float | None = typer.Option(None, "--coverage", min=0, max=100),
+    tests: str = typer.Option("", "--tests", help="Recorded test result, for example '724 passed'."),
+    ci_url: str = typer.Option("", "--ci-url"),
+    artifact: Annotated[list[str] | None, typer.Option("--artifact")] = None,
+    exception: Annotated[list[str] | None, typer.Option("--exception")] = None,
+    out: str = typer.Option("", "--out", "-o"),
+):
+    """Create a machine-readable release qualification evidence bundle."""
+    from magent.release_evidence import build_release_evidence, write_release_evidence
+
+    report = build_release_evidence(
+        project,
+        eval_report=eval_report or None,
+        coverage_percent=coverage,
+        tests=tests,
+        ci_url=ci_url,
+        artifacts=artifact,
+        exceptions=exception,
+    )
+    if out:
+        report["report_path"] = write_release_evidence(report, out)
+    console.print_json(data=report)
+    raise typer.Exit(0 if report["ok"] else 1)
+
+
 @context_app.command("map")
 def context_map_cmd(
     project: str = typer.Option(".", "--project", "-p"),

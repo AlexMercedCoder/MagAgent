@@ -13,6 +13,7 @@ python -m pytest -q
 python -m ruff check src tests
 python -m pytest tests/unit --cov=magent --cov-report=term-missing:skip-covered
 magent docs doctor
+magent eval run evals/reliability-offline.json --report-out agent-eval-report.json
 magent readiness
 magent provider test-matrix
 magent provider tool-smoke <provider> --model <cheap-model>
@@ -45,6 +46,11 @@ High-confidence coverage focuses on:
 - context maps and explicit workbench-to-memory promotion
 - non-interactive ask audits and provider tool-use smoke checks
 - opt-in orchestrated goal plan creation, dry-run preview, retry/resume, background queueing, model-role diagnostics, and sub-agent step packet contracts
+- isolated AgentSession task execution, independent artifact validators, per-task fault containment, and release evidence assembly
+
+CI installs the MCP extra, runs the MCP integration fixtures, and uploads the deterministic
+real-agent eval report. Credentialed Nous Portal qualification runs in the separate scheduled
+or manually dispatched `Provider Qualification` workflow when its repository secret is set.
 
 Use `magent test explain <file>` when targeted test selection is surprising. Use
 `magent plan-apply --dry-run <plan-id>` before executing buffered plan operations.

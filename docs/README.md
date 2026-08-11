@@ -34,6 +34,7 @@ magent docs doctor
 - [MagAgent 0.34.0 Release Record](RELEASE_0.34.0.md)
 - [MagAgent 0.35.0 Release Record](RELEASE_0.35.0.md)
 - [MagAgent 0.35.1 Release Record](RELEASE_0.35.1.md)
+- [MagAgent 0.50.0 Release Record](RELEASE_0.50.0.md)
 
 Common setup tasks now have CLI-first flows:
 
@@ -76,6 +77,8 @@ magent graph plan repair.agraph.yaml
 
 ## Architecture And Workflow
 
+- [MagAgent Roadmap To 1.0](../ROADMAP_TO_1.0.md)
+- [Mag Ecosystem Roadmap](../ROADMAP.md)
 - [Architecture](../src/magent/docs/architecture.md)
 - [Workbench](../src/magent/docs/workbench.md)
 - [Context Map](../src/magent/docs/context.md)
@@ -83,6 +86,8 @@ magent graph plan repair.agraph.yaml
 - [Recipes](../src/magent/docs/recipes.md)
 - [Sandboxed Execution](../src/magent/docs/sandbox.md)
 - [Evals](../src/magent/docs/evals.md)
+- [Release Policy](../src/magent/docs/release-policy.md)
+- [Known Limitations](../src/magent/docs/known-limitations.md)
 - [Patch Workflow](../src/magent/docs/patch-workflow.md)
 - [Checkpoints](../src/magent/docs/checkpoints.md)
 - [Testing And Reliability](../src/magent/docs/testing.md)

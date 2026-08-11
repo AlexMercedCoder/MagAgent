@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib import resources
@@ -107,6 +108,8 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
         "session-messaging",
         "agentic-graphs",
         "hardening",
+        "known-limitations",
+        "release-policy",
     }
     missing_topics = sorted(required - slugs)
     docs_text = "\n".join(read_topic(topic.slug) for topic in topics)
@@ -122,13 +125,63 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
                 encoding="utf-8",
                 errors="replace",
             ) == render_command_reference(command_names)
+    drift = documentation_drift_report()
     return {
-        "ok": not missing_topics and not missing_commands and command_reference_current,
+        "ok": not missing_topics and not missing_commands and command_reference_current and drift["ok"],
         "topics": len(topics),
         "missing_topics": missing_topics,
         "missing_commands": missing_commands,
         "command_reference_current": command_reference_current,
+        "drift": drift,
     }
+
+
+def documentation_drift_report(root: str | Path = ".") -> dict[str, Any]:
+    """Check source metadata against packaged docs and machine contracts.
+
+    Installed wheels do not contain ``pyproject.toml``. In that case the source-only
+    checks are reported as skipped while packaged contract checks still run.
+    """
+    from magent import __version__
+    from magent.desktop_api import platform_contracts
+
+    contracts = platform_contracts()
+    support_text = read_topic("support-policy")
+    checks: list[dict[str, Any]] = []
+
+    def add(name: str, ok: bool, detail: str) -> None:
+        checks.append({"name": name, "ok": ok, "detail": detail})
+
+    task_version = contracts["contracts"]["task"]["version"]
+    event_version = contracts["contracts"]["task_event"]["version"]
+    memory_requirement = contracts["contracts"]["memory_batch"]["requires"]
+    add("task-contract", task_version in support_text, task_version)
+    add("event-contract", event_version in support_text, event_version)
+    add("memory-contract", memory_requirement in support_text, memory_requirement)
+    for runtime in contracts["support"]["python"]:
+        add(f"python-{runtime}", runtime in support_text, f"Python {runtime}")
+
+    project_file = Path(root).resolve() / "pyproject.toml"
+    if project_file.exists():
+        project = tomllib.loads(project_file.read_text(encoding="utf-8"))["project"]
+        dependencies = [str(item) for item in project.get("dependencies", [])]
+        maggraph = next((item for item in dependencies if item.lower().startswith("maggraph")), "")
+        add("package-version", str(project.get("version", "")) == __version__, __version__)
+        add("maggraph-floor", maggraph == memory_requirement, maggraph or "missing")
+        python_support = contracts["support"]["python"]
+        add(
+            "python-floor",
+            str(project.get("requires-python", "")) == f">={python_support[0]}",
+            str(project.get("requires-python", "")),
+        )
+    else:
+        checks.append(
+            {"name": "source-metadata", "ok": True, "status": "skipped", "detail": "pyproject.toml not present"}
+        )
+
+    provider_reference = read_topic("providers")
+    add("provider-reference", provider_reference == render_provider_reference(), "generated catalog")
+    return {"ok": all(check["ok"] for check in checks), "checks": checks}
 
 
 def render_command_reference(command_names: list[str]) -> str:

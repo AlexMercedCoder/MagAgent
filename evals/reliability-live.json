@@ -1,0 +1,59 @@
+{
+  "schema": "magent.agent-eval.v1",
+  "name": "reliability-live",
+  "description": "Low-cost live-model qualification through AgentSession and native tools.",
+  "targets": {"success_rate": 0.9, "artifact_success_rate": 0.95},
+  "tasks": [
+    {
+      "id": "create-python",
+      "category": "coding",
+      "prompt": "Create calculator.py with an add(a, b) function and briefly confirm completion.",
+      "artifact_task": true,
+      "validators": [
+        {"type": "file_exists", "path": "calculator.py"},
+        {"type": "file_contains", "path": "calculator.py", "text": "def add"},
+        {"type": "audit_ok"}
+      ]
+    },
+    {
+      "id": "repair-python",
+      "category": "repair",
+      "prompt": "Fix the bug in total.py so total([2, 3]) returns 5.",
+      "artifact_task": true,
+      "files": {"total.py": "def total(values):\n    return sum(values) + 1\n"},
+      "validators": [
+        {"type": "file_contains", "path": "total.py", "text": "return sum(values)"},
+        {"type": "audit_ok"}
+      ]
+    },
+    {
+      "id": "multi-file-feature",
+      "category": "multi-file",
+      "prompt": "Create greeter.py with greet(name) and test_greeter.py with a focused pytest test.",
+      "artifact_task": true,
+      "validators": [
+        {"type": "file_contains", "path": "greeter.py", "text": "def greet"},
+        {"type": "file_contains", "path": "test_greeter.py", "text": "def test_"},
+        {"type": "audit_ok"}
+      ]
+    },
+    {
+      "id": "structured-json",
+      "category": "data",
+      "prompt": "Create status.json containing valid JSON with status set to ready and count set to 3.",
+      "artifact_task": true,
+      "validators": [
+        {"type": "json_valid", "path": "status.json"},
+        {"type": "file_contains", "path": "status.json", "text": "ready"},
+        {"type": "audit_ok"}
+      ]
+    },
+    {
+      "id": "read-and-summarize",
+      "category": "context",
+      "prompt": "Read NOTES.md and state the release codename in your response without changing files.",
+      "files": {"NOTES.md": "Release codename: Magpie.\n"},
+      "validators": [{"type": "response_contains", "text": "Magpie"}]
+    }
+  ]
+}
