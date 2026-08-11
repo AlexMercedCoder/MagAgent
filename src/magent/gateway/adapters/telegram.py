@@ -36,8 +36,8 @@ class TelegramAdapter(GatewayAdapter):
 
     def __init__(self, config: dict[str, Any], handler: MessageHandler):
         super().__init__(config, handler)
-        self._app = None
-        self._bot = None
+        self._app: Any = None
+        self._bot: Any = None
 
     @property
     def platform_name(self) -> str:
@@ -90,10 +90,10 @@ class TelegramAdapter(GatewayAdapter):
         console.print(f"[bold green]✓ Telegram gateway connected as @{bot_username}[/bold green]")
 
         async def handle_message(update: Update, context) -> None:
-            if not update.message or not update.message.text:
+            msg_obj = update.message
+            if msg_obj is None or msg_obj.text is None:
                 return
 
-            msg_obj = update.message
             chat = msg_obj.chat
             is_dm = chat.type == "private"
             is_group = chat.type in ("group", "supergroup")
@@ -120,6 +120,8 @@ class TelegramAdapter(GatewayAdapter):
                 return
 
             user = msg_obj.from_user
+            if user is None:
+                return
             msg = IncomingMessage(
                 platform="telegram",
                 message_id=str(msg_obj.message_id),
@@ -140,19 +142,24 @@ class TelegramAdapter(GatewayAdapter):
         from telegram.ext import CommandHandler
 
         async def cmd_ask(update: Update, context) -> None:
+            msg_obj = update.message
+            if msg_obj is None:
+                return
             text = " ".join(context.args)
             if not text:
-                await update.message.reply_text("Usage: /ask <your question>")
+                await msg_obj.reply_text("Usage: /ask <your question>")
                 return
-            user = update.message.from_user
+            user = msg_obj.from_user
+            if user is None:
+                return
             msg = IncomingMessage(
                 platform="telegram",
-                message_id=str(update.message.message_id),
+                message_id=str(msg_obj.message_id),
                 user_id=str(user.id),
                 username=user.full_name or str(user.id),
-                channel_id=str(update.message.chat.id),
+                channel_id=str(msg_obj.chat.id),
                 text=text,
-                is_dm=update.message.chat.type == "private",
+                is_dm=msg_obj.chat.type == "private",
                 mentions_bot=True,
             )
             # /ask used to skip the respond_to_dms / respond_to_groups gates
@@ -167,7 +174,10 @@ class TelegramAdapter(GatewayAdapter):
         # Start polling (drops pending updates from before startup)
         await app.initialize()
         await app.start()
-        await app.updater.start_polling(drop_pending_updates=True)
+        updater = app.updater
+        if updater is None:
+            raise RuntimeError("Telegram polling updater is unavailable")
+        await updater.start_polling(drop_pending_updates=True)
 
         # Keep running until stopped
         while self._running:

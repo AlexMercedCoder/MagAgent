@@ -142,7 +142,7 @@ register_plugin_commands(plugin_app)
 register_workbench_commands(workbench_app)
 register_tool_commands(
     tools_app,
-    store=store,
+    store=lambda: _store(),
     load_active_config=lambda: load_config(require_user()),
     console=console,
 )

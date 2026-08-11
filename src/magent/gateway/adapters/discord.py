@@ -37,7 +37,7 @@ class DiscordAdapter(GatewayAdapter):
 
     def __init__(self, config: dict[str, Any], handler: MessageHandler):
         super().__init__(config, handler)
-        self._client = None
+        self._client: Any = None
 
     @property
     def platform_name(self) -> str:
@@ -71,9 +71,10 @@ class DiscordAdapter(GatewayAdapter):
 
         @client.event
         async def on_ready():
+            user = client.user
             console.print(
                 f"[bold green]✓ Discord gateway connected as "
-                f"[cyan]{client.user}[/cyan] (ID: {client.user.id})[/bold green]"
+                f"[cyan]{user}[/cyan] (ID: {user.id if user else 'unknown'})[/bold green]"
             )
 
         @client.event
@@ -94,14 +95,15 @@ class DiscordAdapter(GatewayAdapter):
 
             # In guild channels: require @mention or command prefix
             if is_guild:
-                bot_mentioned = client.user in message.mentions
+                user = client.user
+                bot_mentioned = user is not None and user in message.mentions
                 has_prefix = command_prefix and text.startswith(command_prefix)
                 if not bot_mentioned and not has_prefix:
                     return
                 # Strip mention and prefix
-                if bot_mentioned:
-                    text = text.replace(f"<@{client.user.id}>", "").strip()
-                    text = text.replace(f"<@!{client.user.id}>", "").strip()
+                if bot_mentioned and user is not None:
+                    text = text.replace(f"<@{user.id}>", "").strip()
+                    text = text.replace(f"<@!{user.id}>", "").strip()
                 elif has_prefix:
                     text = text[len(command_prefix) :].strip()
 
@@ -136,7 +138,6 @@ class DiscordAdapter(GatewayAdapter):
         if not self._client:
             return None
         try:
-
             channel = self._client.get_channel(int(msg.channel_id))
             if channel is None:
                 # Try fetching if not in cache (DM channels)
@@ -156,7 +157,6 @@ class DiscordAdapter(GatewayAdapter):
         if not self._client:
             return
         try:
-
             channel = self._client.get_channel(int(channel_id))
             if channel is None:
                 channel = await self._client.fetch_channel(int(channel_id))
