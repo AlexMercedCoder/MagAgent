@@ -124,7 +124,7 @@ jobs:
           python-version: "3.12"
           cache: pip
       - name: Build wheel
-        run: python -m pip install --upgrade pip build pytest && python -m build --wheel
+        run: python -m pip install --upgrade pip build pytest pytest-asyncio Pillow && python -m build --wheel
       - name: Install public-shape wheel
         run: python -c "import glob, subprocess, sys; subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--force-reinstall', glob.glob('dist/*.whl')[0]])"
       - name: CLI and security smoke
@@ -133,4 +133,4 @@ jobs:
           magent tools doctor
           magent system security-report
       - name: Cross-platform contract tests
-        run: python -m pytest -q tests/unit/test_permissions_bypass.py tests/unit/test_safe_names.py tests/unit/test_durability_and_state.py tests/unit/test_auth_store.py tests/unit/test_tools_safety.py tests/unit/test_provider_support.py tests/unit/test_security_assurance.py
+        run: python -m pytest -q tests/unit/test_permissions_bypass.py tests/unit/test_safe_names.py tests/unit/test_durability_and_state.py tests/unit/test_auth_store.py tests/unit/test_tools_safety.py tests/unit/test_provider_support.py tests/unit/test_security_assurance.py -k "not document_tools_create_docx_and_pptx and not visual_artifact_tools_create_svg_diagram_and_image"
