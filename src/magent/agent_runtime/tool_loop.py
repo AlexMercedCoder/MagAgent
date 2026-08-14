@@ -484,6 +484,9 @@ class ToolLoopRuntimeMixin:
         if self._periodic_memory_write_due():
             await self._maybe_write_memories()
         self._maybe_compact_conversation()
+        restore_profile = getattr(self, "_restore_turn_profile", None)
+        if callable(restore_profile):
+            restore_profile()
 
         return response, tool_calls
 
@@ -515,7 +518,11 @@ class ToolLoopRuntimeMixin:
         )
 
     def _max_model_rounds_per_turn(self) -> int:
-        return int(getattr(self.config, "max_model_rounds_per_turn", MAX_MODEL_ROUNDS_PER_TURN))
+        configured = int(getattr(self.config, "max_model_rounds_per_turn", MAX_MODEL_ROUNDS_PER_TURN))
+        profile = getattr(self, "profile", None)
+        if profile is not None and int(profile.max_turns or 0) > 0:
+            return min(configured, int(profile.max_turns))
+        return configured
 
     def _max_tool_calls_per_turn(self) -> int:
         return int(getattr(self.config, "max_tool_calls_per_turn", MAX_TOOL_CALLS_PER_TURN))

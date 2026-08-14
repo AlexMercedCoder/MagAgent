@@ -207,6 +207,8 @@ class LifecycleRuntimeMixin:
     async def end_session(self) -> None:
         await self.cancel_active_work()
         await self._maybe_write_memories()
+        self._queue_profile_state_deltas()
+        self._run_profile_named_hook("on_end")
         if self.conversation and self.memory.available:
             summary_parts = [
                 f"Session {self.session_id}",
@@ -222,6 +224,52 @@ class LifecycleRuntimeMixin:
             messaging.stop()
         # Stop all MCP server connections
         await self.mcp.stop_all()
+
+    def _run_profile_named_hook(self, event: str) -> None:
+        profile = getattr(self, "_session_profile", None)
+        if profile is None:
+            return
+        lifecycle = profile.resolved.document.get("lifecycle", {})
+        hook = lifecycle.get(event)
+        if isinstance(hook, dict):
+            hook_name = str(hook.get("name", ""))
+            required = bool(hook.get("required", False))
+        else:
+            hook_name, required = str(hook or ""), False
+        if not hook_name:
+            return
+        from magent.hooks import load_named_hooks, run_named_hook
+
+        if hook_name not in load_named_hooks(self.cwd):
+            message = f"Named profile hook not configured: {hook_name}"
+            if required:
+                raise RuntimeError(message)
+            console.print(f"[dim yellow]{message}[/dim yellow]")
+            return
+        run_named_hook(self.cwd, hook_name, {"profile": profile.name, "session_id": self.session_id})
+
+    def propose_profile_state(self, entry_id: str, content: str, *, evidence: str) -> None:
+        """Record an evidence-backed agent-scoped fact for inbox review."""
+        proposals = list(self.scratchpad.get("profile_state_proposals") or [])
+        proposals.append({"id": entry_id, "content": content, "evidence": evidence})
+        self.scratchpad["profile_state_proposals"] = proposals[-20:]
+
+    def _queue_profile_state_deltas(self) -> None:
+        profile = getattr(self, "profile", None) or getattr(self, "_session_profile", None)
+        proposals = list(self.scratchpad.get("profile_state_proposals") or [])
+        if profile is None or profile.writeback == "off" or not proposals:
+            return
+        from magent.agent_profiles.delta import ProfileDeltaInbox, make_delta
+
+        for proposal in proposals:
+            entry_id = str(proposal.get("id") or "learned-behavior")
+            operation = {
+                "op": "replace",
+                "path": f"/state/{entry_id}",
+                "value": {"id": entry_id, "content": str(proposal.get("content", ""))},
+            }
+            delta = make_delta(profile.resolved, [operation], evidence=str(proposal.get("evidence", "")))
+            ProfileDeltaInbox(self.cwd).add(delta)
 
     async def cancel_active_work(self) -> None:
         """Cancel in-flight tool work before accepting another interactive prompt."""

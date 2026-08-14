@@ -51,7 +51,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Bridges workbench state into durable MagGraph memory through context maps and explicit memory promotion
 - Documents architecture boundaries for memory, workbench, context, tools, CLI/TUI, and compatibility-safe refactors
 - Saves and runs reusable workflow recipes for release prep, bug triage, docs audits, dependency upgrades, and test repair
-- Defines reusable primary agents and subagents from `.magent/agents/*.md`, with `@review`, `@explore`, and `@docs` invocation
+- Defines portable, stateful Open Agent Profile v1 agents in `.magent/agents/` or `.agents/`, with safe capability narrowing, reviewed learning, and `@review`, `@explore`, and `@docs` invocation
 - Runs project hooks around tools, edits, command failures, memory candidates, and release checks
 - Runs real local LSP clients for Python, TypeScript/JavaScript, Rust, and Go, with capability-aware symbols, diagnostics, definitions, references, hover, and rename
 - Queues background asks, recipes, plans, shell tasks, followups, and gateway tasks through `magent daemon`
@@ -975,6 +975,7 @@ bot_token = "..."
 | [docs/gateway/setup-telegram.md](docs/gateway/setup-telegram.md) | Telegram gateway setup |
 | [src/magent/docs/mcp.md](src/magent/docs/mcp.md) | MCP configuration, compatibility, diagnostics, and skills status |
 | [src/magent/docs/session-messaging.md](src/magent/docs/session-messaging.md) | Authenticated local agent coordination, policies, receipts, recovery, and security |
+| [src/magent/docs/agents.md](src/magent/docs/agents.md) | Open Agent Profile authoring, trust, narrowing, state review, and legacy migration |
 
 ---
 

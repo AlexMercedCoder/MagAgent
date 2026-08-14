@@ -138,6 +138,15 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "policy": "accept",
         "headless_accept": False,
     },
+    "agent_profiles": {
+        "enabled": True,
+        "user_paths": ["~/.config/magent/agents"],
+        "project_paths": [".magent/agents", ".agents"],
+        "writeback": "propose",
+        "max_state_tokens": 1200,
+        "max_state_bytes": 200000,
+        "max_profiles": 200,
+    },
 }
 
 DEFAULT_USER_PROFILE: dict[str, Any] = {

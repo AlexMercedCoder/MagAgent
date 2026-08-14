@@ -4,10 +4,21 @@ Generated from the active Typer command tree.
 
 ## agent
 
+- `magent agent accept`
+- `magent agent convert`
 - `magent agent create`
+- `magent agent digest`
+- `magent agent explain`
+- `magent agent forget`
+- `magent agent history`
+- `magent agent inbox`
 - `magent agent list`
+- `magent agent reject`
+- `magent agent rollback`
 - `magent agent run`
 - `magent agent show`
+- `magent agent state`
+- `magent agent validate`
 
 ## api
 

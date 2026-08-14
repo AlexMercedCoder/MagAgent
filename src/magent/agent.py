@@ -15,6 +15,7 @@ from rich.markup import escape
 from rich.prompt import Confirm, Prompt
 
 from magent.agent_defs import resolve_invocation
+from magent.agent_profiles.models import EffectiveProfile
 from magent.agent_runtime.context import ContextRuntimeMixin
 from magent.agent_runtime.lifecycle import LifecycleRuntimeMixin
 from magent.agent_runtime.support import (
@@ -147,6 +148,7 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
         project_slug: str | None = None,
         interactive_permissions: bool = True,
         permission_mode_override: str | None = None,
+        profile: EffectiveProfile | None = None,
     ):
         self.username = username
         self.config = config
@@ -154,7 +156,14 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
         self.extraction_provider = extraction_provider
         self.cwd = cwd
         self.project_slug = project_slug or self._detect_project_slug(cwd)
-        permission_mode = permission_mode_override or config.permission_mode
+        self.profile = profile
+        self._session_profile = profile
+        self._turn_profile_restore: tuple[Any, Any, Any] | None = None
+        permission_mode = (
+            profile.permission_mode
+            if profile
+            else (permission_mode_override or config.permission_mode)
+        )
 
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
         self.execution_task_id = ""
@@ -168,6 +177,12 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
             "decisions": [],
             "permission_failures": [],
         }
+        if profile is not None:
+            self.scratchpad["active_agent"] = {
+                "name": profile.name,
+                "revision": profile.resolved.revision,
+                "spec_digest": profile.resolved.spec_digest,
+            }
 
         # Initialize subsystems
         memory_dir = user_memory_dir(username)
@@ -189,7 +204,10 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
             trusted_shell_patterns=config.trusted_shell_patterns,
             show_tool_calls=config.get("ui", "show_tool_calls", default=True),
             username=username,
-            tool_budgets=config.get("tool_budgets", default={}),
+            tool_budgets={
+                **(config.get("tool_budgets", default={}) or {}),
+                **(dict(profile.tool_budgets) if profile else {}),
+            },
             session_id=self.session_id,
             interactive_permissions=interactive_permissions,
             shell_sandbox=str(config.get("permissions", "shell_sandbox", default="off") or "off"),
@@ -198,7 +216,19 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
             ),
             config=config,
             activity_callback=self._log_tool_progress_event,
+            allowed_tools=profile.tools if profile else None,
         )
+        self._granted_profile_tools = (
+            frozenset(
+                item.get("function", {}).get("name", "")
+                for item in self.tools.get_tool_definitions()
+                if item.get("function", {}).get("name")
+            )
+            if profile is None
+            else profile.tools
+        )
+        if profile is not None:
+            self._run_profile_named_hook("on_start")
 
         messaging_enabled = bool(config.get("session_messaging", "enabled", default=True))
         messaging_name = str(config.get("session_messaging", "name", default="") or "")
@@ -375,7 +405,42 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
     def _resolve_agent_message(self, user_message: str) -> str:
         invocation = resolve_invocation(user_message, self._cwd())
         if invocation.get("ok"):
+            from magent.agent_profiles.effective import resolve_effective_profile
+            from magent.agent_profiles.registry import AgentProfileRegistry
+
             agent = invocation.get("agent", {})
+            resolved = AgentProfileRegistry(self._cwd(), self.config).get(
+                str(agent.get("name", ""))
+            )
+            if resolved:
+                effective = resolve_effective_profile(
+                    resolved, self.config, self._granted_profile_tools
+                )
+                self._turn_profile_restore = (
+                    self.profile,
+                    self.tools.allowed_tools,
+                    self.tools.permission_mode,
+                )
+                self.profile = effective
+                self.tools.allowed_tools = effective.tools
+                self.tools.permission_mode = effective.permission_mode
+                self.scratchpad["active_agent"] = {
+                    "name": effective.name,
+                    "revision": effective.resolved.revision,
+                    "spec_digest": effective.resolved.spec_digest,
+                }
+                # Role instructions are assembled in the stable prompt.
+                return (
+                    user_message.strip().partition(" ")[2]
+                    or "Use your specialty to help with the current project."
+                )
             self.scratchpad["active_agent"] = agent.get("name")
             return invocation["message"]
         return user_message
+
+    def _restore_turn_profile(self) -> None:
+        restore = getattr(self, "_turn_profile_restore", None)
+        if restore is None:
+            return
+        self.profile, self.tools.allowed_tools, self.tools.permission_mode = restore
+        self._turn_profile_restore = None

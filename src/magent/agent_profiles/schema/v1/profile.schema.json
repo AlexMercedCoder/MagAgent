@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-agent-profile.dev/schema/v1/profile.schema.json",
+  "title": "Open Agent Profile v1",
+  "$comment": "Vendored from the OAP v1 contract supplied to MagAgent; upstream repository commit was not publicly discoverable on 2026-08-14.",
+  "type": "object",
+  "required": ["oap", "metadata", "spec"],
+  "properties": {
+    "oap": {"const": "1.0"},
+    "metadata": {
+      "type": "object",
+      "required": ["name", "revision"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$"},
+        "description": {"type": "string"},
+        "revision": {"type": "integer", "minimum": 1},
+        "annotations": {"type": "object"}
+      },
+      "additionalProperties": true
+    },
+    "spec": {
+      "type": "object",
+      "required": ["role"],
+      "properties": {
+        "role": {"type": "object", "properties": {"instructions": {"type": "string"}}, "additionalProperties": true},
+        "model": {"type": "object", "additionalProperties": true},
+        "tools": {"type": "object", "additionalProperties": true},
+        "permissions": {"type": "object", "additionalProperties": true},
+        "runtime": {"type": "object", "additionalProperties": true},
+        "memory": {"type": "object", "additionalProperties": true},
+        "context": {"type": "object", "additionalProperties": true},
+        "lifecycle": {"type": "object", "additionalProperties": true}
+      },
+      "additionalProperties": true
+    },
+    "state": {"oneOf": [{"type": "array"}, {"type": "object"}]},
+    "history": {"type": "array"},
+    "proposals": {"type": "array"}
+  },
+  "additionalProperties": true
+}

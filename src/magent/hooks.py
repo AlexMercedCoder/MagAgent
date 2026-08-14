@@ -20,6 +20,43 @@ HOOK_EVENTS = {
 }
 
 
+def load_named_hooks(project: str | Path = ".") -> dict[str, list[str]]:
+    """Load explicitly named hooks that profiles may reference by name.
+
+    Profiles never provide command text. Commands remain locally owned in
+    `.magent/hooks.toml` under `[named.<name>]`.
+    """
+    path = hook_config_path(project)
+    if not path.exists():
+        return {}
+    try:
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)
+    except Exception:
+        return {}
+    named = data.get("named", {})
+    if not isinstance(named, dict):
+        return {}
+    result: dict[str, list[str]] = {}
+    for name, value in named.items():
+        commands = value.get("commands", []) if isinstance(value, dict) else value
+        if isinstance(commands, str):
+            commands = [commands]
+        if isinstance(commands, list):
+            result[str(name)] = [str(item) for item in commands if str(item).strip()]
+    return result
+
+
+def run_named_hook(project: str | Path, name: str, payload: dict[str, Any] | None = None, *, timeout: int = 30) -> list[dict[str, Any]]:
+    """Run a locally configured hook by name."""
+    commands = load_named_hooks(project).get(name, [])
+    if not commands:
+        return []
+    root = Path(project).resolve()
+    env = {**os.environ, "MAGENT_HOOK_EVENT": f"named:{name}", "MAGENT_HOOK_PAYLOAD": json.dumps(payload or {}, default=str)}
+    return [run_policy_checked_shell(command, cwd=root, timeout=timeout, env=env) for command in commands]
+
+
 def hook_config_path(project: str | Path = ".") -> Path:
     return Path(project).resolve() / ".magent" / "hooks.toml"
 

@@ -18,6 +18,10 @@ STABLE_PUBLIC_IMPORTS = (
     ("magent.workbench_domains.plans", "save_plan"),
 )
 
+PERSISTENT_STATE_CONTRACTS = (
+    {"name": "agent_profiles", "schema": "oap.v1", "status": "beta", "writes": "reviewed-state-only"},
+)
+
 STABLE_CLI_PREFIXES = {
     "ask",
     "chat",
@@ -65,6 +69,7 @@ def contract_inventory(command_names: list[str] | None = None) -> dict[str, Any]
             "unknown_keys": "preserved",
         },
         "machine": platform["contracts"],
+        "persistent_state": list(PERSISTENT_STATE_CONTRACTS),
         "support": platform["support"],
         "rules": {
             "unknown_fields": "consumers must ignore unknown additive fields",

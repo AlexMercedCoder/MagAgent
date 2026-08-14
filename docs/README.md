@@ -24,7 +24,7 @@ magent docs doctor
 - [Performance](../src/magent/docs/performance.md)
 - [Installation Shapes](../src/magent/docs/installation-shapes.md)
 - [Prompt Caching](../src/magent/docs/prompt-caching.md)
-- [Agent Definitions](../src/magent/docs/agents.md)
+- [Open Agent Profiles](../src/magent/docs/agents.md)
 - [Hooks](../src/magent/docs/hooks.md)
 - [Code Intelligence](../src/magent/docs/lsp.md)
 - [Background Worker](../src/magent/docs/daemon.md)

@@ -233,6 +233,23 @@ magent subagent wizard
 
 The cap is enforced by the sub-agent runner. Set `--max 0` to disable sub-agent spawning.
 
+Open Agent Profile discovery and reviewed state use conservative global ceilings:
+
+```toml
+[agent_profiles]
+enabled = true
+user_paths = ["~/.config/magent/agents"]
+project_paths = [".magent/agents", ".agents"]
+writeback = "propose"
+max_state_tokens = 1200
+max_state_bytes = 200000
+max_profiles = 200
+```
+
+`writeback` is a ceiling, not a grant. A profile cannot request a more permissive mode.
+Profile tools and permissions are always intersected with the active MagAgent policy. See
+`magent docs show agents` and use `magent agent explain NAME` to inspect the effective result.
+
 Project-local config:
 
 `<project>/.magent/config.toml`

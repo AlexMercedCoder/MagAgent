@@ -169,6 +169,13 @@ commands. Expensive actions belong behind explicit button endpoints such as
 
 ### Sandboxes, Evals, Browser, GitHub, And Background Work
 
+`magent.agent_profiles` owns Open Agent Profile parsing, validation, canonical digests,
+legacy conversion, root-derived trust, deterministic discovery, capability narrowing,
+stable-prompt rendering, and reviewable state deltas. `ResolvedProfile` represents what a
+document requests; only `EffectiveProfile`, after intersection with harness policy, may enter
+`AgentSession`. Profile state is untrusted context and delta application is permanently scoped
+to `/state`.
+
 `magent.sandbox` owns isolated plan and recipe execution in worktree, copy, and Docker container modes.
 
 `magent.task_runtime` owns the versioned durable execution contract. It stores task

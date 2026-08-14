@@ -173,6 +173,21 @@ def _build_extraction_provider(config):
         raise typer.Exit(1) from exc
 
 
+def _resolve_cli_profile(name: str | None, cwd: str, config):
+    if not name:
+        return None
+    from magent.agent_profiles.effective import resolve_effective_profile
+    from magent.agent_profiles.registry import AgentProfileRegistry
+    from magent.tools.catalog import built_in_tool_definitions
+
+    resolved = AgentProfileRegistry(cwd, config).get(name)
+    if resolved is None:
+        console.print(f"[red]Agent profile not found:[/red] {name}")
+        raise typer.Exit(1)
+    granted = {item.get("function", {}).get("name", "") for item in built_in_tool_definitions()}
+    return resolve_effective_profile(resolved, config, granted)
+
+
 def _store():
     return store()
 
@@ -350,6 +365,7 @@ def main(
     provider: str | None = typer.Option(None, "--provider", "-p", help="Provider ID"),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
     project: str | None = typer.Option(None, "--project", help="Project directory"),
+    agent: str | None = typer.Option(None, "--agent", help="Run with a named OAP agent profile"),
     version: bool = typer.Option(False, "--version", "-v", help="Show version"),
 ):
     """
@@ -366,14 +382,18 @@ def main(
     username = _require_user()
     config = load_config(username)
     cwd = project or os.getcwd()
-
-    main_provider = _build_provider(config, provider, model)
+    effective_profile = _resolve_cli_profile(agent, cwd, config)
+    main_provider = _build_provider(
+        config,
+        provider or (effective_profile.provider if effective_profile else None),
+        model or (effective_profile.model if effective_profile else None),
+    )
     extract_provider = _build_extraction_provider(config)
 
     if task:
-        _run_one_shot(username, config, main_provider, extract_provider, cwd, task)
+        _run_one_shot(username, config, main_provider, extract_provider, cwd, task, profile=effective_profile)
     else:
-        _run_repl(username, config, main_provider, extract_provider, cwd)
+        _run_repl(username, config, main_provider, extract_provider, cwd, profile=effective_profile)
 
 
 @app.command("ask", rich_help_panel="Everyday Agent Work")
@@ -382,6 +402,7 @@ def ask_cmd(
     provider: str | None = typer.Option(None, "--provider", "-p", help="Provider ID"),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
     project: str | None = typer.Option(None, "--project", help="Project directory"),
+    agent: str | None = typer.Option(None, "--agent", help="Run with a named OAP agent profile"),
     permission_mode: str | None = typer.Option(
         None,
         "--permission-mode",
@@ -429,7 +450,12 @@ def ask_cmd(
     if yes:
         permission_override = "yolo"
     cwd = project or os.getcwd()
-    main_provider = _build_provider(config, provider, model)
+    effective_profile = _resolve_cli_profile(agent, cwd, config)
+    main_provider = _build_provider(
+        config,
+        provider or (effective_profile.provider if effective_profile else None),
+        model or (effective_profile.model if effective_profile else None),
+    )
     extract_provider = _build_extraction_provider(config)
     _run_one_shot(
         username,
@@ -444,6 +470,7 @@ def ask_cmd(
         json_output=json_output,
         events_output=events,
         execution_task_id=execution_task_id,
+        profile=effective_profile,
     )
 
 
@@ -460,6 +487,7 @@ def _run_one_shot(
     json_output: bool = False,
     events_output: bool = False,
     execution_task_id: str = "",
+    profile=None,
 ):
     """Run a single non-interactive agent task."""
     from magent.agent import AgentSession
@@ -474,6 +502,7 @@ def _run_one_shot(
         cwd=cwd,
         interactive_permissions=False,
         permission_mode_override=permission_mode_override,
+        profile=profile,
     )
     bridge = SessionTaskBridge(
         _store(),
@@ -693,7 +722,7 @@ def _one_shot_events(task: str, response: str, audit: dict, session) -> list[dic
     return events
 
 
-def _run_repl(username, config, main_provider, extract_provider, cwd, resume=None):
+def _run_repl(username, config, main_provider, extract_provider, cwd, resume=None, profile=None):
     """Run the interactive REPL with streaming output."""
     from magent.agent import AgentSession
     from magent.execution_bridge import SessionTaskBridge
@@ -705,6 +734,7 @@ def _run_repl(username, config, main_provider, extract_provider, cwd, resume=Non
         provider=main_provider,
         extraction_provider=extract_provider,
         cwd=cwd,
+        profile=profile,
     )
     if resume and resume.get("conversation"):
         # Restore the prior thread so the model has the context the user

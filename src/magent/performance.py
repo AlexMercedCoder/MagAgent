@@ -27,6 +27,7 @@ PERFORMANCE_BUDGETS: dict[str, dict[str, float]] = {
         "event_write_per_second_min": 100.0,
         "event_read_1000_ms_max": 500.0,
         "four_concurrent_tasks_ms_max": 3000.0,
+        "agent_profile_discovery_ms_max": 100.0,
     },
     "release": {
         "cold_cli_import_ms_max": 1500.0,
@@ -35,6 +36,7 @@ PERFORMANCE_BUDGETS: dict[str, dict[str, float]] = {
         "event_write_per_second_min": 150.0,
         "event_read_1000_ms_max": 350.0,
         "four_concurrent_tasks_ms_max": 2000.0,
+        "agent_profile_discovery_ms_max": 75.0,
     },
 }
 
@@ -132,6 +134,11 @@ def performance_budget(
     doctor = performance_doctor(store, username, project)
     memory = _memory_search_benchmark(username)
     runtime = _task_runtime_benchmark(event_count)
+    started = time.perf_counter()
+    from magent.agent_profiles.registry import AgentProfileRegistry
+
+    discovered, _warnings = AgentProfileRegistry(project, load_config(username)).discover()
+    profile_discovery_ms = _elapsed_ms(started)
     metrics = {
         "cold_cli_import_ms": float(install["cold_cli_import_ms"]["average"]),
         "project_inspection_ms": round(sum(doctor["timings_ms"].values()), 3),
@@ -139,6 +146,7 @@ def performance_budget(
         "event_write_per_second": runtime["event_write_per_second"],
         "event_read_1000_ms": runtime["event_read_1000_ms"],
         "four_concurrent_tasks_ms": runtime["four_concurrent_tasks_ms"],
+        "agent_profile_discovery_ms": profile_discovery_ms,
     }
     budgets = PERFORMANCE_BUDGETS[profile]
     gates = {
@@ -160,7 +168,7 @@ def performance_budget(
                 "python": platform.python_version(),
                 "cpu_count": os.cpu_count(),
             },
-            "workload": {"task_events": event_count, "concurrent_tasks": 4},
+            "workload": {"task_events": event_count, "concurrent_tasks": 4, "agent_profiles": len(discovered)},
             "metrics": metrics,
             "budgets": budgets,
             "gates": gates,

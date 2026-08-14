@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.92.0
+
+- Added Open Agent Profile v1 Level 2 support with YAML, JSON, and Markdown encodings, vendored offline schema validation, safe YAML loading, canonical profile/spec digests, and in-memory legacy conversion.
+- Added deterministic managed, user, project, portable, and plugin profile discovery with root-derived trust, explicit collision reporting, duplicate rejection, and OAP-native built-in agents.
+- Enforced effective-profile narrowing for tools, permissions, model-round limits, state budgets, and writeback policy; profiles cannot grant capabilities disabled by MagAgent policy.
+- Added `--agent`, turn-scoped `@agent` activation, stable-prompt role assembly, untrusted bounded profile state, model/provider preferences, and profile identity records.
+- Added reviewable profile state deltas with secret scrubbing, `/state`-only operations, revision and digest conflict checks, atomic writes, history, named local hooks, and an inbox accept/reject flow.
+- Expanded `magent agent` with `explain`, `validate`, `convert`, `state`, `history`, `forget`, `inbox`, `accept`, `reject`, and `digest`, while retaining legacy definitions and existing invocation commands.
+- Added OAP conformance, security, runtime, CLI, and compatibility tests plus repository and in-app documentation.
+
 ## 0.91.0
 
 - Fixed false-positive provider qualification: bracketed provider errors now fail agent evals and tool smokes even when stale artifacts exist.

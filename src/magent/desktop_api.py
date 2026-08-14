@@ -150,6 +150,11 @@ def system_info() -> dict[str, Any]:
             "tier_to_model_role": dict(TIER_TO_MODEL_ROLE),
             "logical_tool_mapping": {name: list(tools) for name, tools in TOOL_NAME_MAP.items()},
         },
+        "open_agent_profile": {
+            "spec_version": "1.0",
+            "conformance_level": 2,
+            "encodings": ["yaml", "json", "md"],
+        },
         "python": sys.version.split()[0],
         "platform": {
             "system": platform.system(),
@@ -195,6 +200,12 @@ def platform_contracts() -> dict[str, Any]:
                 "conformance_level": 3,
                 "transport": "json/jsonl",
             },
+            "open_agent_profile": {
+                "version": "1.0",
+                "status": "beta",
+                "conformance_level": 2,
+                "transport": "json",
+            },
             "mcp": {
                 "status": "dual-era-core",
                 "legacy_through": "2025-11-25",
@@ -208,6 +219,42 @@ def platform_contracts() -> dict[str, Any]:
             "breaking_changes_before_1_0": "frozen after 0.90; security exceptions only",
         },
     }
+
+
+def agent_profiles(project: str = ".") -> dict[str, Any]:
+    """Return resolved OAP metadata for desktop clients."""
+    from magent.agent_profiles.registry import AgentProfileRegistry
+
+    username = get_current_user()
+    config = load_config(username) if username else None
+    return AgentProfileRegistry(project, config).list()
+
+
+def agent_profile(name: str, project: str = ".", *, effective: bool = False) -> dict[str, Any]:
+    """Return one resolved or effective profile as machine-readable JSON."""
+    from magent.agent_profiles.registry import AgentProfileRegistry
+
+    username = get_current_user()
+    config = load_config(username) if username else None
+    resolved = AgentProfileRegistry(project, config).get(name)
+    if resolved is None:
+        return {"ok": False, "error": f"Agent profile not found: {name}"}
+    if not effective:
+        return {"ok": True, "profile": resolved.as_dict()}
+    if config is None:
+        return {"ok": False, "error": "No configured user; effective policy is unavailable"}
+    from magent.agent_profiles.effective import resolve_effective_profile
+    from magent.tools.catalog import built_in_tool_definitions
+
+    granted = {item.get("function", {}).get("name", "") for item in built_in_tool_definitions()}
+    return {"ok": True, "effective_profile": resolve_effective_profile(resolved, config, granted).as_dict()}
+
+
+def agent_profile_inbox(project: str = ".") -> dict[str, Any]:
+    """Return pending profile deltas for a desktop review surface."""
+    from magent.agent_profiles.delta import ProfileDeltaInbox
+
+    return {"ok": True, "deltas": ProfileDeltaInbox(project).pending()}
 
 
 def graph_validate(path: str, *, strict: bool = False) -> dict[str, Any]:

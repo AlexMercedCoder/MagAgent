@@ -83,17 +83,34 @@ def agent_dirs(project: str | Path = ".") -> list[Path]:
     return [
         CONFIG_DIR / "agents",
         root / ".magent" / "agents",
+        root / ".agents",
         *[plugin / "agents" for plugin in enabled_plugin_paths()],
     ]
 
 
 def list_agents(project: str | Path = ".") -> dict[str, Any]:
-    agents = dict(BUILTIN_AGENTS)
-    for directory in agent_dirs(project):
-        for path in sorted(directory.glob("*.md")) if directory.exists() else []:
-            definition = load_agent_file(path)
-            agents[definition.name] = definition
-    return {"ok": True, "agents": [agent.as_dict() for agent in sorted(agents.values(), key=lambda item: item.name)]}
+    from magent.agent_profiles.legacy import legacy_frontmatter
+    from magent.agent_profiles.registry import AgentProfileRegistry
+
+    profiles, warnings = AgentProfileRegistry(project).discover()
+    agents = []
+    for profile in profiles.values():
+        frontmatter = legacy_frontmatter(profile.document)
+        prompt = str(profile.document.get("spec", {}).get("role", {}).get("instructions", ""))
+        agents.append(AgentDefinition(
+            name=profile.name,
+            prompt=prompt,
+            description=str(frontmatter.get("description", "")),
+            mode=str(frontmatter.get("mode", "subagent")),
+            provider=str(frontmatter.get("provider", "")),
+            model=str(frontmatter.get("model", "")),
+            tools=frontmatter.get("tools", {}),
+            permission_mode=str(frontmatter.get("permissionMode", "")),
+            memory_mode=str(frontmatter.get("memory", "")),
+            max_turns=int(frontmatter.get("maxTurns", 0) or 0),
+            path=str(profile.source_path or ""),
+        ))
+    return {"ok": True, "agents": [agent.as_dict() for agent in sorted(agents, key=lambda item: item.name)], "warnings": warnings}
 
 
 def get_agent(name: str, project: str | Path = ".") -> AgentDefinition | None:
@@ -104,20 +121,23 @@ def get_agent(name: str, project: str | Path = ".") -> AgentDefinition | None:
 
 
 def load_agent_file(path: Path) -> AgentDefinition:
-    text = path.read_text(encoding="utf-8", errors="replace")
-    metadata, body = _split_frontmatter(text)
+    from magent.agent_profiles.legacy import legacy_frontmatter
+    from magent.agent_profiles.registry import AgentProfileRegistry
+
+    profile = AgentProfileRegistry(path.parent).load_path(path)
+    mapped = legacy_frontmatter(profile.document)
     return AgentDefinition(
-        name=str(metadata.get("name") or path.stem).strip().lower(),
-        description=str(metadata.get("description") or ""),
-        mode=str(metadata.get("mode") or "subagent"),
-        provider=str(metadata.get("provider") or ""),
-        model=str(metadata.get("model") or ""),
-        tools=metadata.get("tools") if isinstance(metadata.get("tools"), dict) else {},
-        permission_mode=str(metadata.get("permissionMode") or metadata.get("permission_mode") or ""),
-        memory_mode=str(metadata.get("memory") or metadata.get("memory_mode") or ""),
-        max_turns=int(metadata.get("maxTurns") or metadata.get("max_turns") or 0),
+        name=str(mapped.get("name") or path.stem),
+        prompt=str(profile.document.get("spec", {}).get("role", {}).get("instructions", "")),
+        description=str(mapped.get("description") or ""),
+        mode=str(mapped.get("mode") or "subagent"),
+        provider=str(mapped.get("provider") or ""),
+        model=str(mapped.get("model") or ""),
+        tools=mapped.get("tools") if isinstance(mapped.get("tools"), dict) else {},
+        permission_mode=str(mapped.get("permissionMode") or ""),
+        memory_mode=str(mapped.get("memory") or ""),
+        max_turns=int(mapped.get("maxTurns") or 0),
         path=str(path),
-        prompt=body.strip(),
     )
 
 

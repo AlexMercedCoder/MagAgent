@@ -124,6 +124,7 @@ class ToolExecutor(
         shell_sandbox_network: bool = False,
         config: Any | None = None,
         activity_callback: Callable[[str, dict[str, Any], float, str], None] | None = None,
+        allowed_tools: set[str] | frozenset[str] | None = None,
     ):
         self.cwd = cwd
         self.permission_mode = permission_mode
@@ -140,6 +141,7 @@ class ToolExecutor(
         self.shell_sandbox_network = bool(shell_sandbox_network)
         self.config = config
         self.activity_callback = activity_callback
+        self.allowed_tools = frozenset(allowed_tools) if allowed_tools is not None else None
         self._active_tasks: set[asyncio.Task[Any]] = set()
         self._active_processes: set[asyncio.subprocess.Process] = set()
         # Audit trail of file access outside the project root.
@@ -243,10 +245,16 @@ class ToolExecutor(
         from magent.tools.catalog import built_in_tool_definitions
         from magent.tools.registry import reconcile_required_with_signatures
 
-        return reconcile_required_with_signatures(
+        definitions = reconcile_required_with_signatures(
             filter_tool_definitions_for_user(built_in_tool_definitions(), self.username),
             self,
         )
+        if self.allowed_tools is None:
+            return definitions
+        return [
+            item for item in definitions
+            if item.get("function", {}).get("name") in self.allowed_tools
+        ]
 
     def get_tool_definitions_for_message(self, message: str) -> list[dict[str, Any]]:
         from magent.tools.catalog import select_tool_definitions_for_message
@@ -255,6 +263,8 @@ class ToolExecutor(
 
     async def dispatch(self, tool_name: str, tool_args: dict[str, Any]) -> ToolResult:
         """Dispatch a tool call by name."""
+        if self.allowed_tools is not None and tool_name not in self.allowed_tools:
+            return {"ok": False, "error": f"Tool disabled by active agent profile: {tool_name}"}
         a = _normalize_tool_args(tool_name, strip_tool_activity(tool_args))
         from magent.agraph.runtime_context import authorize_graph_tool
 

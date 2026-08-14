@@ -35,6 +35,7 @@ class ContextRuntimeMixin:
     compacted_summary: str
     scratchpad: dict[str, Any]
     conversation: list[dict[str, str]]
+    profile: Any
 
     def _cwd(self) -> str:
         return str(getattr(self, "cwd", "."))
@@ -44,6 +45,13 @@ class ContextRuntimeMixin:
 
     def _build_stable_prompt(self) -> str:
         parts = [AGENT_STATIC_PROMPT]
+        profile = getattr(self, "profile", None)
+        if profile is not None:
+            from magent.agent_profiles.render import render_profile_prompt
+
+            rendered = render_profile_prompt(profile)
+            if rendered:
+                parts.append(rendered)
         if self._should_inject_tool_use_enforcement():
             parts.append(TOOL_USE_ENFORCEMENT_PROMPT)
             parts.append(OPEN_MODEL_EXECUTION_PROMPT)
@@ -68,6 +76,15 @@ class ContextRuntimeMixin:
         if self.memory.available:
             recalled = self.memory.recall(user_message)
             if recalled:
+                memory_budget = int(getattr(self.config, "memory_budget_tokens", 4000))
+                profile = getattr(self, "profile", None)
+                if profile is not None:
+                    memory_budget = max(0, memory_budget - int(profile.max_state_tokens))
+                recalled = truncate_to_tokens(
+                    recalled,
+                    memory_budget,
+                    "[memory context truncated to reserve profile state]",
+                )
                 memory_context = f"## Your Memory (what you know about this user)\n\n{recalled}\n"
         repo_context = ""
         repo_slice = self.repo_map.relevant_slice(user_message, self.config.repo_map_budget_tokens)
@@ -223,6 +240,12 @@ class ContextRuntimeMixin:
             from magent.budgets import SpendTracker
 
             tracker = SpendTracker(self.config)
+            profile = getattr(self, "profile", None)
+            if profile is not None and float(profile.session_usd or 0.0) > 0:
+                current = float(tracker.limits.get("session_usd", 0.0) or 0.0)
+                tracker.limits["session_usd"] = (
+                    min(current, profile.session_usd) if current else profile.session_usd
+                )
             self._spend_tracker = tracker
         return tracker
 

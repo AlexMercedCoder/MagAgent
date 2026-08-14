@@ -1,0 +1,28 @@
+{
+  "oap": "1.0",
+  "implementation": "magagent",
+  "version": "0.92.0",
+  "level": 2,
+  "encodings": ["yaml", "json", "md"],
+  "discovery_roots": ["managed", "user", "project", "portable", "plugin"],
+  "security": {
+    "root_derived_trust": true,
+    "capability_narrowing": true,
+    "untrusted_state": true,
+    "state_only_deltas": true,
+    "reviewed_writeback": true,
+    "atomic_writes": true
+  },
+  "unimplemented": [
+    "extends",
+    "spec.tools.mcp_servers",
+    "spec.tools.skills",
+    "spec.runtime.subagents",
+    "spec.memory.stores"
+  ],
+  "provenance": {
+    "guide": "docs/oap-implementation-plan.md",
+    "schema": "src/magent/agent_profiles/schema/v1/profile.schema.json",
+    "note": "The upstream OAP repository named by the guide was not publicly discoverable when this implementation was prepared."
+  }
+}
