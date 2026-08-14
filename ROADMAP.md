@@ -3,7 +3,7 @@
 > Canonical roadmap for all remaining MagAgent work through `1.0.0`.
 >
 > Last reviewed: 2026-08-14
-> Current release: `0.92.0`
+> Current release: `0.93.0`
 
 ## Product Promise
 
@@ -15,11 +15,11 @@ actions, recover interrupted work, and understand the compatibility and safety p
 The remaining path is about reliability, evidence, cohesion, and supportability. New
 feature families should wait unless they directly close a milestone gate.
 
-Open Agent Profile v1 is the deliberate pre-1.0 interoperability exception. Version 0.92.0
-ships Level 2 behind MagAgent's existing safety boundaries so portable agent identity and
-reviewed agent-scoped learning can soak before the 1.0 contract is declared final. Level 3
-composition, profile MCP/skill contributions, and profile-declared subagent topology remain
-post-1.0 candidates unless conformance evidence makes them release-critical.
+Open Agent Profile v1 is the deliberate pre-1.0 interoperability exception. Version 0.93.0
+ships provisional Level 3 harness support behind MagAgent's existing safety boundaries:
+composition, scoped MCP and skills, declared memory stores, constrained delegation, and
+background profile continuity. Formal certification remains pending until the canonical OAP
+repository and reference fixtures can be pinned and compared.
 
 ## Principles
 

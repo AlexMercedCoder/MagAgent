@@ -244,11 +244,15 @@ writeback = "propose"
 max_state_tokens = 1200
 max_state_bytes = 200000
 max_profiles = 200
+max_delegation_depth = 3
 ```
 
 `writeback` is a ceiling, not a grant. A profile cannot request a more permissive mode.
 Profile tools and permissions are always intersected with the active MagAgent policy. See
 `magent docs show agents` and use `magent agent explain NAME` to inspect the effective result.
+Gateways may set `agent_profile = "review"`; daemon asks use `magent daemon enqueue ask TASK
+--agent review`; and goals use `magent goal TASK --agent review`. Remote messages cannot choose
+or widen a gateway profile.
 
 Project-local config:
 

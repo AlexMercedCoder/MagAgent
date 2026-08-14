@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from magent.agent_profiles.composition import resolve_composition
 from magent.agent_profiles.digest import digest_document, digest_spec
 from magent.agent_profiles.documents import parse_document, validate_document
 from magent.agent_profiles.errors import ProfileError
@@ -123,7 +124,7 @@ class AgentProfileRegistry:
         maximum = int(self._setting("max_profiles", 200))
         if len(selected) > maximum:
             raise ProfileError(f"profile count {len(selected)} exceeds configured maximum {maximum}")
-        return selected, warnings
+        return resolve_composition(selected), warnings
 
     def list(self) -> dict[str, Any]:
         profiles, warnings = self.discover()

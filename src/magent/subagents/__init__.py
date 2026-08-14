@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from dataclasses import dataclass
+from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -40,6 +41,7 @@ class SubAgentRunner:
         config,
         quiet: bool = False,
         parent_task_id: str = "",
+        parent_profile: Any | None = None,
     ):
         self.username = username
         self.provider = provider
@@ -48,11 +50,17 @@ class SubAgentRunner:
         self.config = config
         self.quiet = quiet
         self.parent_task_id = parent_task_id
+        self.parent_profile = parent_profile
         self._execution_task_id = ""
         self._tasks: dict[str, SubAgentTask] = {}
 
     async def spawn(
-        self, task_id: str, description: str, *, execution_task_id: str = ""
+        self,
+        task_id: str,
+        description: str,
+        *,
+        execution_task_id: str = "",
+        profile_name: str = "",
     ) -> SubAgentTask:
         """
         Spawn a sub-agent to complete a focused task.
@@ -62,6 +70,13 @@ class SubAgentRunner:
         self._execution_task_id = ""
         task = SubAgentTask(task_id=task_id, description=description)
         max_subagents = int(getattr(self.config, "max_subagents", 3))
+        if self.parent_profile is not None:
+            max_subagents = min(max_subagents, self.parent_profile.max_subagents)
+            if self.parent_profile.max_parallel_subagents <= 0:
+                task.done = True
+                task.error = "Active agent profile does not permit parallel subagents"
+                self._tasks[task_id] = task
+                return task
         # The cap is on *concurrency*, not on how many sub-agents this runner
         # has ever spawned. Counting finished tasks meant `/spawn` failed
         # forever after N total spawns, and because goal_orchestrator reuses one
@@ -75,6 +90,49 @@ class SubAgentRunner:
                 console.print(f"[dim red]✗ {task.error}[/dim red]")
             return task
         self._tasks[task_id] = task
+
+        child_profile = None
+        if self.parent_profile is not None:
+            allowed = self.parent_profile.subagents
+            if allowed == ():
+                task.done = True
+                task.error = "Active agent profile does not permit subagents"
+                return task
+            if self.parent_profile.max_delegation_depth <= 0:
+                task.done = True
+                task.error = "Agent profile delegation depth exhausted"
+                return task
+            if not profile_name and allowed:
+                profile_name = allowed[0]
+            elif not profile_name:
+                # Re-resolving the parent as a child applies the delegation
+                # depth decrement and preserves every parent capability ceiling.
+                profile_name = self.parent_profile.name
+            if profile_name and allowed is not None and profile_name not in allowed:
+                task.done = True
+                task.error = (
+                    f"Subagent profile {profile_name!r} is outside the parent delegation policy"
+                )
+                return task
+        if profile_name:
+            from magent.agent_profiles.effective import resolve_effective_profile
+            from magent.agent_profiles.registry import AgentProfileRegistry
+            from magent.tools.catalog import built_in_tool_definitions
+
+            resolved = AgentProfileRegistry(self.cwd, self.config).get(profile_name)
+            if resolved is None:
+                task.done = True
+                task.error = f"Subagent profile not found: {profile_name}"
+                return task
+            granted = {
+                item.get("function", {}).get("name", "") for item in built_in_tool_definitions()
+            }
+            child_profile = resolve_effective_profile(
+                resolved,
+                self.config,
+                granted,
+                parent=self.parent_profile,
+            )
 
         if not self.quiet:
             console.print(
@@ -90,13 +148,31 @@ class SubAgentRunner:
             from magent.execution_bridge import SessionTaskBridge
             from magent.workbench_store import WorkbenchStore
 
+            child_provider = self.provider
+            if child_profile is not None and (
+                child_profile.provider != getattr(self.provider, "provider_id", "")
+                or child_profile.model != getattr(self.provider, "model", "")
+            ):
+                from magent.providers import build_provider
+
+                provider_config = self.config.provider_config(child_profile.provider)
+                provider_credential = self.config.resolve_api_key(
+                    child_profile.provider
+                ) or provider_config.get("api_key")
+                child_provider = build_provider(
+                    child_profile.provider,
+                    child_profile.model,
+                    provider_credential,
+                    provider_config,
+                )
             session = AgentSession(
                 username=self.username,
                 config=self.config,
-                provider=self.provider,
+                provider=child_provider,
                 extraction_provider=self.extraction_provider,
                 cwd=self.cwd,
                 project_slug=None,
+                profile=child_profile,
             )
             bridge = SessionTaskBridge(
                 WorkbenchStore(self.username),
@@ -105,10 +181,16 @@ class SubAgentRunner:
                 title=description[:500],
                 project=self.cwd,
                 permission_policy=str(getattr(self.config, "permission_mode", "balanced")),
-                provider=self.provider,
+                provider=child_provider,
                 task_id=execution_task_id,
                 parent_task_id=self.parent_task_id,
-                metadata={"subagent_id": task_id},
+                metadata={
+                    "subagent_id": task_id,
+                    "agent_profile": child_profile.name if child_profile else "",
+                    "parent_agent_profile": (
+                        self.parent_profile.name if self.parent_profile else ""
+                    ),
+                },
             )
 
             # Single-turn sub-agent: send task, get result
@@ -144,6 +226,8 @@ class SubAgentRunner:
         the caller got fewer results than it asked for with no error.
         """
         max_parallel = max(1, int(getattr(self.config, "max_parallel_subagents", 2)))
+        if self.parent_profile is not None:
+            max_parallel = max(1, min(max_parallel, self.parent_profile.max_parallel_subagents))
         results: list[SubAgentTask] = []
         for start in range(0, len(tasks), max_parallel):
             wave = tasks[start : start + max_parallel]

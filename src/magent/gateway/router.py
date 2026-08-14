@@ -137,10 +137,26 @@ class MessageRouter:
             from magent.providers import build_provider
 
             config = load_config(self._username)
-            p_cfg = config.provider_config(config.default_provider)
-            api_key = config.resolve_api_key(config.default_provider) or p_cfg.get("api_key")
+            profile = None
+            profile_name = str(self.config.get("agent_profile") or "").strip()
+            provider_name, model_name = config.default_provider, config.default_model
+            if profile_name:
+                from magent.agent_profiles.effective import resolve_effective_profile
+                from magent.agent_profiles.registry import AgentProfileRegistry
+                from magent.tools.catalog import built_in_tool_definitions
 
-            provider = build_provider(config.default_provider, config.default_model, api_key, p_cfg)
+                resolved = AgentProfileRegistry(Path.cwd(), config).get(profile_name)
+                if resolved is None:
+                    raise RuntimeError(f"Gateway agent profile not found: {profile_name}")
+                granted = {
+                    item.get("function", {}).get("name", "") for item in built_in_tool_definitions()
+                }
+                profile = resolve_effective_profile(resolved, config, granted)
+                provider_name, model_name = profile.provider, profile.model
+            p_cfg = config.provider_config(provider_name)
+            api_key = config.resolve_api_key(provider_name) or p_cfg.get("api_key")
+
+            provider = build_provider(provider_name, model_name, api_key, p_cfg)
             ext_p_cfg = config.provider_config(config.extraction_provider)
             ext_key = config.resolve_api_key(config.extraction_provider) or ext_p_cfg.get("api_key")
             ext_provider = build_provider(
@@ -159,6 +175,7 @@ class MessageRouter:
                 cwd=os.getcwd(),
                 project_slug=f"gateway_{channel_id[:12]}",
                 interactive_permissions=False,
+                profile=profile,
             )
             self._session_cache[channel_id] = session
 
@@ -250,7 +267,11 @@ class MessageRouter:
                 task = enqueue_task(
                     WorkbenchStore(self._username),
                     "ask",
-                    {"task": msg.text, "source": f"{msg.platform}/{msg.channel_id}"},
+                    {
+                        "task": msg.text,
+                        "source": f"{msg.platform}/{msg.channel_id}",
+                        "agent": str(self.config.get("agent_profile") or ""),
+                    },
                     project=".",
                 )
                 return (

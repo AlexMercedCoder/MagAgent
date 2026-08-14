@@ -9,7 +9,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'0.92.0'`
+- `agent.version` default: `'0.93.0'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 - `agent.max_model_rounds_per_turn` default: `16`
@@ -126,6 +126,7 @@ Stored at `~/.config/magent/config.toml`.
 - `agent_profiles.max_state_tokens` default: `1200`
 - `agent_profiles.max_state_bytes` default: `200000`
 - `agent_profiles.max_profiles` default: `200`
+- `agent_profiles.max_delegation_depth` default: `3`
 
 ## User Profile
 

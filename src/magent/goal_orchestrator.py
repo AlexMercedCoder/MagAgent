@@ -75,6 +75,7 @@ def create_orchestrated_goal(
     max_steps: int = 3,
     planning_model_role: str = "review",
     execution_model_role: str = "coding",
+    agent_profile: str = "",
     quiet: bool = False,
 ) -> dict[str, Any]:
     """Create a durable staged plan and cached step packets for a goal."""
@@ -87,11 +88,18 @@ def create_orchestrated_goal(
         planning_role=planning_model_role,
         execution_role=execution_model_role,
         state="planning",
-        metadata={"verify": verify, "review": review},
+        metadata={"verify": verify, "review": review, "agent_profile": agent_profile},
     )
     profile = project_profile(root)
     steps = _build_steps(goal, profile, verify=verify, review=review, max_steps=max_steps)
-    cache_key = _cache_key(goal, root, steps, planning_model_role, execution_model_role)
+    cache_key = _cache_key(
+        goal,
+        root,
+        steps,
+        planning_model_role,
+        execution_model_role,
+        agent_profile=agent_profile,
+    )
     master_plan = _render_master_plan(
         goal,
         root=root,
@@ -134,6 +142,7 @@ def create_orchestrated_goal(
             "max_steps": len(steps),
             "planning_model_role": planning_model_role,
             "execution_model_role": execution_model_role,
+            "agent_profile": agent_profile,
             "cache_key": cache_key,
             "execution_task_id": runtime_task["id"],
             "created_at": now_iso(),
@@ -157,6 +166,7 @@ def create_orchestrated_goal(
                 "cache_key": cache_key,
                 "planning_model_role": planning_model_role,
                 "execution_model_role": execution_model_role,
+                "agent_profile": agent_profile,
                 "steps": steps,
                 "step_packets": step_packets,
                 "step_statuses": [
@@ -194,6 +204,7 @@ async def run_orchestrated_goal(
     max_steps: int = 3,
     planning_model_role: str = "review",
     execution_model_role: str = "coding",
+    agent_profile: str = "",
     quiet: bool = False,
 ) -> dict[str, Any]:
     """Create and run a staged goal sequentially through sub-agents."""
@@ -206,6 +217,7 @@ async def run_orchestrated_goal(
         max_steps=max_steps,
         planning_model_role=planning_model_role,
         execution_model_role=execution_model_role,
+        agent_profile=agent_profile,
     )
     run_result = await run_orchestrated_plan(
         store,
@@ -238,6 +250,24 @@ async def run_orchestrated_plan(
     if not plan:
         return {"ok": False, "error": f"Orchestrated plan not found: {plan_id}", "plan_id": plan_id}
     orchestration = _normalize_orchestration(plan)
+    parent_profile = None
+    agent_profile = str(orchestration.get("agent_profile") or "").strip()
+    if agent_profile:
+        from magent.agent_profiles.effective import resolve_effective_profile
+        from magent.agent_profiles.registry import AgentProfileRegistry
+        from magent.tools.catalog import built_in_tool_definitions
+
+        resolved = AgentProfileRegistry(plan.get("root") or ".", config).get(agent_profile)
+        if resolved is None:
+            return {
+                "ok": False,
+                "error": f"Agent profile not found: {agent_profile}",
+                "plan_id": plan_id,
+            }
+        granted = {
+            item.get("function", {}).get("name", "") for item in built_in_tool_definitions()
+        }
+        parent_profile = resolve_effective_profile(resolved, config, granted)
     # Preview has this guard; run did not, so a fully completed plan re-ran its
     # last step (_start_index clamps to len(steps)-1) on every invocation.
     if orchestration.get("status") == "completed" and not retry_step:
@@ -276,6 +306,7 @@ async def run_orchestrated_plan(
         config,
         quiet=quiet,
         parent_task_id=execution_task_id,
+        parent_profile=parent_profile,
     )
     completed: list[dict[str, Any]] = _prior_summaries(orchestration, start_index)
     step_statuses = _step_statuses(orchestration)
@@ -339,7 +370,10 @@ async def run_orchestrated_plan(
         step = orchestration["steps"][index]
         step_statuses[index] = {**step_statuses[index], "status": "running", "started_at": now_iso()}
         try:
-            task = await runner.spawn(f"{plan['id']}_step_{index + 1}", prompt)
+            task = await runner.spawn(
+                f"{plan['id']}_step_{index + 1}",
+                prompt,
+            )
             task_result, task_error = task.result, task.error
         except Exception as exc:
             task_result, task_error = "", str(exc)
@@ -702,6 +736,8 @@ def _cache_key(
     steps: list[dict[str, Any]],
     planning_model_role: str,
     execution_model_role: str,
+    *,
+    agent_profile: str = "",
 ) -> str:
     payload = {
         "goal": goal,
@@ -709,6 +745,7 @@ def _cache_key(
         "steps": [step["title"] for step in steps],
         "planning_model_role": planning_model_role,
         "execution_model_role": execution_model_role,
+        "agent_profile": agent_profile,
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
@@ -724,6 +761,7 @@ def _normalize_orchestration(plan: dict[str, Any]) -> dict[str, Any]:
     orchestration.setdefault(
         "execution_model_role", str(plan.get("execution_model_role") or "coding")
     )
+    orchestration.setdefault("agent_profile", str(plan.get("agent_profile") or ""))
     orchestration.setdefault("execution_task_id", str(plan.get("execution_task_id") or ""))
     orchestration["steps"] = steps
     orchestration.setdefault("step_packets", [])

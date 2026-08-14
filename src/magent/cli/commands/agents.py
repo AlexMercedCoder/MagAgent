@@ -159,12 +159,16 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         console.print_json(data={"ok": True, "deltas": ProfileDeltaInbox(project).pending()})
 
     @agent_app.command("accept")
-    def agent_accept_cmd(delta_id: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_accept_cmd(
+        delta_id: str,
+        project: str = typer.Option(".", "--project", "-p"),
+        rebase: bool = typer.Option(True, "--rebase/--no-rebase", help="Rebase when unrelated profile state changed."),
+    ) -> None:
         """Apply a reviewed profile state delta."""
         from magent.agent_profiles.delta import ProfileDeltaInbox
 
         try:
-            item = ProfileDeltaInbox(project).decide(delta_id, "accepted")
+            item = ProfileDeltaInbox(project).decide(delta_id, "accepted", auto_rebase=rebase)
             console.print_json(data={"ok": True, "delta": item})
         except Exception as exc:
             console.print_json(data={"ok": False, "error": str(exc)})
@@ -183,6 +187,16 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         """Show full and spec-only canonical digests."""
         profile, _ = _require_profile(name, project)
         console.print_json(data={"ok": True, "name": profile.name, "profile_digest": profile.profile_digest, "spec_digest": profile.spec_digest})
+
+    @agent_app.command("conformance")
+    def agent_conformance_cmd() -> None:
+        """Run the packaged offline OAP Level 3 harness conformance suite."""
+        from magent.agent_profiles.conformance import run_conformance
+
+        result = run_conformance()
+        console.print_json(data=result)
+        if not result["ok"]:
+            raise typer.Exit(1)
 
     @agent_app.command("run")
     def agent_run_cmd(name: str, task: str, project: str = typer.Option(".", "--project", "-p")) -> None:

@@ -1,0 +1,44 @@
+{
+  "schema": "oap.conformance.v1",
+  "valid": [
+    {
+      "oap": "1.0",
+      "metadata": {"name": "base", "revision": 1},
+      "spec": {
+        "role": {"instructions": "Inspect the project."},
+        "tools": {
+          "allow": ["read_file", "run_shell"],
+          "mcp_servers": ["github"],
+          "skills": ["review"]
+        },
+        "runtime": {
+          "subagents": {
+            "allow": ["review"],
+            "max_subagents": 1,
+            "max_parallel": 1,
+            "max_depth": 1
+          }
+        },
+        "memory": {
+          "stores": [
+            {"name": "user-graph", "kind": "maggraph", "mode": "read"}
+          ]
+        }
+      }
+    },
+    {
+      "oap": "1.0",
+      "extends": "base",
+      "metadata": {"name": "child", "revision": 1},
+      "spec": {
+        "role": {"instructions": "Report findings."},
+        "tools": {"allow": ["read_file", "write_file"], "mcp_servers": ["github"]}
+      }
+    }
+  ],
+  "invalid": [
+    {"metadata": {"name": "missing-version", "revision": 1}, "spec": {"role": {}}},
+    {"oap": "1.0", "metadata": {"name": "Bad Name", "revision": 1}, "spec": {"role": {}}},
+    {"oap": "1.0", "metadata": {"name": "bad-store", "revision": 1}, "spec": {"role": {}, "memory": {"stores": [{"name": "x", "kind": "executable", "mode": "read"}]}}}
+  ]
+}

@@ -73,11 +73,14 @@ class ContextRuntimeMixin:
 
     def _build_context_prompt(self, user_message: str) -> str:
         memory_context = ""
-        if self.memory.available:
+        profile = getattr(self, "profile", None)
+        memory_allowed = profile is None or getattr(profile, "allows_memory", lambda _action: True)(
+            "read"
+        )
+        if memory_allowed and self.memory.available:
             recalled = self.memory.recall(user_message)
             if recalled:
                 memory_budget = int(getattr(self.config, "memory_budget_tokens", 4000))
-                profile = getattr(self, "profile", None)
                 if profile is not None:
                     memory_budget = max(0, memory_budget - int(profile.max_state_tokens))
                 recalled = truncate_to_tokens(
@@ -103,6 +106,11 @@ class ContextRuntimeMixin:
         skill_context = self.skill_registry.build_skill_context(
             user_message,
             budget_tokens=self.config.skill_budget_tokens,
+            allowed_names=(
+                None
+                if profile is None or getattr(profile, "skills", None) is None
+                else set(profile.skills)
+            ),
         )
         return AGENT_CONTEXT_PROMPT.format(
             memory_context=memory_context,

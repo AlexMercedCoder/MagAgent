@@ -17,6 +17,8 @@ def _state_entries(value: Any) -> list[dict[str, Any]]:
 
 
 def render_state(profile: EffectiveProfile) -> str:
+    if not profile.allows_store("oap-state", "read"):
+        return ""
     entries = _state_entries(profile.resolved.document.get("state", []))
     pinned = [item for item in entries if item.get("pinned")]
     others = [item for item in entries if not item.get("pinned")]
@@ -48,17 +50,19 @@ def render_state(profile: EffectiveProfile) -> str:
 
 
 def render_profile_prompt(profile: EffectiveProfile) -> str:
-    role = profile.resolved.document.get("spec", {}).get("role", {})
     blocks = []
     labels = (
         ("instructions", "Agent Instructions"), ("objectives", "Objectives"),
         ("persona", "Persona"), ("constraints", "Constraints"), ("examples", "Examples"),
     )
-    for key, label in labels:
-        value = role.get(key)
-        if value:
-            text = "\n".join(str(item) for item in value) if isinstance(value, list) else str(value)
-            blocks.append(f"## {label}\n{text.strip()}")
+    for document in (*profile.resolved.lineage, profile.resolved.document):
+        role = document.get("spec", {}).get("role", {})
+        name = str(document.get("metadata", {}).get("name", "profile"))
+        for key, label in labels:
+            value = role.get(key)
+            if value:
+                text = "\n".join(str(item) for item in value) if isinstance(value, list) else str(value)
+                blocks.append(f"## {label} ({name})\n{text.strip()}")
     state = render_state(profile)
     if state:
         blocks.append(state)

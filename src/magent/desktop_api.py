@@ -152,7 +152,7 @@ def system_info() -> dict[str, Any]:
         },
         "open_agent_profile": {
             "spec_version": "1.0",
-            "conformance_level": 2,
+            "conformance_level": 3,
             "encodings": ["yaml", "json", "md"],
         },
         "python": sys.version.split()[0],
@@ -203,7 +203,7 @@ def platform_contracts() -> dict[str, Any]:
             "open_agent_profile": {
                 "version": "1.0",
                 "status": "beta",
-                "conformance_level": 2,
+                "conformance_level": 3,
                 "transport": "json",
             },
             "mcp": {
@@ -247,7 +247,10 @@ def agent_profile(name: str, project: str = ".", *, effective: bool = False) -> 
     from magent.tools.catalog import built_in_tool_definitions
 
     granted = {item.get("function", {}).get("name", "") for item in built_in_tool_definitions()}
-    return {"ok": True, "effective_profile": resolve_effective_profile(resolved, config, granted).as_dict()}
+    return {
+        "ok": True,
+        "effective_profile": resolve_effective_profile(resolved, config, granted).as_dict(),
+    }
 
 
 def agent_profile_inbox(project: str = ".") -> dict[str, Any]:
@@ -255,6 +258,13 @@ def agent_profile_inbox(project: str = ".") -> dict[str, Any]:
     from magent.agent_profiles.delta import ProfileDeltaInbox
 
     return {"ok": True, "deltas": ProfileDeltaInbox(project).pending()}
+
+
+def agent_profile_conformance() -> dict[str, Any]:
+    """Return offline OAP harness conformance evidence for desktop clients."""
+    from magent.agent_profiles.conformance import run_conformance
+
+    return run_conformance()
 
 
 def graph_validate(path: str, *, strict: bool = False) -> dict[str, Any]:

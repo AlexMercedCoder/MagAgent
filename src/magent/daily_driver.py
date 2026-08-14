@@ -20,6 +20,7 @@ def create_goal(
     max_loops: int = 3,
     verifier_model: str = "cheap",
     reviewer_model: str = "review",
+    agent_profile: str = "",
 ) -> dict[str, Any]:
     """Create a durable goal-loop record and optional background task."""
     root = Path(project).resolve()
@@ -42,6 +43,7 @@ def create_goal(
             "max_loops": max_loops,
             "verifier_model": verifier_model,
             "reviewer_model": reviewer_model,
+            "agent_profile": agent_profile,
             "prompt": instructions,
             "created_at": now_iso(),
         },
@@ -59,7 +61,11 @@ def create_goal(
         queued = enqueue_task(
             store,
             "ask",
-            {"task": instructions, "source": f"goal/{record['id']}"},
+            {
+                "task": instructions,
+                "source": f"goal/{record['id']}",
+                "agent": agent_profile,
+            },
             project=root,
         )
     return {"ok": True, "goal": record, "plan": plan, "queued": queued}

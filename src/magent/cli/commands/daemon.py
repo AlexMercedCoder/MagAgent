@@ -15,13 +15,25 @@ def register_daemon_commands(daemon_app: typer.Typer) -> None:
         value: str = typer.Argument(...),
         project: str = typer.Option(".", "--project", "-p"),
         run_at: str = typer.Option("", "--run-at"),
+        agent: str = typer.Option("", "--agent", help="Run ask tasks with an OAP profile."),
     ) -> None:
         """Enqueue an ask, recipe, plan, or shell task."""
         from magent.cli.command_context import store
         from magent.daemon import enqueue_task
 
-        payload_key = {"recipe": "name", "plan": "id", "orchestrated_goal": "id", "agraph": "path", "shell": "command"}.get(kind, "task")
-        console.print_json(data=enqueue_task(store(), kind, {payload_key: value}, project=project, run_at=run_at))
+        payload_key = {
+            "recipe": "name",
+            "plan": "id",
+            "orchestrated_goal": "id",
+            "agraph": "path",
+            "shell": "command",
+        }.get(kind, "task")
+        payload = {payload_key: value}
+        if agent:
+            payload["agent"] = agent
+        console.print_json(
+            data=enqueue_task(store(), kind, payload, project=project, run_at=run_at)
+        )
 
     @daemon_app.command("list")
     def daemon_list_cmd(status: str = typer.Option("", "--status")) -> None:

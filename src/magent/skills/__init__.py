@@ -115,8 +115,14 @@ def parse_skill_file(path: Path) -> Skill | None:
 class SkillRegistry:
     """Discovers and manages available skills."""
 
-    def __init__(self, extra_dirs: list[Path] | None = None):
+    def __init__(
+        self,
+        extra_dirs: list[Path] | None = None,
+        *,
+        allowed_names: set[str] | None = None,
+    ):
         self.skills: list[Skill] = []
+        self.allowed_names = allowed_names
         self._search_dirs: list[Path] = [SKILLS_DIR, BUILTIN_SKILLS_DIR]
         if extra_dirs:
             self._search_dirs.extend(extra_dirs)
@@ -144,7 +150,7 @@ class SkillRegistry:
                 if locked_paths is not None and str(skill_md) not in locked_paths:
                     continue
                 skill = parse_skill_file(skill_md)
-                if skill:
+                if skill and (self.allowed_names is None or skill.name in self.allowed_names):
                     self.skills.append(skill)
 
         return len(self.skills)
@@ -158,15 +164,31 @@ class SkillRegistry:
         SKILLS_LOCK.parent.mkdir(parents=True, exist_ok=True)
         SKILLS_LOCK.write_text(json.dumps(lock_data, indent=2))
 
-    def match(self, user_message: str, max_skills: int = MAX_ACTIVE_SKILLS) -> list[Skill]:
+    def match(
+        self,
+        user_message: str,
+        max_skills: int = MAX_ACTIVE_SKILLS,
+        *,
+        allowed_names: set[str] | None = None,
+    ) -> list[Skill]:
         if not self.skills:
             return []
-        scored = [(s.score_relevance(user_message), s) for s in self.skills]
+        scored = [
+            (s.score_relevance(user_message), s)
+            for s in self.skills
+            if allowed_names is None or s.name in allowed_names
+        ]
         scored.sort(key=lambda x: x[0], reverse=True)
         return [s for score, s in scored[:max_skills] if score > 0.05]
 
-    def build_skill_context(self, user_message: str, budget_tokens: int = 2000) -> str:
-        active = self.match(user_message)
+    def build_skill_context(
+        self,
+        user_message: str,
+        budget_tokens: int = 2000,
+        *,
+        allowed_names: set[str] | None = None,
+    ) -> str:
+        active = self.match(user_message, allowed_names=allowed_names)
         if not active:
             return ""
         blocks = []

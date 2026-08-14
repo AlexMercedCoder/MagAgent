@@ -70,6 +70,7 @@ class ToolLoopRuntimeMixin:
     _prune_stale_tool_results: Any
     _tool_definitions: Any
     _log_llm_usage: Any
+    _mcp_tool_allowed: Any
     _compress_tool_result: Any
     _resolve_agent_message: Any
 
@@ -518,7 +519,9 @@ class ToolLoopRuntimeMixin:
         )
 
     def _max_model_rounds_per_turn(self) -> int:
-        configured = int(getattr(self.config, "max_model_rounds_per_turn", MAX_MODEL_ROUNDS_PER_TURN))
+        configured = int(
+            getattr(self.config, "max_model_rounds_per_turn", MAX_MODEL_ROUNDS_PER_TURN)
+        )
         profile = getattr(self, "profile", None)
         if profile is not None and int(profile.max_turns or 0) > 0:
             return min(configured, int(profile.max_turns))
@@ -933,7 +936,12 @@ class ToolLoopRuntimeMixin:
         # Hooks run off the loop: a synchronous subprocess here blocked every
         # other task for up to the hook timeout.
         await run_hooks_async(self._cwd(), "pre_tool", {"tool": tool_name, "args": tool_args})
-        if self.mcp.is_mcp_tool(tool_name):
+        if tool_name.startswith("mcp__") and not self._mcp_tool_allowed(tool_name):
+            result = {
+                "ok": False,
+                "error": "MCP tool is outside the active agent profile capability set",
+            }
+        elif self.mcp.is_mcp_tool(tool_name):
             result = await self.mcp.dispatch(tool_name, dispatch_args)
         else:
             result = await self.tools.dispatch(tool_name, dispatch_args)

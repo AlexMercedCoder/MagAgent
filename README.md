@@ -51,7 +51,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Bridges workbench state into durable MagGraph memory through context maps and explicit memory promotion
 - Documents architecture boundaries for memory, workbench, context, tools, CLI/TUI, and compatibility-safe refactors
 - Saves and runs reusable workflow recipes for release prep, bug triage, docs audits, dependency upgrades, and test repair
-- Defines portable, stateful Open Agent Profile v1 agents in `.magent/agents/` or `.agents/`, with safe capability narrowing, reviewed learning, and `@review`, `@explore`, and `@docs` invocation
+- Defines portable, stateful Open Agent Profile v1 Level 3 agents in `.magent/agents/` or `.agents/`, with inheritance, scoped MCP/skills/memory/subagents, safe capability narrowing, reviewed learning, and `@review`, `@explore`, and `@docs` invocation
 - Runs project hooks around tools, edits, command failures, memory candidates, and release checks
 - Runs real local LSP clients for Python, TypeScript/JavaScript, Rust, and Go, with capability-aware symbols, diagnostics, definitions, references, hover, and rename
 - Queues background asks, recipes, plans, shell tasks, followups, and gateway tasks through `magent daemon`

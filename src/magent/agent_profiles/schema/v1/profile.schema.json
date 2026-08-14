@@ -7,6 +7,12 @@
   "required": ["oap", "metadata", "spec"],
   "properties": {
     "oap": {"const": "1.0"},
+    "extends": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      ]
+    },
     "metadata": {
       "type": "object",
       "required": ["name", "revision"],
@@ -24,10 +30,59 @@
       "properties": {
         "role": {"type": "object", "properties": {"instructions": {"type": "string"}}, "additionalProperties": true},
         "model": {"type": "object", "additionalProperties": true},
-        "tools": {"type": "object", "additionalProperties": true},
+        "tools": {
+          "type": "object",
+          "properties": {
+            "allow": {"type": "array", "items": {"type": "string"}},
+            "deny": {"type": "array", "items": {"type": "string"}},
+            "mcp_servers": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+            "skills": {"type": "array", "items": {"$ref": "#/$defs/reference"}}
+          },
+          "additionalProperties": true
+        },
         "permissions": {"type": "object", "additionalProperties": true},
-        "runtime": {"type": "object", "additionalProperties": true},
-        "memory": {"type": "object", "additionalProperties": true},
+        "runtime": {
+          "type": "object",
+          "properties": {
+            "subagents": {
+              "oneOf": [
+                {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+                {
+                  "type": "object",
+                  "properties": {
+                    "allow": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+                    "profiles": {"type": "array", "items": {"$ref": "#/$defs/reference"}},
+                    "max_subagents": {"type": "integer", "minimum": 0},
+                    "max_parallel": {"type": "integer", "minimum": 0},
+                    "max_depth": {"type": "integer", "minimum": 0}
+                  },
+                  "additionalProperties": true
+                }
+              ]
+            }
+          },
+          "additionalProperties": true
+        },
+        "memory": {
+          "type": "object",
+          "properties": {
+            "mode": {"enum": ["off", "read", "write", "read_write"]},
+            "stores": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["name", "kind", "mode"],
+                "properties": {
+                  "name": {"type": "string", "minLength": 1},
+                  "kind": {"enum": ["oap-state", "maggraph"]},
+                  "mode": {"enum": ["off", "read", "write", "read_write"]}
+                },
+                "additionalProperties": true
+              }
+            }
+          },
+          "additionalProperties": true
+        },
         "context": {"type": "object", "additionalProperties": true},
         "lifecycle": {"type": "object", "additionalProperties": true}
       },
@@ -36,6 +91,19 @@
     "state": {"oneOf": [{"type": "array"}, {"type": "object"}]},
     "history": {"type": "array"},
     "proposals": {"type": "array"}
+  },
+  "$defs": {
+    "reference": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "object",
+          "required": ["name"],
+          "properties": {"name": {"type": "string", "minLength": 1}},
+          "additionalProperties": true
+        }
+      ]
+    }
   },
   "additionalProperties": true
 }

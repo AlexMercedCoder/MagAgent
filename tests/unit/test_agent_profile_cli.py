@@ -31,3 +31,12 @@ def test_convert_is_preview_only_without_write_flag(tmp_path: Path) -> None:
     assert "oap: '1.0'" in preview.output
     assert path.read_text(encoding="utf-8") == original
     assert not path.with_suffix(".md.legacy.bak").exists()
+
+
+def test_agent_conformance_command() -> None:
+    result = runner.invoke(app, ["agent", "conformance"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["level"] == 3
+    assert payload["passed"] == payload["total"]

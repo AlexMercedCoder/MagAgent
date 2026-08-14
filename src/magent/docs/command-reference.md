@@ -5,6 +5,7 @@ Generated from the active Typer command tree.
 ## agent
 
 - `magent agent accept`
+- `magent agent conformance`
 - `magent agent convert`
 - `magent agent create`
 - `magent agent digest`

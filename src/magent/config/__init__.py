@@ -146,6 +146,7 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "max_state_tokens": 1200,
         "max_state_bytes": 200000,
         "max_profiles": 200,
+        "max_delegation_depth": 3,
     },
 }
 

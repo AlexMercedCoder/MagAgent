@@ -1,9 +1,9 @@
 # Implementing Open Agent Profile (OAP) v1 in MagAgent
 
-> Implementation status: completed for MagAgent 0.92.0 at OAP v1 Level 2. See
-> `docs/RELEASE_0.92.0.md` and `docs/oap-conformance.json` for shipped scope and evidence.
+> Implementation status: completed through provisional OAP v1 Level 3 in MagAgent 0.93.0.
+> See `docs/RELEASE_0.93.0.md` and `docs/oap-conformance.json` for shipped scope and evidence.
 
-**Status:** Plan, not yet implemented
+**Status:** Implemented; retained as design history
 **Spec:** `open-agent-profile` repository, `spec/v1/SPEC.md`
 **Target:** Conformance Level 2 in the first release, Level 3 incrementally
 **Audience:** An engineer or agent implementing this end to end
@@ -62,19 +62,20 @@ OAP adds the missing layer: a per-agent, bounded, reviewable state block that a 
 - `magent agents` CLI expansion
 - Published conformance statement
 
-### Deferred to Level 3
+### Shipped in Level 3 (0.93.0)
 
-- `extends` composition
-- `spec.tools.mcp_servers` (MagAgent has MCP; wiring through profiles is separable)
-- `spec.tools.skills` references
-- `spec.runtime.subagents` (MagAgent has sub-agent spawning; the delegation ceiling rule is the new part)
-- MagGraph as a declared `spec.memory.stores` entry
+- `extends` composition with deterministic lineage and resolution digests
+- `spec.tools.mcp_servers` selection from locally configured servers
+- `spec.tools.skills` selection from discovered skills
+- `spec.runtime.subagents` with parent-profile intersection and delegation ceilings
+- MagGraph and OAP state as declared `spec.memory.stores` entries
 
-### Out of scope
+### Still out of scope
 
 - Changes to MagGraph itself
 - Changes to the recipe, playbook, or plan formats
-- Any change to how the daemon or gateway queue work
+- Profile-driven installation of MCP servers, skills, plugins, or executable hooks
+- Formal upstream certification until the canonical OAP repository can be pinned
 
 ---
 
@@ -407,16 +408,12 @@ magent agents digest NAME
 {
   "oap": "1.0",
   "implementation": "magagent",
-  "version": "0.92.0",
-  "level": 2,
+  "version": "0.93.0",
+  "level": 3,
   "encodings": ["yaml", "json", "md"],
   "discovery_roots": ["managed", "user", "project", "plugin"],
-  "unimplemented": [
-    "extends",
-    "spec.tools.mcp_servers",
-    "spec.tools.skills",
-    "spec.runtime.subagents"
-  ]
+  "status": "provisional",
+  "unimplemented": []
 }
 ```
 
@@ -452,9 +449,7 @@ Declare MagGraph in the profile as a store, so a reader can see the full picture
 
 ### Sub-agent delegation
 
-MagAgent spawns sub-agents for parallel work. When `spec.runtime.subagents` lands in Level 3, the rule is absolute: **a subagent's effective profile is intersected with the parent's effective profile, not with the harness default.** Otherwise a constrained agent spawns an unconstrained one and delegation becomes a privilege-escalation path.
-
-Until Level 3, sub-agent spawning behaves as today, and `docs/agent-profiles.md` says so plainly rather than implying a guarantee that is not yet there.
+MagAgent spawns sub-agents for parallel work. In Level 3, the rule is absolute: **a subagent's effective profile is intersected with the parent's effective profile, not with the harness default.** Otherwise a constrained agent could spawn an unconstrained one and delegation would become a privilege-escalation path.
 
 ### The daemon and the gateway
 

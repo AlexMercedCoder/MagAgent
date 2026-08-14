@@ -137,7 +137,20 @@ class LifecycleRuntimeMixin:
             builtins = self.tools.get_tool_definitions_for_message(user_message)
         else:
             builtins = self.tools.get_tool_definitions()
-        return builtins + self.mcp.get_tool_definitions()
+        mcp = [
+            item
+            for item in self.mcp.get_tool_definitions()
+            if self._mcp_tool_allowed(str(item.get("function", {}).get("name", "")))
+        ]
+        return builtins + mcp
+
+    def _mcp_tool_allowed(self, tool_name: str) -> bool:
+        profile = getattr(self, "profile", None)
+        servers = getattr(profile, "mcp_servers", None)
+        if profile is None or servers is None:
+            return True
+        parts = tool_name.split("__", 2)
+        return len(parts) == 3 and parts[1] in set(servers)
 
     def _log_llm_usage(self, response: Any) -> None:
         usage = getattr(response, "usage", None)
@@ -170,7 +183,9 @@ class LifecycleRuntimeMixin:
         )
         self._spend.record(cost or 0.0)
 
-    async def spawn_subagent(self, task_id: str, description: str) -> str:
+    async def spawn_subagent(
+        self, task_id: str, description: str, *, profile_name: str = ""
+    ) -> str:
         """Spawn a focused sub-agent for a parallel task. Returns its result."""
         from magent.subagents import SubAgentRunner
 
@@ -182,12 +197,26 @@ class LifecycleRuntimeMixin:
                 cwd=self.cwd,
                 config=self.config,
                 parent_task_id=str(getattr(self, "execution_task_id", "")),
+                parent_profile=getattr(self, "profile", None),
             )
-        task = await self._subagent_runner.spawn(task_id, description)
+        if profile_name:
+            task = await self._subagent_runner.spawn(
+                task_id, description, profile_name=profile_name
+            )
+        else:
+            task = await self._subagent_runner.spawn(task_id, description)
         return task.result if task.done and not task.error else f"[sub-agent error: {task.error}]"
 
     async def _maybe_write_memories(self) -> None:
-        if not self.config.auto_write or not self.memory.available:
+        profile = getattr(self, "profile", None)
+        if (
+            not self.config.auto_write
+            or not self.memory.available
+            or (
+                profile is not None
+                and not getattr(profile, "allows_memory", lambda _action: True)("write")
+            )
+        ):
             return
         if not self.conversation:
             return
@@ -209,7 +238,14 @@ class LifecycleRuntimeMixin:
         await self._maybe_write_memories()
         self._queue_profile_state_deltas()
         self._run_profile_named_hook("on_end")
-        if self.conversation and self.memory.available:
+        profile = getattr(self, "profile", None)
+        if (
+            self.conversation
+            and self.memory.available
+            and (
+                profile is None or getattr(profile, "allows_memory", lambda _action: True)("write")
+            )
+        ):
             summary_parts = [
                 f"Session {self.session_id}",
                 f"Project: {self.project_slug or 'unspecified'}",
@@ -246,7 +282,9 @@ class LifecycleRuntimeMixin:
                 raise RuntimeError(message)
             console.print(f"[dim yellow]{message}[/dim yellow]")
             return
-        run_named_hook(self.cwd, hook_name, {"profile": profile.name, "session_id": self.session_id})
+        run_named_hook(
+            self.cwd, hook_name, {"profile": profile.name, "session_id": self.session_id}
+        )
 
     def propose_profile_state(self, entry_id: str, content: str, *, evidence: str) -> None:
         """Record an evidence-backed agent-scoped fact for inbox review."""
@@ -257,7 +295,14 @@ class LifecycleRuntimeMixin:
     def _queue_profile_state_deltas(self) -> None:
         profile = getattr(self, "profile", None) or getattr(self, "_session_profile", None)
         proposals = list(self.scratchpad.get("profile_state_proposals") or [])
-        if profile is None or profile.writeback == "off" or not proposals:
+        if (
+            profile is None
+            or profile.writeback == "off"
+            or not getattr(profile, "allows_store", lambda _kind, _action: True)(
+                "oap-state", "write"
+            )
+            or not proposals
+        ):
             return
         from magent.agent_profiles.delta import ProfileDeltaInbox, make_delta
 
@@ -268,7 +313,9 @@ class LifecycleRuntimeMixin:
                 "path": f"/state/{entry_id}",
                 "value": {"id": entry_id, "content": str(proposal.get("content", ""))},
             }
-            delta = make_delta(profile.resolved, [operation], evidence=str(proposal.get("evidence", "")))
+            delta = make_delta(
+                profile.resolved, [operation], evidence=str(proposal.get("evidence", ""))
+            )
             ProfileDeltaInbox(self.cwd).add(delta)
 
     async def cancel_active_work(self) -> None:

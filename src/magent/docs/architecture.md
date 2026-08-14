@@ -171,10 +171,12 @@ commands. Expensive actions belong behind explicit button endpoints such as
 
 `magent.agent_profiles` owns Open Agent Profile parsing, validation, canonical digests,
 legacy conversion, root-derived trust, deterministic discovery, capability narrowing,
-stable-prompt rendering, and reviewable state deltas. `ResolvedProfile` represents what a
+stable-prompt rendering, deterministic inheritance composition, scoped MCP/skill/memory
+references, constrained delegation, and reviewable state deltas. `ResolvedProfile` represents what a
 document requests; only `EffectiveProfile`, after intersection with harness policy, may enter
 `AgentSession`. Profile state is untrusted context and delta application is permanently scoped
-to `/state`.
+to `/state`. Child agents are intersected with the parent's effective profile, and queued work
+persists the profile identity so resumption cannot silently widen authority.
 
 `magent.sandbox` owns isolated plan and recipe execution in worktree, copy, and Docker container modes.
 

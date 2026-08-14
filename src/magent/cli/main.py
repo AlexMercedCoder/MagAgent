@@ -391,7 +391,9 @@ def main(
     extract_provider = _build_extraction_provider(config)
 
     if task:
-        _run_one_shot(username, config, main_provider, extract_provider, cwd, task, profile=effective_profile)
+        _run_one_shot(
+            username, config, main_provider, extract_provider, cwd, task, profile=effective_profile
+        )
     else:
         _run_repl(username, config, main_provider, extract_provider, cwd, profile=effective_profile)
 
@@ -1155,13 +1157,22 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
 
     if command == "/spawn":
         if not arg:
-            console.print("[yellow]Usage: /spawn <task description>[/yellow]")
+            console.print("[yellow]Usage: /spawn [@profile] <task description>[/yellow]")
             return True
         import uuid as _uuid
 
         task_id = f"sub_{_uuid.uuid4().hex[:6]}"
+        profile_name = ""
+        description = arg
+        if arg.startswith("@"):
+            profile_name, _, description = arg[1:].partition(" ")
+            if not description.strip():
+                console.print("[yellow]Provide a task after the subagent profile.[/yellow]")
+                return True
         console.print(f"[dim]Spawning sub-agent [{task_id}]...[/dim]")
-        result = _loop.run_until_complete(session.spawn_subagent(task_id, arg))
+        result = _loop.run_until_complete(
+            session.spawn_subagent(task_id, description.strip(), profile_name=profile_name.strip())
+        )
         from magent.tui import print_response
 
         console.print(f"[dim cyan]Sub-agent [{task_id}] result:[/dim cyan]")
@@ -1847,6 +1858,7 @@ def goal_cmd(
     ),
     provider: str | None = typer.Option(None, "--provider", help="Provider ID when using --run."),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name when using --run."),
+    agent: str = typer.Option("", "--agent", help="Run this goal with a named OAP profile."),
     permission_mode: str | None = typer.Option(
         None, "--permission-mode", help="Permission mode when using --run."
     ),
@@ -1891,6 +1903,7 @@ def goal_cmd(
                     max_steps=orchestrated_steps,
                     planning_model_role=planning_model_role,
                     execution_model_role=execution_model_role,
+                    agent_profile=agent,
                     quiet=json_output,
                 )
 
@@ -1905,6 +1918,7 @@ def goal_cmd(
                 max_steps=orchestrated_steps,
                 planning_model_role=planning_model_role,
                 execution_model_role=execution_model_role,
+                agent_profile=agent,
             )
             if background:
                 from magent.daemon import enqueue_task
@@ -1912,7 +1926,7 @@ def goal_cmd(
                 queued = enqueue_task(
                     _store(),
                     "orchestrated_goal",
-                    {"id": result["plan"]["id"], "goal": goal},
+                    {"id": result["plan"]["id"], "goal": goal, "agent": agent},
                     project=project,
                 )
                 result["queued"] = queued
@@ -1963,6 +1977,7 @@ def goal_cmd(
         max_loops=max_loops,
         verifier_model=verifier_model,
         reviewer_model=reviewer_model,
+        agent_profile=agent,
     )
     if json_output:
         console.print_json(data=result)
@@ -1982,6 +1997,11 @@ def goal_cmd(
         cfg = load_config(username)
         main_provider = _build_provider(cfg, provider, model)
         extract_provider = _build_extraction_provider(cfg)
+        effective_profile = _resolve_cli_profile(agent or None, project, cfg)
+        if effective_profile is not None and provider is None and model is None:
+            main_provider = _build_provider(
+                cfg, effective_profile.provider, effective_profile.model
+            )
         _run_one_shot(
             username,
             cfg,
@@ -1992,6 +2012,7 @@ def goal_cmd(
             permission_mode_override=permission_mode,
             repair_attempts=repair_attempts,
             strict_audit=True,
+            profile=effective_profile,
         )
     else:
         console.print("[dim]Run now with:[/dim]")

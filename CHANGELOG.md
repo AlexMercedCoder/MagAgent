@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.93.0
+
+- Completed MagAgent's provisional Open Agent Profile v1 Level 3 harness support with deterministic `extends` composition, inherited policy narrowing, and resolution digests.
+- Added profile-scoped MCP server and skill selection, declared OAP and MagGraph memory stores, and read/write enforcement for state injection, recall, learning, and summaries.
+- Added constrained subagent delegation with parent capability intersection, profile/model routing, delegation depth and concurrency ceilings, manual `/spawn @profile`, and profile continuity across goals, daemon work, and gateways.
+- Added conflict-safe state-delta rebasing for unrelated concurrent edits while preserving fail-closed same-target conflicts.
+- Added packaged offline Level 3 conformance fixtures and `magent agent conformance`, plus machine API conformance reporting and focused inheritance, runtime, daemon, gateway, and security regression tests.
+- Updated repository and in-app documentation for Level 3 authoring, operation, diagnostics, and the remaining upstream-certification caveat.
+
 ## 0.92.0
 
 - Added Open Agent Profile v1 Level 2 support with YAML, JSON, and Markdown encodings, vendored offline schema validation, safe YAML loading, canonical profile/spec digests, and in-memory legacy conversion.

@@ -182,6 +182,7 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
                 "name": profile.name,
                 "revision": profile.resolved.revision,
                 "spec_digest": profile.resolved.spec_digest,
+                "resolution_digest": profile.resolved.resolution_digest,
             }
 
         # Initialize subsystems
@@ -255,6 +256,15 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
         from magent.mcp import MCPManager
 
         mcp_servers_cfg = config.get("mcp", "servers", default={})
+        if (
+            profile is not None
+            and profile.mcp_servers is not None
+            and isinstance(mcp_servers_cfg, dict)
+        ):
+            selected_mcp = set(profile.mcp_servers)
+            mcp_servers_cfg = {
+                name: value for name, value in mcp_servers_cfg.items() if name in selected_mcp
+            }
         self.mcp = MCPManager(
             mcp_servers_cfg if isinstance(mcp_servers_cfg, dict) else {},
             input_handler=self._handle_mcp_input if interactive_permissions else None,
@@ -428,6 +438,7 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
                     "name": effective.name,
                     "revision": effective.resolved.revision,
                     "spec_digest": effective.resolved.spec_digest,
+                    "resolution_digest": effective.resolved.resolution_digest,
                 }
                 # Role instructions are assembled in the stable prompt.
                 return (

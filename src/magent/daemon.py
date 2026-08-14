@@ -31,7 +31,11 @@ def enqueue_task(
         kind,
         _task_title(kind, payload),
         project=project,
-        metadata={"source": "daemon", "run_at": run_at},
+        metadata={
+            "source": "daemon",
+            "run_at": run_at,
+            "agent_profile": str(payload.get("agent") or ""),
+        },
     )
     item: dict[str, Any] = store.append(
         QUEUE_STORE,
@@ -238,6 +242,8 @@ def _execute_item(
         return _run_shell(payload.get("command", ""), project, control_state=control_state)
     else:
         command = ["magent", "ask", payload.get("task", ""), "--project", project]
+        if payload.get("agent"):
+            command.extend(["--agent", str(payload["agent"])])
     return _run_command(command, project, control_state=control_state)
 
 
