@@ -1,0 +1,1474 @@
+{
+  "ok": true,
+  "schema": "magent.release-evidence.v2",
+  "version": "0.94.0",
+  "generated_at": "2026-08-16T18:03:34.587223+00:00",
+  "root": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent",
+  "runtime": {
+    "python": "3.14.5",
+    "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35"
+  },
+  "git": {
+    "commit": "256f008c84ba985139173037fd1d0772c6b23796",
+    "branch": "main",
+    "tag": "",
+    "clean": true,
+    "status": []
+  },
+  "checks": {
+    "docs": {
+      "ok": true,
+      "checks": [
+        {
+          "name": "task-contract",
+          "ok": true,
+          "detail": "magent.task.v2"
+        },
+        {
+          "name": "event-contract",
+          "ok": true,
+          "detail": "magent.task-event.v1"
+        },
+        {
+          "name": "memory-contract",
+          "ok": true,
+          "detail": "maggraph>=0.4.1"
+        },
+        {
+          "name": "state-contract",
+          "ok": true,
+          "detail": "1"
+        },
+        {
+          "name": "supply-chain-contract",
+          "ok": true,
+          "detail": "magent.supply-chain.v1"
+        },
+        {
+          "name": "python-3.11",
+          "ok": true,
+          "detail": "Python 3.11"
+        },
+        {
+          "name": "python-3.12",
+          "ok": true,
+          "detail": "Python 3.12"
+        },
+        {
+          "name": "python-3.13",
+          "ok": true,
+          "detail": "Python 3.13"
+        },
+        {
+          "name": "python-3.14",
+          "ok": true,
+          "detail": "Python 3.14"
+        },
+        {
+          "name": "package-version",
+          "ok": true,
+          "detail": "0.94.0"
+        },
+        {
+          "name": "maggraph-floor",
+          "ok": true,
+          "detail": "maggraph>=0.4.1"
+        },
+        {
+          "name": "python-floor",
+          "ok": true,
+          "detail": ">=3.11"
+        },
+        {
+          "name": "provider-reference",
+          "ok": true,
+          "detail": "generated catalog"
+        }
+      ]
+    },
+    "providers": {
+      "schema": "magent.provider-support.v1",
+      "ok": true,
+      "provider_count": 22,
+      "providers": [
+        {
+          "id": "opencode-go",
+          "display": "OpenCode Go",
+          "default_model": "deepseek-v4-flash",
+          "access_mode": "subscription",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "OPENCODE_GO_KEY",
+          "credential_aliases": [
+            "OPENCODE_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "ollama",
+          "display": "Ollama (local)",
+          "default_model": "qwen2.5-coder:32b",
+          "access_mode": "local",
+          "adapter": "ollama",
+          "local": true,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools"
+          ],
+          "limitations": [
+            "Behavior depends on the locally installed model and server version."
+          ]
+        },
+        {
+          "id": "lmstudio",
+          "display": "LM Studio (local)",
+          "default_model": "local-model",
+          "access_mode": "local",
+          "adapter": "openai-compatible",
+          "local": true,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools"
+          ],
+          "limitations": [
+            "Behavior depends on the locally installed model and server version."
+          ]
+        },
+        {
+          "id": "openai",
+          "display": "OpenAI",
+          "default_model": "gpt-5",
+          "access_mode": "api",
+          "adapter": "openai",
+          "local": false,
+          "credential_env": "OPENAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "anthropic",
+          "display": "Anthropic",
+          "default_model": "claude-sonnet-5",
+          "access_mode": "api",
+          "adapter": "anthropic",
+          "local": false,
+          "credential_env": "ANTHROPIC_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "nous-portal",
+          "display": "Nous Portal",
+          "default_model": "deepseek/deepseek-v4-flash",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "NOUS_API_KEY",
+          "credential_aliases": [
+            "NOUS_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "passed",
+          "support_tier": "qualified",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "docs/reports/0.50.0-nous-live-evals.json",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage",
+            "artifact-creation"
+          ],
+          "limitations": [
+            "Qualification applies to the tested model and account tier."
+          ]
+        },
+        {
+          "id": "opencode-zen",
+          "display": "OpenCode Zen",
+          "default_model": "deepseek-v4-flash",
+          "access_mode": "payg",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "OPENCODE_ZEN_KEY",
+          "credential_aliases": [
+            "OPENCODE_ZEN_API_KEY",
+            "OPENCODE_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "google",
+          "display": "Google Gemini",
+          "default_model": "gemini-3.6-flash",
+          "access_mode": "api",
+          "adapter": "gemini",
+          "local": false,
+          "credential_env": "GEMINI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "groq",
+          "display": "Groq",
+          "default_model": "llama-3.3-70b-versatile",
+          "access_mode": "api",
+          "adapter": "groq",
+          "local": false,
+          "credential_env": "GROQ_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "openrouter",
+          "display": "OpenRouter",
+          "default_model": "deepseek/deepseek-chat",
+          "access_mode": "api",
+          "adapter": "openrouter",
+          "local": false,
+          "credential_env": "OPENROUTER_API_KEY",
+          "credential_aliases": [
+            "OPENROUTER_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "trusted-router",
+          "display": "TrustedRouter",
+          "default_model": "trustedrouter/cheap",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "TRUSTEDROUTER_API_KEY",
+          "credential_aliases": [
+            "TRUSTED_ROUTER_API_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "prime-intellect",
+          "display": "Prime Intellect",
+          "default_model": "meta-llama/llama-3.1-70b-instruct",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "PRIME_INTELLECT_API_KEY",
+          "credential_aliases": [
+            "PRIMEINTELLECT_API_KEY",
+            "PRIME_API_KEY"
+          ],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "bedrock",
+          "display": "AWS Bedrock",
+          "default_model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+          "access_mode": "aws",
+          "adapter": "bedrock",
+          "local": false,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "mistral",
+          "display": "Mistral AI",
+          "default_model": "mistral-large-latest",
+          "access_mode": "api",
+          "adapter": "mistral",
+          "local": false,
+          "credential_env": "MISTRAL_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "deepseek",
+          "display": "DeepSeek",
+          "default_model": "deepseek-chat",
+          "access_mode": "api",
+          "adapter": "deepseek",
+          "local": false,
+          "credential_env": "DEEPSEEK_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "xai",
+          "display": "xAI",
+          "default_model": "grok-4",
+          "access_mode": "api",
+          "adapter": "xai",
+          "local": false,
+          "credential_env": "XAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "perplexity",
+          "display": "Perplexity",
+          "default_model": "sonar-pro",
+          "access_mode": "api",
+          "adapter": "perplexity",
+          "local": false,
+          "credential_env": "PERPLEXITYAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "cerebras",
+          "display": "Cerebras",
+          "default_model": "llama3.1-8b",
+          "access_mode": "api",
+          "adapter": "cerebras",
+          "local": false,
+          "credential_env": "CEREBRAS_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "together_ai",
+          "display": "Together AI",
+          "default_model": "moonshotai/Kimi-K2.5",
+          "access_mode": "api",
+          "adapter": "together_ai",
+          "local": false,
+          "credential_env": "TOGETHERAI_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "fireworks_ai",
+          "display": "Fireworks AI",
+          "default_model": "accounts/fireworks/models/deepseek-coder-v2-instruct",
+          "access_mode": "api",
+          "adapter": "fireworks_ai",
+          "local": false,
+          "credential_env": "FIREWORKS_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "deepinfra",
+          "display": "DeepInfra",
+          "default_model": "openai/gpt-oss-120b",
+          "access_mode": "api",
+          "adapter": "deepinfra",
+          "local": false,
+          "credential_env": "DEEPINFRA_API_KEY",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        },
+        {
+          "id": "custom",
+          "display": "Custom Endpoint",
+          "default_model": "your-model-name",
+          "access_mode": "api",
+          "adapter": "openai-compatible",
+          "local": false,
+          "credential_env": "",
+          "credential_aliases": [],
+          "catalog_conformance": "passed",
+          "live_conformance": "not-run",
+          "support_tier": "compatible",
+          "evidence_date": "2026-08-11",
+          "evidence_source": "",
+          "capabilities": [
+            "completion",
+            "streaming",
+            "tools",
+            "usage"
+          ],
+          "limitations": [
+            "Live qualification is required for the selected model."
+          ]
+        }
+      ],
+      "live_test_command": "magent provider test-matrix",
+      "tool_test_command": "magent provider smoke-all",
+      "tiers": {
+        "qualified": "Completion, streaming, tools, cancellation, retries, usage, and caching are release-qualified for a tested model.",
+        "compatible": "Catalog and adapter contracts pass; live behavior remains model/account dependent.",
+        "experimental": "Known upstream or implementation limitations remain."
+      },
+      "policy": "Catalog conformance is offline. Full support requires maintainer-run ping and tool-use reports for the release."
+    },
+    "security": {
+      "schema": "magent.security-assurance.v1",
+      "version": "0.94.0",
+      "generated_at": "2026-08-16T18:03:34.582782+00:00",
+      "ok": true,
+      "checks": [
+        {
+          "key": "command-policy",
+          "ok": true,
+          "detail": "5 mutating/substitution command probes require confirmation or are blocked."
+        },
+        {
+          "key": "network-policy",
+          "ok": true,
+          "detail": "Rejected 4/4 local, metadata, and non-HTTP URL probes."
+        },
+        {
+          "key": "path-containment",
+          "ok": true,
+          "detail": "Rejected 4/4 unsafe path components."
+        },
+        {
+          "key": "gateway-default",
+          "ok": true,
+          "detail": "An empty gateway allowlist fails closed."
+        },
+        {
+          "key": "atomic-persistence",
+          "ok": true,
+          "detail": "Atomic persistence round-trip completed without temporary-file residue."
+        }
+      ],
+      "scope": "Deterministic local probes; external penetration testing and provider qualification are separate gates."
+    },
+    "contracts": {
+      "ok": true,
+      "schema": "magent.contract-inventory.v1",
+      "magent_version": "0.94.0",
+      "candidate": "1.0",
+      "python_imports": [
+        {
+          "module": "magent.agent",
+          "symbol": "AgentSession",
+          "status": "stable"
+        },
+        {
+          "module": "magent.tools",
+          "symbol": "ToolExecutor",
+          "status": "stable"
+        },
+        {
+          "module": "magent.workbench",
+          "symbol": "WorkbenchStore",
+          "status": "stable"
+        },
+        {
+          "module": "magent.workbench",
+          "symbol": "task_add",
+          "status": "stable"
+        },
+        {
+          "module": "magent.workbench_domains.plans",
+          "symbol": "save_plan",
+          "status": "stable"
+        }
+      ],
+      "cli": [],
+      "config": {
+        "version": "1",
+        "status": "stable",
+        "global_keys": [
+          {
+            "path": "agent.doom_loop_policy",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "agent.file_mutation_verifier",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "agent.max_failed_same_tool_per_turn",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agent.max_identical_tool_calls_per_turn",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agent.max_model_rounds_per_turn",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agent.max_subagents",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agent.max_tool_calls_per_turn",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agent.name",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "agent.selective_tools",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "agent.tool_use_enforcement",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "agent.version",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "agent_profiles.default_profile",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "agent_profiles.enabled",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "agent_profiles.max_delegation_depth",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agent_profiles.max_profiles",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agent_profiles.max_state_bytes",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agent_profiles.max_state_tokens",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agent_profiles.project_paths",
+            "type": "list",
+            "status": "stable"
+          },
+          {
+            "path": "agent_profiles.user_paths",
+            "type": "list",
+            "status": "stable"
+          },
+          {
+            "path": "agent_profiles.writeback",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "agraph.allow_command_criteria",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "agraph.max_parallel_nodes",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "agraph.tier_roles.advanced",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "agraph.tier_roles.frontier",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "agraph.tier_roles.minimal",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "agraph.tier_roles.standard",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "budgets.daily_usd",
+            "type": "float",
+            "status": "stable"
+          },
+          {
+            "path": "budgets.session_usd",
+            "type": "float",
+            "status": "stable"
+          },
+          {
+            "path": "budgets.warn_at",
+            "type": "float",
+            "status": "stable"
+          },
+          {
+            "path": "context.compact_every_n_turns",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "context.instructions",
+            "type": "list",
+            "status": "stable"
+          },
+          {
+            "path": "context.keep_recent_turns",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "context.max_history_tokens",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "context.prompt_cache_key_scope",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "context.prompt_cache_min_stable_tokens",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "context.prompt_cache_retention",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "context.prompt_caching",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "context.prune_stale_tool_results",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "defaults.context_window_tokens",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "defaults.memory_budget_tokens",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "defaults.model",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "defaults.permission_mode",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "defaults.provider",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "defaults.repo_map_budget_tokens",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "defaults.skill_budget_tokens",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "memory.auto_commit",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "memory.auto_write",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "memory.encrypt",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "memory.extraction_model",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "memory.extraction_provider",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "memory.recall_body_tokens",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "memory.semantic_enabled",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "memory.semantic_model",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "memory.semantic_provider",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "memory.semantic_top_k",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "memory.write_every_n_turns",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "models.cheap",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "models.coding",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "models.fallback",
+            "type": "list",
+            "status": "stable"
+          },
+          {
+            "path": "models.frontier",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "models.image_maker",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "models.memory",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "models.review",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "permissions.allowed_shell_patterns",
+            "type": "list",
+            "status": "stable"
+          },
+          {
+            "path": "permissions.shell_sandbox",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "permissions.shell_sandbox_network",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "permissions.trusted_shell_patterns",
+            "type": "list",
+            "status": "stable"
+          },
+          {
+            "path": "session_messaging.enabled",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "session_messaging.headless_accept",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "session_messaging.name",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "session_messaging.policy",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "skills.lockfile",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "subagents.max_parallel_subagents",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "subagents.max_subagents",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "subagents.model_role",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "subagents.sandbox_mode",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "tool_budgets.db_query",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "tool_budgets.default",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "tool_budgets.read_file",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "tool_budgets.read_file_range",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "tool_budgets.run_python",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "tool_budgets.run_shell",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "tool_budgets.search_codebase",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "tool_budgets.web_fetch",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "ui.show_memory_writes",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "ui.show_tool_calls",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "ui.stream_output",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "ui.theme",
+            "type": "str",
+            "status": "stable"
+          }
+        ],
+        "user_keys": [
+          {
+            "path": "memory.auto_write",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "memory.encrypt",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "memory.max_nodes",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "memory.write_every_n_turns",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "permissions.allowed_shell_patterns",
+            "type": "list",
+            "status": "stable"
+          },
+          {
+            "path": "permissions.auto_commit_memory",
+            "type": "bool",
+            "status": "stable"
+          },
+          {
+            "path": "permissions.mode",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "preferences.default_agent_profile",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "preferences.default_model",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "preferences.default_provider",
+            "type": "str",
+            "status": "stable"
+          },
+          {
+            "path": "preferences.memory_budget_tokens",
+            "type": "int",
+            "status": "stable"
+          },
+          {
+            "path": "preferences.theme",
+            "type": "str",
+            "status": "stable"
+          }
+        ],
+        "unknown_keys": "preserved"
+      },
+      "machine": {
+        "desktop_cli": {
+          "version": "1",
+          "status": "stable",
+          "transport": "json/jsonl"
+        },
+        "task": {
+          "version": "magent.task.v2",
+          "status": "stable"
+        },
+        "task_event": {
+          "version": "magent.task-event.v1",
+          "status": "stable"
+        },
+        "plugin_manifest": {
+          "version": "1",
+          "status": "stable"
+        },
+        "plugin_registry": {
+          "version": "magent.plugin-registry.v1",
+          "status": "beta"
+        },
+        "provider_support": {
+          "version": "magent.provider-support.v1",
+          "status": "stable"
+        },
+        "ecosystem_readiness": {
+          "version": "mag.ecosystem-readiness.v1",
+          "status": "beta"
+        },
+        "config_schema": {
+          "version": "1",
+          "status": "stable"
+        },
+        "memory_batch": {
+          "version": "1",
+          "status": "stable",
+          "requires": "maggraph>=0.4.1"
+        },
+        "memory_recall": {
+          "version": "2",
+          "status": "stable",
+          "requires": "maggraph>=0.4.1"
+        },
+        "persistent_state": {
+          "version": "1",
+          "status": "stable"
+        },
+        "supply_chain": {
+          "version": "magent.supply-chain.v1",
+          "status": "stable"
+        },
+        "agentic_graph": {
+          "version": "1.0",
+          "status": "draft-standard",
+          "conformance_level": 3,
+          "transport": "json/jsonl"
+        },
+        "open_agent_profile": {
+          "version": "1.0",
+          "status": "beta",
+          "conformance_level": 3,
+          "transport": "json"
+        },
+        "mcp": {
+          "status": "dual-era-core",
+          "legacy_through": "2025-11-25",
+          "modern": "2026-07-28",
+          "experimental": [
+            "tasks",
+            "remote-skills",
+            "apps-rendering"
+          ]
+        }
+      },
+      "persistent_state": [
+        {
+          "name": "agent_profiles",
+          "schema": "oap.v1",
+          "status": "beta",
+          "writes": "reviewed-state-only"
+        }
+      ],
+      "support": {
+        "python": [
+          "3.11",
+          "3.12",
+          "3.13",
+          "3.14"
+        ],
+        "deprecation_notice_minor_releases": 1,
+        "breaking_changes_before_1_0": "frozen after 0.90; security exceptions only"
+      },
+      "rules": {
+        "unknown_fields": "consumers must ignore unknown additive fields",
+        "deprecation": "one prior minor release for stable removals",
+        "downgrade": "newer persistent schemas are refused",
+        "beta": "may change before 1.0 with migration notes",
+        "experimental": "opt-in and outside the support promise"
+      }
+    },
+    "migrations": {
+      "ok": true,
+      "schema": "magent.migration-assurance.v1",
+      "state_schema": 1,
+      "checks": {
+        "legacy-upgrade": true,
+        "rollback": true,
+        "downgrade-refusal": true
+      }
+    },
+    "evals": {
+      "ok": true,
+      "status": "recorded",
+      "report": {
+        "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/docs/reports/0.94.0-agent-evals.json",
+        "sha256": "4f66765a98ad72eb422a9ee16c0a8daa18ea57900be098c92a46746f2cb80027",
+        "summary": {
+          "schema": "magent.agent-eval-report.v1",
+          "suite": "reliability-offline",
+          "version": "0.94.0",
+          "ran_at": "2026-08-16T17:52:24.360890+00:00",
+          "passed": 32,
+          "total": 32,
+          "success_rate": 1.0,
+          "artifact_passed": 20,
+          "artifact_total": 20,
+          "artifact_success_rate": 1.0,
+          "targets": {
+            "success_rate": 1.0,
+            "artifact_success_rate": 1.0
+          },
+          "metrics": {
+            "elapsed_ms": 3554.84,
+            "tool_calls": 37,
+            "retries": 0,
+            "time_to_first_activity_ms": 83.43,
+            "prompt_tokens": 0.0,
+            "completion_tokens": 0.0,
+            "total_tokens": 0.0,
+            "cached_tokens": 0.0,
+            "cost_usd": 0.0
+          }
+        }
+      }
+    },
+    "memory": {
+      "ok": true,
+      "status": "recorded",
+      "report": {
+        "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/docs/reports/0.94.0-memory-eval.json",
+        "sha256": "9c8e658665c9146306435957c68a102382d4a82de98e9bdbf2b06e53c087211c",
+        "schema": "magent.memory-eval.v2",
+        "metrics": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "mean_reciprocal_rank": 1.0,
+          "stale_hit_rate": 0.0,
+          "contradiction_hit_rate": 0.0,
+          "project_scope_accuracy": 1.0,
+          "explanation_coverage": 1.0,
+          "provenance_coverage": 1.0,
+          "backlink_coverage": 0.6667,
+          "average_context_tokens": 454.67,
+          "budget_pass_rate": 1.0
+        },
+        "gates": {
+          "precision_min": true,
+          "recall_min": true,
+          "mean_reciprocal_rank_min": true,
+          "stale_hit_rate_max": true,
+          "contradiction_hit_rate_max": true,
+          "project_scope_accuracy_min": true,
+          "explanation_coverage_min": true,
+          "provenance_coverage_min": true,
+          "backlink_coverage_min": true,
+          "budget_pass_rate_min": true
+        }
+      }
+    },
+    "performance": {
+      "ok": true,
+      "status": "recorded",
+      "report": {
+        "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/docs/reports/0.94.0-performance.json",
+        "sha256": "34f42eab9c8a565d00aa5da1d9d01a6ec24c987742f60f5e25845a03d79cd273",
+        "schema": "magent.performance-budget.v1",
+        "metrics": {
+          "cold_cli_import_ms": 234.24,
+          "project_inspection_ms": 23.575,
+          "memory_search_average_ms": 1.589,
+          "event_write_per_second": 13463.35,
+          "event_read_1000_ms": 5.325,
+          "four_concurrent_tasks_ms": 216.232,
+          "agent_profile_discovery_ms": 7.411
+        },
+        "gates": {
+          "cold_cli_import_ms_max": true,
+          "project_inspection_ms_max": true,
+          "memory_search_average_ms_max": true,
+          "event_write_per_second_min": true,
+          "event_read_1000_ms_max": true,
+          "four_concurrent_tasks_ms_max": true,
+          "agent_profile_discovery_ms_max": true
+        }
+      }
+    },
+    "supply_chain": {
+      "ok": true,
+      "status": "recorded",
+      "report": {
+        "path": "/home/alexmerced/development/personal/Personal/utility/2026/MagAgent/docs/reports/0.94.0-supply-chain/supply-chain.json",
+        "sha256": "ebd67acfcfae07451b2261e8c3ce4e4fcef8554d5cac8dc7fb7f784e9cf2d45e",
+        "schema": "magent.supply-chain.v1",
+        "metrics": {},
+        "gates": {}
+      }
+    },
+    "tests": {
+      "ok": true,
+      "status": "897 passed"
+    },
+    "coverage": {
+      "ok": true,
+      "percent": 68.8,
+      "required": 68.0
+    },
+    "ci": {
+      "ok": true,
+      "url": "https://github.com/AlexMercedCoder/MagAgent/actions/runs/31963153619",
+      "status": "recorded"
+    },
+    "artifacts": {
+      "ok": true,
+      "items": [
+        {
+          "path": "/tmp/magent-dist-0.94.0-final/mag_agent-0.94.0-py3-none-any.whl",
+          "ok": true,
+          "bytes": 658447,
+          "sha256": "6508c3cdf509fc6cc07440ea8ab8b9153a5b4b42e8bc370bee0e1124e97f8e18"
+        },
+        {
+          "path": "/tmp/magent-dist-0.94.0-final/mag_agent-0.94.0.tar.gz",
+          "ok": true,
+          "bytes": 2414936,
+          "sha256": "112c0fb90335a250c006c45c86d863a9058041b5bd05c750df520b99a03727ff"
+        }
+      ]
+    }
+  },
+  "blocking": [],
+  "exceptions": [],
+  "blocking_exceptions": []
+}
