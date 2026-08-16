@@ -1,0 +1,247 @@
+{
+  "ok": true,
+  "schema": "magent.supply-chain.v1",
+  "version": "0.94.0",
+  "generated_at": "2026-08-16T17:56:42.539301+00:00",
+  "checks": {
+    "artifacts": true,
+    "dependency_audit": true,
+    "secret_scan": true,
+    "sbom": true,
+    "provenance": true
+  },
+  "artifacts": [
+    {
+      "path": "/tmp/magent-dist-0.94.0-final/mag_agent-0.94.0-py3-none-any.whl",
+      "ok": true,
+      "bytes": 658447,
+      "sha256": "6508c3cdf509fc6cc07440ea8ab8b9153a5b4b42e8bc370bee0e1124e97f8e18"
+    },
+    {
+      "path": "/tmp/magent-dist-0.94.0-final/mag_agent-0.94.0.tar.gz",
+      "ok": true,
+      "bytes": 2414936,
+      "sha256": "112c0fb90335a250c006c45c86d863a9058041b5bd05c750df520b99a03727ff"
+    }
+  ],
+  "dependency_audit": {
+    "ok": true,
+    "status": "passed",
+    "path": "/tmp/magent-094-wheel-pip-audit.json",
+    "sha256": "a2d1f7bc0e72f623453ff628fcada3de5ad600c959981240581a96fa74cb4b28",
+    "vulnerabilities": []
+  },
+  "secret_scan": {
+    "ok": true,
+    "files_scanned": 472,
+    "findings": []
+  },
+  "sbom": {
+    "bomFormat": "CycloneDX",
+    "specVersion": "1.6",
+    "serialNumber": "urn:uuid:4444c08b-c872-95b2-f7cc-cc8710c44a5a",
+    "version": 1,
+    "metadata": {
+      "timestamp": "2026-08-16T17:56:42.533736+00:00",
+      "component": {
+        "type": "application",
+        "name": "mag-agent",
+        "version": "0.94.0",
+        "purl": "pkg:pypi/mag-agent@0.94.0"
+      }
+    },
+    "components": [
+      {
+        "type": "library",
+        "name": "aiofiles",
+        "version": "25.1.0",
+        "licenses": [
+          {
+            "license": {
+              "name": "Apache-2.0"
+            }
+          }
+        ],
+        "purl": "pkg:pypi/aiofiles@25.1.0"
+      },
+      {
+        "type": "library",
+        "name": "ddgs",
+        "version": "9.14.4",
+        "licenses": [],
+        "purl": "pkg:pypi/ddgs@9.14.4"
+      },
+      {
+        "type": "library",
+        "name": "gitpython",
+        "version": "3.1.57",
+        "licenses": [
+          {
+            "license": {
+              "name": "BSD-3-Clause"
+            }
+          }
+        ],
+        "purl": "pkg:pypi/gitpython@3.1.57"
+      },
+      {
+        "type": "library",
+        "name": "httpx",
+        "version": "0.28.1",
+        "licenses": [
+          {
+            "license": {
+              "name": "BSD-3-Clause"
+            }
+          }
+        ],
+        "purl": "pkg:pypi/httpx@0.28.1"
+      },
+      {
+        "type": "library",
+        "name": "jinja2",
+        "version": "3.1.6",
+        "licenses": [],
+        "purl": "pkg:pypi/jinja2@3.1.6"
+      },
+      {
+        "type": "library",
+        "name": "jmespath",
+        "version": "1.1.0",
+        "licenses": [
+          {
+            "license": {
+              "name": "MIT"
+            }
+          }
+        ],
+        "purl": "pkg:pypi/jmespath@1.1.0"
+      },
+      {
+        "type": "library",
+        "name": "jsonschema",
+        "version": "4.26.0",
+        "licenses": [],
+        "purl": "pkg:pypi/jsonschema@4.26.0"
+      },
+      {
+        "type": "library",
+        "name": "litellm",
+        "version": "1.93.0",
+        "licenses": [],
+        "purl": "pkg:pypi/litellm@1.93.0"
+      },
+      {
+        "type": "library",
+        "name": "maggraph",
+        "version": "0.4.1",
+        "licenses": [
+          {
+            "license": {
+              "name": "MIT OR Apache-2.0"
+            }
+          }
+        ],
+        "purl": "pkg:pypi/maggraph@0.4.1"
+      },
+      {
+        "type": "library",
+        "name": "prompt-toolkit",
+        "version": "3.0.52",
+        "licenses": [],
+        "purl": "pkg:pypi/prompt-toolkit@3.0.52"
+      },
+      {
+        "type": "library",
+        "name": "pyyaml",
+        "version": "6.0.3",
+        "licenses": [
+          {
+            "license": {
+              "name": "MIT"
+            }
+          }
+        ],
+        "purl": "pkg:pypi/pyyaml@6.0.3"
+      },
+      {
+        "type": "library",
+        "name": "rich",
+        "version": "14.3.4",
+        "licenses": [
+          {
+            "license": {
+              "name": "MIT"
+            }
+          }
+        ],
+        "purl": "pkg:pypi/rich@14.3.4"
+      },
+      {
+        "type": "library",
+        "name": "tomli-w",
+        "version": "1.2.0",
+        "licenses": [],
+        "purl": "pkg:pypi/tomli-w@1.2.0"
+      },
+      {
+        "type": "library",
+        "name": "typer",
+        "version": "0.27.1",
+        "licenses": [],
+        "purl": "pkg:pypi/typer@0.27.1"
+      }
+    ]
+  },
+  "provenance": {
+    "_type": "https://in-toto.io/Statement/v1",
+    "subject": [
+      {
+        "name": "mag_agent-0.94.0-py3-none-any.whl",
+        "digest": {
+          "sha256": "6508c3cdf509fc6cc07440ea8ab8b9153a5b4b42e8bc370bee0e1124e97f8e18"
+        }
+      },
+      {
+        "name": "mag_agent-0.94.0.tar.gz",
+        "digest": {
+          "sha256": "112c0fb90335a250c006c45c86d863a9058041b5bd05c750df520b99a03727ff"
+        }
+      }
+    ],
+    "predicateType": "https://slsa.dev/provenance/v1",
+    "predicate": {
+      "buildDefinition": {
+        "buildType": "https://pypa.io/build",
+        "externalParameters": {
+          "version": "0.94.0"
+        },
+        "internalParameters": {
+          "python": "3.14.5",
+          "implementation": "CPython"
+        },
+        "resolvedDependencies": [
+          {
+            "uri": "git@github.com:AlexMercedCoder/MagAgent.git",
+            "digest": {
+              "gitCommit": "082e04a77ef67c8124a09efe6fa7d2f57c3da831"
+            }
+          }
+        ]
+      },
+      "runDetails": {
+        "builder": {
+          "id": "https://github.com/AlexMercedCoder/MagAgent/actions"
+        },
+        "metadata": {
+          "invocationId": "082e04a77ef67c8124a09efe6fa7d2f57c3da831",
+          "startedOn": "2026-08-16T17:56:42.539281+00:00"
+        }
+      }
+    }
+  },
+  "signing": {
+    "status": "external",
+    "detail": "Tag and artifact signing require maintainer-managed signing credentials."
+  }
+}
