@@ -21,6 +21,8 @@
 
 Important command paths:
 
+- `magent get-started`: show an accessible first-run guide covering setup, chat, permissions, profiles, research, memory, and graphs.
+- `magent get-started --json`: return the same orientation as a machine-readable guide and first-command list.
 - `magent --help`: show grouped command categories with a Start Here section.
 - `magent ask "task"`: run a non-interactive task with completion audit warnings.
 - `magent ask --permission-mode paranoid "task"`: override permissions for one run.
@@ -94,10 +96,14 @@ Important command paths:
 - `magent execution pause|resume|cancel|retry <task-id>`: control a durable task lifecycle.
 - `magent profile list`: list guided provider/memory/subagent presets.
 - `magent profile apply <name>`: apply a guided preset.
+- `magent profile wizard`: create a validated Open Agent Profile through an interactive wizard.
+- `magent profile default`: show the profile automatically used by ordinary sessions.
+- `magent profile set-default <name>`: set the active user's default OAP; use `--global` for the installation fallback.
+- `magent profile clear-default`: remove the user override and return to the global default.
 - `magent provider list`: list known providers and default models.
 - `magent provider detect`: detect provider readiness from environment variables.
 - `magent provider set <provider>`: set the default provider/model.
-- `magent provider wizard`: interactively choose provider, access mode, model, and key source.
+- `magent provider wizard`: interactively choose provider, explained access/billing mode, key source, and a dynamically discovered model; use `/search words` inside the picker or enter a model ID directly.
 - `magent provider test`: test the configured provider connection.
 - `magent provider test-matrix`: test configured/ready providers and report skipped providers.
 - `magent provider models <provider>`: list cached or discovered provider models.
@@ -120,7 +126,7 @@ Important command paths:
 - `magent model health`: show model role provider/runtime health.
 - `magent model capabilities`: show inferred role capabilities such as text, tool calling, vision, and image generation.
 - `magent model recommend`: recommend a model from successful local health observations.
-- `magent model wizard`: interactively set common model roles.
+- `magent model wizard`: interactively set common model roles with guidance for each role and `provider/model` values.
 - `magent model image-wizard`: interactively set the image_maker role and provider credential.
 - `magent auth list`: list configured keyring-backed provider credentials.
 - `magent auth add <provider>`: store a provider API key in the OS keyring when available.
@@ -237,7 +243,7 @@ tools, prompts, resources, templates, cache freshness, and structured content.
 - `magent memory inbox reject <candidate-id>`: reject one memory candidate.
 - `magent memory inbox edit <candidate-id> --body "..."`: edit candidate text before accepting it.
 - `magent memory configure`: configure memory write mode, semantic search, and extraction model settings.
-- `magent memory wizard`: interactively configure memory behavior.
+- `magent memory wizard`: interactively configure graph-memory review mode, semantic recall, extraction frequency, and extraction model with option guidance.
 - `magent memory quality`: report duplicate-looking and suppressed memory nodes.
 - `magent memory merge <target-id> <source-id>`: merge one memory node into another.
 - `magent memory suppress <node-id>`: mark a memory node suppressed without deleting it.
@@ -253,7 +259,7 @@ tools, prompts, resources, templates, cache freshness, and structured content.
 - `magent project playbook`: show `.magent/playbook.toml` routines.
 - `magent project playbook --init`: create a starter project playbook.
 - `magent project init`: create project config and playbook files.
-- `magent project wizard`: guided alias for project initialization.
+- `magent project wizard`: guided project initialization that explains generated config/playbook files and `--force` behavior.
 - `magent project config`: show `.magent/config.toml` values.
 - `magent code index`: build and save a lightweight Python symbol/import/test index.
 - `magent code symbols <query>`: search indexed symbols.
@@ -316,9 +322,9 @@ tools, prompts, resources, templates, cache freshness, and structured content.
 - `magent subagent configure`: configure sub-agent caps and defaults.
 - `magent subagent status`: show sub-agent configuration.
 - `magent subagent run <task>`: run a focused sub-agent task from the CLI.
-- `magent subagent wizard`: interactively configure sub-agent caps.
+- `magent subagent wizard`: interactively configure explained sub-agent caps, concurrency, model role, and sandbox isolation.
 - `magent gateway configure <platform>`: configure Slack, Discord, or Telegram tokens and allowlists.
-- `magent gateway wizard <platform>`: prompt for gateway token fields.
+- `magent gateway wizard <platform>`: prompt for gateway tokens and shared user/channel allowlists with security guidance.
 - `magent gateway doctor`: show gateway readiness.
 
 Use `magent <command> --help` for command-specific Typer help.

@@ -31,6 +31,8 @@ magent onboard
 magent profile list
 magent profile apply coding-cloud
 magent profile apply lightweight
+magent profile wizard
+magent profile set-default my-profile
 magent provider list
 magent provider detect
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
@@ -50,12 +52,53 @@ magent provider cooldowns
 magent provider clear-cooldown openai
 ```
 
+## Guided Wizards
+
+Interactive wizards explain consequential options immediately before asking for a value. They
+state when a choice inherits existing configuration, narrows a security ceiling, changes cost or
+concurrency, or writes portable project files.
+
+- `magent configure` explains user isolation, the main provider, credential storage, model discovery, and shared versus cheaper memory-extraction models.
+- `magent provider wizard` explains access and billing modes, credential storage, custom endpoints, and provider-aware model discovery.
+- `magent model wizard` explains coding, review, memory, cheap, image-maker, and fallback roles and the `provider/model` format.
+- `magent memory wizard` distinguishes automatic, inbox-first, and manual graph memory from OAP profile state, then explains semantic recall and extraction frequency.
+- `magent subagent wizard` explains worker caps, concurrency, model roles, and blank/copy/worktree/container isolation.
+- `magent profile wizard` explains OAP scope, inheritance, personality, tool presets, permissions, MCP/skill selection, memory, delegation, context, hooks, writeback, and default selection.
+- `magent gateway wizard PLATFORM` explains token handling and prompts for shared user/channel allowlists using platform-native IDs.
+- `magent project wizard` explains the project configuration and playbook files it creates and when `--force` replaces them.
+
+Defaults are usable starting points, but they are not hidden decisions. Wizard summaries or result
+JSON identify what was saved, and the corresponding doctor/status commands verify the result.
+
+For profile web research, choose a tool policy that includes `web` and set network access to
+`read` or `full`. `read` is the recommended default and supports search, deep research, page
+fetching, and browser inspection. `full` additionally permits arbitrary HTTP methods and network
+writes. Profile choices only narrow the active harness and capability-pack policy; they never
+grant networking that MagAgent has disabled globally.
+
 During `magent configure`, cloud providers offer three credential paths:
 
 - paste an API key and let MagAgent save it in local config
 - reference an environment variable such as `OPENCODE_ZEN_KEY`, `OPENCODE_ZEN_API_KEY`, or `NOUS_API_KEY`
 - store an API key in the OS keyring with `magent auth add <provider>`
 - skip credentials and configure them later
+
+After credential setup, the wizard requests the selected provider's current
+model catalog and presents a numbered picker. Enter `/search words` to filter a
+large catalog, select a number, or enter an exact model ID manually. The same
+picker is available through `magent provider wizard`. Live discovery supports
+OpenAI, Anthropic, Gemini, Ollama, Groq, OpenRouter, common hosted providers,
+and OpenAI-compatible endpoints. Results are cached locally. If refresh fails,
+MagAgent uses the last successful catalog; if no cache exists, setup falls back
+to the catalog default and keeps manual entry available.
+
+Inspect or refresh discovery without changing configuration:
+
+```bash
+magent provider models anthropic --refresh
+magent provider models ollama --refresh
+magent provider models openrouter --refresh
+```
 
 Saved keys are redacted by config display commands. If a session starts with a
 cloud provider whose key is missing, MagAgent stops before the first prompt and
@@ -222,6 +265,10 @@ magent gateway wizard discord
 magent gateway doctor
 ```
 
+The gateway wizard collects platform tokens plus optional shared user and channel allowlists. Use
+platform-native IDs rather than display names, then run `magent gateway doctor`. Leaving both
+allowlists empty is unsuitable for a bot exposed to an untrusted or public workspace.
+
 The main agent can spawn focused sub-agents. Configure the cap and parallelism with:
 
 ```bash
@@ -238,6 +285,7 @@ Open Agent Profile discovery and reviewed state use conservative global ceilings
 ```toml
 [agent_profiles]
 enabled = true
+default_profile = "magagent"
 user_paths = ["~/.config/magent/agents"]
 project_paths = [".magent/agents", ".agents"]
 writeback = "propose"
@@ -250,6 +298,10 @@ max_delegation_depth = 3
 `writeback` is a ceiling, not a grant. A profile cannot request a more permissive mode.
 Profile tools and permissions are always intersected with the active MagAgent policy. See
 `magent docs show agents` and use `magent agent explain NAME` to inspect the effective result.
+The active user's `preferences.default_agent_profile` overrides the global default. Create one
+without editing TOML via `magent profile wizard`, inspect it with `magent profile default`, and
+change it with `magent profile set-default NAME`. The managed `magagent` profile is always the
+out-of-box fallback.
 Gateways may set `agent_profile = "review"`; daemon asks use `magent daemon enqueue ask TASK
 --agent review`; and goals use `magent goal TASK --agent review`. Remote messages cannot choose
 or widen a gateway profile.

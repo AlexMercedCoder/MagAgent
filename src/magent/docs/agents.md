@@ -5,12 +5,49 @@ MagAgent implements provisional Open Agent Profile (OAP) v1 Level 3 harness supp
 ## Start Here
 
 ```bash
+magent profile wizard
+magent profile default
+magent profile set-default reviewer
 magent agent create reviewer --description "Project reviewer"
 magent agent list
 magent agent explain reviewer
 magent --agent reviewer
 magent ask --agent reviewer "Review the current diff"
 ```
+
+`magent profile wizard` is the recommended authoring path. It creates a validated OAP
+document and guides you through the profile name, description, annotations, role instructions,
+persona, objectives, constraints, inheritance, provider and model, tools, MCP servers, skills,
+permission mode, network access, memory stores, runtime role, subagent limits, context budget,
+lifecycle hooks, and state writeback. Profiles can be stored for the current user, in
+`.magent/agents/`, or in the portable `.agents/` directory. The final prompt optionally makes
+the new profile the default.
+
+Web access has two independent profile checks. `spec.tools.allow` must include `web` or the
+specific web tools, and `spec.permissions.network` must be `read` or `full`. Use `read` for web
+search, deep research, page fetching, and browser inspection. Use `full` only when the profile
+must make arbitrary HTTP requests or network writes. `none` removes all network tools even when
+the tool allowlist contains `web`. This `network` field is a MagAgent OAP extension and remains
+bounded by the active harness permission mode and enabled capability packs.
+
+```yaml
+spec:
+  tools:
+    allow: [read, search, web]
+  permissions:
+    default: balanced
+    network: read
+```
+
+Every installation includes a managed `magagent` profile, and it is the out-of-box default. Its
+general coding and productivity personality is injected into ordinary REPL and `ask` sessions.
+`magent profile set-default NAME` changes the active user's default; add `--global` to change the
+installation fallback. `magent profile clear-default` removes a user override. An explicit
+`--agent NAME` wins for one session, while `--agent none` temporarily disables profile injection.
+
+The older `magent profile list` and `magent profile apply NAME` commands remain configuration
+preset shortcuts for provider, memory, and subagent settings. OAP inspection and state commands
+remain under `magent agent`.
 
 Inside an ordinary interactive session, `@review task` activates that profile for one turn and restores the prior session policy afterwards.
 
@@ -109,8 +146,12 @@ magent agent convert .magent/agents/reviewer.md --write
 
 ## Commands
 
-`magent agent` provides `list`, `show`, `explain`, `validate`, `create`, `convert`, `state`, `history`, `rollback`, `forget`, `inbox`, `accept`, `reject`, `digest`, `conformance`, and the compatibility `run` renderer. Run `magent agent conformance` offline to inspect packaged Level 3 behavioral evidence.
+`magent profile` provides `wizard`, `default`, `set-default`, and `clear-default` for OAP setup,
+plus `list` and `apply` for guided configuration presets. `magent agent` provides `list`, `show`,
+`explain`, `validate`, `create`, `convert`, `state`, `history`, `rollback`, `forget`, `inbox`,
+`accept`, `reject`, `digest`, `conformance`, and the compatibility `run` renderer. Run
+`magent agent conformance` offline to inspect packaged Level 3 behavioral evidence.
 
 ## Current Conformance Boundary
 
-Version 0.93.0 declares provisional OAP v1 Level 3 harness support. The complete supplied Level 3 surface is enforced in interactive sessions, asks, subagents, goals, daemon work, and gateways. The declaration remains provisional because the canonical upstream OAP repository and reference conformance corpus were not publicly discoverable when this release was prepared; MagAgent ships its offline schema and behavioral fixtures without claiming unverifiable upstream certification.
+Version 0.94.0 declares provisional OAP v1 Level 3 harness support. The complete supplied Level 3 surface is enforced in interactive sessions, asks, subagents, goals, daemon work, and gateways. The declaration remains provisional because the canonical upstream OAP repository and reference conformance corpus were not publicly discoverable when this release was prepared; MagAgent ships its offline schema and behavioral fixtures without claiming unverifiable upstream certification.

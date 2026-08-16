@@ -22,6 +22,12 @@ Generation takes a bounded project scan and token-limited repository map before 
 
 Review or edit the generated document, validate it again, then run it. `--yes` approves every graph gate and checkpoint; omit it for interactive approval. Do not use `--yes` for an untrusted graph.
 
+Release tests generate a fresh inspect, implement, and verify graph, require strict validation,
+and execute it through the real dependency scheduler with deterministic node runners. CLI smoke
+tests additionally cover generation, strict validation, planning, and dry-run execution. This
+separates graph-runtime correctness from provider/model variability while exercising the same
+executor used by live runs.
+
 ## Execution
 
 - `minimal`, `standard`, `advanced`, and `frontier` intelligence tiers map to the `cheap`, `coding`, `coding`, and `frontier` model roles. If `frontier` is not configured, MagAgent uses `review`.

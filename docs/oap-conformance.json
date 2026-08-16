@@ -1,7 +1,7 @@
 {
   "oap": "1.0",
   "implementation": "magagent",
-  "version": "0.93.0",
+  "version": "0.94.0",
   "level": 3,
   "status": "provisional",
   "encodings": ["yaml", "json", "md"],

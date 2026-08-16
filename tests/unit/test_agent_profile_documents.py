@@ -48,6 +48,14 @@ def test_invalid_profile_reports_json_pointer() -> None:
         validate_document({"oap": "1.0", "metadata": {}, "spec": {"role": {}}})
 
 
+def test_profile_network_permission_rejects_unknown_modes() -> None:
+    document = _document()
+    document["spec"]["permissions"] = {"network": "sometimes"}
+
+    with pytest.raises(ProfileValidationError, match="/spec/permissions/network"):
+        validate_document(document)
+
+
 def test_digests_are_canonical_and_spec_digest_ignores_state() -> None:
     first = _document()
     second = json.loads(json.dumps(first))

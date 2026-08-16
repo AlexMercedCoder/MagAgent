@@ -4,7 +4,9 @@ Start here when you install MagAgent on a new machine or open a new project. The
 to teach MagAgent enough about the environment that it can spend fewer tokens guessing and
 more tokens doing useful work.
 
-1. Run `magent setup`.
+Run `magent get-started` for a plain-language orientation before this project-focused tutorial.
+
+1. Run `magent configure`.
 2. Run `magent doctor`.
 3. Open a project and run `magent project commands`.
 4. Build code intelligence with `magent code index`.

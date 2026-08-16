@@ -148,6 +148,32 @@ def test_plan_is_deterministic_and_generated_graph_is_strictly_valid() -> None:
     assert "repository_map" in generated["context"]
 
 
+def test_generated_graph_completes_real_scheduler_execution(tmp_path: Path) -> None:
+    generated, report = generate_and_validate(
+        "Create a small verified project artifact", project=tmp_path
+    )
+    assert report.ok
+
+    async def generated_runner(node_id, _prompt, _route, _task_id):
+        outputs = {
+            "inspect": {"findings": "Use the existing project conventions."},
+            "implement": {"summary": "Created the requested artifact."},
+            "verify": {"report": "Verified the artifact and reviewed the result."},
+        }
+        return {"outputs": outputs[node_id]}
+
+    result = asyncio.run(executor(tmp_path, generated_runner).run(generated))
+
+    assert result["ok"] is True
+    assert result["run"]["status"] == "succeeded"
+    assert [node["node_id"] for node in result["run"]["nodes"]] == [
+        "inspect",
+        "implement",
+        "verify",
+    ]
+    assert result["run"]["outputs"]["verification_report"].startswith("Verified")
+
+
 def test_generation_eval_corpus_meets_quality_floor() -> None:
     corpus = json.loads((ROOT / "evals/agentic-graph-generation.json").read_text(encoding="utf-8"))
     reports = [generate_and_validate(goal, strict=True)[1] for goal in corpus["goals"]]

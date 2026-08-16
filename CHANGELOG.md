@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.94.0
+
+- Added `magent get-started` with an accessible terminal guide and machine-readable JSON covering setup, sessions, permissions, profiles, research, memory, and larger workflows.
+- Added complete interactive Open Agent Profile authoring, the managed `magagent` default personality, user/global default-profile commands, and explicit per-profile network access narrowing.
+- Added provider-aware live and cached model discovery to setup and provider wizards, model search and ranking, role guidance, and clearer setup explanations across profile, memory, subagent, gateway, and project flows.
+- Clarified that web-enabled profiles need both an allowed web tool and `network: read` or `full`; `read` supports search and inspection without arbitrary HTTP writes.
+- Added a generated-graph regression that executes through the real scheduler, plus CLI generation, strict validation, planning, and dry-run qualification.
+- Updated packaged, repository, generated command, configuration, architecture, testing, and quick-start documentation for the new workflows.
+
 ## 0.93.0
 
 - Completed MagAgent's provisional Open Agent Profile v1 Level 3 harness support with deterministic `extends` composition, inherited policy narrowing, and resolution digests.

@@ -40,7 +40,14 @@
           },
           "additionalProperties": true
         },
-        "permissions": {"type": "object", "additionalProperties": true},
+        "permissions": {
+          "type": "object",
+          "properties": {
+            "default": {"enum": ["paranoid", "balanced", "silent", "yolo"]},
+            "network": {"enum": ["none", "read", "full"]}
+          },
+          "additionalProperties": true
+        },
         "runtime": {
           "type": "object",
           "properties": {

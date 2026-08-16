@@ -42,3 +42,27 @@ def test_permission_mode_rounding_goes_down() -> None:
 def test_every_narrowing_produces_an_adjustment() -> None:
     effective = resolve_effective_profile(_profile({"permissions": {"default": "yolo"}, "runtime": {"max_turns": 50}}), _config(), {"read_file"})
     assert {item.field for item in effective.adjustments} >= {"permissions.default", "runtime.max_turns"}
+
+
+def test_network_read_keeps_search_but_removes_arbitrary_http() -> None:
+    effective = resolve_effective_profile(
+        _profile({"permissions": {"network": "read"}, "tools": {"allow": ["web"]}}),
+        _config(),
+        {"web_search", "web_fetch", "deep_research", "http_request"},
+    )
+
+    assert effective.network_access == "read"
+    assert {"web_search", "web_fetch", "deep_research"} <= effective.tools
+    assert "http_request" not in effective.tools
+    assert any(item.field == "permissions.network" for item in effective.adjustments)
+
+
+def test_network_none_removes_web_tools() -> None:
+    effective = resolve_effective_profile(
+        _profile({"permissions": {"network": "none"}, "tools": {"allow": ["*"]}}),
+        _config(),
+        {"read_file", "web_search", "web_fetch", "http_request"},
+    )
+
+    assert effective.network_access == "none"
+    assert effective.tools == {"read_file"}

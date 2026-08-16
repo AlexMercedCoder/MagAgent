@@ -47,6 +47,14 @@ CONFIG_SCHEMA: list[dict[str, Any]] = [
         "description": "Model name used for the main agent by default.",
     },
     {
+        "path": "agent_profiles.default_profile",
+        "label": "Default agent profile",
+        "type": "string",
+        "scope": "global",
+        "category": "agents",
+        "description": "Open Agent Profile used when a session does not pass --agent.",
+    },
+    {
         "path": "defaults.permission_mode",
         "label": "Permission mode",
         "type": "enum",
@@ -227,7 +235,18 @@ def agent_profiles(project: str = ".") -> dict[str, Any]:
 
     username = get_current_user()
     config = load_config(username) if username else None
-    return AgentProfileRegistry(project, config).list()
+    result = AgentProfileRegistry(project, config).list()
+    result["default_profile"] = (
+        config.default_agent_profile if config is not None else "magagent"
+    )
+    return result
+
+
+def agent_profile_default(project: str = ".") -> dict[str, Any]:
+    """Return the active default profile and its resolved metadata."""
+    from magent.agent_profiles.authoring import default_profile_status
+
+    return default_profile_status(get_current_user(), project)
 
 
 def agent_profile(name: str, project: str = ".", *, effective: bool = False) -> dict[str, Any]:

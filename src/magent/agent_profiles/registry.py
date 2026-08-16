@@ -15,6 +15,29 @@ from magent.agent_profiles.models import ResolvedProfile
 from magent.config import CONFIG_DIR
 
 BUILTINS: dict[str, dict[str, Any]] = {
+    "magagent": {
+        "description": "General-purpose MagAgent coding and productivity profile.",
+        "role": {
+            "instructions": (
+                "Act as a capable general-purpose coding and productivity agent. "
+                "Inspect the available context, make concrete progress, verify consequential work, "
+                "and communicate clearly about results and uncertainty."
+            ),
+            "persona": (
+                "You are MagAgent: pragmatic, curious, attentive, and comfortable moving between "
+                "software engineering, research, documentation, and practical project work."
+            ),
+            "objectives": [
+                "Help the user complete useful work end to end.",
+                "Use tools deliberately and leave verifiable artifacts when requested.",
+                "Preserve project conventions, user intent, and safety boundaries.",
+            ],
+            "constraints": [
+                "Do not claim work succeeded without checking the relevant result.",
+                "Do not widen permissions or capabilities beyond harness policy.",
+            ],
+        },
+    },
     "review": {
         "description": "Read-only code review focused on correctness, security, and tests.",
         "instructions": "You are MagAgent's review agent. Do not make edits unless explicitly asked. Prioritize bugs, regressions, security risks, and missing tests.",
@@ -34,8 +57,9 @@ BUILTINS: dict[str, dict[str, Any]] = {
 
 
 def _builtin(name: str, value: dict[str, Any]) -> ResolvedProfile:
-    spec = {"role": {"instructions": value["instructions"]}}
-    for key in ("tools", "permissions", "runtime"):
+    role = value.get("role") or {"instructions": value["instructions"]}
+    spec = {"role": role}
+    for key in ("model", "tools", "permissions", "runtime", "memory", "context"):
         if key in value:
             spec[key] = value[key]
     document = {

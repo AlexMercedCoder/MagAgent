@@ -52,6 +52,12 @@ separate from release-operations evidence such as signing and paid provider smok
 
 `magent.provider_catalog` is the shared source of truth for provider metadata: setup labels, default models, environment variables, access modes, display names, LiteLLM routing modes, and OpenAI-compatible base URLs. Provider additions should start there, then add focused tests for runtime model routing and config detection.
 
+`magent.provider_models` owns live model discovery, response normalization,
+local caching, stale-cache fallback, and recommendation ranking.
+`magent.cli.model_picker` is the shared interactive adapter used by first-run
+setup and provider reconfiguration. Provider-specific list protocols belong in
+the discovery module rather than in wizard command handlers.
+
 `magent.project_scan` owns bounded project file iteration. Repo maps, code
 indexes, test maps, and performance diagnostics should use this shared scanner
 so file caps, git-aware discovery, and ignored directories remain consistent.
@@ -177,6 +183,12 @@ document requests; only `EffectiveProfile`, after intersection with harness poli
 `AgentSession`. Profile state is untrusted context and delta application is permanently scoped
 to `/state`. Child agents are intersected with the parent's effective profile, and queued work
 persists the profile identity so resumption cannot silently widen authority.
+`magent.agent_profiles.authoring` owns validated profile construction, scoped atomic writes, and
+default-profile persistence. `magent.cli.profile_wizard` only gathers interactive input and passes a
+complete document to that domain boundary. Sessions resolve an explicit `--agent` first, then the
+active user's default, then the global managed `magagent` fallback. This gives CLI and desktop
+clients one profile-selection contract while keeping profile requests subject to effective-policy
+narrowing.
 
 `magent.sandbox` owns isolated plan and recipe execution in worktree, copy, and Docker container modes.
 

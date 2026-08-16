@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 
+from magent.cli.wizard_guidance import explain_field, explain_options
 from magent.config import (
     CONFIG_DIR,
     LOGS_DIR,
@@ -49,6 +50,10 @@ def run_setup() -> None:
     existing = get_current_user()
     if existing:
         console.print(f"[dim]Active user: [bold]{existing}[/bold][/dim]")
+        console.print(
+            "[dim]Users keep separate preferences, memory, task history, and credentials. "
+            "Keep the current user unless you want an isolated identity.[/dim]"
+        )
         change = Confirm.ask("Create a new user?", default=False)
         username = existing if not change else _prompt_create_user()
     else:
@@ -56,6 +61,10 @@ def run_setup() -> None:
 
     # Configure a provider
     console.print("\n[bold]Step 2: Choose your default AI provider[/bold]")
+    console.print(
+        "[dim]This provider handles ordinary chat and coding requests. You can assign different "
+        "models to specialized roles later with magent model wizard.[/dim]"
+    )
     for i, (_pid, label) in enumerate(PROVIDER_CHOICES, 1):
         console.print(f"  [cyan]{i}[/cyan]. {label}")
 
@@ -69,9 +78,6 @@ def run_setup() -> None:
     except (ValueError, IndexError):
         provider_id = "ollama"
 
-    default_model = DEFAULT_MODELS.get(provider_id, "unknown")
-    model = Prompt.ask("Default model", default=default_model)
-
     # Get API key
     api_key_env, inline_api_key = _get_api_key(provider_id)
 
@@ -80,12 +86,36 @@ def run_setup() -> None:
     if provider_id == "custom":
         base_url = Prompt.ask("API base URL", default="http://localhost:8000/v1")
 
+    default_model = DEFAULT_MODELS.get(provider_id, "unknown")
+    from magent.cli.model_picker import prompt_for_provider_model
+    from magent.config import load_config
+    from magent.workbench_store import WorkbenchStore
+
+    model = prompt_for_provider_model(
+        load_config(username),
+        WorkbenchStore(username),
+        provider_id,
+        default_model=default_model,
+        api_key=inline_api_key or (os.environ.get(api_key_env) if api_key_env else None),
+        base_url=base_url,
+        console=console,
+    )
+
     # Memory extraction model
     console.print(
         "\n[bold]Step 3: Memory extraction model (can be different from main model)[/bold]"
     )
     console.print(
         "[dim]A smaller/cheaper model can be used to extract memories after conversations.[/dim]"
+    )
+    explain_options(
+        console,
+        "Memory extraction choice",
+        [
+            ("same model", "Simplest setup and usually strongest extraction, but may cost more."),
+            ("different model", "Use a cheaper or local model for background memory processing."),
+        ],
+        note="Memory extraction does not change the model used for your main conversation.",
     )
     same_as_main = Confirm.ask("Use same model for memory extraction?", default=True)
     if same_as_main:
@@ -137,6 +167,11 @@ def run_setup() -> None:
 
 
 def _prompt_create_user() -> str:
+    explain_field(
+        console,
+        "User profile",
+        "A local MagAgent identity with its own provider preferences, memory, tasks, and session history.",
+    )
     while True:
         name = Prompt.ask("\n[bold]Step 1:[/bold] Choose a username")
         name = name.strip().lower().replace(" ", "_")

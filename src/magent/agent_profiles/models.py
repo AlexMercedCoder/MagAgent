@@ -68,6 +68,7 @@ class EffectiveProfile:
     resolved: ResolvedProfile
     tools: frozenset[str]
     permission_mode: str
+    network_access: str = "full"
     provider: str = ""
     model: str = ""
     max_turns: int = 0
@@ -93,6 +94,7 @@ class EffectiveProfile:
             **self.resolved.as_dict(include_document=False),
             "tools": sorted(self.tools),
             "permission_mode": self.permission_mode,
+            "network_access": self.network_access,
             "provider": self.provider,
             "model": self.model,
             "max_turns": self.max_turns,

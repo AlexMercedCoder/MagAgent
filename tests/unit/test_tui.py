@@ -27,6 +27,13 @@ def test_context_line_compacts_home_path() -> None:
     assert "demo-1234" in line
 
 
+def test_context_line_shows_active_profile() -> None:
+    line = tui.context_line("alex", "Nous", "/repo", "balanced", profile="review")
+
+    assert "profile" in line
+    assert "review" in line
+
+
 def test_print_banner_renders_compact_session_context(monkeypatch) -> None:
     captured = Console(record=True, width=60, color_system=None)
     monkeypatch.setattr(tui, "console", captured)

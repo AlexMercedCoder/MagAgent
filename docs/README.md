@@ -25,6 +25,7 @@ magent docs doctor
 - [Installation Shapes](../src/magent/docs/installation-shapes.md)
 - [Prompt Caching](../src/magent/docs/prompt-caching.md)
 - [Open Agent Profiles](../src/magent/docs/agents.md)
+  Includes the interactive profile wizard, default-profile selection, OAP authoring, trust, and state review.
 - [Hooks](../src/magent/docs/hooks.md)
 - [Code Intelligence](../src/magent/docs/lsp.md)
 - [Background Worker](../src/magent/docs/daemon.md)
@@ -44,13 +45,17 @@ magent docs doctor
 - [MagAgent 0.80.0 Release Record](RELEASE_0.80.0.md)
 - [MagAgent 0.90.0 Release Record](RELEASE_0.90.0.md)
 - [MagAgent 0.91.0 Release Record](RELEASE_0.91.0.md)
+- [MagAgent 0.93.0 Release Record](RELEASE_0.93.0.md)
+- [MagAgent 0.94.0 Release Record](RELEASE_0.94.0.md)
 
 Common setup tasks now have CLI-first flows:
 
 ```bash
+magent get-started
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
 magent provider matrix
 magent provider recommend --goal coding
+magent provider models openrouter --refresh
 magent provider test-matrix
 magent provider set openai --model gpt-5 --access codex
 magent provider cooldowns
@@ -83,6 +88,16 @@ magent graph generate "repair the failing tests" --out repair.agraph.yaml
 magent graph validate repair.agraph.yaml --strict
 magent graph plan repair.agraph.yaml
 ```
+
+Both `magent configure` and `magent provider wizard` discover models for the
+selected provider after credential setup. Choose a number, enter `/search
+words` to narrow a large provider catalog, or type an exact model ID. Cached
+and built-in defaults keep this flow usable when discovery is unavailable.
+
+All interactive wizards explain their choices in context. The profile wizard describes OAP scope,
+inheritance, tools, permissions, memory, delegation, writeback, and default selection before asking.
+Gateway setup covers user/channel allowlists rather than tokens alone. See
+[Configuration](../src/magent/docs/configuration.md#guided-wizards) for the full wizard map.
 
 ## Architecture And Workflow
 

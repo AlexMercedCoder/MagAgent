@@ -84,6 +84,7 @@ def docs_doctor(command_names: list[str] | None = None) -> dict[str, Any]:
         "troubleshooting",
         "recipes",
         "tutorial",
+        "get-started",
         "testing",
         "patch-workflow",
         "ui",

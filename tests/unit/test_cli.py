@@ -9,7 +9,7 @@ from magent import __version__ as magent_version
 from magent import agent as magent_agent
 from magent import config as magent_config
 from magent import config_ux, workbench, workbench_store
-from magent.cli import command_context
+from magent.cli import command_context, model_picker
 from magent.cli import main as cli_main
 from magent.task_runtime import TaskRuntime
 from magent.workbench import WorkbenchStore
@@ -35,6 +35,20 @@ def test_cli_version_and_tutorial() -> None:
     assert f"MagAgent {magent_version}" in version.output
     assert tutorial.exit_code == 0
     assert "First Project Pass" in tutorial.output
+
+
+def test_get_started_is_accessible_and_machine_readable() -> None:
+    guide = runner.invoke(cli_main.app, ["get-started"])
+    payload = runner.invoke(cli_main.app, ["get-started", "--json"])
+
+    assert guide.exit_code == 0
+    assert "Set Up MagAgent" in guide.output
+    assert "Understand Permissions" in guide.output
+    assert "network access" in guide.output.lower()
+    assert payload.exit_code == 0
+    parsed = json.loads(payload.output)
+    assert parsed["ok"] is True
+    assert "magent configure" in parsed["first_commands"]
 
 
 def test_cli_help_is_grouped_for_new_users() -> None:
@@ -216,11 +230,16 @@ def test_provider_wizard_can_store_inline_api_key(tmp_path: Path, monkeypatch) -
         "provider_access_modes",
         lambda _provider_id: [{"id": "subscription", "label": "Subscription"}],
     )
+    monkeypatch.setattr(
+        model_picker,
+        "prompt_for_provider_model",
+        lambda *_args, **_kwargs: "deepseek-v4-flash",
+    )
 
     result = runner.invoke(
         cli_main.app,
         ["provider", "wizard"],
-        input="1\n1\ndeepseek-v4-flash\n1\ninline-secret\n",
+        input="1\n1\n1\ninline-secret\n",
     )
     cfg = magent_config.load_global_config()
 
@@ -254,6 +273,25 @@ def test_model_image_wizard_sets_image_role_without_changing_default_provider(tm
     assert cfg["models"]["image_maker"] == "openai/gpt-image-1"
     assert cfg["providers"]["openai"]["default_model"] == "gpt-image-1"
     assert cfg["providers"]["openai"]["api_key_env"] == "OPENAI_API_KEY"
+
+
+def test_gateway_wizard_explains_and_persists_allowlists(tmp_path: Path, monkeypatch) -> None:
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.create_user("cli-user")
+    magent_config.set_current_user("cli-user")
+
+    result = runner.invoke(
+        cli_main.app,
+        ["gateway", "wizard", "telegram"],
+        input="bot-secret\n123,456\nteam-channel\n",
+    )
+    cfg = magent_config.load_global_config()
+
+    assert result.exit_code == 0
+    assert "Gateway security" in result.output
+    assert "bot-secret" not in result.output
+    assert cfg["gateway"]["allowed_user_ids"] == ["123", "456"]
+    assert cfg["gateway"]["allowed_channel_ids"] == ["team-channel"]
 
 
 def test_cli_guided_ux_commands(tmp_path: Path, monkeypatch) -> None:

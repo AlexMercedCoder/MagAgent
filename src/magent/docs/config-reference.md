@@ -9,7 +9,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'0.93.0'`
+- `agent.version` default: `'0.94.0'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 - `agent.max_model_rounds_per_turn` default: `16`
@@ -120,6 +120,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent_profiles`
 
 - `agent_profiles.enabled` default: `True`
+- `agent_profiles.default_profile` default: `'magagent'`
 - `agent_profiles.user_paths` default: `['~/.config/magent/agents']`
 - `agent_profiles.project_paths` default: `['.magent/agents', '.agents']`
 - `agent_profiles.writeback` default: `'propose'`
@@ -136,6 +137,7 @@ Stored at `~/.config/magent/users/<user>/profile.toml`.
 
 - `preferences.default_provider` default: `''`
 - `preferences.default_model` default: `''`
+- `preferences.default_agent_profile` default: `''`
 - `preferences.theme` default: `'dark'`
 - `preferences.memory_budget_tokens` default: `4000`
 ### `permissions`

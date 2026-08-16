@@ -67,11 +67,13 @@ def test_config_properties_prefer_user_overrides(monkeypatch) -> None:
             "providers": {"custom": {"api_key_env": "MAGENT_TEST_KEY"}},
             "models": {"coding": "coder"},
             "mcp": {"servers": {}},
+            "agent_profiles": {"default_profile": "magagent"},
         },
         {
             "preferences": {
                 "default_provider": "custom",
                 "default_model": "cloud",
+                "default_agent_profile": "pair-programmer",
                 "memory_budget_tokens": 123,
             },
             "permissions": {"mode": "silent", "allowed_shell_patterns": ["pytest *"]},
@@ -87,6 +89,7 @@ def test_config_properties_prefer_user_overrides(monkeypatch) -> None:
 
     assert cfg.default_provider == "custom"
     assert cfg.default_model == "cloud"
+    assert cfg.default_agent_profile == "pair-programmer"
     assert cfg.permission_mode == "silent"
     assert cfg.allowed_shell_patterns == ["pytest *"]
     assert cfg.memory_budget_tokens == 123

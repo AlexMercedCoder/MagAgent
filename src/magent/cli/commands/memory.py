@@ -659,11 +659,36 @@ def register_memory_commands(
     @memory_app.command("wizard")
     def memory_wizard_cmd():
         """Interactively configure memory write and semantic recall settings."""
+        from magent.cli.wizard_guidance import explain_field, explain_options
         from magent.config_ux import configure_memory
 
+        explain_options(
+            console,
+            "Memory modes",
+            [
+                ("auto", "Write eligible memories automatically after extraction."),
+                ("inbox-first", "Queue candidates for review before durable graph writes. Recommended."),
+                ("manual", "Do not extract automatically; create and manage memories explicitly."),
+            ],
+            note="These settings govern user/project MagGraph memory, not OAP profile-state writeback.",
+        )
         mode = Prompt.ask("Memory mode", choices=["auto", "inbox-first", "manual"], default="inbox-first")
+        explain_field(
+            console,
+            "Semantic search",
+            "Adds meaning-based recall alongside keyword search. It uses local index storage and an embedding provider when configured.",
+        )
         semantic = Confirm.ask("Enable semantic memory search?", default=True)
+        explain_field(
+            console,
+            "Write interval",
+            "How often the conversation is checked for useful memory candidates. Lower values react sooner but add model work.",
+        )
         write_every = int(Prompt.ask("Write/check memory every N turns", default="3"))
+        console.print(
+            "[dim]The extraction provider/model performs background memory analysis. Leave both blank "
+            "to keep the current settings; a small inexpensive model is usually sufficient.[/dim]"
+        )
         extraction_provider = Prompt.ask("Extraction provider (blank keeps current)", default="")
         extraction_model = Prompt.ask("Extraction model (blank keeps current)", default="")
         console.print_json(

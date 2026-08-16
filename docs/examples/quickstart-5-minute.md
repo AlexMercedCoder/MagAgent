@@ -4,7 +4,7 @@ Use this when you want a fast confidence pass on a new install or provider.
 
 ```bash
 magent readiness
-magent provider models opencode-go
+magent provider models opencode-go --refresh
 magent provider tool-smoke opencode-go --model deepseek-v4-flash
 magent ask --repair-attempts 1 "Create hello.txt containing hello from MagAgent"
 ```

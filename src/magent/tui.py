@@ -55,14 +55,17 @@ def context_line(
     git_branch: str | None = None,
     session_name: str | None = None,
     session_id: str | None = None,
+    profile: str | None = None,
 ) -> str:
-    """Return a compact one-line session context summary."""
+    """Return a compact one-line session context summary, including the active profile."""
     parts = [
         f"[{THEME.muted}]user[/{THEME.muted}] [{THEME.user}]{username}[/{THEME.user}]",
         f"[{THEME.muted}]provider[/{THEME.muted}] [{THEME.provider}]{provider}[/{THEME.provider}]",
     ]
     if model:
         parts.append(f"[{THEME.muted}]model[/{THEME.muted}] [{THEME.provider}]{model}[/{THEME.provider}]")
+    if profile:
+        parts.append(f"[{THEME.muted}]profile[/{THEME.muted}] [bold cyan]{profile}[/bold cyan]")
     parts.append(f"[{THEME.muted}]mode[/{THEME.muted}] [{THEME.mode}]{mode}[/{THEME.mode}]")
     if git_branch:
         parts.append(f"[{THEME.muted}]git[/{THEME.muted}] [bold]{git_branch}[/bold]")
@@ -88,6 +91,7 @@ def print_banner(
     git_branch: str | None = None,
     session_name: str | None = None,
     session_id: str | None = None,
+    profile: str | None = None,
 ) -> None:
     """Print a compact startup banner that adapts to terminal width."""
     title = f"{LOGO} {version}".strip()
@@ -103,6 +107,7 @@ def print_banner(
                     git_branch=git_branch,
                     session_name=session_name,
                     session_id=session_id,
+                    profile=profile,
                 ),
                 title=f"[{THEME.accent}]{title}[/{THEME.accent}]",
                 border_style=THEME.border,
@@ -127,6 +132,7 @@ def print_banner(
             git_branch=git_branch,
             session_name=session_name,
             session_id=session_id,
+            profile=profile,
         ),
     )
     console.print(Panel(table, border_style=THEME.border, box=box.ROUNDED, padding=(1, 2)))

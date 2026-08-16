@@ -140,6 +140,7 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     },
     "agent_profiles": {
         "enabled": True,
+        "default_profile": "magagent",
         "user_paths": ["~/.config/magent/agents"],
         "project_paths": [".magent/agents", ".agents"],
         "writeback": "propose",
@@ -154,6 +155,7 @@ DEFAULT_USER_PROFILE: dict[str, Any] = {
     "preferences": {
         "default_provider": "",
         "default_model": "",
+        "default_agent_profile": "",
         "theme": "dark",
         "memory_budget_tokens": 4000,
     },
@@ -238,6 +240,13 @@ class Config:
     def default_model(self) -> str:
         user_pref = self._user.get("preferences", {}).get("default_model") or ""
         return user_pref or self._global.get("defaults", {}).get("model", "qwen2.5-coder:32b")
+
+    @property
+    def default_agent_profile(self) -> str:
+        user_value = self._user.get("preferences", {}).get("default_agent_profile")
+        if user_value is not None and str(user_value).strip():
+            return str(user_value).strip()
+        return str(self._global.get("agent_profiles", {}).get("default_profile", "magagent"))
 
     @property
     def permission_mode(self) -> str:

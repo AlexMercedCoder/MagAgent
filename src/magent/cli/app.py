@@ -9,11 +9,12 @@ app = typer.Typer(
     help=(
         "MagAgent — CLI AI coding agent powered by MagGraph persistent memory.\n\n"
         "[bold]Start here:[/bold] `magent configure`, `magent tutorial`, `magent doctor`, "
-        "`magent ask \"task\"`, or just run `magent` for an interactive session."
+        "`magent get-started`, `magent ask \"task\"`, or just run `magent` for an interactive session."
     ),
     epilog=(
         "Common first moves:\n"
         "  magent configure                  Set up user, provider, model, and memory\n"
+        "  magent get-started                Read a clear first-use guide\n"
         "  magent tutorial                   Learn the workflow\n"
         "  magent doctor                     Check setup health\n"
         "  magent ask \"fix the failing test\"  Run one task\n"
@@ -67,7 +68,10 @@ model_app = typer.Typer(help="Model role configuration", name="model")
 auth_app = typer.Typer(help="Credential storage and keyring helpers", name="auth")
 subagent_app = typer.Typer(help="Sub-agent configuration and runs", name="subagent")
 skill_app = typer.Typer(help="Browse and inspect local skills", name="skill")
-profile_app = typer.Typer(help="Guided UX configuration profiles", name="profile")
+profile_app = typer.Typer(
+    help="Create and select Open Agent Profiles or apply guided configuration presets",
+    name="profile",
+)
 permission_app = typer.Typer(help="Permission profile UX", name="permission")
 performance_app = typer.Typer(help="Local performance diagnostics", name="performance")
 workbench_app = typer.Typer(help="Workbench storage maintenance", name="workbench")

@@ -75,7 +75,9 @@ provider-support.json`. It records provider IDs, adapters, credential variable n
 and conformance state, never credential values. Full-support release qualification
 still requires maintainer-run completion and tool-use checks for that release.
 Use `magent provider models <provider> --refresh` when a provider changes model
-IDs, and `magent model health` to review recent smoke outcomes.
+IDs, and `magent model health` to review recent smoke outcomes. A failed live
+refresh returns the last successful cached catalog when available and includes
+a warning; it does not erase the known-good list.
 
 For release readiness, run `magent release check`. For scriptable reviews, use
 `magent review --fail-on P1`.

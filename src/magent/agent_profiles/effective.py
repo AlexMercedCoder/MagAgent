@@ -10,6 +10,15 @@ from magent.agent_profiles.models import Adjustment, EffectiveProfile, ResolvedP
 
 _MODE_ORDER = {"paranoid": 0, "balanced": 1, "silent": 2, "yolo": 3}
 _WRITEBACK_ORDER = {"off": 0, "propose": 1, "auto": 2}
+_NETWORK_ORDER = {"none": 0, "read": 1, "full": 2}
+_NETWORK_READ_TOOLS = {
+    "web_search",
+    "web_fetch",
+    "deep_research",
+    "browser_snapshot",
+    "browser_screenshot",
+}
+_NETWORK_TOOLS = _NETWORK_READ_TOOLS | {"http_request"}
 _TOOL_ALIASES = {
     "read": {"read_file", "read_file_range", "outline_file", "list_dir", "diff_files"},
     "write": {
@@ -224,8 +233,10 @@ def resolve_effective_profile(
 
     policy_mode = str(getattr(config, "permission_mode", "balanced"))
     mode = policy_mode
+    network_access = "full"
     for document in documents:
-        requested_mode = str(document.get("spec", {}).get("permissions", {}).get("default") or mode)
+        permissions = document.get("spec", {}).get("permissions", {})
+        requested_mode = str(permissions.get("default") or mode)
         narrowed = narrow_permission_mode(mode, requested_mode)
         if narrowed != requested_mode:
             adjustments.append(
@@ -237,6 +248,12 @@ def resolve_effective_profile(
                 )
             )
         mode = narrowed
+        requested_network = str(permissions.get("network") or network_access)
+        if requested_network not in _NETWORK_ORDER:
+            requested_network = "none"
+        network_access = min(
+            (network_access, requested_network), key=lambda item: _NETWORK_ORDER[item]
+        )
 
     provider = str(getattr(config, "default_provider", ""))
     model_id = str(getattr(config, "default_model", ""))
@@ -320,6 +337,10 @@ def resolve_effective_profile(
         for name in sorted(before - effective_tools):
             adjustments.append(Adjustment("tools", name, None, "parent profile delegation ceiling"))
         mode = narrow_permission_mode(parent.permission_mode, mode)
+        network_access = min(
+            (network_access, getattr(parent, "network_access", "full")),
+            key=lambda item: _NETWORK_ORDER[item],
+        )
         writeback = min((writeback, parent.writeback), key=lambda item: _WRITEBACK_ORDER[item])
         max_turns = min(max_turns, parent.max_turns)
         max_state = min(max_state, parent.max_state_tokens)
@@ -334,10 +355,26 @@ def resolve_effective_profile(
         if parent.memory_stores is not None:
             stores = _intersect_stores(stores, parent.memory_stores)
 
+    before_network = set(effective_tools)
+    if network_access == "none":
+        effective_tools -= _NETWORK_TOOLS
+    elif network_access == "read":
+        effective_tools -= _NETWORK_TOOLS - _NETWORK_READ_TOOLS
+    for name in sorted(before_network - effective_tools):
+        adjustments.append(
+            Adjustment(
+                "permissions.network",
+                name,
+                None,
+                f"profile network access is {network_access}",
+            )
+        )
+
     return EffectiveProfile(
         resolved=resolved,
         tools=frozenset(effective_tools),
         permission_mode=mode,
+        network_access=network_access,
         provider=provider,
         model=model_id,
         max_turns=max_turns,

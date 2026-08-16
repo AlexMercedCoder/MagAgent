@@ -14,6 +14,7 @@ implies that signing, live-provider, cross-platform, or upstream MCP gates passe
 
 Core ideas:
 
+- `magent get-started` gives new users a short, accessible path through setup, permissions, profiles, research, and larger workflows.
 - `magent ask "..."` runs a one-shot task.
 - `magent` starts an interactive Rich terminal session with a compact banner, Markdown response panels, and quiet streaming.
 - `magent docs list` shows built-in documentation topics.

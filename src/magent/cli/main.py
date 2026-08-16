@@ -97,6 +97,7 @@ from magent.cli.commands.memory import register_memory_commands
 from magent.cli.commands.performance import register_performance_commands
 from magent.cli.commands.permissions import register_permission_commands
 from magent.cli.commands.plugins import register_plugin_commands
+from magent.cli.commands.profiles import register_profile_commands
 from magent.cli.commands.providers import register_provider_ux_commands
 from magent.cli.commands.tools import register_tool_commands
 from magent.cli.commands.workbench import register_workbench_commands
@@ -126,6 +127,7 @@ console = Console()
 register_agent_commands(agent_app)
 register_browser_commands(browser_app)
 register_provider_ux_commands(provider_app)
+register_profile_commands(profile_app, store=store, console=console)
 register_config_commands(config_app)
 register_daemon_commands(daemon_app)
 register_docs_commands(docs_app, known_command_names=lambda: known_command_names(app))
@@ -174,15 +176,24 @@ def _build_extraction_provider(config):
 
 
 def _resolve_cli_profile(name: str | None, cwd: str, config):
-    if not name:
+    explicit = name is not None
+    selected = str(name or "").strip()
+    if explicit and selected.lower() in {"none", "off"}:
         return None
     from magent.agent_profiles.effective import resolve_effective_profile
     from magent.agent_profiles.registry import AgentProfileRegistry
     from magent.tools.catalog import built_in_tool_definitions
 
-    resolved = AgentProfileRegistry(cwd, config).get(name)
+    selected = selected or str(getattr(config, "default_agent_profile", "magagent") or "magagent")
+    resolved = AgentProfileRegistry(cwd, config).get(selected)
+    if resolved is None and not explicit and selected != "magagent":
+        console.print(
+            f"[yellow]Default agent profile '{selected}' is unavailable here; using magagent.[/yellow]"
+        )
+        selected = "magagent"
+        resolved = AgentProfileRegistry(cwd, config).get(selected)
     if resolved is None:
-        console.print(f"[red]Agent profile not found:[/red] {name}")
+        console.print(f"[red]Agent profile not found:[/red] {selected}")
         raise typer.Exit(1)
     granted = {item.get("function", {}).get("name", "") for item in built_in_tool_definitions()}
     return resolve_effective_profile(resolved, config, granted)
@@ -761,6 +772,7 @@ def _run_repl(username, config, main_provider, extract_provider, cwd, resume=Non
         cwd,
         config.permission_mode,
         version=__version__,
+        profile=profile.name if profile else "",
         session_name=session_name,
     )
 
@@ -1437,11 +1449,19 @@ def project_wizard_cmd(
     path: str = typer.Option(".", "--path", "-p"),
     force: bool = typer.Option(False, "--force"),
 ):
-    """Guided project bootstrap alias for project init."""
+    """Explain and create project config and playbook files."""
     # Call the underlying helper, not the Typer command: invoking a command as
     # a function leaves every unpassed parameter as a truthy OptionInfo.
     from magent.ux_flows import init_project
 
+    console.print(
+        Panel(
+            "Creates .magent/config.toml and .magent/playbook.toml for project-specific defaults, "
+            "test/build commands, review rules, and reusable routines. Existing files are preserved "
+            "unless --force is supplied.",
+            title="Project Bootstrap",
+        )
+    )
     console.print_json(data=init_project(path, force=force))
 
 
@@ -2767,9 +2787,18 @@ def provider_set_cmd(
 @provider_app.command("wizard")
 def provider_wizard_cmd():
     """Interactively configure provider, access mode, model, and key source."""
+    from magent.cli.model_picker import prompt_for_provider_model
+    from magent.cli.wizard_guidance import explain_options
     from magent.config_ux import provider_access_modes, provider_choices, set_default_provider
     from magent.provider_catalog import provider_env_vars
 
+    console.print(
+        Panel(
+            "Choose the service used for ordinary MagAgent requests, how you access it, where its "
+            "credential lives, and a model exposed by that provider.",
+            title="Provider Wizard",
+        )
+    )
     choices = provider_choices()
     for i, item in enumerate(choices, 1):
         console.print(f"{i}. {item['id']} — {item['label']}")
@@ -2779,14 +2808,20 @@ def provider_wizard_cmd():
     except (ValueError, IndexError):
         selected = choices[0]
     modes = provider_access_modes(selected["id"])
-    for i, item in enumerate(modes, 1):
-        console.print(f"{i}. {item['id']} — {item['label']}")
+    explain_options(
+        console,
+        "Access modes",
+        [
+            (str(i), f"{item['label']}: {item.get('description', item['id'])}")
+            for i, item in enumerate(modes, 1)
+        ],
+        note="Access mode determines authentication and billing; it does not merely rename the provider.",
+    )
     access_choice = Prompt.ask("Access mode", default="1")
     try:
         access_mode = modes[int(access_choice) - 1]["id"]
     except (ValueError, IndexError):
         access_mode = modes[0]["id"]
-    model = Prompt.ask("Default model", default=selected["default_model"])
     team_id = ""
     if selected["id"] == "prime-intellect":
         team_id = Prompt.ask("Prime Intellect team ID (optional)", default="").strip()
@@ -2798,6 +2833,10 @@ def provider_wizard_cmd():
         console.print("  [cyan]1[/cyan]. Paste key now and save it in MagAgent config")
         console.print(f"  [cyan]2[/cyan]. Use environment variable [bold]{default_env}[/bold]")
         console.print("  [cyan]3[/cyan]. Skip for now")
+        console.print(
+            "[dim]Pasted keys are stored locally with restrictive file permissions and redacted in "
+            "config output. Environment variables keep the secret outside MagAgent config.[/dim]"
+        )
         credential_choice = Prompt.ask("Credential option", choices=["1", "2", "3"], default="1")
         if credential_choice == "1":
             api_key = Prompt.ask("API key", password=True, default="").strip()
@@ -2813,11 +2852,25 @@ def provider_wizard_cmd():
                 f"[yellow]Skipping credential. You can add one later with "
                 f"[bold]magent provider wizard[/bold] or [bold]magent provider set {selected['id']} --api-key-env {default_env}[/bold].[/yellow]"
             )
+    base_url = ""
+    if selected["id"] == "custom":
+        base_url = Prompt.ask("API base URL", default="http://localhost:8000/v1").strip()
+    resolved_key = api_key or (os.environ.get(api_key_env) if api_key_env else None)
+    model = prompt_for_provider_model(
+        load_config(get_current_user()),
+        store(),
+        selected["id"],
+        default_model=selected["default_model"],
+        api_key=resolved_key,
+        base_url=base_url or None,
+        console=console,
+    )
     result = set_default_provider(
         selected["id"],
         model,
         api_key_env=api_key_env,
         api_key=api_key,
+        base_url=base_url,
         access_mode=access_mode,
         team_id=team_id,
     )
@@ -2967,11 +3020,25 @@ def model_recommend_cmd(
 
 @model_app.command("wizard")
 def model_wizard_cmd():
-    """Interactively set common model roles from the current default model."""
+    """Explain and configure specialized model roles."""
+    from magent.cli.wizard_guidance import explain_options
     from magent.config_ux import MODEL_ROLES, set_model_role
 
     config = load_config(get_current_user())
     default = f"{config.default_provider}/{config.default_model}"
+    explain_options(
+        console,
+        "Model roles",
+        [
+            ("coding", "Primary implementation and tool-use work."),
+            ("review", "Independent code and change review."),
+            ("memory", "Conversation-memory extraction and summarization."),
+            ("cheap", "Low-cost background, routing, and lightweight tasks."),
+            ("image_maker", "Image-generation requests when the provider supports them."),
+            ("fallback", "Backup model used when the preferred model is unavailable."),
+        ],
+        note="Use provider/model values. Press Enter to inherit the displayed default; leave fallback blank to disable it.",
+    )
     results = []
     for role in MODEL_ROLES:
         value = Prompt.ask(f"{role} model", default=default if role != "fallback" else "")
@@ -2983,6 +3050,7 @@ def model_wizard_cmd():
 @model_app.command("image-wizard")
 def model_image_wizard_cmd():
     """Interactively configure the image_maker model role and credentials."""
+    from magent.cli.wizard_guidance import explain_field
     from magent.config_ux import (
         configure_provider_entry,
         image_model_choices,
@@ -2990,6 +3058,11 @@ def model_image_wizard_cmd():
     )
     from magent.provider_catalog import provider_env_vars
 
+    explain_field(
+        console,
+        "Image model role",
+        "Used only by image-generation tools. It does not replace your default chat or coding model.",
+    )
     choices = image_model_choices()
     for i, item in enumerate(choices, 1):
         default = item["value"] or "provider/model"
@@ -3177,9 +3250,24 @@ def subagent_run_cmd(
 
 @subagent_app.command("wizard")
 def subagent_wizard_cmd():
-    """Interactively configure sub-agent caps."""
+    """Explain and configure subagent caps, models, and isolation."""
+    from magent.cli.wizard_guidance import explain_options
     from magent.config_ux import configure_subagents
 
+    explain_options(
+        console,
+        "Subagent settings",
+        [
+            ("maximum", "Total focused workers the main agent may create for one task; 0 disables delegation."),
+            ("parallel", "Workers allowed to run concurrently. Lower values reduce resource and quota spikes."),
+            ("model role", "Configured model role used by workers, usually coding or cheap."),
+            ("blank", "Run in the current project with normal checkpoint protections."),
+            ("copy", "Use an isolated filesystem copy."),
+            ("worktree", "Use an isolated Git worktree when the project is a repository."),
+            ("container", "Use the configured container runtime for strongest isolation."),
+        ],
+        note="Profile-specific subagent limits can narrow these global caps but cannot raise them.",
+    )
     max_subagents = int(Prompt.ask("Maximum sub-agents", default="3"))
     max_parallel = int(Prompt.ask("Maximum parallel sub-agents", default="2"))
     model_role = Prompt.ask("Model role", default="coding")
@@ -3268,6 +3356,35 @@ def tutorial_cmd():
     from magent.docs import read_topic
 
     console.print(read_topic("tutorial"))
+
+
+@app.command("get-started", rich_help_panel="Start Here")
+def get_started_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Return the guide and key commands as JSON."),
+):
+    """Show a clear first-use guide for MagAgent."""
+    from rich.markdown import Markdown
+
+    from magent.docs import read_topic
+
+    guide = read_topic("get-started")
+    if json_output:
+        console.print_json(
+            data={
+                "ok": True,
+                "guide": guide,
+                "first_commands": [
+                    "magent configure",
+                    "magent doctor",
+                    "magent",
+                    'magent ask "task"',
+                    "magent profile wizard",
+                    "magent docs search <query>",
+                ],
+            }
+        )
+        return
+    console.print(Markdown(guide))
 
 
 @data_app.command("inspect")
@@ -4107,15 +4224,40 @@ def gateway_configure_cmd(
 
 @gateway_app.command("wizard")
 def gateway_wizard_cmd(platform: str = typer.Argument(..., help="slack, discord, or telegram")):
-    """Prompt for gateway token fields and save them."""
+    """Configure gateway tokens and user/channel allowlists."""
+    from magent.cli.wizard_guidance import explain_field
     from magent.config_ux import configure_gateway
 
     platform = platform.lower()
+    explain_field(
+        console,
+        "Gateway security",
+        "Tokens authenticate the bot. User and channel allowlists determine who may send work to your agent; leaving both blank is not recommended for public bots.",
+    )
     bot_token = Prompt.ask(f"{platform} bot token", password=True, default="")
     app_token = ""
     if platform == "slack":
         app_token = Prompt.ask("Slack app token (xapp-...)", password=True, default="")
-    result = configure_gateway(platform, bot_token=bot_token, app_token=app_token)
+    allowed_users = [
+        item.strip()
+        for item in Prompt.ask("Allowed user IDs (comma-separated, optional)", default="").split(",")
+        if item.strip()
+    ]
+    allowed_channels = [
+        item.strip()
+        for item in Prompt.ask("Allowed channel IDs (comma-separated, optional)", default="").split(",")
+        if item.strip()
+    ]
+    console.print(
+        "[dim]Use platform-native IDs, not display names. Run magent gateway doctor after setup.[/dim]"
+    )
+    result = configure_gateway(
+        platform,
+        bot_token=bot_token,
+        app_token=app_token,
+        allowed_user_ids=allowed_users,
+        allowed_channel_ids=allowed_channels,
+    )
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)

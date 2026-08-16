@@ -52,6 +52,7 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Documents architecture boundaries for memory, workbench, context, tools, CLI/TUI, and compatibility-safe refactors
 - Saves and runs reusable workflow recipes for release prep, bug triage, docs audits, dependency upgrades, and test repair
 - Defines portable, stateful Open Agent Profile v1 Level 3 agents in `.magent/agents/` or `.agents/`, with inheritance, scoped MCP/skills/memory/subagents, safe capability narrowing, reviewed learning, and `@review`, `@explore`, and `@docs` invocation
+- Includes a complete `magent profile wizard`, a managed `magagent` personality by default, and user/global default-profile selection without hand-editing configuration
 - Runs project hooks around tools, edits, command failures, memory candidates, and release checks
 - Runs real local LSP clients for Python, TypeScript/JavaScript, Rust, and Go, with capability-aware symbols, diagnostics, definitions, references, hover, and rename
 - Queues background asks, recipes, plans, shell tasks, followups, and gateway tasks through `magent daemon`
@@ -121,7 +122,7 @@ for readiness and exact install commands, or see [Installation Shapes](src/magen
 ### First-time setup
 
 ```bash
-magent setup
+magent get-started
 magent configure
 ```
 
@@ -130,6 +131,9 @@ The wizard will:
 2. Walk you through selecting an AI provider and model
 3. Let you paste an API key into local config, use an environment variable, or skip credentials for later
 4. Test the connection live
+
+`magent get-started` is a plain-language guide to sessions, permissions, profiles,
+web research, memory, plans, goals, and Agentic Graphs. You can rerun it at any time.
 
 If a configured cloud provider is missing credentials, `magent` stops before the
 session starts and prints the exact `magent configure`, `magent provider set`,
@@ -215,6 +219,7 @@ magent provider matrix
 magent provider recommend --goal coding
 magent provider explain mistral
 magent provider env
+magent provider models openrouter --refresh
 magent provider test-matrix
 magent provider set openai --model gpt-5 --api-key-env OPENAI_API_KEY
 magent provider set openai --model gpt-5 --access codex
@@ -224,6 +229,15 @@ magent provider doctor
 magent provider cooldowns
 magent provider clear-cooldown openai
 ```
+
+`magent configure` and `magent provider wizard` dynamically load the selected
+provider's available models after credentials are configured. The picker ranks
+the provider default and likely coding/tool-use models first, accepts
+`/search words` to filter large catalogs, and always accepts a model ID entered
+directly. OpenAI, Anthropic, Gemini, Ollama, Groq, OpenRouter, common hosted
+providers, and OpenAI-compatible endpoints support live discovery. When a
+provider does not expose model listing or is offline, MagAgent uses its cached
+catalog or built-in default without blocking setup.
 
 Provider access modes are intentionally distinct:
 
@@ -697,7 +711,7 @@ magent memory configure --mode inbox-first --write-every 3
 ```bash
 magent gateway init              # Print example config
 magent gateway configure telegram # Save platform tokens and allowlists
-magent gateway wizard slack      # Prompt for platform token fields
+magent gateway wizard slack      # Prompt for tokens and user/channel allowlists
 magent gateway doctor            # Show gateway readiness
 magent gateway start             # Start all configured platforms (daemon)
 magent gateway start slack -f    # Single platform, foreground mode
@@ -715,6 +729,9 @@ magent onboard         # Apply guided profile + project defaults
 magent next            # Suggest useful next actions
 magent profile list    # Guided configuration presets
 magent profile apply   # Apply provider/memory/subagent preset
+magent profile wizard  # Create a complete Open Agent Profile interactively
+magent profile default # Show the profile used by ordinary sessions
+magent profile set-default NAME
 magent config backup   # Back up global/current-user config
 magent config diff     # Diff current config against a backup
 magent config restore  # Restore config from a backup
@@ -724,6 +741,7 @@ magent provider matrix # Provider catalog and readiness table
 magent provider recommend # Recommend providers for a goal
 magent provider set    # Set default provider/model
 magent provider wizard # Interactive provider/access/model setup
+magent provider models # Cached/live model discovery for one provider
 magent provider doctor # Provider/config readiness
 magent provider cooldowns # Show rate-limit cooldowns
 magent model roles     # Show role-specific model routing

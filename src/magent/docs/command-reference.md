@@ -118,6 +118,7 @@ Generated from the active Typer command tree.
 - `magent execution`
 - `magent followup`
 - `magent gateway`
+- `magent get-started`
 - `magent github`
 - `magent goal`
 - `magent goal-run`
@@ -410,7 +411,11 @@ Generated from the active Typer command tree.
 ## profile
 
 - `magent profile apply`
+- `magent profile clear-default`
+- `magent profile default`
 - `magent profile list`
+- `magent profile set-default`
+- `magent profile wizard`
 
 ## project
 
