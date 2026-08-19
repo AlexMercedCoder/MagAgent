@@ -629,12 +629,27 @@ def research_cmd(
         help="Write a Markdown research report in the active directory.",
     ),
     out: str | None = typer.Option(None, "--out", "-o", help="Output path for --write."),
+    project: str = typer.Option(".", "--project", "-p", help="Active project directory."),
+    agent: str | None = typer.Option(None, "--agent", help="Apply an OAP profile's tool and network policy."),
 ):
     """Run deep web research without starting a full agent session."""
     from magent.tools import ToolExecutor
 
+    config = None
+    effective_profile = None
+    if agent is not None:
+        username = _require_user()
+        config = load_config(username)
+        effective_profile = _resolve_cli_profile(agent, project, config)
+
     async def _run() -> dict:
-        tools = ToolExecutor(os.getcwd(), permission_mode="silent", interactive_permissions=False)
+        tools = ToolExecutor(
+            str(Path(project).resolve()),
+            permission_mode=effective_profile.permission_mode if effective_profile else "silent",
+            interactive_permissions=False,
+            config=config,
+            allowed_tools=set(effective_profile.tools) if effective_profile else None,
+        )
         return await tools.deep_research(
             topic,
             questions=question or [],
@@ -653,7 +668,7 @@ def research_cmd(
                 "Write this research report to the active directory?", default=False
             )
         if should_write:
-            path = _write_research_report(result, out=out)
+            path = _write_research_report(result, out=out, project=project)
             console.print(f"[green]✓ Wrote research report:[/green] {path}")
     if not result.get("ok"):
         raise typer.Exit(1)
@@ -677,11 +692,13 @@ def update_cmd(run: bool = typer.Option(False, "--run", help="Run the detected u
         raise typer.Exit(completed.returncode)
 
 
-def _write_research_report(result: dict, *, out: str | None = None) -> Path:
+def _write_research_report(
+    result: dict, *, out: str | None = None, project: str | Path = "."
+) -> Path:
     path = (
         Path(out).expanduser()
         if out
-        else Path.cwd() / f"{_slugify_filename(str(result.get('topic') or 'research'))}.md"
+        else Path(project).resolve() / f"{_slugify_filename(str(result.get('topic') or 'research'))}.md"
     )
     path = path.resolve(strict=False)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -2576,7 +2593,10 @@ def context_audit_cmd(
 
 
 @recipe_app.command("list")
-def recipe_list_cmd(project: str = typer.Option(".", "--project", "-p")):
+def recipe_list_cmd(
+    project: str = typer.Option(".", "--project", "-p"),
+    json_output: bool = typer.Option(False, "--json", hidden=True),
+):
     """List built-in, saved, and playbook-backed workflow recipes."""
     from magent.recipes import list_recipes
 
@@ -2629,12 +2649,17 @@ def recipe_save_cmd(
 
 @recipe_app.command("run")
 def recipe_run_cmd(
-    name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    name: str = typer.Argument(...),
+    project: str = typer.Option(".", "--project", "-p"),
+    agent: str = typer.Option("", "--agent", help="Attach an OAP profile to the materialized plan."),
+    json_output: bool = typer.Option(False, "--json", hidden=True),
 ):
     """Create a pending execution plan from a workflow recipe."""
     from magent.recipes import run_recipe
 
-    result = run_recipe(_store(), name, project)
+    if agent:
+        _resolve_cli_profile(agent, project, load_config(_require_user()))
+    result = run_recipe(_store(), name, project, agent=agent)
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)

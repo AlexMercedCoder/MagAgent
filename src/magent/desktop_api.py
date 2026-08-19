@@ -213,6 +213,8 @@ def platform_contracts() -> dict[str, Any]:
                 "status": "beta",
                 "conformance_level": 3,
                 "transport": "json",
+                "editor_contract": "magent.oap-profile.v1",
+                "authoring_transport": "json-stdin/json",
             },
             "mcp": {
                 "status": "dual-era-core",

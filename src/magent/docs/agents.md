@@ -11,6 +11,7 @@ magent profile set-default reviewer
 magent agent create reviewer --description "Project reviewer"
 magent agent list
 magent agent explain reviewer
+magent agent schema
 magent --agent reviewer
 magent ask --agent reviewer "Review the current diff"
 ```
@@ -22,6 +23,26 @@ permission mode, network access, memory stores, runtime role, subagent limits, c
 lifecycle hooks, and state writeback. Profiles can be stored for the current user, in
 `.magent/agents/`, or in the portable `.agents/` directory. The final prompt optionally makes
 the new profile the default.
+
+Desktop editors and other machine clients use the versioned
+`magent.oap-profile.v1` contract instead of rewriting Markdown or YAML directly:
+
+```bash
+magent agent schema --project .
+magent agent preview --input profile.json --project .
+magent agent apply --input profile.json --scope project --project .
+magent agent revisions reviewer --project .
+magent agent detail reviewer --project .
+magent agent restore-revision reviewer CHECKPOINT --expected-digest DIGEST --project . --yes
+magent agent clone reviewer reviewer-copy --scope user --project .
+magent agent export reviewer --output reviewer.md --project .
+```
+
+`preview` shows inherited and effective authority plus missing local skills, MCP servers,
+tools, and subagents. Updates require the digest returned when the profile was opened.
+Behavior edits preserve runtime-owned state and proposals, append revision history, and
+create a rollback checkpoint before writing atomically. Import and export never include
+secret-like extension fields.
 
 Web access has two independent profile checks. `spec.tools.allow` must include `web` or the
 specific web tools, and `spec.permissions.network` must be `read` or `full`. Use `read` for web
@@ -133,6 +154,10 @@ magent agent history reviewer
 
 Every accepted delta is limited to `/state`, verifies the source revision and digest, scrubs secrets, increments the revision once, appends history, creates a profile checkpoint, and writes atomically. `--rebase` accepts an unrelated concurrent state change but rejects edits to the same target. Proposals are never automatically accepted, including under `writeback: auto`. Restore a checkpoint with `magent agent rollback NAME CHECKPOINT`.
 
+Authoring revisions are separate from state-delta history. Use `agent revisions` to list
+editor checkpoints and `agent restore-revision` for digest-guarded restoration. The older
+`agent rollback` remains the low-level state-checkpoint command.
+
 ## Legacy Compatibility And Conversion
 
 Legacy YAML-frontmatter agents are converted in memory on each read and are never rewritten as a side effect. Preview or explicitly apply conversion with:
@@ -148,10 +173,17 @@ magent agent convert .magent/agents/reviewer.md --write
 
 `magent profile` provides `wizard`, `default`, `set-default`, and `clear-default` for OAP setup,
 plus `list` and `apply` for guided configuration presets. `magent agent` provides `list`, `show`,
-`explain`, `validate`, `create`, `convert`, `state`, `history`, `rollback`, `forget`, `inbox`,
+`schema`, `preview`, `apply`, `clone`, `import`, `export`, `delete`, `detail`, `revisions`,
+`restore-revision`, `explain`, `validate`, `create`, `convert`, `state`, `history`, `rollback`, `forget`, `inbox`,
 `accept`, `reject`, `digest`, `conformance`, and the compatibility `run` renderer. Run
 `magent agent conformance` offline to inspect packaged Level 3 behavioral evidence.
 
 ## Current Conformance Boundary
 
-Version 0.94.0 declares provisional OAP v1 Level 3 harness support. The complete supplied Level 3 surface is enforced in interactive sessions, asks, subagents, goals, daemon work, and gateways. The declaration remains provisional because the canonical upstream OAP repository and reference conformance corpus were not publicly discoverable when this release was prepared; MagAgent ships its offline schema and behavioral fixtures without claiming unverifiable upstream certification.
+Version 0.95.0 retains provisional OAP v1 Level 3 harness support and adds the
+conflict-safe desktop authoring contract. The complete supplied Level 3 surface is enforced
+in interactive sessions, asks, research, recipes, graph agent nodes, subagents, goals, daemon
+work, and gateways. The declaration remains provisional because the canonical upstream OAP
+repository and reference conformance corpus were not publicly discoverable when this release
+was prepared; MagAgent ships its offline schema and behavioral fixtures without claiming
+unverifiable upstream certification.

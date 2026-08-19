@@ -122,7 +122,7 @@ def apply_delta(path: Path, delta: dict[str, Any], *, auto_rebase: bool = False)
         delta = rebase_delta(path, delta)
         document, _body, encoding = parse_document(path)
         revision = int(document.get("metadata", {}).get("revision", 1))
-    checkpoint = _checkpoint(path, document, encoding)
+    checkpoint = create_checkpoint(path, document, encoding)
     for operation in delta.get("operations", []):
         _apply_state_operation(document, operation)
     document.setdefault("metadata", {})["revision"] = revision + 1
@@ -145,7 +145,8 @@ def apply_delta(path: Path, delta: dict[str, Any], *, auto_rebase: bool = False)
     }
 
 
-def _checkpoint(path: Path, document: dict[str, Any], encoding: str) -> Path:
+def create_checkpoint(path: Path, document: dict[str, Any], encoding: str) -> Path:
+    """Persist a restorable copy of a profile before a mutation."""
     directory = (
         path.parent.parent / "profile-checkpoints"
         if path.parent.name == "agents"
@@ -165,7 +166,7 @@ def restore_checkpoint(path: Path, checkpoint: Path) -> dict[str, Any]:
     restored, _restored_body, restored_encoding = parse_document(checkpoint)
     validate_document(current)
     validate_document(restored)
-    safety = _checkpoint(path, current, current_encoding)
+    safety = create_checkpoint(path, current, current_encoding)
     atomic_write(path, render_document(restored, restored_encoding))
     return {
         "ok": True,

@@ -732,6 +732,10 @@ magent profile apply   # Apply provider/memory/subagent preset
 magent profile wizard  # Create a complete Open Agent Profile interactively
 magent profile default # Show the profile used by ordinary sessions
 magent profile set-default NAME
+magent agent schema    # Machine-readable OAP editor contract and local choices
+magent agent preview --input profile.json
+magent agent apply --input profile.json --scope project
+magent agent revisions NAME
 magent config backup   # Back up global/current-user config
 magent config diff     # Diff current config against a backup
 magent config restore  # Restore config from a backup

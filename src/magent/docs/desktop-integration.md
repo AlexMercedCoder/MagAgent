@@ -7,7 +7,30 @@ MagAgent exposes stable machine-readable CLI commands for desktop shells such as
 - `magent system info`
 - `magent readiness --project <path>`
 - `magent ask --json --events --project <path> "task"`
-- `magent research "topic" --question "focus" --max-sources 8`
+- `magent research "topic" --question "focus" --max-sources 8 --project <path> --agent <profile>`
+
+## Open Agent Profiles
+
+Use `magent.oap-profile.v1` for visual profile management:
+
+- `magent agent schema --project <path>` returns the JSON Schema, installed tools, packs,
+  skills, MCP servers, provider choices, profile templates, and editor guidance.
+- `magent agent preview --input - --project <path>` reads a JSON document on stdin and
+  returns validation, dependency diagnostics, inheritance, and effective authority.
+- `magent agent apply` reads the document from `--input -` and accepts `--scope`,
+  `--project`, and `--expected-digest` to create or conflict-safely update a document.
+  Scope may be `user`, `project`, or `portable`.
+- `magent agent revisions <name> --project <path>` and `restore-revision` expose guarded
+  rollback history.
+- `magent agent detail <name> --project <path>` combines the resolved document, effective
+  authority, and checkpoints to reduce desktop process startup overhead.
+- `clone`, `import`, `export`, and `delete` cover profile lifecycle operations.
+
+Pass profile JSON through stdin. This keeps instructions and annotations out of process
+arguments and desktop command history. A profile narrows agent authority; it does not replace
+the MagAgent user, project, credential store, or filesystem sandbox. Pin both profile name and
+`profile_digest` in a desktop chat session so revision drift is visible rather than silently
+changing an existing conversation.
 
 For live desktop asks, create the durable task first and attach the child process:
 
@@ -90,4 +113,5 @@ facades never expose roster capabilities and keep desktop clients out of transpo
 internals.
 
 `magent system contracts` publishes the task, event, memory recall, memory batch,
-configuration, plugin, MCP, and Agentic Graph compatibility levels used by desktop clients.
+configuration, plugin, MCP, Open Agent Profile editor, and Agentic Graph compatibility levels
+used by desktop clients.

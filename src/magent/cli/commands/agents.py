@@ -2,13 +2,25 @@
 
 from __future__ import annotations
 
+import json
 import shutil
+import sys
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
 
 console = Console()
+
+
+def _load_document_input(path: str) -> dict:
+    """Read one JSON OAP document from stdin or a file."""
+    text = sys.stdin.read() if path == "-" else Path(path).expanduser().read_text(encoding="utf-8")
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError("Profile input must be a JSON object")
+    return data
 
 
 def _registry(project: str):
@@ -34,6 +46,179 @@ def _require_profile(name: str, project: str):
 
 
 def register_agent_commands(agent_app: typer.Typer) -> None:
+    @agent_app.command("schema")
+    def agent_schema_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
+        """Return the versioned OAP editor contract and local choices."""
+        from magent.agent_profiles.desktop import profile_contract
+
+        _registry_instance, config = _registry(project)
+        console.print_json(data=profile_contract(project, config))
+
+    @agent_app.command("preview")
+    def agent_preview_cmd(
+        input_path: str = typer.Option("-", "--input", help="JSON document path, or - for stdin."),
+        project: str = typer.Option(".", "--project", "-p"),
+    ) -> None:
+        """Validate and resolve an OAP document without writing it."""
+        from magent.agent_profiles.desktop import preview_profile
+
+        try:
+            _registry_instance, config = _registry(project)
+            result = preview_profile(_load_document_input(input_path), project=project, config=config)
+        except Exception as exc:
+            result = {"ok": False, "error": str(exc)}
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @agent_app.command("apply")
+    def agent_apply_cmd(
+        input_path: str = typer.Option("-", "--input", help="JSON document path, or - for stdin."),
+        scope: str = typer.Option("user", "--scope", help="user, project, or portable"),
+        project: str = typer.Option(".", "--project", "-p"),
+        expected_digest: str = typer.Option("", "--expected-digest"),
+    ) -> None:
+        """Create or conflict-safely update an OAP document."""
+        from magent.agent_profiles.desktop import apply_profile
+
+        try:
+            _registry_instance, config = _registry(project)
+            result = apply_profile(
+                _load_document_input(input_path),
+                scope=scope,
+                project=project,
+                config=config,
+                expected_digest=expected_digest,
+            )
+        except Exception as exc:
+            result = {"ok": False, "error": str(exc)}
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @agent_app.command("clone")
+    def agent_clone_cmd(
+        source: str,
+        name: str,
+        scope: str = typer.Option("user", "--scope"),
+        project: str = typer.Option(".", "--project", "-p"),
+    ) -> None:
+        """Copy a profile without carrying state or history."""
+        from magent.agent_profiles.desktop import clone_profile
+
+        _registry_instance, config = _registry(project)
+        result = clone_profile(source, name, scope=scope, project=project, config=config)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @agent_app.command("import")
+    def agent_import_cmd(
+        source: Path,
+        scope: str = typer.Option("user", "--scope"),
+        project: str = typer.Option(".", "--project", "-p"),
+        name: str = typer.Option("", "--name"),
+        dry_run: bool = typer.Option(False, "--dry-run"),
+    ) -> None:
+        """Preview or import an OAP document."""
+        from magent.agent_profiles.desktop import import_profile
+
+        _registry_instance, config = _registry(project)
+        result = import_profile(
+            source, scope=scope, project=project, config=config, name=name, dry_run=dry_run
+        )
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @agent_app.command("export")
+    def agent_export_cmd(
+        name: str,
+        output: Annotated[Path, typer.Option("--output", "-o")],
+        project: str = typer.Option(".", "--project", "-p"),
+    ) -> None:
+        """Export a portable profile with secret-like extension fields removed."""
+        from magent.agent_profiles.desktop import export_profile
+
+        _registry_instance, config = _registry(project)
+        result = export_profile(name, output, project=project, config=config)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @agent_app.command("delete")
+    def agent_delete_cmd(
+        name: str,
+        expected_digest: str = typer.Option(..., "--expected-digest"),
+        project: str = typer.Option(".", "--project", "-p"),
+        yes: bool = typer.Option(False, "--yes", help="Confirm permanent deletion."),
+    ) -> None:
+        """Delete a user-owned profile after digest and confirmation checks."""
+        from magent.agent_profiles.desktop import delete_profile
+
+        if not yes:
+            console.print_json(data={"ok": False, "error": "Pass --yes after reviewing the profile."})
+            raise typer.Exit(1)
+        _registry_instance, config = _registry(project)
+        result = delete_profile(
+            name, project=project, config=config, expected_digest=expected_digest
+        )
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @agent_app.command("revisions")
+    def agent_revisions_cmd(
+        name: str, project: str = typer.Option(".", "--project", "-p")
+    ) -> None:
+        """List restorable authoring revisions for an OAP profile."""
+        from magent.agent_profiles.desktop import profile_checkpoints
+
+        _registry_instance, config = _registry(project)
+        result = profile_checkpoints(name, project=project, config=config)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @agent_app.command("detail")
+    def agent_detail_cmd(
+        name: str, project: str = typer.Option(".", "--project", "-p")
+    ) -> None:
+        """Return profile document, effective authority, and revision history."""
+        from magent.agent_profiles.desktop import inspect_profile
+
+        _registry_instance, config = _registry(project)
+        result = inspect_profile(name, project=project, config=config)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @agent_app.command("restore-revision")
+    def agent_restore_revision_cmd(
+        name: str,
+        checkpoint: Path,
+        expected_digest: str = typer.Option(..., "--expected-digest"),
+        project: str = typer.Option(".", "--project", "-p"),
+        yes: bool = typer.Option(False, "--yes"),
+    ) -> None:
+        """Conflict-safely restore a profile revision created by MagAgent."""
+        from magent.agent_profiles.desktop import rollback_profile
+
+        if not yes:
+            console.print_json(data={"ok": False, "error": "Pass --yes after reviewing the revision."})
+            raise typer.Exit(1)
+        _registry_instance, config = _registry(project)
+        result = rollback_profile(
+            name,
+            checkpoint,
+            project=project,
+            config=config,
+            expected_digest=expected_digest,
+        )
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
     @agent_app.command("list")
     def agent_list_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
         """List profiles with revision, trust, source, and digest."""

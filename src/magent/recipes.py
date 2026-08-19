@@ -147,7 +147,9 @@ def save_recipe(
     return recipe
 
 
-def run_recipe(store: Any, name: str, project: str | Path = ".") -> dict[str, Any]:
+def run_recipe(
+    store: Any, name: str, project: str | Path = ".", *, agent: str = ""
+) -> dict[str, Any]:
     """Materialize a recipe as a pending execution plan."""
     recipe = get_recipe(store, name, project)
     if not recipe:
@@ -163,7 +165,7 @@ def run_recipe(store: Any, name: str, project: str | Path = ".") -> dict[str, An
         goal,
         project=root,
         state="planning",
-        metadata={"recipe": recipe["name"]},
+        metadata={"recipe": recipe["name"], **({"agent_profile": agent} if agent else {})},
     )
     plan = save_execution_plan(store, root, goal, commands=recipe.get("commands", []), include_diff=False)
     updated = store.update_item(
@@ -173,11 +175,12 @@ def run_recipe(store: Any, name: str, project: str | Path = ".") -> dict[str, An
         steps=recipe.get("steps", []),
         status="pending",
         execution_task_id=runtime_task["id"],
+        agent_profile=agent,
     )
     runtime.record_event(
         runtime_task["id"],
         "recipe_materialized",
-        detail={"recipe": recipe["name"], "plan_id": plan["id"]},
+        detail={"recipe": recipe["name"], "plan_id": plan["id"], **({"agent_profile": agent} if agent else {})},
     )
     runtime.transition(runtime_task["id"], "waiting", reason="Recipe plan is ready")
     return {

@@ -5,18 +5,28 @@ Generated from the active Typer command tree.
 ## agent
 
 - `magent agent accept`
+- `magent agent apply`
+- `magent agent clone`
 - `magent agent conformance`
 - `magent agent convert`
 - `magent agent create`
+- `magent agent delete`
+- `magent agent detail`
 - `magent agent digest`
 - `magent agent explain`
+- `magent agent export`
 - `magent agent forget`
 - `magent agent history`
+- `magent agent import`
 - `magent agent inbox`
 - `magent agent list`
+- `magent agent preview`
 - `magent agent reject`
+- `magent agent restore-revision`
+- `magent agent revisions`
 - `magent agent rollback`
 - `magent agent run`
+- `magent agent schema`
 - `magent agent show`
 - `magent agent state`
 - `magent agent validate`

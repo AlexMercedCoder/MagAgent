@@ -63,6 +63,7 @@ class GraphExecutor:
         assume_yes: bool = False,
         root_task_id: str = "",
         compatibility_completed_state: bool = False,
+        profile: Any | None = None,
     ) -> None:
         self.username = username
         self.config = config
@@ -74,6 +75,7 @@ class GraphExecutor:
         self.assume_yes = assume_yes
         self._root_task_id = root_task_id
         self.compatibility_completed_state = compatibility_completed_state
+        self.profile = profile
         self._record: dict[str, Any] = {}
         self._started = 0.0
         self._document: GraphDocument | None = None
@@ -976,9 +978,17 @@ class GraphExecutor:
         self, node_id: str, prompt: str, route: Route, task_id: str
     ) -> Any:
         from magent.agent import AgentSession
-        from magent.cli.command_context import build_extraction_provider, build_provider_for_role
+        from magent.cli.command_context import (
+            build_extraction_provider,
+            build_provider,
+            build_provider_for_role,
+        )
 
-        provider = build_provider_for_role(self.config, route.role)
+        provider = (
+            build_provider(self.config, self.profile.provider, self.profile.model)
+            if self.profile and (self.profile.provider or self.profile.model)
+            else build_provider_for_role(self.config, route.role)
+        )
         extraction = build_extraction_provider(self.config)
         session = AgentSession(
             username=self.username,
@@ -987,6 +997,7 @@ class GraphExecutor:
             extraction_provider=extraction,
             cwd=str(self._workspace.get()),
             project_slug=None,
+            profile=self.profile,
         )
         session.execution_task_id = task_id
         try:

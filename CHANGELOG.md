@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.95.0 (unreleased)
+
+- Added the versioned `magent.oap-profile.v1` desktop authoring contract with schema and
+  local-choice discovery, previewed effective authority, JSON-stdin apply, import/export,
+  clone/delete, optimistic concurrency, and secret-safe portable exports.
+- Added durable authoring checkpoints and digest-guarded profile revision restoration while
+  preserving runtime-owned profile state and proposals across behavior edits.
+- Extended OAP selection to project-scoped deep research, recipe plans, and Agentic Graph
+  agent nodes so desktop profile choices remain operational rather than decorative.
+- Regenerated the built-in command reference and expanded agent and desktop integration docs.
+
 ## 0.94.0
 
 - Added `magent get-started` with an accessible terminal guide and machine-readable JSON covering setup, sessions, permissions, profiles, research, memory, and larger workflows.

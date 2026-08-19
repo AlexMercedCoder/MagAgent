@@ -157,6 +157,7 @@ def register_graph_commands(
         dry_run: bool = typer.Option(False, "--dry-run"),
         yes: bool = typer.Option(False, "--yes", help="Approve interactive graph gates non-interactively."),
         json_output: bool = typer.Option(False, "--json"),
+        agent: str = typer.Option("", "--agent", help="Run graph agent nodes under an OAP profile."),
     ) -> None:
         """Run a validated graph with durable node and run records."""
         username = get_current_user()
@@ -172,8 +173,11 @@ def register_graph_commands(
         async def approve(prompt: str, _detail: dict[str, Any]) -> bool:
             return yes or Confirm.ask(prompt, default=False)
 
+        config = load_config(username)
+        effective_profile = _effective_profile(agent, project, config) if agent else None
+
         async def execute() -> dict[str, Any]:
-            executor = GraphExecutor(username=username, config=load_config(username), project=project, store=store(), approval=approve, assume_yes=yes)
+            executor = GraphExecutor(username=username, config=config, project=project, store=store(), approval=approve, assume_yes=yes, profile=effective_profile)
             return await executor.run(path, params=params, dry_run=dry_run)
 
         try:
@@ -230,6 +234,21 @@ def register_graph_commands(
 
 def _find_run(store: WorkbenchStore, run_id: str) -> dict[str, Any] | None:
     return next((item for item in reversed(store.read("graph_runs", [])) if item.get("run_id") == run_id), None)
+
+
+def _effective_profile(name: str, project: str | Path, config: Any) -> Any:
+    from magent.agent_profiles.effective import resolve_effective_profile
+    from magent.agent_profiles.registry import AgentProfileRegistry
+    from magent.tools.catalog import built_in_tool_definitions
+
+    resolved = AgentProfileRegistry(project, config).get(name)
+    if resolved is None:
+        raise GraphRunError(f"Agent profile not found: {name}", "RT012")
+    granted = {
+        str(item.get("function", {}).get("name", ""))
+        for item in built_in_tool_definitions()
+    }
+    return resolve_effective_profile(resolved, config, granted)
 
 
 def _fail(message: str, console: Console) -> Any:
