@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.95.0 (unreleased)
+## 0.95.0 (2026-08-19)
 
 - Added the versioned `magent.oap-profile.v1` desktop authoring contract with schema and
   local-choice discovery, previewed effective authority, JSON-stdin apply, import/export,
