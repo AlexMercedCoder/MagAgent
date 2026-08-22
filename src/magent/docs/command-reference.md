@@ -267,14 +267,22 @@ Generated from the active Typer command tree.
 ## graph
 
 - `magent graph add`
+- `magent graph apply`
+- `magent graph duplicate-node`
 - `magent graph export-plan`
 - `magent graph export-plugin`
 - `magent graph export-recipe`
 - `magent graph generate`
+- `magent graph generate-draft`
+- `magent graph inspect`
 - `magent graph list`
+- `magent graph model-draft`
 - `magent graph plan`
+- `magent graph preview`
+- `magent graph rename-node`
 - `magent graph resume`
 - `magent graph run`
+- `magent graph schema`
 - `magent graph show`
 - `magent graph status`
 - `magent graph validate`

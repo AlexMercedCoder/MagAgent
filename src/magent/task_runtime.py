@@ -10,12 +10,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Lock
 from typing import Any, Literal, cast
 
 from magent.workbench_store import WorkbenchStore
 
 TASK_SCHEMA_VERSION = "magent.task.v2"
 EVENT_SCHEMA_VERSION = "magent.task-event.v1"
+_INITIALIZE_LOCK = Lock()
 
 TaskState = Literal[
     "pending",
@@ -82,12 +84,17 @@ class TaskRuntime:
         self.path = root / "task_runtime.sqlite3"
         # Journal mode persists in the database. Set it once instead of taking
         # the journal lock again for every short-lived event connection.
-        connection = sqlite3.connect(self.path, timeout=10)
-        try:
-            connection.execute("PRAGMA journal_mode = WAL")
-        finally:
-            connection.close()
-        self._initialize()
+        # Multiple graph/card workers can discover the ledger simultaneously.
+        # Serialize one-time WAL/schema setup inside the process; normal reads
+        # and writes remain independently connected and concurrency-safe.
+        with _INITIALIZE_LOCK:
+            connection = sqlite3.connect(self.path, timeout=60)
+            try:
+                connection.execute("PRAGMA busy_timeout = 60000")
+                connection.execute("PRAGMA journal_mode = WAL")
+            finally:
+                connection.close()
+            self._initialize()
 
     def create(
         self,
@@ -389,10 +396,11 @@ class TaskRuntime:
 
     @contextmanager
     def _connect(self, *, write: bool = False) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.path, timeout=10)
+        connection = sqlite3.connect(self.path, timeout=60)
         try:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA busy_timeout = 60000")
             if write:
                 connection.execute("BEGIN IMMEDIATE")
             yield connection

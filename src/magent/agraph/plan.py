@@ -100,6 +100,7 @@ def plan_graph(source: str | dict[str, Any] | GraphDocument) -> GraphPlan:
             "title": nodes[node_id].get("title", node_id),
             "tier": (nodes[node_id].get("intelligence") or {}).get("tier", "none"),
             "estimate": nodes[node_id].get("estimate") or {},
+            "agent_profile": nodes[node_id].get("x-magagent-profile", ""),
             "level": levels[node_id],
         }
         for node_id in order
@@ -116,6 +117,71 @@ def plan_graph(source: str | dict[str, Any] | GraphDocument) -> GraphPlan:
         max_parallel_nodes=max(1, configured_parallel),
         nodes=rows,
     )
+
+
+def resolved_plan(
+    source: str | dict[str, Any] | GraphDocument,
+    *,
+    project: str = ".",
+    config: Any | None = None,
+    default_profile: str = "",
+) -> dict[str, Any]:
+    """Return the plan plus effective route and authority for every job."""
+    document = source if isinstance(source, GraphDocument) else load_graph(source)
+    result = plan_graph(document).as_dict()
+    result["contract"] = "magent.graph-plan.v2"
+    nodes = document.data.get("nodes") or {}
+    for row in result["nodes"]:
+        node = nodes[row["id"]]
+        row["dependencies"] = list(node.get("depends_on") or [])
+        row["initial_blocking"] = [
+            {"code": "GRAPH_DEPENDENCY_PENDING", "dependency": dependency, "message": f"Waiting for {dependency}."}
+            for dependency in row["dependencies"]
+        ]
+    if config is None:
+        from magent.config import DEFAULT_GLOBAL_CONFIG, Config
+
+        config = Config(DEFAULT_GLOBAL_CONFIG)
+    from magent.agent_profiles.effective import resolve_effective_profile
+    from magent.agent_profiles.registry import AgentProfileRegistry
+    from magent.agraph.routing import route_for_node
+    from magent.tools.catalog import built_in_tool_definitions
+
+    registry = AgentProfileRegistry(project, config)
+    granted = {str(item.get("function", {}).get("name", "")) for item in built_in_tool_definitions()}
+    for row in result["nodes"]:
+        node = nodes[row["id"]]
+        if node.get("type", "task") != "gate":
+            try:
+                row["route"] = route_for_node(config, node).as_dict()
+            except Exception as exc:
+                row["route_error"] = {"code": getattr(exc, "code", "RT011"), "message": str(exc)}
+        profile_name = str(node.get("x-magagent-profile") or default_profile or "").strip().lstrip("@").lower()
+        if not profile_name:
+            row["resolved_profile"] = {
+                "name": "run-default",
+                "provider": (row.get("route") or {}).get("provider", ""),
+                "model": (row.get("route") or {}).get("model", ""),
+                "permission_mode": str(getattr(config, "permission_mode", "balanced")),
+                "network_access": str(getattr(config, "network_access", "none")),
+                "tools": [],
+            }
+            continue
+        resolved = registry.get(profile_name)
+        if resolved is None:
+            row["profile_error"] = {"code": "RT012", "message": f"Agent profile not found: {profile_name}"}
+            continue
+        profile = resolve_effective_profile(resolved, config, granted)
+        row["resolved_profile"] = {
+            "name": profile_name,
+            "provider": str(getattr(profile, "provider", "")),
+            "model": str(getattr(profile, "model", "")),
+            "permission_mode": str(getattr(profile, "permission_mode", "")),
+            "network_access": str(getattr(profile, "network_access", "")),
+            "tools": list(getattr(profile, "tools", ()) or ()),
+            "max_turns": int(getattr(profile, "max_turns", 0) or 0),
+        }
+    return result
 
 
 def _node_execution_bound(node: dict[str, Any]) -> int:

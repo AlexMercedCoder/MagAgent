@@ -39,6 +39,18 @@
     "params": { "type": "object" },
     "context": { "type": "object" },
     "outputs": { "type": "object" },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "succeeded", "failed", "skipped", "total"],
+      "properties": {
+        "text": { "type": "string" },
+        "succeeded": { "type": "array", "items": { "type": "string" } },
+        "failed": { "type": "array", "items": { "type": "string" } },
+        "skipped": { "type": "array", "items": { "type": "string" } },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
     "usage": { "$ref": "#/$defs/usage" },
     "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" } },
     "graph_success": { "$ref": "#/$defs/criteria_results" },
@@ -155,6 +167,25 @@
       "required": ["node_id", "type", "status"],
       "properties": {
         "node_id": { "type": "string" },
+        "agent_profile": { "type": "string", "description": "OAP profile assigned to this node by a harness extension." },
+        "dependencies": { "type": "array", "items": { "type": "string" } },
+        "summary": { "type": "string" },
+        "error": { "type": "string" },
+        "error_code": { "type": "string" },
+        "files_changed": { "type": "array", "items": { "type": "string" } },
+        "blocked_by": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "dependency", "message"],
+            "properties": {
+              "code": { "type": "string" },
+              "dependency": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        },
         "scope_path": {
           "type": "string",
           "description": "Dotted path for nodes inside loop/map/subgraph scopes, e.g. fix_loop[2].run_tests."

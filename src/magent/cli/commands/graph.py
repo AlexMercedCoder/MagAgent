@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ from rich.table import Table
 from magent.agraph.document import write_graph
 from magent.agraph.execute import GraphExecutor, GraphRunError
 from magent.agraph.generate import generate_to_file, plan_record_to_graph
-from magent.agraph.plan import plan_graph
+from magent.agraph.plan import plan_graph, resolved_plan
 from magent.agraph.validate import validate_graph
 from magent.config import get_current_user, load_config
 from magent.workbench_store import WorkbenchStore
@@ -30,6 +31,128 @@ def register_graph_commands(
     store: Callable[[], WorkbenchStore],
     console: Console,
 ) -> None:
+    def input_document(path: str) -> dict[str, Any]:
+        text = sys.stdin.read() if path == "-" else Path(path).expanduser().read_text(encoding="utf-8")
+        value = json.loads(text)
+        if not isinstance(value, dict):
+            raise ValueError("Graph input must be a JSON object")
+        return value
+
+    def registry_config(project: str | Path) -> Any | None:
+        username = get_current_user()
+        return load_config(username) if username else None
+
+    @graph_app.command("schema")
+    def schema_cmd(project: Path = typer.Option(Path("."), "--project", "-p")) -> None:
+        """Return the versioned graph editor contract and local profiles."""
+        from magent.agraph.authoring import authoring_contract
+
+        console.print_json(data=authoring_contract(project, registry_config(project)))
+
+    @graph_app.command("inspect")
+    def inspect_cmd(path: Path = typer.Argument(..., exists=True, dir_okay=False)) -> None:
+        """Load a normalized graph document for a visual editor."""
+        from magent.agraph.authoring import inspect_graph
+
+        result = inspect_graph(path)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @graph_app.command("preview")
+    def preview_cmd(
+        input_path: str = typer.Option("-", "--input"),
+        project: Path = typer.Option(Path("."), "--project", "-p"),
+    ) -> None:
+        """Validate and plan an unsaved graph supplied as JSON."""
+        from magent.agraph.authoring import preview_graph
+
+        try:
+            result = preview_graph(input_document(input_path), project=project, config=registry_config(project))
+        except Exception as exc:
+            result = {"ok": False, "error": str(exc)}
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @graph_app.command("apply")
+    def apply_cmd(
+        path: Path = typer.Argument(...),
+        input_path: str = typer.Option("-", "--input"),
+        project: Path = typer.Option(Path("."), "--project", "-p"),
+        expected_digest: str = typer.Option("", "--expected-digest"),
+    ) -> None:
+        """Conflict-safely save a validated graph supplied as JSON."""
+        from magent.agraph.authoring import save_graph
+
+        try:
+            result = save_graph(input_document(input_path), path, project=project, config=registry_config(project), expected_digest=expected_digest)
+        except Exception as exc:
+            result = {"ok": False, "error": str(exc)}
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @graph_app.command("generate-draft")
+    def generate_draft_cmd(
+        goal: str = typer.Argument(...),
+        project: Path = typer.Option(Path("."), "--project", "-p"),
+    ) -> None:
+        """Return a generated graph draft without writing or running it."""
+        from magent.agraph.authoring import generate_draft
+
+        console.print_json(data=generate_draft(goal, project=project))
+
+    @graph_app.command("rename-node")
+    def rename_node_cmd(
+        old_id: str = typer.Argument(...),
+        new_id: str = typer.Argument(...),
+        input_path: str = typer.Option("-", "--input"),
+    ) -> None:
+        """Safely rename a node in an unsaved graph document."""
+        from magent.agraph.authoring import rename_node
+
+        result = rename_node(input_document(input_path), old_id, new_id)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @graph_app.command("duplicate-node")
+    def duplicate_node_cmd(
+        node_id: str = typer.Argument(...),
+        new_id: str = typer.Argument(...),
+        input_path: str = typer.Option("-", "--input"),
+    ) -> None:
+        """Duplicate a node while preserving its type-specific contract."""
+        from magent.agraph.authoring import duplicate_node
+
+        result = duplicate_node(input_document(input_path), node_id, new_id)
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
+    @graph_app.command("model-draft")
+    def model_draft_cmd(
+        goal: str = typer.Argument(...),
+        project: Path = typer.Option(Path("."), "--project", "-p"),
+        input_path: str = typer.Option("", "--input"),
+        instruction: str = typer.Option("", "--instruction"),
+    ) -> None:
+        """Generate or improve a graph through the configured planning model."""
+        from magent.agraph.authoring import model_graph_draft
+
+        config = registry_config(project)
+        if config is None:
+            _fail("No active user. Run `magent configure` first.", console)
+        current = input_document(input_path) if input_path else None
+        try:
+            result = asyncio.run(model_graph_draft(goal, project=project, config=config, document=current, instruction=instruction))
+        except Exception as exc:
+            result = {"ok": False, "error": str(exc)}
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
     @graph_app.command("validate")
     def validate_cmd(
         path: Path = typer.Argument(..., exists=True, dir_okay=False),
@@ -53,6 +176,8 @@ def register_graph_commands(
     def plan_cmd(
         path: Path = typer.Argument(..., exists=True, dir_okay=False),
         json_output: bool = typer.Option(False, "--json"),
+        project: Path = typer.Option(Path("."), "--project", "-p"),
+        agent: str = typer.Option("", "--agent", help="Preview this run-default OAP profile."),
     ) -> None:
         """Preview topology, routing tiers, gates, parallelism, and cost."""
         try:
@@ -60,7 +185,7 @@ def register_graph_commands(
         except ValueError as exc:
             _fail(str(exc), console)
         if json_output:
-            console.print_json(data=plan.as_dict())
+            console.print_json(data=resolved_plan(path, project=str(project), config=registry_config(project), default_profile=agent))
             return
         table = Table(title=f"Agentic Graph: {plan.graph_id}")
         table.add_column("#", justify="right")
@@ -157,7 +282,10 @@ def register_graph_commands(
         dry_run: bool = typer.Option(False, "--dry-run"),
         yes: bool = typer.Option(False, "--yes", help="Approve interactive graph gates non-interactively."),
         json_output: bool = typer.Option(False, "--json"),
+        jsonl: bool = typer.Option(False, "--jsonl", help="Stream magent.graph-event.v1 JSON lines."),
         agent: str = typer.Option("", "--agent", help="Run graph agent nodes under an OAP profile."),
+        execution_task_id: str = typer.Option("", "--execution-task-id", help="Attach the run to an existing durable task."),
+        approve_gates: str = typer.Option("", "--approve-gates", help="Comma-separated reviewed gate node ids."),
     ) -> None:
         """Run a validated graph with durable node and run records."""
         username = get_current_user()
@@ -170,21 +298,32 @@ def register_graph_commands(
         except (json.JSONDecodeError, ValueError) as exc:
             _fail(f"Invalid --params: {exc}", console)
 
-        async def approve(prompt: str, _detail: dict[str, Any]) -> bool:
-            return yes or Confirm.ask(prompt, default=False)
+        reviewed_gates = {item.strip() for item in approve_gates.split(",") if item.strip()}
+
+        async def approve(prompt: str, detail: dict[str, Any]) -> bool:
+            return yes or str(detail.get("node_id") or "") in reviewed_gates or Confirm.ask(prompt, default=False)
 
         config = load_config(username)
         effective_profile = _effective_profile(agent, project, config) if agent else None
 
+        def emit(event: dict[str, Any]) -> None:
+            if jsonl:
+                console.print(json.dumps(event, separators=(",", ":"), default=str), markup=False)
+
         async def execute() -> dict[str, Any]:
-            executor = GraphExecutor(username=username, config=config, project=project, store=store(), approval=approve, assume_yes=yes, profile=effective_profile)
+            executor = GraphExecutor(username=username, config=config, project=project, store=store(), approval=approve, assume_yes=yes, profile=effective_profile, root_task_id=execution_task_id, event_sink=emit if jsonl else None)
             return await executor.run(path, params=params, dry_run=dry_run)
 
         try:
             result = asyncio.run(execute())
         except GraphRunError as exc:
+            if jsonl:
+                console.print(json.dumps({"schema_version": "magent.graph-event.v1", "type": "graph.error", "state": "failed", "error_code": exc.code, "error": str(exc)}, separators=(",", ":")), markup=False)
+                raise typer.Exit(1) from exc
             _fail(str(exc), console)
-        if json_output or dry_run:
+        if jsonl:
+            console.print(json.dumps({"schema_version": "magent.graph-result.v1", **result}, separators=(",", ":"), default=str), markup=False)
+        elif json_output or dry_run:
             console.print_json(data=result)
         else:
             run = result["run"]
@@ -192,16 +331,42 @@ def register_graph_commands(
             console.print(f"[{style}]{run['status']}[/{style}] {run['run_id']} ({len(run['nodes'])} node records)")
             for item in run.get("diagnostics") or []:
                 console.print(f"[yellow]{item['code']}[/yellow] {item['message']}")
+            summary = run.get("summary") or {}
+            console.print(f"Succeeded: {len(summary.get('succeeded') or [])} | Failed/blocked: {len(summary.get('failed') or [])} | Skipped: {len(summary.get('skipped') or [])}")
         if not result.get("ok"):
             raise typer.Exit(1)
 
     @graph_app.command("status")
-    def status_cmd(run_id: str = typer.Argument(...)) -> None:
-        """Show one portable graph run record."""
-        record = _find_run(store(), run_id)
-        if not record:
+    def status_cmd(
+        run_id: str = typer.Argument(...),
+        json_output: bool = typer.Option(False, "--json"),
+        jsonl: bool = typer.Option(False, "--jsonl", help="Write lifecycle events as JSON lines."),
+        event_limit: int = typer.Option(500, "--event-limit", min=1, max=5000),
+    ) -> None:
+        """Show a reconnectable graph status snapshot with job blockers and summaries."""
+        from magent.agraph.status import graph_status
+
+        result = graph_status(store(), run_id, event_limit=event_limit)
+        if not result:
             _fail(f"Graph run not found: {run_id}", console)
-        console.print_json(data={"ok": True, "run": record})
+        if jsonl:
+            for event in result.get("events") or []:
+                detail = event.get("detail") or {}
+                if detail.get("schema_version") == "magent.graph-event.v1":
+                    console.print(json.dumps(detail, separators=(",", ":"), default=str), markup=False)
+            return
+        if json_output:
+            console.print_json(data=result)
+            return
+        table = Table(title=f"Graph run {run_id} · {result['state']}")
+        table.add_column("Job")
+        table.add_column("State")
+        table.add_column("Profile")
+        table.add_column("Summary / blocker")
+        for node in result["nodes"]:
+            blocker = "; ".join(item["message"] for item in node.get("blocked_by") or [])
+            table.add_row(node["node_id"], node["state"], node["profile"] or "run-default", node["summary"] or blocker)
+        console.print(table)
 
     @graph_app.command("resume")
     def resume_cmd(
@@ -210,6 +375,11 @@ def register_graph_commands(
         project: Path = typer.Option(Path("."), "--project", "-p"),
         force: bool = typer.Option(False, "--force"),
         yes: bool = typer.Option(False, "--yes"),
+        execution_task_id: str = typer.Option("", "--execution-task-id"),
+        approve_gates: str = typer.Option("", "--approve-gates"),
+        retry_nodes: str = typer.Option("", "--retry-nodes", help="Comma-separated failed job ids to retry with their dependents."),
+        json_output: bool = typer.Option(False, "--json"),
+        jsonl: bool = typer.Option(False, "--jsonl"),
     ) -> None:
         """Resume a graph run, guarded by the original graph digest."""
         username = get_current_user()
@@ -221,15 +391,27 @@ def register_graph_commands(
             _fail("Pass --file because this run has no source path.", console)
         graph_path = path or Path(source_path)
 
-        async def approve(prompt: str, _detail: dict[str, Any]) -> bool:
-            return yes or Confirm.ask(prompt, default=False)
+        reviewed_gates = {item.strip() for item in approve_gates.split(",") if item.strip()}
+
+        async def approve(prompt: str, detail: dict[str, Any]) -> bool:
+            return yes or str(detail.get("node_id") or "") in reviewed_gates or Confirm.ask(prompt, default=False)
 
         async def execute() -> dict[str, Any]:
-            executor = GraphExecutor(username=username, config=load_config(username), project=project, store=store(), approval=approve, assume_yes=yes)
-            return await executor.run(graph_path, params=record.get("params") or {}, resume_record=record, force=force)
+            sink = (lambda event: console.print(json.dumps(event, separators=(",", ":"), default=str), markup=False)) if jsonl else None
+            executor = GraphExecutor(username=username, config=load_config(username), project=project, store=store(), approval=approve, assume_yes=yes, root_task_id=execution_task_id, event_sink=sink)
+            selected = {item.strip() for item in retry_nodes.split(",") if item.strip()}
+            return await executor.run(graph_path, params=record.get("params") or {}, resume_record=record, force=force, retry_nodes=selected or None)
 
         result = asyncio.run(execute())
-        console.print_json(data=result)
+        if jsonl:
+            console.print(json.dumps({"schema_version": "magent.graph-result.v1", **result}, separators=(",", ":"), default=str), markup=False)
+        elif json_output:
+            console.print_json(data=result)
+        else:
+            summary = result.get("run", {}).get("summary") or {}
+            console.print(str(summary.get("text") or result.get("run", {}).get("status")))
+        if not result.get("ok"):
+            raise typer.Exit(1)
 
 
 def _find_run(store: WorkbenchStore, run_id: str) -> dict[str, Any] | None:

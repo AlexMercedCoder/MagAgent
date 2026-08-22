@@ -69,3 +69,22 @@ def propagate_skips(document: dict[str, Any], statuses: dict[str, str], scope: d
             statuses[node_id] = "skipped"
             skipped.append(node_id)
     return skipped
+
+
+def blocking_reasons(
+    document: dict[str, Any], node_id: str, statuses: dict[str, str], scope: dict[str, Any]
+) -> list[dict[str, str]]:
+    """Explain why a pending node cannot run yet using stable reason codes."""
+    reasons: list[dict[str, str]] = []
+    incoming = [edge for edge in edge_table(document, statuses, scope) if edge["to"] == node_id]
+    if not incoming and node_id not in set(document.get("entrypoints") or []):
+        return [{"code": "GRAPH_NO_ACTIVE_ROUTE", "dependency": "", "message": "No active route reaches this node."}]
+    for edge in incoming:
+        source = str(edge["from"])
+        state = str(statuses.get(source, "pending"))
+        if edge["active"] is None:
+            reasons.append({"code": "GRAPH_DEPENDENCY_PENDING", "dependency": source, "message": f"Waiting for {source} ({state})."})
+        elif edge["active"] is False:
+            code = "GRAPH_CONDITION_FALSE" if edge["kind"] == "conditional" else "GRAPH_DEPENDENCY_UNSATISFIED"
+            reasons.append({"code": code, "dependency": source, "message": f"Route from {source} is inactive after {state}."})
+    return reasons

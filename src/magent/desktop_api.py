@@ -207,6 +207,10 @@ def platform_contracts() -> dict[str, Any]:
                 "status": "draft-standard",
                 "conformance_level": 3,
                 "transport": "json/jsonl",
+                "event_contract": "magent.graph-event.v1",
+                "status_contract": "magent.graph-status.v1",
+                "plan_contract": "magent.graph-plan.v2",
+                "selective_retry": True,
             },
             "open_agent_profile": {
                 "version": "1.0",
@@ -215,6 +219,12 @@ def platform_contracts() -> dict[str, Any]:
                 "transport": "json",
                 "editor_contract": "magent.oap-profile.v1",
                 "authoring_transport": "json-stdin/json",
+            },
+            "agentic_graph_authoring": {
+                "version": "magent.agentic-graph-authoring.v2",
+                "status": "beta",
+                "transport": "json-stdin/json",
+                "profile_extension": "x-magagent-profile",
             },
             "mcp": {
                 "status": "dual-era-core",

@@ -8,7 +8,7 @@ MagAgent implements Agentic Graph Specification (AGS) 1.0 conformance level 3. G
 magent graph validate plan.agraph.yaml --strict
 magent graph plan plan.agraph.yaml
 magent graph run plan.agraph.yaml --project .
-magent graph status <run-id>
+magent graph status <run-id> --json
 magent graph resume <run-id>
 ```
 
@@ -17,6 +17,43 @@ Generate a conservative inspect, implement, and verify graph from a goal:
 ```bash
 magent graph generate "repair the failing API tests" --project . --out repair.agraph.yaml
 ```
+
+## Visual authoring and desktop contracts
+
+Mag Command Center's Graph Board uses the same portable Graph Spec documents and these
+machine-readable authoring commands:
+
+```bash
+magent graph schema --project .
+magent graph inspect work.agraph.yaml
+magent graph preview --input - --project .
+magent graph apply work.agraph.yaml --input - --project . --expected-digest DIGEST
+magent graph generate-draft "repair the tests" --project .
+```
+
+`preview` and `apply` read a JSON graph document from standard input. `apply` validates
+strictly, confines writes to the active project, writes atomically, and rejects a stale
+`--expected-digest` instead of overwriting a graph changed elsewhere.
+
+Assign an Open Agent Profile to one node with the namespaced extension:
+
+```yaml
+nodes:
+  review:
+    type: task
+    title: Review the implementation
+    description: Review correctness, security, and test coverage.
+    x-magagent-profile: review
+```
+
+MagAgent resolves the named profile for that node only. Its personality, provider, model,
+tools, and effective permissions apply without widening harness policy. Unknown profiles
+fail authoring validation and fail closed at runtime.
+
+`magent graph plan ... --json` and `magent graph preview` return
+`magent.graph-plan.v2`. Each job includes its dependencies, initial blocking reasons,
+resolved provider/model route, and effective profile authority so a desktop can show what
+will run before execution begins.
 
 Generation takes a bounded project scan and token-limited repository map before writing per-node contracts. This keeps generated plans project-aware without embedding source files or spending provider quota merely to create the first reviewable draft.
 
@@ -37,6 +74,20 @@ executor used by live runs.
 - `before_start`, `before_side_effects`, and `after_outputs` checkpoints are enforced by the harness. A required checkpoint that cannot be displayed fails with `RT015`.
 - `shared`, `worktree`, and copied `sandbox` workspaces are supported. Unsupported or unavailable isolation fails with `RT014`; MagAgent does not silently downgrade it. Container-isolated agent sessions are currently refused.
 - Resume reuses completed node outputs only when the canonical graph digest matches. Use `--force` only after reviewing graph changes.
+- `magent graph resume RUN_ID --retry-nodes implement,verify` reruns the selected jobs and every downstream dependent while retaining unaffected successful work.
+
+## Live status and terminal results
+
+Use `magent graph run ... --jsonl` for `magent.graph-event.v1` lifecycle events. Jobs emit
+queued, started, and completed events with stable state, dependency, profile, summary,
+error-code, changed-file, and blocker fields. The final line is a
+`magent.graph-result.v1` envelope, and the process exits nonzero when any job fails or is
+blocked.
+
+`magent graph status RUN_ID --json` returns a reconnectable `magent.graph-status.v1`
+snapshot reconstructed from the durable graph task and its child job tasks. Terminal jobs
+retain a concise success, failure, skip, or blocker summary. `--jsonl` replays persisted
+graph boundary events for log-oriented clients.
 
 Core logical mappings include `file_read` to bounded file readers, `file_write` to file editing tools, `shell_exec` to `run_shell`, `web_search` to search/research, both `web_fetch` and `http_fetch` to URL fetch tools, `browser` to browser automation, and `image`/`document` to artifact creation tools. `magent system info` is the machine-readable source of truth for the complete mapping.
 

@@ -4,13 +4,14 @@ import asyncio
 import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from magent.agraph.criteria import evaluate_criteria
 from magent.agraph.document import GraphDocumentError, load_graph
 from magent.agraph.ecosystem import export_plugin_pack
-from magent.agraph.execute import GraphExecutor, GraphRunError
+from magent.agraph.execute import GraphExecutor, GraphRunError, _retry_closure
 from magent.agraph.expressions import AgxEvaluationError, evaluate_expression
 from magent.agraph.generate import generate_and_validate
 from magent.agraph.output import emit_output
@@ -22,6 +23,7 @@ from magent.agraph.runtime_context import (
     reset_graph_tool_policy,
     set_graph_tool_policy,
 )
+from magent.agraph.status import graph_status
 from magent.agraph.validate import validate_graph
 from magent.config import DEFAULT_GLOBAL_CONFIG, Config
 from magent.plugin_sdk import validate_plugin
@@ -162,7 +164,8 @@ def test_generated_graph_completes_real_scheduler_execution(tmp_path: Path) -> N
         }
         return {"outputs": outputs[node_id]}
 
-    result = asyncio.run(executor(tmp_path, generated_runner).run(generated))
+    graph_executor = executor(tmp_path, generated_runner)
+    result = asyncio.run(graph_executor.run(generated))
 
     assert result["ok"] is True
     assert result["run"]["status"] == "succeeded"
@@ -172,6 +175,63 @@ def test_generated_graph_completes_real_scheduler_execution(tmp_path: Path) -> N
         "verify",
     ]
     assert result["run"]["outputs"]["verification_report"].startswith("Verified")
+    assert result["run"]["metadata"]["graph_snapshot"]["id"] == generated["id"]
+    child_tasks = graph_executor.runtime.list_tasks(parent_task_id=result["task_id"])
+    assert {task["metadata"]["node_id"] for task in child_tasks} == {"inspect", "implement", "verify"}
+
+
+def test_parallel_nodes_keep_profile_context_isolated(tmp_path: Path) -> None:
+    nodes = {
+        "docs": {"type": "task", "title": "Docs", "description": "Write docs.", "x-magagent-profile": "docs", "outputs": {"result": {"type": "string", "description": "Result."}}, "requirements": {"tools": [], "permissions": []}, "success": {"criteria": [{"id": "done", "kind": "artifact_present", "description": "Done.", "output": "result"}]}},
+        "code": {"type": "task", "title": "Code", "description": "Write code.", "x-magagent-profile": "code", "outputs": {"result": {"type": "string", "description": "Result."}}, "requirements": {"tools": [], "permissions": []}, "success": {"criteria": [{"id": "done", "kind": "artifact_present", "description": "Done.", "output": "result"}]}},
+    }
+    document = graph(nodes=nodes, outputs={"docs": {"type": "string", "description": "Docs.", "from": "nodes.docs.outputs.result"}, "code": {"type": "string", "description": "Code.", "from": "nodes.code.outputs.result"}})
+    document["entrypoints"] = ["docs", "code"]
+    document["constraints"] = {"max_parallel_nodes": 2}
+    seen: dict[str, str] = {}
+    graph_executor: GraphExecutor
+
+    async def runner(node, _prompt, _route, _task):
+        await asyncio.sleep(0.01)
+        seen[node] = graph_executor._active_profile.get().name
+        emit_output("result", node)
+        return ""
+
+    graph_executor = executor(tmp_path, runner)
+    graph_executor.config._global["subagents"]["max_parallel"] = 2
+    graph_executor._profile_for_node = lambda node: SimpleNamespace(name=node["x-magagent-profile"])
+    result = asyncio.run(graph_executor.run(document))
+    assert result["ok"] is True
+    assert seen == {"docs": "docs", "code": "code"}
+
+
+def test_durable_pause_waits_at_node_boundary(tmp_path: Path) -> None:
+    second = {"type": "task", "title": "Second", "description": "Second.", "depends_on": ["work"], "inputs": {"prior": {"type": "string", "description": "First result.", "from": "nodes.work.outputs.result"}}, "outputs": {"result": {"type": "string", "description": "Result."}}, "requirements": {"tools": [], "permissions": []}, "success": {"criteria": [{"id": "done", "kind": "artifact_present", "description": "Done.", "output": "result"}]}}
+    document = graph(nodes={**graph()["nodes"], "second": second}, outputs={"result": {"type": "string", "description": "Final.", "from": "nodes.second.outputs.result"}})
+    calls: list[str] = []
+
+    async def scenario() -> dict:
+        nonlocal graph_executor
+        async def runner(node, _prompt, _route, _task):
+            calls.append(node)
+            await asyncio.sleep(0.03)
+            emit_output("result", node)
+            return ""
+        store = WorkbenchStore(tmp_path / "pause-store")
+        runtime_task = GraphExecutor(username="test", config=Config(DEFAULT_GLOBAL_CONFIG), project=tmp_path, store=store, agent_runner=runner)
+        root = runtime_task.runtime.create("agentic_graph", "Pause", project=tmp_path)
+        graph_executor = GraphExecutor(username="test", config=Config(DEFAULT_GLOBAL_CONFIG), project=tmp_path, store=store, agent_runner=runner, root_task_id=root["id"])
+        running = asyncio.create_task(graph_executor.run(document))
+        await asyncio.sleep(0.01)
+        graph_executor.runtime.pause(root["id"])
+        await asyncio.sleep(0.06)
+        assert calls == ["work"] and not running.done()
+        graph_executor.runtime.resume(root["id"])
+        return await running
+
+    graph_executor: GraphExecutor
+    result = asyncio.run(scenario())
+    assert result["ok"] is True and calls == ["work", "second"]
 
 
 def test_generation_eval_corpus_meets_quality_floor() -> None:
@@ -183,6 +243,7 @@ def test_generation_eval_corpus_meets_quality_floor() -> None:
 
 def test_simple_execution_emits_valid_record_and_resume_reuses_success(tmp_path: Path) -> None:
     calls = 0
+    events: list[dict] = []
 
     async def runner(_node, _prompt, _route, _task):
         nonlocal calls
@@ -190,12 +251,40 @@ def test_simple_execution_emits_valid_record_and_resume_reuses_success(tmp_path:
         emit_output("result", "done")
         return ""
 
-    first = asyncio.run(executor(tmp_path, runner).run(graph()))
+    first_executor = executor(tmp_path, runner, event_sink=events.append)
+    first = asyncio.run(first_executor.run(graph()))
     validate_run_record(first["run"])
     second = asyncio.run(executor(tmp_path, runner).run(graph(), resume_record=first["run"]))
     assert first["ok"] and second["ok"]
     assert calls == 1
     assert second["run"]["outputs"] == {"result": "done"}
+    assert first["run"]["summary"] == {
+        "text": "Graph succeeded: 1 succeeded, 0 failed or blocked, 0 skipped.",
+        "succeeded": ["work"],
+        "failed": [],
+        "skipped": [],
+        "total": 1,
+    }
+    assert [event["type"] for event in events] == [
+        "graph.started", "node.queued", "node.started", "node.completed", "graph.completed"
+    ]
+    assert all(event["schema_version"] == "magent.graph-event.v1" for event in events)
+    snapshot = graph_status(first_executor.store, first["run"]["run_id"])
+    assert snapshot and snapshot["schema_version"] == "magent.graph-status.v1"
+    assert snapshot["nodes"][0]["state"] == "succeeded"
+    assert snapshot["nodes"][0]["summary"] == "done"
+
+
+def test_selective_retry_invalidates_selected_job_and_dependents() -> None:
+    document = graph(
+        nodes={
+            "inspect": {"type": "task"},
+            "implement": {"type": "task", "depends_on": ["inspect"]},
+            "verify": {"type": "task", "depends_on": ["implement"]},
+            "docs": {"type": "task", "depends_on": ["inspect"]},
+        }
+    )
+    assert _retry_closure(document, {"implement"}) == {"implement", "verify"}
 
 
 def test_expression_decision_activates_only_selected_branch(tmp_path: Path) -> None:
