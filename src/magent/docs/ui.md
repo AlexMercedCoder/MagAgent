@@ -1,6 +1,6 @@
 # Local UI
 
-`magent ui` starts a local-only operations dashboard for the current MagAgent user and project. It is designed for quick situational awareness and small local actions while an agent session is running, not as a hosted service or replacement for the CLI.
+`magent ui` starts a local-only chat workspace for the current MagAgent user and project. It packages a lightweight conversational alternative to Mag Command Center directly with the CLI while retaining the local operations dashboard as a secondary view. It is not a hosted service.
 
 ## Start the UI
 
@@ -12,9 +12,51 @@ magent ui --open
 
 The server binds to `127.0.0.1` and prints the local URL. Press `Ctrl+C` to stop it.
 
-## What It Shows
+## Conversations And Bots
 
-The UI combines the same local data used by the CLI:
+The Chats view supports durable traditional, bot, and group conversations:
+
+- traditional multi-turn MagAgent conversations
+- bot conversations backed by one named Open Agent Profile
+- bounded group conversations with two to five profile-backed participants
+- an explicit coordinator that synthesizes group responses
+- streamed response text with speaker attribution
+- persisted local histories that survive UI restarts
+
+Group participants run with isolated profile authority. A profile can narrow the globally configured tools and permission posture, but cannot widen them.
+
+## Graph Kanban
+
+The Graphs view finds `.agraph.yaml`, `.agraph.yml`, and `.agraph.json` files inside the selected project. Choose a graph—or enter a project-relative path—to validate its digest-bound execution plan before running it.
+
+You can also author a workflow directly in the browser:
+
+- start with a blank graph and add task cards yourself
+- describe a goal and ask the configured planning model for an AI-generated draft
+- assign an Open Agent Profile to each task
+- select dependencies from the other cards on the board
+- edit or delete cards before execution
+- save and strictly validate the native `.agraph` document before Run is enabled
+
+AI-generated graphs are proposals only. They remain editable and never run automatically. Saves are confined to the selected project, and subsequent edits use the graph digest to detect conflicting disk changes.
+
+Every plan is displayed in three fixed columns:
+
+- **To do** for jobs waiting on the run or dependencies
+- **Current work** for jobs actively handled by MagAgent
+- **Done** for succeeded, failed, blocked, cancelled, and skipped jobs
+
+Cards show their dependencies, assigned profile, execution state, changed-file count, and final success or failure summary. Graph execution runs through MagAgent's existing durable `GraphExecutor`, task, event, and status contracts. Human gate cards must be reviewed individually before the Run button will start the graph.
+
+## Profiles And Settings
+
+The Bots and Profiles views list the profiles available to the selected project and show their effective provider, model, tools, and permission policy. New profiles are validated through the same Open Agent Profile contract used by the CLI before they are written.
+
+The Settings view only exposes schema-guided, non-secret configuration fields. API keys and other secret-bearing configuration are never returned to the browser.
+
+## Operations
+
+The Operations view combines the same local data used by the CLI:
 
 - workspace status and clean-worktree report
 - active tasks, plans, patch queue, reviews, and checkpoints
@@ -33,6 +75,19 @@ The UI combines the same local data used by the CLI:
 The dashboard exposes local JSON endpoints for tooling:
 
 - `/api/state`
+- `/api/bootstrap`
+- `/api/conversations`
+- `/api/conversations/message`
+- `/api/profile`
+- `/api/profiles`
+- `/api/graphs`
+- `/api/graphs/preview?path=<project-relative-graph>`
+- `/api/graphs/draft`
+- `/api/graphs/preview-draft`
+- `/api/graphs/save`
+- `/api/graphs/run`
+- `/api/graphs/status?job_id=<web-run-id>`
+- `/api/settings`
 - `/api/docs/search?q=memory`
 - `/api/docs/topic?slug=overview`
 - `/api/release/check`
@@ -43,7 +98,9 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/patch/preview?id=<patch-id>`
 - `/api/checkpoint/diff?id=<checkpoint-id>`
 
-These endpoints intentionally reuse MagAgent's existing workbench, docs, memory, and release helpers so the browser view stays aligned with CLI behavior.
+Mutation endpoints are POST-only and require both the per-launch authorization token and CSRF header. The server remains bound to loopback and applies Host, Origin, request-size, content-type, and browser security-header checks.
+
+These endpoints intentionally reuse MagAgent's existing session, profile, configuration, workbench, docs, memory, and release helpers so the browser view stays aligned with CLI behavior.
 
 ## Desktop Integration APIs
 
@@ -69,4 +126,4 @@ Desktop clients such as Mag Command Center should prefer the machine-readable CL
 
 `magent dashboard` exports a static HTML workbench snapshot. `magent dashboard --serve` serves that snapshot on localhost.
 
-`magent ui` is the interactive local operations view. Use it when you want a live dashboard that can refresh state, run release checks, inspect saved patches, inspect checkpoint diffs, promote reviewed memory candidates, review model health, and run a tiny provider smoke without regenerating a file.
+`magent ui` is the interactive local chat and operations workspace. Use it for ongoing conversations, profile-backed bots, bounded group chats, guided settings, and live operational inspection.

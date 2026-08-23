@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>MagAgent</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="rail" aria-label="Primary navigation">
+      <div class="brand-mark">M</div>
+      <nav>
+        <button class="rail-button active" data-view="chat" title="Chats">✦<span>Chats</span></button>
+        <button class="rail-button" data-view="bots" title="Bots">◉<span>Bots</span></button>
+        <button class="rail-button" data-view="graphs" title="Graphs">⌘<span>Graphs</span></button>
+        <button class="rail-button" data-view="profiles" title="Profiles">◇<span>Profiles</span></button>
+        <button class="rail-button" data-view="settings" title="Settings">⚙<span>Settings</span></button>
+        <button class="rail-button" data-view="operations" title="Operations">⌁<span>Ops</span></button>
+      </nav>
+      <div class="connection-dot" title="Local connection"></div>
+    </aside>
+
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <div><div class="eyebrow">LOCAL WORKSPACE</div><h1>MagAgent</h1></div>
+        <button class="icon-button" id="sidebarToggle" aria-label="Close sidebar">×</button>
+      </div>
+      <div class="new-actions">
+        <button class="primary-button" data-new="chat"><span>＋</span> New chat</button>
+        <button class="split-button" id="newMenuButton" aria-label="More new conversation options">⌄</button>
+        <div class="new-menu hidden" id="newMenu">
+          <button data-new="bot">Bot conversation</button>
+          <button data-new="group">Group conversation</button>
+        </div>
+      </div>
+      <label class="search"><span>⌕</span><input id="conversationSearch" placeholder="Search conversations"></label>
+      <div class="sidebar-section-label"><span>CONVERSATIONS</span><span id="conversationCount">0</span></div>
+      <div class="conversation-list" id="conversationList"></div>
+      <div class="project-card">
+        <div class="project-icon">⌘</div>
+        <div><strong id="projectName">Workspace</strong><span id="projectPath">Loading…</span></div>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <button class="icon-button mobile-only" id="openSidebar">☰</button>
+        <div class="conversation-heading">
+          <div class="avatar" id="activeAvatar">M</div>
+          <div><h2 id="activeTitle">New conversation</h2><p id="activeSubtitle">MagAgent · Ready</p></div>
+        </div>
+        <div class="topbar-actions">
+          <span class="status-pill"><i></i> Local</span>
+          <button class="icon-button" id="contextToggle" aria-label="Toggle details">☷</button>
+        </div>
+      </header>
+
+      <section class="view active" id="chatView">
+        <div class="messages" id="messages"></div>
+        <div class="composer-wrap">
+          <div class="composer">
+            <textarea id="messageInput" rows="1" placeholder="Ask MagAgent anything…"></textarea>
+            <div class="composer-footer">
+              <div><button class="composer-tool" title="Add context">＋</button><span class="hint">Enter to send · Shift+Enter for a new line</span></div>
+              <button class="send-button" id="sendButton" aria-label="Send message">↑</button>
+            </div>
+          </div>
+          <p class="disclaimer">MagAgent can make mistakes. Review consequential changes and tool activity.</p>
+        </div>
+      </section>
+
+      <section class="view page-view" id="botsView"><div class="page-head"><div><div class="eyebrow">SPECIALISTS</div><h2>Your bots</h2><p>Start a focused conversation with any Open Agent Profile.</p></div></div><div class="card-grid" id="botGrid"></div></section>
+      <section class="view page-view graph-page" id="graphsView">
+        <div class="page-head"><div><div class="eyebrow">AGENTIC GRAPH</div><h2>Graph Kanban</h2><p>Validate a dependency graph, then let MagAgent work every card to completion.</p></div><div class="graph-actions"><button class="secondary-button" id="previewGraphButton">Validate plan</button><button class="primary-button" id="runGraphButton" disabled>▶ Run graph</button></div></div>
+        <section class="graph-author-start">
+          <div><div class="eyebrow">GOAL TO GRAPH</div><h3>Build the work, your way</h3><p>Start with an empty board and make every card yourself, or ask the planning model for a draft you can review and edit.</p></div>
+          <label>What should this graph accomplish?<textarea id="graphGoal" rows="2" placeholder="Ship a reliable onboarding flow, including implementation, documentation, and verification…"></textarea></label>
+          <div class="graph-create-actions"><button class="secondary-button" id="blankGraphButton">＋ Blank graph</button><button class="primary-button" id="generateGraphButton">✦ Generate with AI</button></div>
+        </section>
+        <section class="graph-draft-bar hidden" id="graphDraftBar">
+          <div><span class="draft-dot"></span><strong id="graphDraftTitle">Untitled workflow</strong><span id="graphDraftState">Unsaved draft</span></div>
+          <div class="graph-draft-actions"><button class="secondary-button" id="addGraphCardButton">＋ Add card</button><button class="primary-button" id="saveGraphButton">Save &amp; validate</button></div>
+        </section>
+        <div class="graph-source-bar"><label>Graph file<select id="graphSelect"><option value="">Choose a graph…</option></select></label><label class="graph-path-label">Or enter a project-relative path<input id="graphPath" placeholder="workflow.agraph.yaml"></label></div>
+        <div class="graph-overview hidden" id="graphOverview"><div><span>Graph</span><strong id="graphName">—</strong></div><div><span>Jobs</span><strong id="graphNodeCount">0</strong></div><div><span>Max parallel</span><strong id="graphParallel">1</strong></div><div><span>Projected cost</span><strong id="graphCost">$0.00</strong></div><div class="graph-run-summary"><span>Run status</span><strong id="graphRunStatus">Ready</strong></div></div>
+        <div class="graph-gates hidden" id="graphGates"><strong>Human gates</strong><span>Review each gate before running.</span><div id="graphGateList"></div></div>
+        <div class="graph-error hidden" id="graphError" role="alert"></div>
+        <div class="kanban-board" id="graphKanban" aria-label="Agentic Graph execution Kanban">
+          <section class="kanban-column todo"><header><div><strong>To do</strong><span>Waiting for the run or dependencies</span></div><b id="todoCount">0</b></header><div class="kanban-card-list" id="todoCards"><div class="kanban-placeholder">Choose a graph to see its jobs.</div></div></section>
+          <section class="kanban-column current"><header><div><strong>Current work</strong><span>Actively handled by the agent</span></div><b id="currentCount">0</b></header><div class="kanban-card-list" id="currentCards"><div class="kanban-placeholder">The agent is not working a card.</div></div></section>
+          <section class="kanban-column done"><header><div><strong>Done</strong><span>Succeeded and failed jobs with summaries</span></div><b id="doneCount">0</b></header><div class="kanban-card-list" id="doneCards"><div class="kanban-placeholder">Completed jobs will appear here.</div></div></section>
+        </div>
+      </section>
+      <section class="view page-view" id="profilesView"><div class="page-head"><div><div class="eyebrow">OPEN AGENT PROFILE</div><h2>Profiles</h2><p>Inspect effective authority or create a reusable specialist.</p></div><button class="primary-button" id="createProfileButton">＋ New profile</button></div><div class="profile-layout"><div class="profile-list" id="profileList"></div><div class="detail-card" id="profileDetail"></div></div></section>
+      <section class="view page-view" id="settingsView"><div class="page-head"><div><div class="eyebrow">PREFERENCES</div><h2>Settings</h2><p>Safe defaults shared by the CLI and local UI.</p></div></div><form id="settingsForm" class="settings-grid"></form></section>
+      <section class="view page-view" id="operationsView"><div class="page-head"><div><div class="eyebrow">LOCAL DIAGNOSTICS</div><h2>Operations</h2><p>Workspace health, plans, patches, models, and recent activity.</p></div><button class="secondary-button" id="refreshOps">Refresh</button></div><div class="ops-grid" id="opsGrid"></div></section>
+    </main>
+
+    <aside class="context-panel" id="contextPanel">
+      <div class="context-head"><div><div class="eyebrow">CONTEXT</div><h3>Conversation details</h3></div><button class="icon-button" id="closeContext">×</button></div>
+      <div class="context-body">
+        <div class="context-hero"><div class="avatar large" id="contextAvatar">M</div><strong id="contextTitle">MagAgent</strong><span id="contextKind">Standard chat</span></div>
+        <div class="context-section"><label>Project</label><div class="context-value" id="contextProject">—</div></div>
+        <div class="context-section"><label>Participants</label><div class="participant-list" id="contextParticipants"></div></div>
+        <div class="context-section"><label>Safety</label><div class="safety-row"><span>Permission mode</span><strong id="contextPermission">Balanced</strong></div><p>Profiles can narrow authority, but never widen the configured ceiling.</p></div>
+      </div>
+    </aside>
+  </div>
+
+  <dialog id="conversationDialog"><form method="dialog" id="conversationForm"><div class="dialog-head"><div><div class="eyebrow">NEW CONVERSATION</div><h2 id="dialogTitle">Start a chat</h2></div><button class="icon-button" value="cancel" formnovalidate>×</button></div><input type="hidden" id="conversationKind" value="chat"><label>Title<input id="newTitle" maxlength="100" placeholder="What are you working on?"></label><div id="profilePickerWrap" class="hidden"><label>Profiles</label><div class="profile-picker" id="profilePicker"></div></div><div id="coordinatorWrap" class="hidden"><label>Coordinator<select id="coordinatorSelect"></select></label></div><div class="dialog-actions"><button class="secondary-button" value="cancel" formnovalidate>Cancel</button><button class="primary-button" type="submit" value="default">Create conversation</button></div></form></dialog>
+  <dialog id="profileDialog"><form method="dialog" id="profileForm"><div class="dialog-head"><div><div class="eyebrow">OPEN AGENT PROFILE</div><h2>Create a specialist</h2></div><button class="icon-button" value="cancel" formnovalidate>×</button></div><label>Name<input id="profileName" required pattern="[a-z0-9][a-z0-9_-]*" placeholder="release-reviewer"></label><label>Description<input id="profileDescription" required placeholder="Reviews release readiness and evidence"></label><label>Instructions<textarea id="profileInstructions" required rows="4" placeholder="Act as a careful release reviewer…"></textarea></label><div class="dialog-row"><label>Permission mode<select id="profilePermission"><option>paranoid</option><option selected>balanced</option><option>silent</option></select></label><label>Scope<select id="profileScope"><option value="project">Project</option><option value="user">User</option><option value="portable">Portable</option></select></label></div><div class="dialog-actions"><button class="secondary-button" value="cancel" formnovalidate>Cancel</button><button class="primary-button" type="submit" value="default">Validate &amp; create</button></div></form></dialog>
+  <dialog id="graphCardDialog"><form method="dialog" id="graphCardForm"><div class="dialog-head"><div><div class="eyebrow">GRAPH CARD</div><h2 id="graphCardHeading">Add a task</h2></div><button class="icon-button" value="cancel" formnovalidate>×</button></div><label>Card ID<input id="graphCardId" required pattern="[A-Za-z][A-Za-z0-9_-]{0,127}" placeholder="implement_feature"></label><label>Title<input id="graphCardTitle" required maxlength="180" placeholder="Implement the feature"></label><label>Instructions<textarea id="graphCardDescription" required rows="5" placeholder="Describe the outcome, constraints, and evidence expected from the agent…"></textarea></label><label>Profile<select id="graphCardProfile"><option value="">Run default</option></select></label><fieldset class="dependency-picker"><legend>Dependencies</legend><p>This card waits until every selected card is done.</p><div id="graphDependencyPicker"></div></fieldset><input type="hidden" id="graphCardOriginalId"><div class="dialog-actions graph-card-dialog-actions"><button class="danger-button hidden" type="button" id="deleteGraphCardButton">Delete card</button><span></span><button class="secondary-button" value="cancel" formnovalidate>Cancel</button><button class="primary-button" type="submit" value="default">Save card</button></div></form></dialog>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/assets/app.js" defer></script>
+  <script src="/assets/ui-polish.js" defer></script>
+</body>
+</html>

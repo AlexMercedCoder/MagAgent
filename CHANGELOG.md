@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.97.0 (2026-08-22)
+
+- Rebuilt `magent ui` as a bundled local chat workspace with durable traditional,
+  profile-backed bot, and bounded multi-bot group conversations with streamed responses.
+- Added guided Open Agent Profile creation, effective-authority inspection, and safe default
+  settings without exposing secret-bearing configuration to the browser.
+- Added a fixed three-column Graph Kanban that validates and runs native Agentic Graphs through
+  the durable executor while retaining dependencies, profile routing, gates, changed files, and
+  per-card success or failure summaries.
+- Added blank graph authoring and review-only AI graph generation from a goal, including editable
+  task cards, profile assignment, dependency wiring, project-confined saves, strict validation,
+  and optimistic digest conflict detection.
+- Hardened the loopback UI with per-launch authorization, CSRF enforcement, POST-only mutations,
+  bounded JSON bodies, Origin and Host checks, CSP, and no-store response policy.
+
+## 0.96.0 (2026-08-22)
+
+- Added the `magent.agentic-graph-authoring.v2`, `magent.graph-plan.v2`,
+  `magent.graph-event.v1`, `magent.graph-result.v1`, and `magent.graph-status.v1` machine
+  contracts for a complete desktop Graph Board.
+- Added reference-aware graph edits, review-only model generation, selective gate approval,
+  durable attach, pause, cancellation, resume, snapshot retention, and selective downstream retry.
+
 ## 0.95.0 (2026-08-19)
 
 - Added the versioned `magent.oap-profile.v1` desktop authoring contract with schema and

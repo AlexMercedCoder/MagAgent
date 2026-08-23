@@ -514,6 +514,21 @@ MagAgent's workbench stores practical productivity state under each user profile
 
 Workbench files are plain JSON in `~/.config/magent/users/<username>/workbench/`.
 
+### Bundled Local Web UI
+
+Run `magent ui --open` for a lightweight, local Mag Command Center alternative packaged with
+the CLI. It provides durable multi-conversation chat, profile-backed bots, small coordinated bot
+groups, profile creation, guided non-secret settings, and the existing operations cockpit.
+
+The Graphs view can open existing `.agraph` files, start a blank workflow, or ask the configured
+planning model to propose a graph from a goal. Task cards support profile selection and explicit
+dependencies. MagAgent saves and strictly validates the native graph before enabling Run, then
+moves cards through **To do**, **Current work**, and **Done**, retaining a success or failure
+summary for every completed card.
+
+The server remains loopback-only and uses a per-launch token plus CSRF protection. See
+[`magent docs show ui`](src/magent/docs/ui.md) for behavior and API details.
+
 ---
 
 ## SQLite Local Databases

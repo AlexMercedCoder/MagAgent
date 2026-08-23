@@ -1,0 +1,340 @@
+"""Graph catalogue and background execution support for the bundled Web UI."""
+
+from __future__ import annotations
+
+import asyncio
+import re
+import threading
+import uuid
+from pathlib import Path
+from typing import Any
+
+from magent.agraph.authoring import model_graph_draft, node_template, preview_graph, save_graph
+from magent.agraph.execute import GraphExecutor
+from magent.agraph.plan import resolved_plan
+from magent.agraph.status import graph_status
+from magent.config import load_config
+from magent.workbench_store import WorkbenchStore
+
+GRAPH_SUFFIXES = (".agraph.yaml", ".agraph.yml", ".agraph.json")
+
+
+def confined_graph_target(project: str | Path, raw_path: str) -> Path:
+    """Resolve a new or existing graph target without allowing project escape."""
+    root = Path(project).resolve()
+    candidate = Path(raw_path).expanduser()
+    candidate = (candidate if candidate.is_absolute() else root / candidate).resolve(strict=False)
+    if candidate == root or root not in candidate.parents:
+        raise ValueError("graph path must stay inside the selected project")
+    if not candidate.name.lower().endswith(GRAPH_SUFFIXES):
+        raise ValueError("graph must use .agraph.yaml, .agraph.yml, or .agraph.json")
+    return candidate
+
+
+def blank_graph_document(goal: str = "") -> dict[str, Any]:
+    """Return an editable graph shell; it becomes runnable after its first card."""
+    objective = goal.strip()
+    title = objective.rstrip(".")[:180] or "Untitled workflow"
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:80] or "untitled"
+    return {
+        "ags_version": "1.0",
+        "kind": "AgenticGraph",
+        "id": f"magent/web/{slug}",
+        "title": title,
+        "objective": objective or "Describe the outcome this workflow should achieve.",
+        "version": "1.0.0",
+        "requires_conformance": 1,
+        "constraints": {"max_parallel_nodes": 1, "max_node_executions": 50},
+        "policy": {"on_expression_error": "fail", "on_node_failure": "halt", "checkpointing": "per_node"},
+        "entrypoints": [],
+        "nodes": {},
+        "outputs": {},
+    }
+
+
+def web_task_node(index: int = 1) -> dict[str, Any]:
+    """Return a strictly-valid task card suitable for browser authoring."""
+    node = node_template("task", index)
+    node.update(
+        title=f"New task {index}",
+        description="Describe the outcome this card must produce.",
+        outputs={"summary": {"type": "markdown", "description": "Completion summary and evidence."}},
+        success={
+            "summary": "The card completed and produced a summary.",
+            "criteria": [
+                {
+                    "id": "summary_present",
+                    "kind": "artifact_present",
+                    "description": "A completion summary was emitted.",
+                    "output": "summary",
+                }
+            ],
+        },
+    )
+    return node
+
+
+async def generate_web_graph(goal: str, *, project: str | Path, username: str) -> dict[str, Any]:
+    """Generate a review-only graph proposal using the configured planning model."""
+    objective = goal.strip()
+    if not objective:
+        return {"ok": False, "error": "Describe a goal before generating a graph"}
+    return await model_graph_draft(
+        objective,
+        project=project,
+        config=load_config(username),
+        instruction=(
+            "Create a concise dependency graph of executable task cards for this goal. "
+            "Every task must have a clear title, instructions, outputs, and success criteria."
+        ),
+    )
+
+
+def preview_web_graph(document: dict[str, Any], *, project: str | Path, username: str) -> dict[str, Any]:
+    if not isinstance(document, dict):
+        return {"ok": False, "error": "document must be an object"}
+    result = preview_graph(document, project=project, config=load_config(username))
+    return _with_validation_error(result)
+
+
+def save_web_graph(
+    document: dict[str, Any],
+    raw_path: str,
+    *,
+    project: str | Path,
+    username: str,
+    expected_digest: str = "",
+) -> dict[str, Any]:
+    target = confined_graph_target(project, raw_path)
+    result = save_graph(
+        document,
+        target,
+        project=project,
+        config=load_config(username),
+        expected_digest=expected_digest,
+    )
+    return _with_validation_error(result)
+
+
+def _with_validation_error(result: dict[str, Any]) -> dict[str, Any]:
+    if result.get("ok") or result.get("error"):
+        return result
+    findings = (result.get("validation") or {}).get("findings") or []
+    messages = [str(item.get("message") or "").strip() for item in findings if item.get("severity") == "error"]
+    result["error"] = "; ".join(message for message in messages[:4] if message) or "Graph validation failed"
+    return result
+
+
+def confined_graph_path(project: str | Path, raw_path: str) -> Path:
+    root = Path(project).resolve()
+    candidate = Path(raw_path).expanduser()
+    candidate = (candidate if candidate.is_absolute() else root / candidate).resolve()
+    if candidate != root and root not in candidate.parents:
+        raise ValueError("graph path must stay inside the selected project")
+    if not candidate.is_file():
+        raise ValueError("graph file does not exist")
+    if not candidate.name.lower().endswith(GRAPH_SUFFIXES):
+        raise ValueError("graph must use .agraph.yaml, .agraph.yml, or .agraph.json")
+    return candidate
+
+
+def graph_catalog(store: WorkbenchStore, project: str | Path) -> dict[str, Any]:
+    root = Path(project).resolve()
+    found: dict[str, dict[str, Any]] = {}
+    for item in store.read("graphs", []):
+        raw = str(item.get("path") or "")
+        try:
+            path = confined_graph_path(root, raw)
+        except ValueError:
+            continue
+        found[str(path)] = {
+            "path": str(path),
+            "name": path.name,
+            "graph_id": str(item.get("graph_id") or path.stem),
+            "source": "catalogue",
+        }
+    ignored = {".git", ".magent", "node_modules", "target", "dist", ".venv", "venv"}
+    try:
+        candidates = root.rglob("*")
+        for path in candidates:
+            if len(found) >= 100:
+                break
+            relative = path.relative_to(root)
+            if any(part in ignored for part in relative.parts):
+                continue
+            if path.is_file() and path.name.lower().endswith(GRAPH_SUFFIXES):
+                resolved = path.resolve()
+                found.setdefault(
+                    str(resolved),
+                    {
+                        "path": str(resolved),
+                        "name": resolved.name,
+                        "graph_id": resolved.name.split(".agraph", 1)[0],
+                        "source": "project",
+                    },
+                )
+    except OSError:
+        pass
+    runs = []
+    for item in reversed(store.read("graph_runs", [])):
+        runs.append(
+            {
+                "run_id": str(item.get("run_id") or ""),
+                "graph_id": str(item.get("graph_id") or ""),
+                "status": str(item.get("status") or ""),
+                "started_at": str(item.get("started_at") or ""),
+                "finished_at": str(item.get("finished_at") or ""),
+                "summary": item.get("summary") or {},
+            }
+        )
+        if len(runs) >= 30:
+            break
+    return {"ok": True, "graphs": sorted(found.values(), key=lambda item: item["name"]), "runs": runs}
+
+
+class GraphRunManager:
+    """Own background graph runs and expose polling-friendly Kanban snapshots."""
+
+    def __init__(self, store: WorkbenchStore, username: str, project: str | Path):
+        self.store = store
+        self.username = username
+        self.project = Path(project).resolve()
+        self._jobs: dict[str, dict[str, Any]] = {}
+        self._lock = threading.Lock()
+
+    def preview(self, raw_path: str) -> dict[str, Any]:
+        path = confined_graph_path(self.project, raw_path)
+        return {
+            "ok": True,
+            "path": str(path),
+            "plan": resolved_plan(
+                str(path),
+                project=str(self.project),
+                config=load_config(self.username),
+            ),
+        }
+
+    def start(
+        self,
+        raw_path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        approved_gates: list[str] | None = None,
+    ) -> dict[str, Any]:
+        preview = self.preview(raw_path)
+        path = Path(preview["path"])
+        plan = preview["plan"]
+        approved = {str(item) for item in (approved_gates or [])}
+        missing_gates = sorted(set(plan.get("gates") or []) - approved)
+        if missing_gates:
+            raise ValueError("review and approve gates before running: " + ", ".join(missing_gates))
+        job_id = f"webgraph_{uuid.uuid4().hex[:16]}"
+        job = {
+            "ok": True,
+            "job_id": job_id,
+            "run_id": "",
+            "path": str(path),
+            "graph_id": str(plan.get("graph_id") or path.stem),
+            "graph_digest": str(plan.get("graph_digest") or ""),
+            "state": "queued",
+            "summary": "Waiting for the graph runner.",
+            "plan": plan,
+            "events": [],
+            "nodes": [
+                {
+                    "node_id": item["id"],
+                    "title": item.get("title") or item["id"],
+                    "type": item.get("type", "task"),
+                    "profile": item.get("agent_profile") or (item.get("resolved_profile") or {}).get("name", ""),
+                    "dependencies": item.get("dependencies") or [],
+                    "state": "pending",
+                    "summary": "",
+                    "error": "",
+                    "files_changed": [],
+                }
+                for item in plan.get("nodes") or []
+            ],
+        }
+        with self._lock:
+            self._jobs[job_id] = job
+        thread = threading.Thread(
+            target=self._execute,
+            args=(job_id, path, dict(params or {}), approved),
+            daemon=True,
+        )
+        thread.start()
+        return self.status(job_id) or job
+
+    def status(self, job_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            snapshot = dict(job) if job else None
+            if snapshot is not None and job is not None:
+                snapshot["events"] = list(job.get("events") or [])[-500:]
+                snapshot["nodes"] = [dict(item) for item in job.get("nodes") or []]
+        if not snapshot:
+            durable = graph_status(self.store, job_id)
+            return durable
+        run_id = str(snapshot.get("run_id") or "")
+        durable = graph_status(self.store, run_id) if run_id else None
+        if durable:
+            snapshot.update(
+                state=durable.get("state") or snapshot["state"],
+                summary=(durable.get("summary") or {}).get("text") or durable.get("summary") or snapshot["summary"],
+                nodes=durable.get("nodes") or snapshot["nodes"],
+            )
+        return snapshot
+
+    def _execute(self, job_id: str, path: Path, params: dict[str, Any], approved: set[str]) -> None:
+        def emit(event: dict[str, Any]) -> None:
+            with self._lock:
+                job = self._jobs[job_id]
+                job["events"].append(event)
+                job["run_id"] = str(event.get("run_id") or job["run_id"])
+                if event.get("type") == "graph.started":
+                    job["state"] = "running"
+                    job["summary"] = str(event.get("summary") or "Graph execution started.")
+                if event.get("node_id"):
+                    node = next(
+                        (item for item in job["nodes"] if item["node_id"] == event["node_id"]),
+                        None,
+                    )
+                    if node:
+                        node.update(
+                            state=str(event.get("state") or node["state"]),
+                            summary=str(event.get("summary") or node["summary"]),
+                            error=str(event.get("error") or node["error"]),
+                            files_changed=list(event.get("files_changed") or node["files_changed"]),
+                        )
+                if event.get("type") == "graph.completed":
+                    job["state"] = str(event.get("state") or "completed")
+                    job["summary"] = str(event.get("summary") or "Graph execution completed.")
+
+        async def approve(_prompt: str, detail: dict[str, Any]) -> bool:
+            return str(detail.get("node_id") or "") in approved
+
+        async def run() -> dict[str, Any]:
+            executor = GraphExecutor(
+                username=self.username,
+                config=load_config(self.username),
+                project=self.project,
+                store=self.store,
+                approval=approve,
+                event_sink=emit,
+            )
+            return await executor.run(path, params=params)
+
+        try:
+            result = asyncio.run(run())
+            record = result.get("run") or {}
+            with self._lock:
+                job = self._jobs[job_id]
+                job["run_id"] = str(record.get("run_id") or job["run_id"])
+                job["state"] = str(record.get("status") or ("succeeded" if result.get("ok") else "failed"))
+                summary = record.get("summary") or {}
+                job["summary"] = str(summary.get("text") or summary or job["summary"])
+        except BaseException as exc:
+            with self._lock:
+                job = self._jobs[job_id]
+                job["state"] = "failed"
+                job["summary"] = str(exc)

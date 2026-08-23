@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import http.client
 from pathlib import Path
+
+import pytest
 
 import magent.ui as ui_module
 from magent import workbench
@@ -49,17 +52,17 @@ def test_ui_state_does_not_execute_release_check(tmp_path: Path, monkeypatch) ->
 def test_render_ui_html_contains_local_endpoints() -> None:
     html = render_ui_html()
 
-    assert "MagAgent UI" in html
-    assert "/api/state" in html
-    assert "/api/docs/search" in html
-    assert "/api/release/check" in html
-    assert "/api/readiness" in html
-    assert "/api/model/health" in html
-    assert "/api/provider/smoke" in html
-    assert "/api/memory/inbox" in html
-    assert "/api/memory/promote" in html
-    assert "/api/patch/preview" in html
-    assert "/api/checkpoint/diff" in html
+    assert "MagAgent" in html
+    assert "New chat" in html
+    assert "Group conversation" in html
+    assert "Graph Kanban" in html
+    assert "Blank graph" in html
+    assert "Generate with AI" in html
+    assert "Add card" in html
+    assert "Profiles" in html
+    assert "Settings" in html
+    assert "Operations" in html
+    assert "/assets/app.js" in html
 
 
 def test_ui_action_helpers_use_domain_modules(tmp_path: Path, monkeypatch) -> None:
@@ -117,3 +120,44 @@ def test_serve_ui_serves_html_and_json(tmp_path: Path, monkeypatch) -> None:
     assert result["url"] == f"http://127.0.0.1:7831/?token={result['token']}"
     # The server handle is returned so callers can shut it down.
     assert result["server"] is not None
+
+
+def test_live_ui_auth_csrf_and_conversation_api(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("ui-http-test")
+    result = serve_ui(store, project=tmp_path, username=None, port=0, open_browser=False)
+    if not result["ok"] and "Operation not permitted" in result.get("error", ""):
+        pytest.skip("local socket binding is disabled by the test sandbox")
+    assert result["ok"] is True
+    server = result["server"]
+    port = server.server_address[1]
+    token = result["token"]
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        connection.request("GET", "/api/bootstrap")
+        assert connection.getresponse().status == 403
+
+        connection.request("GET", f"/api/conversations?token={token}")
+        assert connection.getresponse().status == 405
+
+        connection.request(
+            "POST",
+            f"/api/conversations?token={token}",
+            body='{"kind":"chat","title":"HTTP test"}',
+            headers={"Content-Type": "application/json", "X-Magent-CSRF": "wrong"},
+        )
+        assert connection.getresponse().status == 403
+
+        connection.request(
+            "POST",
+            f"/api/conversations?token={token}",
+            body='{"kind":"chat","title":"HTTP test"}',
+            headers={"Content-Type": "application/json", "X-Magent-CSRF": token},
+        )
+        response = connection.getresponse()
+        assert response.status == 201
+        assert b'"title": "HTTP test"' in response.read()
+    finally:
+        server.shutdown()
+        server.server_close()

@@ -48,6 +48,7 @@ magent docs doctor
 - [MagAgent 0.93.0 Release Record](RELEASE_0.93.0.md)
 - [MagAgent 0.94.0 Release Record](RELEASE_0.94.0.md)
 - [MagAgent 0.96.0 Graph Board Contract](RELEASE_0.96.0.md)
+- [MagAgent 0.97.0 Local Web Workspace](RELEASE_0.97.0.md)
 - [MagAgent 0.95.0 Release Candidate](RELEASE_0.95.0.md)
 
 Common setup tasks now have CLI-first flows:

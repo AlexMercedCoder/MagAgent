@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import mimetypes
 import secrets
 import threading
 import urllib.parse
@@ -21,6 +23,16 @@ from magent.ui_actions import (
     promote_memory_candidate,
     run_release_check,
 )
+from magent.web_conversations import ConversationStore
+from magent.web_graphs import (
+    GraphRunManager,
+    blank_graph_document,
+    generate_web_graph,
+    graph_catalog,
+    preview_web_graph,
+    save_web_graph,
+    web_task_node,
+)
 from magent.workbench import (
     WorkbenchStore,
     checkpoint_sessions,
@@ -32,6 +44,9 @@ from magent.workbench import (
     workspace_status,
 )
 from magent.workbench_cockpit import cockpit_state
+
+WEBUI_DIR = Path(__file__).with_name("webui")
+MAX_REQUEST_BYTES = 128 * 1024
 
 
 def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | None = None) -> dict[str, Any]:
@@ -85,72 +100,8 @@ def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | N
 
 
 def render_ui_html(token: str = "") -> str:
-    return """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MagAgent UI</title>
-<style>
-:root{color-scheme:light dark;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-body{margin:0;background:#f6f7f9;color:#171923}
-header{background:#1f2937;color:#fff;padding:18px 24px}
-main{padding:20px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
-section{background:#fff;border:1px solid #d8dde6;border-radius:8px;padding:16px;box-shadow:0 1px 2px #0001}
-h1{margin:0;font-size:22px} h2{margin:0 0 12px;font-size:16px}
-button{border:1px solid #9aa4b2;background:#fff;border-radius:6px;padding:7px 10px;cursor:pointer}
-pre{white-space:pre-wrap;word-break:break-word;background:#f1f3f6;border-radius:6px;padding:10px;max-height:320px;overflow:auto}
-.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.metric{font-size:28px;font-weight:700}.muted{color:#667085}
-@media (prefers-color-scheme:dark){body{background:#111827;color:#e5e7eb}section{background:#1f2937;border-color:#374151}button{background:#111827;color:#e5e7eb;border-color:#4b5563}pre{background:#111827}.muted{color:#9ca3af}}
-</style>
-</head>
-<body>
-<header><h1>MagAgent UI</h1><div id="project" class="muted"></div></header>
-<main>
-<section><h2>Workspace</h2><div class="row"><button onclick="refresh()">Refresh</button><button onclick="loadReleaseCheck()">Release Check</button><button onclick="loadReadiness()">Readiness</button></div><pre id="workspace">Loading...</pre></section>
-<section><h2>Cockpit</h2><div class="row"><button onclick="loadCockpit()">Refresh Cockpit</button></div><pre id="cockpit">Loading...</pre></section>
-<section><h2>Model Health</h2><div class="row"><input id="smokeProvider" placeholder="Provider"><input id="smokeModel" placeholder="Model"><button onclick="loadModelHealth()">Health</button><button onclick="runProviderSmoke()">Smoke</button></div><pre id="modelHealth">Loading...</pre></section>
-<section><h2>Plans</h2><div class="metric" id="planCount">0</div><pre id="plans"></pre></section>
-<section><h2>Patches</h2><div class="metric" id="patchCount">0</div><div class="row"><input id="patchId" placeholder="Patch ID"><button onclick="inspectPatch()">Inspect</button></div><pre id="patches"></pre></section>
-<section><h2>Checkpoints</h2><div class="metric" id="checkpointCount">0</div><div class="row"><input id="checkpointId" placeholder="Checkpoint ID"><button onclick="inspectCheckpoint()">Diff</button></div><pre id="checkpoints"></pre></section>
-<section><h2>Project Doctor</h2><pre id="doctor"></pre></section>
-<section><h2>Memory Inbox</h2><div class="row"><input id="memoryId" placeholder="Candidate ID"><button onclick="loadMemoryInbox()">Inbox</button><button onclick="promoteMemory()">Promote</button></div><pre id="memory"></pre></section>
-<section><h2>Command History</h2><pre id="commands"></pre></section>
-<section><h2>Docs</h2><div class="row"><input id="docQuery" placeholder="Search docs"><button onclick="searchDocs()">Search</button></div><pre id="docs"></pre></section>
-</main>
-<script>
-const TOKEN=new URLSearchParams(location.search).get('token')||'';
-function withToken(path){return path+(path.includes('?')?'&':'?')+'token='+encodeURIComponent(TOKEN)}
-async function getJson(path){const r=await fetch(withToken(path),{headers:{'X-Magent-Token':TOKEN}});return await r.json()}
-async function postJson(path){const r=await fetch(withToken(path),{method:'POST',headers:{'X-Magent-Token':TOKEN}});return await r.json()}
-function show(id,data){document.getElementById(id).textContent=JSON.stringify(data,null,2)}
-async function refresh(){
- const data=await getJson('/api/state');
- document.getElementById('project').textContent=data.project;
- show('workspace',data.workspace); show('plans',data.plans); show('patches',data.patches);
- show('cockpit',data.cockpit);
- show('modelHealth',data.model_health);
- show('checkpoints',data.checkpoints); show('doctor',data.project_doctor); show('memory',data.memory_quality);
- show('commands',data.command_history); show('docs',data.docs);
- document.getElementById('planCount').textContent=data.plans.length;
- document.getElementById('patchCount').textContent=data.patches.length;
- document.getElementById('checkpointCount').textContent=data.checkpoints.length;
-}
-async function searchDocs(){const q=encodeURIComponent(document.getElementById('docQuery').value);show('docs',await getJson('/api/docs/search?q='+q))}
-async function loadReleaseCheck(){show('workspace',await postJson('/api/release/check'))}
-async function loadReadiness(){show('workspace',await getJson('/api/readiness'))}
-async function loadCockpit(){show('cockpit',await getJson('/api/cockpit'))}
-async function loadModelHealth(){show('modelHealth',await getJson('/api/model/health'))}
-async function runProviderSmoke(){const p=encodeURIComponent(document.getElementById('smokeProvider').value);const m=encodeURIComponent(document.getElementById('smokeModel').value);show('modelHealth',await postJson('/api/provider/smoke?provider='+p+'&model='+m))}
-async function loadMemoryInbox(){show('memory',await getJson('/api/memory/inbox'))}
-async function promoteMemory(){const id=encodeURIComponent(document.getElementById('memoryId').value);show('memory',await postJson('/api/memory/promote?id='+id))}
-async function inspectPatch(){const id=encodeURIComponent(document.getElementById('patchId').value);show('patches',await getJson('/api/patch/preview?id='+id))}
-async function inspectCheckpoint(){const id=encodeURIComponent(document.getElementById('checkpointId').value);show('checkpoints',await getJson('/api/checkpoint/diff?id='+id))}
-refresh()
-</script>
-</body>
-</html>
-"""
+    """Return the packaged shell. ``token`` remains a compatibility argument."""
+    return (WEBUI_DIR / "index.html").read_text(encoding="utf-8")
 
 
 def serve_ui(
@@ -170,9 +121,25 @@ def serve_ui(
     """
     root = Path(project).resolve()
     token = secrets.token_urlsafe(32)
+    conversations = ConversationStore(store)
+    conversation_locks: dict[str, threading.Lock] = {}
+    graph_runs = GraphRunManager(store, username, root) if username else None
 
     # Endpoints that mutate state or spend money. GET must not reach these.
-    mutating_paths = {"/api/memory/promote", "/api/provider/smoke", "/api/release/check"}
+    mutating_paths = {
+        "/api/memory/promote",
+        "/api/provider/smoke",
+        "/api/release/check",
+        "/api/conversations",
+        "/api/conversations/update",
+        "/api/conversations/message",
+        "/api/profiles",
+        "/api/graphs/run",
+        "/api/graphs/draft",
+        "/api/graphs/preview-draft",
+        "/api/graphs/save",
+        "/api/settings",
+    }
 
     class Handler(BaseHTTPRequestHandler):
         def _authorized(self, parsed: urllib.parse.ParseResult) -> bool:
@@ -185,15 +152,69 @@ def serve_ui(
             supplied = urllib.parse.parse_qs(parsed.query).get("token", [""])[0]
             if not supplied:
                 supplied = (self.headers.get("X-Magent-Token") or "").strip()
+            if not supplied:
+                cookies = {}
+                for pair in (self.headers.get("Cookie") or "").split(";"):
+                    key, separator, value = pair.strip().partition("=")
+                    if separator:
+                        cookies[key] = value
+                supplied = cookies.get("magent_ui", "")
             return secrets.compare_digest(supplied, token)
+
+        def _security_headers(self) -> None:
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'self'; style-src 'self'; script-src 'self'; "
+                "connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'",
+            )
 
         def _json(self, data: Any, status: int = 200) -> None:
             payload = json.dumps(data, default=str).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
+            self._security_headers()
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
             self.wfile.write(payload)
+
+        def _body(self) -> dict[str, Any]:
+            raw_length = self.headers.get("Content-Length", "0")
+            try:
+                length = int(raw_length)
+            except ValueError as exc:
+                raise ValueError("invalid Content-Length") from exc
+            if length < 0 or length > MAX_REQUEST_BYTES:
+                raise ValueError("request body is too large")
+            if length and "application/json" not in (self.headers.get("Content-Type") or ""):
+                raise ValueError("Content-Type must be application/json")
+            if not length:
+                return {}
+            data = json.loads(self.rfile.read(length).decode("utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("JSON body must be an object")
+            return data
+
+        def _asset(self, name: str) -> None:
+            safe_name = Path(name).name
+            path = WEBUI_DIR / safe_name
+            if not path.is_file():
+                self._json({"ok": False, "error": "not found"}, status=404)
+                return
+            payload = path.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+            self._security_headers()
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def _stream_event(self, data: dict[str, Any]) -> None:
+            self.wfile.write((json.dumps(data, default=str) + "\n").encode("utf-8"))
+            self.wfile.flush()
 
         def do_POST(self) -> None:  # noqa: N802
             self._dispatch(method="POST")
@@ -211,15 +232,271 @@ def serve_ui(
             if method == "GET" and parsed.path in mutating_paths:
                 self._json({"ok": False, "error": "use POST for this endpoint"}, status=405)
                 return
+            if method == "POST" and parsed.path in mutating_paths:
+                csrf = (self.headers.get("X-Magent-CSRF") or "").strip()
+                if not secrets.compare_digest(csrf, token):
+                    self._json({"ok": False, "error": "invalid CSRF token"}, status=403)
+                    return
 
             try:
                 if parsed.path == "/":
                     payload = render_ui_html(token).encode()
                     self.send_response(200)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Set-Cookie", f"magent_ui={token}; HttpOnly; SameSite=Strict; Path=/")
+                    self._security_headers()
                     self.send_header("Content-Length", str(len(payload)))
                     self.end_headers()
                     self.wfile.write(payload)
+                elif parsed.path.startswith("/assets/"):
+                    self._asset(parsed.path.removeprefix("/assets/"))
+                elif parsed.path == "/api/bootstrap":
+                    from magent.desktop_api import agent_profiles, config_schema
+
+                    self._json(
+                        {
+                            "ok": True,
+                            "csrf_token": token,
+                            "project": str(root),
+                            "conversations": conversations.list(),
+                            "profiles": agent_profiles(str(root)),
+                            "settings": config_schema(username),
+                        }
+                    )
+                elif parsed.path == "/api/conversations" and method == "GET":
+                    self._json({"ok": True, "conversations": conversations.list()})
+                elif parsed.path == "/api/graphs":
+                    self._json(graph_catalog(store, root))
+                elif parsed.path == "/api/graphs/preview":
+                    if graph_runs is None:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        self._json(graph_runs.preview(query.get("path", [""])[0]))
+                elif parsed.path == "/api/graphs/draft":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        body = self._body()
+                        goal = str(body.get("goal", ""))
+                        if body.get("mode") == "ai":
+                            self._json(asyncio.run(generate_web_graph(goal, project=root, username=username)))
+                        else:
+                            self._json(
+                                {
+                                    "ok": True,
+                                    "document": blank_graph_document(goal),
+                                    "node_template": web_task_node(),
+                                }
+                            )
+                elif parsed.path == "/api/graphs/preview-draft":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        body = self._body()
+                        document = body.get("document")
+                        if not isinstance(document, dict):
+                            self._json({"ok": False, "error": "document must be an object"}, status=400)
+                            return
+                        result = preview_web_graph(document, project=root, username=username)
+                        self._json(result, status=200 if result.get("ok") else 400)
+                elif parsed.path == "/api/graphs/save":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        body = self._body()
+                        document = body.get("document")
+                        if not isinstance(document, dict):
+                            self._json({"ok": False, "error": "document must be an object"}, status=400)
+                            return
+                        result = save_web_graph(
+                            document,
+                            str(body.get("path", "")),
+                            project=root,
+                            username=username,
+                            expected_digest=str(body.get("expected_digest", "")),
+                        )
+                        self._json(result, status=200 if result.get("ok") else (409 if result.get("conflict") else 400))
+                elif parsed.path == "/api/graphs/status":
+                    if graph_runs is None:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        snapshot = graph_runs.status(query.get("job_id", [""])[0])
+                        self._json(
+                            snapshot or {"ok": False, "error": "graph run not found"},
+                            status=200 if snapshot else 404,
+                        )
+                elif parsed.path == "/api/graphs/run":
+                    if graph_runs is None:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        body = self._body()
+                        params = body.get("params") or {}
+                        if not isinstance(params, dict):
+                            self._json({"ok": False, "error": "params must be an object"}, status=400)
+                            return
+                        result = graph_runs.start(
+                            str(body.get("path", "")),
+                            params=params,
+                            approved_gates=list(body.get("approved_gates") or []),
+                        )
+                        self._json(result, status=202)
+                elif parsed.path == "/api/conversations" and method == "POST":
+                    body = self._body()
+                    record = conversations.create(
+                        title=str(body.get("title", "New conversation")),
+                        kind=str(body.get("kind", "chat")),
+                        project=str(root),
+                        profiles=list(body.get("profiles") or []),
+                        coordinator=str(body.get("coordinator", "")),
+                    )
+                    self._json({"ok": True, "conversation": record}, status=201)
+                elif parsed.path == "/api/conversations/update":
+                    body = self._body()
+                    record = conversations.update(
+                        str(body.get("conversation_id", "")),
+                        title=body.get("title"),
+                        archived=bool(body.get("archived", False)),
+                    )
+                    self._json({"ok": True, "conversation": record})
+                elif parsed.path == "/api/conversations/message":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                        return
+                    body = self._body()
+                    conversation_id = str(body.get("conversation_id", ""))
+                    content = str(body.get("content", "")).strip()
+                    if not content or len(content) > 32000:
+                        self._json({"ok": False, "error": "message must contain 1 to 32000 characters"}, status=400)
+                        return
+                    conversation = conversations.get(conversation_id)
+                    if conversation is None:
+                        self._json({"ok": False, "error": "conversation not found"}, status=404)
+                        return
+                    turn_lock = conversation_locks.setdefault(conversation_id, threading.Lock())
+                    if not turn_lock.acquire(blocking=False):
+                        self._json(
+                            {"ok": False, "error": "a turn is already running for this conversation"},
+                            status=409,
+                        )
+                        return
+                    conversations.append_message(conversation_id, role="user", content=content, speaker="You")
+                    conversation = conversations.get(conversation_id) or conversation
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+                    self._security_headers()
+                    self.end_headers()
+
+                    from magent.web_chat import WebChatRunner
+
+                    def chunk(speaker: str, text: str) -> None:
+                        self._stream_event({"type": "chunk", "speaker": speaker, "content": text})
+
+                    try:
+                        results = WebChatRunner(username, root).run(conversation, content, on_chunk=chunk)
+                        for result in results:
+                            conversations.append_message(
+                                conversation_id,
+                                role="assistant",
+                                content=result["content"],
+                                speaker=result["speaker"],
+                                metadata={key: value for key, value in result.items() if key != "content"},
+                            )
+                        self._stream_event(
+                            {"type": "done", "conversation": conversations.get(conversation_id)}
+                        )
+                    except Exception as exc:
+                        conversations.append_message(
+                            conversation_id,
+                            role="assistant",
+                            content=str(exc),
+                            speaker="MagAgent",
+                            status="error",
+                        )
+                        self._stream_event({"type": "error", "error": str(exc)})
+                    finally:
+                        turn_lock.release()
+                elif parsed.path == "/api/profile":
+                    from magent.agent_profiles.desktop import inspect_profile
+                    from magent.config import load_config
+
+                    config = load_config(username) if username else None
+                    self._json(
+                        inspect_profile(
+                            query.get("name", [""])[0], project=root, config=config
+                        )
+                    )
+                elif parsed.path == "/api/profiles":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                        return
+                    from magent.agent_profiles.desktop import apply_profile
+                    from magent.config import load_config
+
+                    body = self._body()
+                    document = {
+                        "oap": "1.0",
+                        "metadata": {
+                            "name": str(body.get("name", "")).strip(),
+                            "description": str(body.get("description", "")).strip(),
+                            "revision": 1,
+                        },
+                        "spec": {
+                            "role": {"instructions": str(body.get("instructions", "")).strip()},
+                            "permissions": {"default": str(body.get("permission_mode", "balanced"))},
+                        },
+                        "state": [],
+                        "history": [],
+                        "proposals": [],
+                        "lifecycle": {"writeback": "off"},
+                    }
+                    result = apply_profile(
+                        document,
+                        scope=str(body.get("scope", "project")),
+                        project=root,
+                        config=load_config(username),
+                    )
+                    self._json(result, status=201 if result.get("ok") else 400)
+                elif parsed.path == "/api/settings":
+                    from magent.desktop_api import CONFIG_SCHEMA, config_set
+
+                    body = self._body()
+                    setting_path = str(body.get("path", ""))
+                    allowed = {str(item["path"]): item for item in CONFIG_SCHEMA}
+                    if setting_path not in allowed:
+                        self._json({"ok": False, "error": "setting is not editable in the guided UI"}, status=400)
+                    else:
+                        field = allowed[setting_path]
+                        value = body.get("value")
+                        field_type = field.get("type")
+                        invalid = bool(
+                            (field_type == "boolean" and not isinstance(value, bool))
+                            or (field_type == "integer" and (not isinstance(value, int) or isinstance(value, bool)))
+                            or (field_type in {"string", "enum"} and not isinstance(value, str))
+                            or (field.get("choices") and value not in field["choices"])
+                        )
+                        minimum = field.get("min")
+                        if (
+                            field_type == "integer"
+                            and isinstance(value, int)
+                            and not isinstance(value, bool)
+                            and minimum is not None
+                            and value < int(minimum)
+                        ):
+                            invalid = True
+                        if invalid:
+                            self._json(
+                                {"ok": False, "error": f"invalid value for {setting_path}"},
+                                status=400,
+                            )
+                            return
+                        self._json(
+                            config_set(
+                                setting_path,
+                                value,
+                                username=username,
+                                scope=str(body.get("scope", allowed[setting_path].get("scope", "global"))),
+                            )
+                        )
                 elif parsed.path == "/api/state":
                     self._json(ui_state(store, root, username=username))
                 elif parsed.path == "/api/cockpit":
