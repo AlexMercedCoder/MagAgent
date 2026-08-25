@@ -400,7 +400,6 @@ def test_a_tool_approval_can_be_answered_from_the_browser(tmp_path: Path, monkey
     agent could not do real work and never said why. The decision now travels
     the run's event log and comes back over HTTP.
     """
-    import threading
     import time
 
     from magent import ui as ui_module
