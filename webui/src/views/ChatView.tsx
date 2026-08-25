@@ -215,21 +215,6 @@ export function ChatView({
         aria-relevant="additions text"
         aria-busy={busy}
       >
-        {approval && (
-          <div className="approval-card" role="alertdialog" aria-label="Tool approval">
-            <b>This turn wants to do something that needs your say-so</b>
-            <p>{approval.description}</p>
-            <div className="approval-actions">
-              <button className="primary-button" type="button" onClick={() => void decide(true)}>
-                Allow once
-              </button>
-              <button className="secondary-button" type="button" onClick={() => void decide(false)}>
-                Deny
-              </button>
-            </div>
-            <small>Nothing runs until you answer. Leaving it unanswered denies it.</small>
-          </div>
-        )}
         {resumed && busy && (
           <p className="run-resumed" role="status">
             Picked this turn back up. It kept running while the view was away.
@@ -271,6 +256,21 @@ export function ChatView({
             </div>
           </article>
         ))}
+        {approval && (
+          <div className="approval-card" role="alertdialog" aria-label="Tool approval">
+            <b>This turn wants to do something that needs your say-so</b>
+            <p>{approval.description}</p>
+            <div className="approval-actions">
+              <button className="primary-button" type="button" onClick={() => void decide(true)}>
+                Allow once
+              </button>
+              <button className="secondary-button" type="button" onClick={() => void decide(false)}>
+                Deny
+              </button>
+            </div>
+            <small>Nothing runs until you answer. Leaving it unanswered denies it.</small>
+          </div>
+        )}
       </div>
 
       <div className="composer-wrap">
