@@ -29,20 +29,29 @@ def test_running_daemon_process_observes_durable_cancellation(tmp_path: Path) ->
     holder: dict[str, object] = {}
     worker = threading.Thread(target=lambda: holder.setdefault("result", run_once(store)))
 
-    started = time.monotonic()
     worker.start()
     runtime = TaskRuntime(store)
-    deadline = started + 2
+
+    # Wait for the child to actually be running before cancelling it. How long
+    # that takes depends on machine load and says nothing about cancellation,
+    # so it is deliberately not part of the latency budget below.
+    deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         task = runtime.get(queued["execution_task_id"])
         if task and task["state"] == "running":
             break
         time.sleep(0.02)
+    assert runtime.get(queued["execution_task_id"])["state"] == "running"
+
+    # The point of the test: cancelling interrupts promptly instead of waiting
+    # out the child's 10-second sleep. Measure from the cancel, not from the
+    # thread start, or a slow start alone fails the assertion.
+    cancelled_at = time.monotonic()
     runtime.cancel(queued["execution_task_id"])
-    worker.join(timeout=2)
+    worker.join(timeout=8)
 
     assert not worker.is_alive()
-    assert time.monotonic() - started < 2
+    assert time.monotonic() - cancelled_at < 5
     assert runtime.get(queued["execution_task_id"])["state"] == "cancelled"
     assert list_queue(store)["tasks"][0]["status"] == "cancelled"
     assert holder["result"]["results"][0]["result"]["cancelled"] is True
