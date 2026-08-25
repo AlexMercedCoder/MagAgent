@@ -120,6 +120,7 @@ class ToolExecutor(
         tool_budgets: dict[str, int] | None = None,
         session_id: str = "manual",
         interactive_permissions: bool = True,
+        permission_prompt: Any = None,
         shell_sandbox: str = "off",
         shell_sandbox_network: bool = False,
         config: Any | None = None,
@@ -136,6 +137,9 @@ class ToolExecutor(
         self.tool_budgets = {**DEFAULT_TOOL_BUDGETS, **(tool_budgets or {})}
         self.session_id = session_id
         self.interactive_permissions = interactive_permissions
+        # A front end with a user but no console supplies this; without one a
+        # non-interactive caller can only refuse.
+        self.permission_prompt = permission_prompt
         # Optional isolation for run_shell, independent of the permission tier.
         self.shell_sandbox = str(shell_sandbox or "off")
         self.shell_sandbox_network = bool(shell_sandbox_network)
@@ -216,6 +220,7 @@ class ToolExecutor(
             tier,
             self.permission_mode,
             interactive=self.interactive_permissions,
+            ask=self.permission_prompt,
         )
 
     def _permission_denied(self, perm: PermissionResult) -> ToolResult:

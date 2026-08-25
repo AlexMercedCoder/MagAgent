@@ -84,7 +84,11 @@ def _turn_worker(
             run.append({"type": "chunk", "speaker": speaker, "content": text})
 
         try:
-            results = WebChatRunner(username, root).run(
+            results = WebChatRunner(
+                username,
+                root,
+                on_approval=lambda description, tier: run.request_approval(description, int(tier)),
+            ).run(
                 conversation,
                 prompt,
                 on_chunk=chunk,
@@ -240,6 +244,7 @@ def serve_ui(
         "/api/settings",
         "/api/onboarding/configure",
         "/api/runs/cancel",
+        "/api/runs/approve",
     }
 
     # Dual-purpose paths: POST mutates and still needs CSRF, but GET is a plain
@@ -731,6 +736,25 @@ def serve_ui(
                 elif parsed.path == "/api/runs/cancel":
                     body = self._body()
                     self._json(runs.cancel(str(body.get("id", ""))))
+                elif parsed.path == "/api/runs/approve":
+                    body = self._body()
+                    found = runs.get(str(body.get("id", "")))
+                    if found is None:
+                        self._json({"ok": False, "error": "run not found"}, status=404)
+                        return
+                    decided = found.decide_approval(
+                        str(body.get("request_id", "")), bool(body.get("approved"))
+                    )
+                    self._json(
+                        {"ok": decided}
+                        if decided
+                        else {
+                            "ok": False,
+                            # Answering a stale prompt is a race, not a fault:
+                            # say which, so the UI can just drop the card.
+                            "error": "That approval is no longer waiting for an answer.",
+                        }
+                    )
                 elif parsed.path == "/api/memory/overview":
                     from magent.web_memory import overview
 

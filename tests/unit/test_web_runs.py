@@ -269,3 +269,118 @@ def test_a_running_turn_is_never_evicted() -> None:
     assert store.get(long_lived.id) is not None
     release.set()
     _settle(long_lived)
+
+
+# --- approvals ---------------------------------------------------------------
+
+
+def test_a_run_parks_until_an_approval_is_answered() -> None:
+    """The Web UI ran non-interactive, so every risky tool was refused outright."""
+    asked = threading.Event()
+    outcome: dict[str, bool] = {}
+
+    def work(handle):
+        asked.set()
+        outcome["approved"] = handle.request_approval("run `rm -rf build`", 2)
+
+    store = RunStore()
+    run = store.start("conv-1", work)
+    assert asked.wait(5)
+
+    # The prompt reaches the watcher through the same log as everything else.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not run.since(0):
+        time.sleep(0.01)
+    request = run.since(0)[0]
+    assert request["type"] == "approval.requested"
+    assert request["description"] == "run `rm -rf build`"
+    assert run.state == "running"
+
+    assert run.decide_approval(request["request_id"], True) is True
+    assert _settle(run) == "succeeded"
+    assert outcome["approved"] is True
+
+
+def test_a_denied_approval_returns_false_to_the_tool() -> None:
+    outcome: dict[str, bool] = {}
+
+    def work(handle):
+        outcome["approved"] = handle.request_approval("delete everything", 3)
+
+    store = RunStore()
+    run = store.start("conv-1", work)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not run.since(0):
+        time.sleep(0.01)
+
+    run.decide_approval(run.since(0)[0]["request_id"], False)
+    _settle(run)
+    assert outcome["approved"] is False
+    resolved = run.since(0)[-1]
+    assert resolved["type"] == "approval.resolved"
+    assert resolved["approved"] is False
+
+
+def test_an_unanswered_approval_is_a_denial() -> None:
+    """A tab that closed must not leave a tool authorised by default."""
+    from magent import web_runs
+
+    outcome: dict[str, bool] = {}
+
+    def work(handle):
+        outcome["approved"] = handle.request_approval("touch the disk", 2)
+
+    original = web_runs.APPROVAL_TIMEOUT_SECONDS
+    web_runs.APPROVAL_TIMEOUT_SECONDS = 0.3
+    try:
+        store = RunStore()
+        run = store.start("conv-1", work)
+        _settle(run, timeout=10)
+    finally:
+        web_runs.APPROVAL_TIMEOUT_SECONDS = original
+
+    assert outcome["approved"] is False
+    assert run.since(0)[-1]["reason"] == "timeout"
+
+
+def test_answering_a_stale_request_is_refused() -> None:
+    """Answering twice, or answering after a timeout, is a race and not a fault."""
+    store = RunStore()
+    run = store.start("conv-1", lambda handle: handle.request_approval("something", 2))
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not run.since(0):
+        time.sleep(0.01)
+    request_id = run.since(0)[0]["request_id"]
+
+    assert run.decide_approval(request_id, True) is True
+    assert run.decide_approval(request_id, True) is False
+    assert run.decide_approval("ask_nonesuch", True) is False
+    _settle(run)
+
+
+def test_cancelling_releases_a_run_parked_on_an_approval() -> None:
+    """Otherwise cancel looks broken for exactly the turns most likely to need it."""
+    store = RunStore()
+    run = store.start("conv-1", lambda handle: handle.request_approval("wait here", 2))
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and not run.since(0):
+        time.sleep(0.01)
+
+    asked = time.monotonic()
+    store.cancel(run.id)
+    assert _settle(run, timeout=10) == "cancelled"
+    assert time.monotonic() - asked < 5
+
+
+def test_a_snapshot_reports_an_approval_a_reattaching_browser_must_answer() -> None:
+    store = RunStore()
+    run = store.start("conv-1", lambda handle: handle.request_approval("needs a human", 2))
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and run.snapshot()["awaiting_approval"] is None:
+        time.sleep(0.01)
+
+    waiting = run.snapshot()["awaiting_approval"]
+    assert waiting["description"] == "needs a human"
+    run.decide_approval(waiting["request_id"], False)
+    _settle(run)
+    assert run.snapshot()["awaiting_approval"] is None

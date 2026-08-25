@@ -622,3 +622,8 @@ textarea,input,select{color:var(--c-18201d)}
 .memory-empty{color:var(--muted);font-size:12px;line-height:1.55;margin:4px 0 0}
 @media (max-width:1100px){.memory-stats{grid-template-columns:repeat(2,1fr)}.memory-layout{grid-template-columns:1fr}}
 .run-resumed{align-self:center;margin:0;font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:6px 13px;background:var(--panel)}
+.approval-card{align-self:center;width:min(560px,100%);border:1px solid var(--c-e2d39d);background:var(--c-fff9e7);border-radius:14px;padding:16px 18px}
+.approval-card b{display:block;font-size:13px}
+.approval-card p{margin:8px 0 0;font-size:12.5px;line-height:1.55;overflow-wrap:anywhere}
+.approval-actions{display:flex;gap:8px;margin-top:14px}
+.approval-card small{display:block;margin-top:10px;font-size:10.5px;color:var(--c-776b44)}

@@ -147,6 +147,7 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
         cwd: str,
         project_slug: str | None = None,
         interactive_permissions: bool = True,
+        permission_prompt: Any = None,
         permission_mode_override: str | None = None,
         profile: EffectiveProfile | None = None,
     ):
@@ -211,6 +212,7 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
             },
             session_id=self.session_id,
             interactive_permissions=interactive_permissions,
+            permission_prompt=permission_prompt,
             shell_sandbox=str(config.get("permissions", "shell_sandbox", default="off") or "off"),
             shell_sandbox_network=bool(
                 config.get("permissions", "shell_sandbox_network", default=False)

@@ -391,3 +391,165 @@ def test_a_running_turn_can_be_cancelled_over_http(tmp_path: Path, monkeypatch) 
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_tool_approval_can_be_answered_from_the_browser(tmp_path: Path, monkeypatch) -> None:
+    """The Web UI ran with permissions non-interactive.
+
+    Every tool above the auto-approve threshold was refused outright, so the
+    agent could not do real work and never said why. The decision now travels
+    the run's event log and comes back over HTTP.
+    """
+    import threading
+    import time
+
+    from magent import ui as ui_module
+
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("ui-approval-test")
+    decided: dict[str, bool] = {}
+
+    class NeedsPermission:
+        def __init__(self, *_args, on_approval=None, **_kwargs) -> None:
+            self.on_approval = on_approval
+
+        def run(self, _conversation, _prompt, *, on_chunk=None, should_continue=None):
+            allowed = self.on_approval("run `rm -rf build`", 2)
+            decided["allowed"] = allowed
+            return [{"content": f"allowed={allowed}", "speaker": "MagAgent"}]
+
+    import magent.web_chat as web_chat
+
+    monkeypatch.setattr(web_chat, "WebChatRunner", NeedsPermission)
+
+    result = ui_module.serve_ui(
+        store, project=tmp_path, username="ui-approval-test", port=0, open_browser=False
+    )
+    if not result["ok"] and "Operation not permitted" in result.get("error", ""):
+        pytest.skip("local socket binding is disabled by the test sandbox")
+    server = result["server"]
+    port = server.server_address[1]
+    token = result["token"]
+    write_headers = {"Content-Type": "application/json", "X-Magent-CSRF": token}
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        connection.request(
+            "POST",
+            f"/api/conversations?token={token}",
+            body='{"kind":"chat","title":"Approval"}',
+            headers=write_headers,
+        )
+        conversation_id = json.loads(connection.getresponse().read())["conversation"]["id"]
+
+        talker = http.client.HTTPConnection("127.0.0.1", port, timeout=20)
+        talker.request(
+            "POST",
+            f"/api/conversations/message?token={token}",
+            body=json.dumps({"conversation_id": conversation_id, "content": "clean up"}),
+            headers=write_headers,
+        )
+        stream = talker.getresponse()
+        run_id = json.loads(stream.fp.readline())["id"]
+
+        # The prompt must reach the browser, and the turn must wait for it.
+        asking = json.loads(stream.fp.readline())
+        assert asking["type"] == "approval.requested"
+        assert asking["description"] == "run `rm -rf build`"
+        assert "allowed" not in decided
+
+        answerer = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        answerer.request(
+            "POST",
+            f"/api/runs/approve?token={token}",
+            body=json.dumps(
+                {"id": run_id, "request_id": asking["request_id"], "approved": True}
+            ),
+            headers=write_headers,
+        )
+        assert json.loads(answerer.getresponse().read())["ok"] is True
+
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and "allowed" not in decided:
+            time.sleep(0.05)
+        assert decided["allowed"] is True
+
+        # Answering the same request twice is a race, not a fault.
+        answerer.request(
+            "POST",
+            f"/api/runs/approve?token={token}",
+            body=json.dumps(
+                {"id": run_id, "request_id": asking["request_id"], "approved": True}
+            ),
+            headers=write_headers,
+        )
+        stale = json.loads(answerer.getresponse().read())
+        assert stale["ok"] is False
+        assert "no longer waiting" in stale["error"]
+        talker.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_an_unanswered_approval_denies_rather_than_hanging(tmp_path: Path, monkeypatch) -> None:
+    """A tab that closed must not leave a tool authorised, or a thread parked."""
+    import time
+
+    from magent import ui as ui_module
+    from magent import web_runs
+
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    monkeypatch.setattr(web_runs, "APPROVAL_TIMEOUT_SECONDS", 0.5)
+    store = WorkbenchStore("ui-timeout-test")
+    decided: dict[str, bool] = {}
+
+    class NeedsPermission:
+        def __init__(self, *_args, on_approval=None, **_kwargs) -> None:
+            self.on_approval = on_approval
+
+        def run(self, _conversation, _prompt, *, on_chunk=None, should_continue=None):
+            decided["allowed"] = self.on_approval("do something risky", 2)
+            return [{"content": "done", "speaker": "MagAgent"}]
+
+    import magent.web_chat as web_chat
+
+    monkeypatch.setattr(web_chat, "WebChatRunner", NeedsPermission)
+
+    result = ui_module.serve_ui(
+        store, project=tmp_path, username="ui-timeout-test", port=0, open_browser=False
+    )
+    if not result["ok"] and "Operation not permitted" in result.get("error", ""):
+        pytest.skip("local socket binding is disabled by the test sandbox")
+    server = result["server"]
+    port = server.server_address[1]
+    token = result["token"]
+    write_headers = {"Content-Type": "application/json", "X-Magent-CSRF": token}
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        connection.request(
+            "POST",
+            f"/api/conversations?token={token}",
+            body='{"kind":"chat","title":"Timeout"}',
+            headers=write_headers,
+        )
+        conversation_id = json.loads(connection.getresponse().read())["conversation"]["id"]
+
+        talker = http.client.HTTPConnection("127.0.0.1", port, timeout=20)
+        talker.request(
+            "POST",
+            f"/api/conversations/message?token={token}",
+            body=json.dumps({"conversation_id": conversation_id, "content": "go"}),
+            headers=write_headers,
+        )
+        talker.getresponse()
+        talker.close()  # nobody is watching, and nobody answers
+
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and "allowed" not in decided:
+            time.sleep(0.05)
+        assert decided["allowed"] is False
+    finally:
+        server.shutdown()
+        server.server_close()

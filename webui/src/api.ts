@@ -194,3 +194,12 @@ export async function reattachRun(
 export async function cancelRun(runId: string): Promise<{ ok: boolean; state?: string; note?: string }> {
   return post("/api/runs/cancel", { id: runId });
 }
+
+/** Answer a tool approval the run is parked on. */
+export async function decideApproval(
+  runId: string,
+  requestId: string,
+  approved: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  return post("/api/runs/approve", { id: runId, request_id: requestId, approved });
+}

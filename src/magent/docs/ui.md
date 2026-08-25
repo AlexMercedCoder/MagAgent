@@ -71,6 +71,20 @@ erased the answer.
 The Stop control deliberately does **not** abort its own stream. A cancelled run ends its own log,
 and letting the stream close normally is what delivers the final transcript.
 
+**Tool approvals reach the browser.** The Web UI runs its sessions with terminal permission
+prompts switched off, which without an alternative means every tool above the mode's auto-approve
+threshold is refused outright: the agent could not do real work, and never explained why.
+`check_permission` now takes an optional `ask` callback for a front end that has a user but no
+console, and a run supplies one. A tool needing a decision publishes `approval.requested` into the
+run's log, the turn parks until `/api/runs/approve` answers, and `approval.resolved` follows.
+
+Unanswered is a denial. A tab that closed is indistinguishable from one that is thinking, so an
+approval that goes unanswered times out and refuses rather than leaving a tool authorised by
+default or a worker thread parked forever. Cancelling a run also releases a turn waiting on an
+approval, because otherwise cancel appears broken for exactly the turns most likely to need it. The
+run snapshot reports any approval still outstanding, so a reattaching browser re-renders the prompt
+instead of leaving the run stuck behind a question nobody can see.
+
 Runs are held in memory for reattachment after a reload, not as history: the conversation store is
 what persists. Finished runs are evicted oldest-first past a cap, and a run still in flight is never
 evicted however old it is, because it still has a reader coming.
@@ -206,6 +220,7 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/runs?conversation_id=<conversation-id>`
 - `/api/runs/events?id=<run-id>&after=<cursor>`
 - `/api/runs/cancel`
+- `/api/runs/approve`
 - `/api/profile`
 - `/api/profiles`
 - `/api/graphs`

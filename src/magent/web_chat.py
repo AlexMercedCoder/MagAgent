@@ -15,6 +15,9 @@ from magent.config import load_config
 from magent.tools.catalog import built_in_tool_definitions
 
 ChunkCallback = Callable[[str, str], None]
+# Asks whoever is watching the run to approve one tool. Without it the session
+# runs non-interactive, which can only refuse.
+ApprovalCallback = Callable[[str, int], bool]
 # Called between units of work; it raises to abandon the turn. A turn that only
 # checked at the start could not be stopped once a long reply began streaming.
 CancelCheck = Callable[[], None]
@@ -23,9 +26,16 @@ CancelCheck = Callable[[], None]
 class WebChatRunner:
     """Run bounded chat turns without shelling out to the CLI."""
 
-    def __init__(self, username: str, project: str | Path):
+    def __init__(
+        self,
+        username: str,
+        project: str | Path,
+        *,
+        on_approval: ApprovalCallback | None = None,
+    ):
         self.username = username
         self.project = str(Path(project).resolve())
+        self.on_approval = on_approval
 
     def _profile(self, name: str, config: Any):
         resolved = AgentProfileRegistry(self.project, config).get(name)
@@ -59,7 +69,11 @@ class WebChatRunner:
             provider=provider,
             extraction_provider=build_extraction_provider(config),
             cwd=self.project,
+            # Non-interactive with no way to ask means every tool above the
+            # auto-approve threshold is refused; the callback is what lets the
+            # browser answer instead of the console.
             interactive_permissions=False,
+            permission_prompt=self.on_approval,
             profile=profile,
         )
         session.conversation = [

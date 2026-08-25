@@ -102,8 +102,16 @@ export type RunSnapshot = {
   error?: string;
 };
 
+export type ApprovalRequest = {
+  request_id: string;
+  description: string;
+  tier: number;
+};
+
 export type ChatEvent =
   | ({ type: "run" } & RunSnapshot)
+  | ({ type: "approval.requested" } & ApprovalRequest)
+  | { type: "approval.resolved"; request_id: string; approved: boolean; reason?: string }
   | { type: "chunk"; speaker: string; content: string }
   | { type: "done"; conversation: Conversation }
   | { type: "conversation"; conversation: Conversation }

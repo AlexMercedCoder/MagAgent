@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import ast
 import fnmatch
+from collections.abc import Callable
 from enum import IntEnum
 from pathlib import Path
 from typing import NamedTuple
@@ -731,12 +732,21 @@ def check_permission(
     tier: RiskTier,
     mode: str = "balanced",
     interactive: bool = True,
+    ask: Callable[[str, RiskTier], bool] | None = None,
 ) -> PermissionResult:
     """
     Evaluate whether an action should proceed based on its tier and the active mode.
 
     Returns PermissionResult(approved, tier, reason).
+
+    `ask` is an alternative to the terminal prompt, for a front end that has a
+    user but not a console. Without it a non-interactive caller can only refuse:
+    the local Web UI ran with `interactive=False`, so every tool above the
+    auto-approve threshold was denied and the agent could not do real work.
+    Passing `ask` makes that caller interactive through its own surface.
     """
+    if ask is not None:
+        interactive = True
     # Determine effective approval threshold by mode.
     auto_threshold = {
         "silent": RiskTier.BLOCK,  # 0-2 auto, only 3 prompts
@@ -755,6 +765,8 @@ def check_permission(
                     border_style="red",
                 )
             )
+            if ask is not None:
+                return PermissionResult(bool(ask(action_description, tier)), tier, "yolo-prompt")
             ans = Prompt.ask("[red]YOLO mode — proceed?[/red] [y/N]", default="y")
             return PermissionResult(ans.lower() in ("y", "yes"), tier, "yolo-prompt")
         return PermissionResult(True, tier, "yolo-auto")
@@ -765,6 +777,11 @@ def check_permission(
 
     if not interactive:
         return PermissionResult(False, tier, "permission-required")
+
+    if ask is not None:
+        # One decision path for every non-terminal front end: it is shown the
+        # same description and tier the console prompt would have shown.
+        return PermissionResult(bool(ask(action_description, tier)), tier, "asked")
 
     # CONFIRM tier — show action, press Enter
     if tier == RiskTier.CONFIRM:

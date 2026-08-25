@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Let the Web UI answer tool approvals. Its sessions ran with terminal permission prompts switched
+  off and no alternative, so every tool above the mode's auto-approve threshold was refused
+  outright: the agent could not do real work and never explained why. `check_permission` now takes
+  an optional callback for a front end that has a user but no console, and a run uses it to publish
+  the request into its event log and park until the browser answers. Unanswered times out as a
+  denial, and cancelling releases a turn waiting on one.
+
 - Made a Web UI turn survive the browser that asked for it. A turn ran on the HTTP request thread
   that started it, so closing the tab mid-reply killed the work: the answer was never recorded and
   the conversation kept a question with no response. A turn is now a run on its own thread with an

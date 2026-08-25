@@ -100,3 +100,73 @@ class TestClassifyFileOp:
 
     def test_unknown_operation_defaults_to_confirmation(self):
         assert classify_file_op("chmod", "script.py", "/project") == RiskTier.CONFIRM
+
+
+# --- asking a front end that has no console ----------------------------------
+
+
+def test_a_non_interactive_caller_without_a_way_to_ask_can_only_refuse() -> None:
+    """This was the local Web UI's whole problem: no console, so no tool ran."""
+    from magent.permissions import RiskTier, check_permission
+
+    result = check_permission("delete a file", RiskTier.CONFIRM, "balanced", interactive=False)
+
+    assert result.approved is False
+    assert result.reason == "permission-required"
+
+
+def test_a_callback_lets_a_non_interactive_caller_decide() -> None:
+    from magent.permissions import RiskTier, check_permission
+
+    seen: list[tuple[str, int]] = []
+
+    def ask(description: str, tier: int) -> bool:
+        seen.append((description, int(tier)))
+        return True
+
+    result = check_permission(
+        "delete a file", RiskTier.CONFIRM, "balanced", interactive=False, ask=ask
+    )
+
+    assert result.approved is True
+    assert result.reason == "asked"
+    # The callback is shown the same description and tier the console prompt is.
+    assert seen == [("delete a file", int(RiskTier.CONFIRM))]
+
+
+def test_a_callback_that_refuses_is_a_denial() -> None:
+    from magent.permissions import RiskTier, check_permission
+
+    result = check_permission(
+        "delete a file", RiskTier.CONFIRM, "balanced", interactive=False, ask=lambda *_: False
+    )
+    assert result.approved is False
+
+
+def test_the_callback_is_not_consulted_below_the_auto_threshold() -> None:
+    """Prompting for something the mode already auto-approves is noise."""
+    from magent.permissions import RiskTier, check_permission
+
+    calls: list[str] = []
+    result = check_permission(
+        "read a file",
+        RiskTier.AUTO,
+        "balanced",
+        interactive=False,
+        ask=lambda description, _tier: calls.append(description) or True,
+    )
+
+    assert result.approved is True
+    assert result.reason == "auto"
+    assert calls == []
+
+
+def test_the_callback_answers_the_high_risk_prompt_in_yolo_mode() -> None:
+    from magent.permissions import RiskTier, check_permission
+
+    result = check_permission(
+        "wipe the disk", RiskTier.BLOCK, "yolo", interactive=False, ask=lambda *_: False
+    )
+
+    assert result.approved is False
+    assert result.reason == "yolo-prompt"
