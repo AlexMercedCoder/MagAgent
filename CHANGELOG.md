@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.98.0 (2026-08-25)
 
 - Fixed accessibility defects found by an audit pass over every view in both themes. Small muted
   text sat between 2.8:1 and 4.4:1 against its real background, below the 4.5:1 AA threshold for
