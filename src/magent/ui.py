@@ -9,6 +9,7 @@ import secrets
 import threading
 import urllib.parse
 import webbrowser
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,7 @@ from magent.web_graphs import (
     save_web_graph,
     web_task_node,
 )
+from magent.web_runs import STREAM_WAIT_SECONDS, TERMINAL_STATES, RunCancelled, RunStore
 from magent.workbench import (
     WorkbenchStore,
     checkpoint_sessions,
@@ -51,6 +53,87 @@ WEBUI_DIR = Path(__file__).with_name("webui")
 # wheel, so installed users never need Node.
 STATIC_DIR = WEBUI_DIR / "static"
 MAX_REQUEST_BYTES = 128 * 1024
+
+
+def _turn_worker(
+    conversations: Any,
+    conversation: dict[str, Any],
+    prompt: str,
+    *,
+    username: str,
+    root: Path,
+    release: Callable[[], None],
+) -> Callable[[Any], None]:
+    """Build the body of a chat run.
+
+    Every message is written from inside the run, not from the request handler,
+    so a reply survives the browser that asked for it going away.
+    """
+    conversation_id = str(conversation.get("id") or "")
+
+    def work(run: Any) -> None:
+        from magent.web_chat import WebChatRunner
+
+        # Kept so a cancelled turn can save what it had already said. Watching
+        # text appear and then vanish is worse than an incomplete answer.
+        partial: dict[str, list[str]] = {"speaker": [], "text": []}
+
+        def chunk(speaker: str, text: str) -> None:
+            partial["speaker"] = [speaker]
+            partial["text"].append(text)
+            run.append({"type": "chunk", "speaker": speaker, "content": text})
+
+        try:
+            results = WebChatRunner(username, root).run(
+                conversation,
+                prompt,
+                on_chunk=chunk,
+                should_continue=run.raise_if_cancelled,
+            )
+            for result in results:
+                conversations.append_message(
+                    conversation_id,
+                    role="assistant",
+                    content=result["content"],
+                    speaker=result["speaker"],
+                    metadata={key: value for key, value in result.items() if key != "content"},
+                )
+            run.append({"type": "done", "conversation": conversations.get(conversation_id)})
+        except RunCancelled:
+            # A cancelled turn still leaves a trace in the transcript, or the
+            # conversation shows a question with no visible outcome. Whatever
+            # was already said is kept: it was on screen, and dropping it makes
+            # cancelling look like it erased the answer.
+            said = "".join(partial["text"]).strip()
+            conversations.append_message(
+                conversation_id,
+                role="assistant",
+                content=f"{said}\n\n_(cancelled)_" if said else "This turn was cancelled.",
+                speaker=(partial["speaker"] or ["MagAgent"])[0],
+                status="cancelled",
+            )
+            run.append({"type": "conversation", "conversation": conversations.get(conversation_id)})
+            raise
+        except Exception as problem:
+            # A raw repr in a chat bubble tells the user nothing they can act
+            # on; name the state and the recovery step.
+            from magent.webui_errors import describe
+
+            friendly = describe(problem)
+            conversations.append_message(
+                conversation_id,
+                role="assistant",
+                content=friendly.as_message(),
+                speaker="MagAgent",
+                status="error",
+                metadata={"error_kind": friendly.kind, "detail": friendly.detail},
+            )
+            run.append({"type": "conversation", "conversation": conversations.get(conversation_id)})
+            raise
+        finally:
+            release()
+
+    return work
 
 
 def _int_or(raw: str, fallback: int) -> int:
@@ -135,6 +218,7 @@ def serve_ui(
     token = secrets.token_urlsafe(32)
     conversations = ConversationStore(store)
     conversation_locks: dict[str, threading.Lock] = {}
+    runs = RunStore()
     graph_runs = GraphRunManager(store, username, root) if username else None
 
     # Endpoints that mutate state or spend money. GET must not reach these.
@@ -155,6 +239,7 @@ def serve_ui(
         "/api/graphs/save",
         "/api/settings",
         "/api/onboarding/configure",
+        "/api/runs/cancel",
     }
 
     # Dual-purpose paths: POST mutates and still needs CSRF, but GET is a plain
@@ -241,6 +326,33 @@ def serve_ui(
         def _stream_event(self, data: dict[str, Any]) -> None:
             self.wfile.write((json.dumps(data, default=str) + "\n").encode("utf-8"))
             self.wfile.flush()
+
+        def _stream_run(self, run: Any, *, after: int = 0) -> None:
+            """Stream a run's event log from a cursor until the run ends.
+
+            Reading from a cursor is what makes reattachment work: a browser
+            that reloads mid-turn asks for everything past what it already has
+            and gets the missed chunks, rather than a truncated reply.
+            """
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self._security_headers()
+            self.end_headers()
+
+            cursor = max(0, after)
+            # The run id goes first so a client that loses the socket can come
+            # back to this exact run instead of guessing.
+            self._stream_event({"type": "run", **run.snapshot(), "cursor": cursor})
+            while True:
+                for event in run.since(cursor):
+                    self._stream_event(event)
+                    cursor += 1
+                if run.state in TERMINAL_STATES and cursor >= run.cursor:
+                    break
+                # Block on the run rather than polling, so a chunk reaches the
+                # browser as soon as it is appended.
+                run.wait(cursor, STREAM_WAIT_SECONDS)
+            self._stream_event({"type": "run", **run.snapshot(), "cursor": cursor})
 
         def do_POST(self) -> None:  # noqa: N802
             self._dispatch(method="POST")
@@ -411,46 +523,23 @@ def serve_ui(
                         return
                     conversations.append_message(conversation_id, role="user", content=content, speaker="You")
                     conversation = conversations.get(conversation_id) or conversation
-                    self.send_response(200)
-                    self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
-                    self._security_headers()
-                    self.end_headers()
 
-                    from magent.web_chat import WebChatRunner
-
-                    def chunk(speaker: str, text: str) -> None:
-                        self._stream_event({"type": "chunk", "speaker": speaker, "content": text})
-
-                    try:
-                        results = WebChatRunner(username, root).run(conversation, content, on_chunk=chunk)
-                        for result in results:
-                            conversations.append_message(
-                                conversation_id,
-                                role="assistant",
-                                content=result["content"],
-                                speaker=result["speaker"],
-                                metadata={key: value for key, value in result.items() if key != "content"},
-                            )
-                        self._stream_event(
-                            {"type": "done", "conversation": conversations.get(conversation_id)}
-                        )
-                    except Exception as exc:
-                        # A raw repr in a chat bubble tells the user nothing they
-                        # can act on; name the state and the recovery step.
-                        from magent.webui_errors import describe
-
-                        friendly = describe(exc)
-                        conversations.append_message(
-                            conversation_id,
-                            role="assistant",
-                            content=friendly.as_message(),
-                            speaker="MagAgent",
-                            status="error",
-                            metadata={"error_kind": friendly.kind, "detail": friendly.detail},
-                        )
-                        self._stream_event({"type": "error", **friendly.as_event()})
-                    finally:
-                        turn_lock.release()
+                    # The turn runs on its own thread and records its reply
+                    # whether or not anyone is watching. Closing the tab used to
+                    # kill the work with the socket, leaving the conversation
+                    # holding a question that never got an answer.
+                    run = runs.start(
+                        conversation_id,
+                        _turn_worker(
+                            conversations,
+                            conversation,
+                            content,
+                            username=username,
+                            root=root,
+                            release=turn_lock.release,
+                        ),
+                    )
+                    self._stream_run(run, after=0)
                 elif parsed.path == "/api/profile":
                     from magent.agent_profiles.desktop import inspect_profile
                     from magent.config import load_config
@@ -628,6 +717,20 @@ def serve_ui(
                     self._json(release_notes(root))
                 elif parsed.path == "/api/memory/inbox":
                     self._json(list_memory_inbox(store, root))
+                elif parsed.path == "/api/runs":
+                    # A reloading tab knows its conversation, not the run id it
+                    # lost, so reattachment is looked up by conversation.
+                    active = runs.active_for(query.get("conversation_id", [""])[0])
+                    self._json({"ok": True, "run": active.snapshot() if active else None})
+                elif parsed.path == "/api/runs/events":
+                    found = runs.get(query.get("id", [""])[0])
+                    if found is None:
+                        self._json({"ok": False, "error": "run not found"}, status=404)
+                        return
+                    self._stream_run(found, after=_int_or(query.get("after", ["0"])[0], 0))
+                elif parsed.path == "/api/runs/cancel":
+                    body = self._body()
+                    self._json(runs.cancel(str(body.get("id", ""))))
                 elif parsed.path == "/api/memory/overview":
                     from magent.web_memory import overview
 

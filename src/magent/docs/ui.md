@@ -41,6 +41,40 @@ A provider and model can be chosen in the panel, which writes only the route.
 that argument is never passed from this path: keys stay in the environment or the system keyring
 and the panel reports only whether one was found and which variable it searched.
 
+## Turns Are Runs
+
+A turn used to execute on the HTTP request thread that started it. Close the tab mid-reply and the
+work died with the socket: the assistant's answer was never recorded, the conversation kept a
+question with no response, and there was no way to stop a turn that was going nowhere short of
+killing the server.
+
+A turn is now a **run**. It executes on its own thread, appends every event to an append-only log,
+and finishes whether or not anyone is watching.
+
+**Streaming reads from a cursor.** `/api/conversations/message` starts a run and streams its log
+from position zero; the first line is the run snapshot, so a client that loses the socket knows
+which run to come back to. `/api/runs/events?id=…&after=N` resumes the same log from a cursor and
+replays everything past it. Losing the connection therefore loses the *view* of a turn, not the
+turn.
+
+**Reattachment is looked up by conversation.** A reloading tab knows which conversation it was in,
+not the run id it lost, so `/api/runs?conversation_id=…` returns the newest run for a conversation.
+The browser only resumes a run still in the `running` state: a finished run already wrote its reply
+into the conversation, and replaying its chunks would show the answer twice.
+
+**Cancellation is cooperative and prompt.** `/api/runs/cancel` sets a flag that the runner checks
+between chunks and, in a group turn, between participants, so stopping interrupts a long reply
+partway rather than waiting for the model to finish talking. Whatever the turn had already said is
+kept and marked cancelled: watching text appear and then vanish makes cancelling look like it
+erased the answer.
+
+The Stop control deliberately does **not** abort its own stream. A cancelled run ends its own log,
+and letting the stream close normally is what delivers the final transcript.
+
+Runs are held in memory for reattachment after a reload, not as history: the conversation store is
+what persists. Finished runs are evicted oldest-first past a cap, and a run still in flight is never
+evicted however old it is, because it still has a reader coming.
+
 ## Conversations And Bots
 
 The Chats view supports durable traditional, bot, and group conversations:
@@ -169,6 +203,9 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/bootstrap`
 - `/api/conversations`
 - `/api/conversations/message`
+- `/api/runs?conversation_id=<conversation-id>`
+- `/api/runs/events?id=<run-id>&after=<cursor>`
+- `/api/runs/cancel`
 - `/api/profile`
 - `/api/profiles`
 - `/api/graphs`

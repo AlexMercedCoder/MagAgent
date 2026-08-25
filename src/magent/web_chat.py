@@ -15,6 +15,9 @@ from magent.config import load_config
 from magent.tools.catalog import built_in_tool_definitions
 
 ChunkCallback = Callable[[str, str], None]
+# Called between units of work; it raises to abandon the turn. A turn that only
+# checked at the start could not be stopped once a long reply began streaming.
+CancelCheck = Callable[[], None]
 
 
 class WebChatRunner:
@@ -41,6 +44,7 @@ class WebChatRunner:
         history: list[dict[str, str]],
         profile_name: str = "",
         on_chunk: ChunkCallback | None = None,
+        should_continue: CancelCheck | None = None,
     ) -> dict[str, Any]:
         config = load_config(self.username)
         profile = self._profile(profile_name, config) if profile_name else None
@@ -66,6 +70,10 @@ class WebChatRunner:
         chunks: list[str] = []
         try:
             async for chunk in session.stream_chat(prompt):
+                # Checked per chunk, so cancelling stops a long reply partway
+                # instead of waiting for the model to finish talking.
+                if should_continue:
+                    should_continue()
                 chunks.append(chunk)
                 if on_chunk:
                     on_chunk(profile_name or "MagAgent", chunk)
@@ -86,6 +94,7 @@ class WebChatRunner:
         prompt: str,
         *,
         on_chunk: ChunkCallback | None = None,
+        should_continue: CancelCheck | None = None,
     ) -> list[dict[str, Any]]:
         history = [
             {"role": item.get("role", ""), "content": item.get("content", "")}
@@ -102,11 +111,16 @@ class WebChatRunner:
                         history=history,
                         profile_name=profiles[0] if profiles else "",
                         on_chunk=on_chunk,
+                        should_continue=should_continue,
                     )
                 ]
 
             participant_results: list[dict[str, Any]] = []
             for profile in profiles:
+                # A group turn runs one participant at a time; cancelling
+                # between them stops the rest of the round.
+                if should_continue:
+                    should_continue()
                 participant_prompt = (
                     f"You are @{profile} in a bounded group chat. Respond independently and concisely "
                     f"to the user's request. Do not attempt to invoke other agents.\n\n{prompt}"
@@ -117,6 +131,7 @@ class WebChatRunner:
                         history=history,
                         profile_name=profile,
                         on_chunk=on_chunk,
+                        should_continue=should_continue,
                     )
                 )
             coordinator = str(conversation.get("coordinator") or profiles[0])
@@ -130,6 +145,7 @@ class WebChatRunner:
                 history=history,
                 profile_name=coordinator,
                 on_chunk=on_chunk,
+                should_continue=should_continue,
             )
             synthesis["speaker"] = f"{coordinator} · synthesis"
             return [*participant_results, synthesis]

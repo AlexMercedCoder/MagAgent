@@ -186,3 +186,208 @@ def test_live_ui_auth_csrf_and_conversation_api(tmp_path: Path, monkeypatch) -> 
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_a_turn_survives_the_browser_that_asked_for_it(tmp_path: Path, monkeypatch) -> None:
+    """The turn used to run on the request thread that started it.
+
+    Close the tab mid-reply and the work died with the socket: the assistant's
+    answer was never recorded and the conversation kept a question with no
+    response. A turn is now a run, and it finishes whether or not anyone is
+    watching.
+    """
+    import threading
+    import time
+
+    from magent import ui as ui_module
+
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("ui-run-test")
+
+    replied = threading.Event()
+
+    class SlowRunner:
+        """Stands in for the model: slow enough to abandon mid-reply."""
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def run(self, _conversation, _prompt, *, on_chunk=None, should_continue=None):
+            for piece in ("thinking", " ", "done"):
+                if should_continue:
+                    should_continue()
+                if on_chunk:
+                    on_chunk("MagAgent", piece)
+                time.sleep(0.3)
+            replied.set()
+            return [{"content": "thinking done", "speaker": "MagAgent"}]
+
+    import magent.web_chat as web_chat
+
+    monkeypatch.setattr(web_chat, "WebChatRunner", SlowRunner)
+
+    result = ui_module.serve_ui(
+        store, project=tmp_path, username="ui-run-test", port=0, open_browser=False
+    )
+    if not result["ok"] and "Operation not permitted" in result.get("error", ""):
+        pytest.skip("local socket binding is disabled by the test sandbox")
+    server = result["server"]
+    port = server.server_address[1]
+    token = result["token"]
+    write_headers = {"Content-Type": "application/json", "X-Magent-CSRF": token}
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        connection.request(
+            "POST",
+            f"/api/conversations?token={token}",
+            body='{"kind":"chat","title":"Durable"}',
+            headers=write_headers,
+        )
+        conversation_id = json.loads(connection.getresponse().read())["conversation"]["id"]
+
+        # Start the turn, read one line, then hang up mid-reply.
+        talker = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        talker.request(
+            "POST",
+            f"/api/conversations/message?token={token}",
+            body=json.dumps({"conversation_id": conversation_id, "content": "hello"}),
+            headers=write_headers,
+        )
+        stream = talker.getresponse()
+        first = json.loads(stream.fp.readline())
+        assert first["type"] == "run"
+        run_id = first["id"]
+        talker.close()
+
+        # The abandoned turn must still finish and record its answer.
+        assert replied.wait(10), "the run died with the socket that started it"
+
+        listing = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        deadline = time.monotonic() + 10
+        messages: list[dict] = []
+        while time.monotonic() < deadline:
+            listing.request("GET", f"/api/conversations?token={token}")
+            found = json.loads(listing.getresponse().read())["conversations"]
+            messages = next(
+                (item["messages"] for item in found if item["id"] == conversation_id), []
+            )
+            if any(item["role"] == "assistant" for item in messages):
+                break
+            time.sleep(0.1)
+
+        assert [item["content"] for item in messages if item["role"] == "assistant"] == [
+            "thinking done"
+        ]
+
+        # And the run is still reattachable by conversation, with its whole log.
+        # The reply is written just before the run marks itself done, so settle.
+        deadline = time.monotonic() + 10
+        snapshot = {}
+        while time.monotonic() < deadline:
+            listing.request("GET", f"/api/runs?conversation_id={conversation_id}&token={token}")
+            snapshot = json.loads(listing.getresponse().read())["run"]
+            if snapshot["state"] != "running":
+                break
+            time.sleep(0.1)
+        assert snapshot["id"] == run_id
+        assert snapshot["state"] == "succeeded"
+
+        listing.request("GET", f"/api/runs/events?id={run_id}&after=0&token={token}")
+        replay = [json.loads(line) for line in listing.getresponse().read().splitlines() if line]
+        assert "".join(e["content"] for e in replay if e["type"] == "chunk") == "thinking done"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_running_turn_can_be_cancelled_over_http(tmp_path: Path, monkeypatch) -> None:
+    """Stop used to abort only the socket, leaving the turn spending tokens."""
+    import threading
+    import time
+
+    from magent import ui as ui_module
+
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("ui-cancel-test")
+    started = threading.Event()
+
+    class Endless:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def run(self, _conversation, _prompt, *, on_chunk=None, should_continue=None):
+            started.set()
+            if on_chunk:
+                on_chunk("MagAgent", "partial answer")
+            for _ in range(3000):
+                if should_continue:
+                    should_continue()
+                time.sleep(0.01)
+            return [{"content": "never", "speaker": "MagAgent"}]
+
+    import magent.web_chat as web_chat
+
+    monkeypatch.setattr(web_chat, "WebChatRunner", Endless)
+
+    result = ui_module.serve_ui(
+        store, project=tmp_path, username="ui-run-test", port=0, open_browser=False
+    )
+    if not result["ok"] and "Operation not permitted" in result.get("error", ""):
+        pytest.skip("local socket binding is disabled by the test sandbox")
+    server = result["server"]
+    port = server.server_address[1]
+    token = result["token"]
+    write_headers = {"Content-Type": "application/json", "X-Magent-CSRF": token}
+
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        connection.request(
+            "POST",
+            f"/api/conversations?token={token}",
+            body='{"kind":"chat","title":"Cancel"}',
+            headers=write_headers,
+        )
+        conversation_id = json.loads(connection.getresponse().read())["conversation"]["id"]
+
+        talker = http.client.HTTPConnection("127.0.0.1", port, timeout=20)
+        talker.request(
+            "POST",
+            f"/api/conversations/message?token={token}",
+            body=json.dumps({"conversation_id": conversation_id, "content": "go"}),
+            headers=write_headers,
+        )
+        stream = talker.getresponse()
+        run_id = json.loads(stream.fp.readline())["id"]
+        assert started.wait(10)
+
+        canceller = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+        canceller.request(
+            "POST",
+            f"/api/runs/cancel?token={token}",
+            body=json.dumps({"id": run_id}),
+            headers=write_headers,
+        )
+        assert json.loads(canceller.getresponse().read())["ok"] is True
+
+        # The stream must end promptly, not wait out the turn.
+        asked = time.monotonic()
+        tail = [json.loads(line) for line in stream.read().splitlines() if line]
+        assert time.monotonic() - asked < 15
+        assert tail[-1]["state"] == "cancelled"
+        talker.close()
+
+        # A cancelled turn leaves a trace, or the transcript shows a question
+        # with no visible outcome.
+        canceller.request("GET", f"/api/conversations?token={token}")
+        found = json.loads(canceller.getresponse().read())["conversations"]
+        messages = next(item["messages"] for item in found if item["id"] == conversation_id)
+        cancelled = [item for item in messages if item.get("status") == "cancelled"]
+        assert cancelled
+        # Whatever was already said is kept. Watching text appear and then
+        # vanish makes cancelling look like it erased the answer.
+        assert "partial answer" in cancelled[0]["content"]
+        assert "cancelled" in cancelled[0]["content"]
+    finally:
+        server.shutdown()
+        server.server_close()

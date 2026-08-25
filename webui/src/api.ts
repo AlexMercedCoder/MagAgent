@@ -1,4 +1,4 @@
-import type { ChatEvent } from "./types";
+import type { ChatEvent, RunSnapshot } from "./types";
 
 /**
  * Client for the local Web UI API.
@@ -117,19 +117,17 @@ export async function post<T>(path: string, body?: unknown): Promise<T> {
  * Stream a chat turn. The server writes newline-delimited JSON onto the POST
  * response body; each complete line is one event.
  */
-export async function streamMessage(
-  conversationId: string,
-  content: string,
+/**
+ * Read a run's event stream to completion.
+ *
+ * The server streams a run's append-only log from a cursor, so losing the
+ * socket loses the view of a turn and not the turn itself: `reattachRun` picks
+ * the same log back up from where this stopped.
+ */
+async function readRunStream(
+  response: Response,
   onEvent: (event: ChatEvent) => void,
-  signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch("/api/conversations/message", {
-    method: "POST",
-    headers: headers(true),
-    credentials: "same-origin",
-    body: JSON.stringify({ conversation_id: conversationId, content }),
-    signal,
-  });
   if (!response.ok) throw await responseError(response);
 
   const reader = response.body?.getReader();
@@ -153,4 +151,46 @@ export async function streamMessage(
     }
     if (done) break;
   }
+}
+
+export async function streamMessage(
+  conversationId: string,
+  content: string,
+  onEvent: (event: ChatEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch("/api/conversations/message", {
+    method: "POST",
+    headers: headers(true),
+    credentials: "same-origin",
+    body: JSON.stringify({ conversation_id: conversationId, content }),
+    signal,
+  });
+  await readRunStream(response, onEvent);
+}
+
+/** The run this conversation last started, if the server still holds it. */
+export async function activeRun(conversationId: string): Promise<RunSnapshot | null> {
+  const found = await request<{ run: RunSnapshot | null }>(
+    `/api/runs?conversation_id=${encodeURIComponent(conversationId)}`,
+  );
+  return found.run;
+}
+
+/** Resume watching a run from a cursor, replaying whatever was missed. */
+export async function reattachRun(
+  runId: string,
+  after: number,
+  onEvent: (event: ChatEvent) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `/api/runs/events?id=${encodeURIComponent(runId)}&after=${after}`,
+    { headers: headers(false), credentials: "same-origin", signal },
+  );
+  await readRunStream(response, onEvent);
+}
+
+export async function cancelRun(runId: string): Promise<{ ok: boolean; state?: string; note?: string }> {
+  return post("/api/runs/cancel", { id: runId });
 }

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Made a Web UI turn survive the browser that asked for it. A turn ran on the HTTP request thread
+  that started it, so closing the tab mid-reply killed the work: the answer was never recorded and
+  the conversation kept a question with no response. A turn is now a run on its own thread with an
+  append-only event log, and it finishes whether or not anyone is watching.
+- Added reattachment. Streams read the log from a cursor and `/api/runs?conversation_id=…` finds the
+  run a reloading tab lost, so reconnecting replays what was missed instead of losing it. Only a
+  still-running run is resumed; a finished one already wrote its reply, and replaying it would show
+  the answer twice.
+- Made Stop actually stop. It cancelled only the socket, leaving the turn running on the server and
+  still spending tokens; it now cancels the run, which is checked between chunks and between group
+  participants so a long reply is interrupted partway. Whatever was already said is kept and marked
+  cancelled rather than vanishing from the screen.
+
 - Added a Memory view to the Web UI. MagAgent's memory is a linked graph of notes the agent wrote
   about you and your projects and it shapes every reply, but the browser could only see the
   promotion inbox, so the memory already in force was invisible. The view reports graph size, link

@@ -90,7 +90,22 @@ export type Bootstrap = {
 };
 
 /** Streamed chat events, one JSON object per line. */
+export type RunState = "running" | "succeeded" | "failed" | "cancelled";
+
+export type RunSnapshot = {
+  id: string;
+  conversation_id: string;
+  state: RunState;
+  cursor: number;
+  started_at?: number;
+  finished_at?: number | null;
+  error?: string;
+};
+
 export type ChatEvent =
+  | ({ type: "run" } & RunSnapshot)
   | { type: "chunk"; speaker: string; content: string }
   | { type: "done"; conversation: Conversation }
+  | { type: "conversation"; conversation: Conversation }
+  | { type: "cancelled" }
   | { type: "error"; error: string; kind?: string; action?: string; detail?: string };
