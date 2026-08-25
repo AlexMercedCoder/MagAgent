@@ -116,7 +116,17 @@
   <dialog id="graphCardDialog"><form method="dialog" id="graphCardForm"><div class="dialog-head"><div><div class="eyebrow">GRAPH CARD</div><h2 id="graphCardHeading">Add a task</h2></div><button class="icon-button" value="cancel" formnovalidate>×</button></div><label>Card ID<input id="graphCardId" required pattern="[A-Za-z][A-Za-z0-9_-]{0,127}" placeholder="implement_feature"></label><label>Title<input id="graphCardTitle" required maxlength="180" placeholder="Implement the feature"></label><label>Instructions<textarea id="graphCardDescription" required rows="5" placeholder="Describe the outcome, constraints, and evidence expected from the agent…"></textarea></label><label>Profile<select id="graphCardProfile"><option value="">Run default</option></select></label><fieldset class="dependency-picker"><legend>Dependencies</legend><p>This card waits until every selected card is done.</p><div id="graphDependencyPicker"></div></fieldset><input type="hidden" id="graphCardOriginalId"><div class="dialog-actions graph-card-dialog-actions"><button class="danger-button hidden" type="button" id="deleteGraphCardButton">Delete card</button><span></span><button class="secondary-button" value="cancel" formnovalidate>Cancel</button><button class="primary-button" type="submit" value="default">Save card</button></div></form></dialog>
   <div class="toast" id="toast" role="status"></div>
   <script src="/assets/markdown.js" defer></script>
+  <script src="/assets/shortcuts.js" defer></script>
 <script src="/assets/app.js" defer></script>
   <script src="/assets/ui-polish.js" defer></script>
+  <dialog id="shortcutsSheet" class="shortcuts-sheet">
+    <form method="dialog">
+      <div class="dialog-head">
+        <div><div class="eyebrow">KEYBOARD</div><h2>Shortcuts</h2></div>
+        <button class="icon-button" value="cancel" aria-label="Close" formnovalidate>×</button>
+      </div>
+      <div class="shortcuts-body"></div>
+    </form>
+  </dialog>
 </body>
 </html>
