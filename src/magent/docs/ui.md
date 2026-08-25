@@ -28,6 +28,12 @@ Markdown rendering treats model output as untrusted, because it can quote a host
 
 The transcript is an `aria-live` region, so streaming output is announced to assistive technology instead of appearing silently.
 
+The UI follows the operating system's light or dark setting, and the control at the foot of the rail cycles between matching the system, forcing light, and forcing dark. The choice is stored per browser and applied before first paint.
+
+Keyboard shortcuts are listed by pressing `/`. Cmd or Ctrl with `K` focuses the message box, with `F` searches conversations, with `Shift+N` starts a chat, and with `1` through `6` switches views. An unmodified key never fires while a text field has focus, so typing `/` in the composer inserts a slash.
+
+When a turn fails, the transcript names the state and the recovery step, rather than printing the raw exception. A missing credential, a rate limit, an unreachable provider, a timeout, a permission denial, a budget or context overflow, an unavailable model, a cancellation, and a profile problem are each recognised; the original text is kept alongside for diagnosis.
+
 Group participants run with isolated profile authority. A profile can narrow the globally configured tools and permission posture, but cannot widen them.
 
 ## Graph Kanban

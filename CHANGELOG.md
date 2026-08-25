@@ -13,6 +13,14 @@
   rendered the live server handle as part of its JSON result.
 - Added an `aria-live` transcript, a visible focus ring, and a `prefers-reduced-motion` query to the
   Web UI; streaming output was previously silent to assistive technology.
+- Added light and dark themes to the Web UI. All 115 colours were literals, so the OS setting had no
+  effect; they are now tokens, with a rail control cycling system, light, and dark. Fixed the
+  composer, which set no background or colour and so rendered as a white box in dark mode.
+- Added a keyboard model: focus the composer, search, start a chat, switch any of the six views,
+  close dialogs, and a shortcuts sheet on `/`. Unmodified keys never fire while typing.
+- Replaced raw exception text in the transcript with named failures that state the recovery step,
+  covering credentials, rate limits, timeouts, unreachable providers, permission denials, budget
+  overflow, unavailable models, cancellation, and profile problems.
 
 ## 0.97.0 (2026-08-22)
 

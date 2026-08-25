@@ -405,14 +405,20 @@ def serve_ui(
                             {"type": "done", "conversation": conversations.get(conversation_id)}
                         )
                     except Exception as exc:
+                        # A raw repr in a chat bubble tells the user nothing they
+                        # can act on; name the state and the recovery step.
+                        from magent.webui_errors import describe
+
+                        friendly = describe(exc)
                         conversations.append_message(
                             conversation_id,
                             role="assistant",
-                            content=str(exc),
+                            content=friendly.as_message(),
                             speaker="MagAgent",
                             status="error",
+                            metadata={"error_kind": friendly.kind, "detail": friendly.detail},
                         )
-                        self._stream_event({"type": "error", "error": str(exc)})
+                        self._stream_event({"type": "error", **friendly.as_event()})
                     finally:
                         turn_lock.release()
                 elif parsed.path == "/api/profile":
