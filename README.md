@@ -526,6 +526,11 @@ dependencies. MagAgent saves and strictly validates the native graph before enab
 moves cards through **To do**, **Current work**, and **Done**, retaining a success or failure
 summary for every completed card.
 
+Assistant replies render as markdown: headings, lists, blockquotes, and fenced code blocks with a
+copy button. Model output is treated as untrusted because it can quote a hostile file, a scraped
+page, or a tool result, so embedded HTML stays visible text rather than becoming elements, and only
+`http`, `https`, `mailto`, and same-document links are followed.
+
 The server remains loopback-only and uses a per-launch token plus CSRF protection. See
 [`magent docs show ui`](src/magent/docs/ui.md) for behavior and API details.
 

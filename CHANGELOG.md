@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- Rendered assistant markdown in the local Web UI: headings, lists, blockquotes, rules, inline and
+  fenced code with a copy button, emphasis, and links. Replies previously showed their own `**`
+  markers and backticks because content was escaped straight into a text node.
+- Treated model output as untrusted in that renderer. Text is escaped before any markup is
+  introduced, raw HTML never becomes elements, and `javascript:` and `data:` URLs never become
+  anchors. Covered by Node-backed formatting and injection tests.
+- Fixed `magent dashboard --serve`, which bound its socket and then aborted with
+  `TypeError: Object of type ThreadingHTTPServer is not JSON serializable` because the command
+  rendered the live server handle as part of its JSON result.
+- Added an `aria-live` transcript, a visible focus ring, and a `prefers-reduced-motion` query to the
+  Web UI; streaming output was previously silent to assistive technology.
+
 ## 0.97.0 (2026-08-22)
 
 - Rebuilt `magent ui` as a bundled local chat workspace with durable traditional,

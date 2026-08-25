@@ -22,6 +22,11 @@ The Chats view supports durable traditional, bot, and group conversations:
 - an explicit coordinator that synthesizes group responses
 - streamed response text with speaker attribution
 - persisted local histories that survive UI restarts
+- assistant replies rendered as markdown, with a copy button on fenced code blocks
+
+Markdown rendering treats model output as untrusted, because it can quote a hostile file, a scraped page, or a tool result. Every text run is escaped before any markup is introduced, raw HTML is never parsed into elements, and only `http`, `https`, `mailto`, and same-document links become anchors; a `javascript:` or `data:` URL renders as plain text. Your own messages are shown literally, exactly as typed.
+
+The transcript is an `aria-live` region, so streaming output is announced to assistive technology instead of appearing silently.
 
 Group participants run with isolated profile authority. A profile can narrow the globally configured tools and permission posture, but cannot widen them.
 
@@ -124,6 +129,6 @@ Desktop clients such as Mag Command Center should prefer the machine-readable CL
 
 ## Relationship To `magent dashboard`
 
-`magent dashboard` exports a static HTML workbench snapshot. `magent dashboard --serve` serves that snapshot on localhost.
+`magent dashboard` exports a static HTML workbench snapshot. `magent dashboard --serve` serves that snapshot on localhost, loopback-only and behind a per-launch token, and blocks until interrupted.
 
 `magent ui` is the interactive local chat and operations workspace. Use it for ongoing conversations, profile-backed bots, bounded group chats, guided settings, and live operational inspection.
