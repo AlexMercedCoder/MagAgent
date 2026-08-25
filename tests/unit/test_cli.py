@@ -703,6 +703,46 @@ def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -
     assert "cli-test" in result.output
 
 
+def test_cli_dashboard_serve_does_not_print_the_server_handle(tmp_path: Path, monkeypatch) -> None:
+    """`serve_dashboard` hands back the live server; printing it used to abort the command.
+
+    The real return value carries a `ThreadingHTTPServer` under `server`, which is not
+    JSON serializable. Rendering the whole dict raised `TypeError` after the socket was
+    already bound, so the server started and the process died immediately afterwards.
+    """
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    store = WorkbenchStore("cli-test")
+    monkeypatch.setattr(cli_main, "_store", lambda: store)
+
+    class NotSerializable:
+        """Stands in for the bound ThreadingHTTPServer."""
+
+    sentinel = NotSerializable()
+    blocked_on: list[object] = []
+
+    # `dashboard_cmd` imports from magent.workbench at call time, so patch it there.
+    monkeypatch.setattr(
+        workbench,
+        "serve_dashboard",
+        lambda store, port, open_browser: {
+            "ok": True,
+            "url": f"http://127.0.0.1:{port}/?token=abc",
+            "path": str(tmp_path / "dashboard.html"),
+            "token": "abc",
+            "server": sentinel,
+        },
+    )
+    monkeypatch.setattr(cli_main, "_block_until_interrupt", blocked_on.append)
+
+    result = runner.invoke(cli_main.app, ["dashboard", "--serve", "--port", "9998"])
+
+    assert result.exit_code == 0, result.output
+    assert "http://127.0.0.1:9998/?token=abc" in result.output
+    # The handle is used, never rendered.
+    assert blocked_on == [sentinel]
+    assert "NotSerializable" not in result.output
+
+
 def test_cli_context_map_and_memory_promote(tmp_path: Path, monkeypatch) -> None:
     project = tmp_path / "project"
     project.mkdir()

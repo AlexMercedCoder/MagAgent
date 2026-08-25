@@ -3728,7 +3728,9 @@ def dashboard_cmd(
 
     if serve:
         result = serve_dashboard(_store(), port=port, open_browser=open_browser)
-        console.print_json(data=result)
+        # `server` is the live ThreadingHTTPServer and is not JSON serializable;
+        # print everything else and keep the handle for the blocking call below.
+        console.print_json(data={key: value for key, value in result.items() if key != "server"})
         if not result.get("ok"):
             raise typer.Exit(1)
         console.print("[dim]Press Ctrl+C to stop.[/dim]")

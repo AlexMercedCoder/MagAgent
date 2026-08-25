@@ -58,7 +58,7 @@
       </header>
 
       <section class="view active" id="chatView">
-        <div class="messages" id="messages"></div>
+        <div class="messages" id="messages" role="log" aria-label="Conversation transcript" aria-live="polite" aria-relevant="additions text"></div>
         <div class="composer-wrap">
           <div class="composer">
             <textarea id="messageInput" rows="1" placeholder="Ask MagAgent anything…"></textarea>
@@ -113,7 +113,8 @@
   <dialog id="profileDialog"><form method="dialog" id="profileForm"><div class="dialog-head"><div><div class="eyebrow">OPEN AGENT PROFILE</div><h2>Create a specialist</h2></div><button class="icon-button" value="cancel" formnovalidate>×</button></div><label>Name<input id="profileName" required pattern="[a-z0-9][a-z0-9_-]*" placeholder="release-reviewer"></label><label>Description<input id="profileDescription" required placeholder="Reviews release readiness and evidence"></label><label>Instructions<textarea id="profileInstructions" required rows="4" placeholder="Act as a careful release reviewer…"></textarea></label><div class="dialog-row"><label>Permission mode<select id="profilePermission"><option>paranoid</option><option selected>balanced</option><option>silent</option></select></label><label>Scope<select id="profileScope"><option value="project">Project</option><option value="user">User</option><option value="portable">Portable</option></select></label></div><div class="dialog-actions"><button class="secondary-button" value="cancel" formnovalidate>Cancel</button><button class="primary-button" type="submit" value="default">Validate &amp; create</button></div></form></dialog>
   <dialog id="graphCardDialog"><form method="dialog" id="graphCardForm"><div class="dialog-head"><div><div class="eyebrow">GRAPH CARD</div><h2 id="graphCardHeading">Add a task</h2></div><button class="icon-button" value="cancel" formnovalidate>×</button></div><label>Card ID<input id="graphCardId" required pattern="[A-Za-z][A-Za-z0-9_-]{0,127}" placeholder="implement_feature"></label><label>Title<input id="graphCardTitle" required maxlength="180" placeholder="Implement the feature"></label><label>Instructions<textarea id="graphCardDescription" required rows="5" placeholder="Describe the outcome, constraints, and evidence expected from the agent…"></textarea></label><label>Profile<select id="graphCardProfile"><option value="">Run default</option></select></label><fieldset class="dependency-picker"><legend>Dependencies</legend><p>This card waits until every selected card is done.</p><div id="graphDependencyPicker"></div></fieldset><input type="hidden" id="graphCardOriginalId"><div class="dialog-actions graph-card-dialog-actions"><button class="danger-button hidden" type="button" id="deleteGraphCardButton">Delete card</button><span></span><button class="secondary-button" value="cancel" formnovalidate>Cancel</button><button class="primary-button" type="submit" value="default">Save card</button></div></form></dialog>
   <div class="toast" id="toast" role="status"></div>
-  <script src="/assets/app.js" defer></script>
+  <script src="/assets/markdown.js" defer></script>
+<script src="/assets/app.js" defer></script>
   <script src="/assets/ui-polish.js" defer></script>
 </body>
 </html>
