@@ -490,3 +490,55 @@ textarea,input,select{color:var(--c-18201d)}
 .shortcuts-sheet li{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:13px}
 .shortcuts-sheet li:last-child{border-bottom:0}
 .shortcuts-sheet kbd{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--c-ccd5d0);background:var(--c-f2f5f2);border-radius:5px;padding:3px 7px;white-space:nowrap}
+
+/* --- Ported shell adjustments --------------------------------------------
+   The stylesheet predates the TypeScript port and assumed markup that the
+   components arrange slightly differently. These rules reconcile the two
+   rather than reshaping components to fit legacy selectors. */
+
+/* `.view.active{display:flex}` inherits row direction, which put the composer
+   beside the transcript instead of beneath it. */
+.view.active{flex-direction:column;flex:1;min-height:0}
+.workspace{min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.workspace .page{flex:1;min-height:0;overflow:auto}
+.chat-view .messages{flex:1;min-height:0;overflow:auto}
+
+/* Slim header strip above the active view. */
+.workspace-head{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--line);flex:none}
+.workspace-title{flex:1;min-width:0;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sidebar-open{display:none}
+
+/* Conversation rows: avatar beside a stacked title and subtitle. */
+.conversation-item{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:center;text-align:left;width:100%}
+.conversation-item b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conversation-item small{display:block;color:var(--muted);font-size:10.5px;margin-top:2px}
+
+/* Context panel: labelled rows, not run-together text. */
+.context-identity{display:grid;justify-items:center;gap:4px;padding:18px 0 8px;text-align:center}
+.context-identity strong{display:block;font-size:15px}
+.context-identity span{display:block;color:var(--muted);font-size:11.5px}
+.context-field{padding:14px 0;border-top:1px solid var(--line)}
+.context-field .eyebrow{display:block;margin-bottom:6px}
+.context-value{font-size:12.5px;overflow-wrap:anywhere}
+.context-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:12.5px}
+.context-note{color:var(--muted);font-size:11.5px;line-height:1.55;margin-top:10px}
+
+/* New-conversation split menu. */
+.new-actions{position:relative}
+.new-menu{position:absolute;z-index:20;top:calc(100% + 6px);right:0;min-width:190px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:5px;display:grid;gap:2px}
+.new-menu button{width:100%;text-align:left;border:0;background:transparent;color:inherit;border-radius:7px;padding:8px 10px;font-size:12px;cursor:pointer}
+.new-menu button:hover:not(:disabled){background:var(--accent-2)}
+.new-menu button:disabled{opacity:.45;cursor:default}
+
+/* Below 980px the sidebar becomes a drawer and the context panel folds away. */
+@media(max-width:1180px){
+  .app-shell{grid-template-columns:76px 292px minmax(0,1fr)}
+  .context-panel{display:none}
+}
+@media(max-width:980px){
+  .app-shell{grid-template-columns:68px minmax(0,1fr)}
+  .sidebar-open{display:grid;place-items:center}
+  .sidebar{position:fixed;z-index:40;inset:0 auto 0 68px;width:min(86vw,300px);transform:translateX(-108%);transition:transform .18s ease;box-shadow:14px 0 40px rgba(16,24,20,.28)}
+  .sidebar.open{transform:none}
+}
+@media(prefers-reduced-motion:reduce){.sidebar{transition:none}}

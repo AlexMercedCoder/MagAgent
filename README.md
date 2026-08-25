@@ -534,6 +534,11 @@ page, or a tool result, so embedded HTML stays visible text rather than becoming
 The server remains loopback-only and uses a per-launch token plus CSRF protection. See
 [`magent docs show ui`](src/magent/docs/ui.md) for behavior and API details.
 
+The interface is a React and TypeScript application under `webui/`, built by Vite into
+`src/magent/webui/static/`. That bundle is committed and ships inside the wheel, so installed users
+never need Node. **Any change under `webui/src` must be rebuilt and committed in the same change**;
+the `Web UI` workflow rebuilds and fails when the shipped assets no longer match their source.
+
 ---
 
 ## SQLite Local Databases

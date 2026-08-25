@@ -46,6 +46,9 @@ from magent.workbench import (
 from magent.workbench_cockpit import cockpit_state
 
 WEBUI_DIR = Path(__file__).with_name("webui")
+# Vite writes the built bundle here. It is committed and ships inside the
+# wheel, so installed users never need Node.
+STATIC_DIR = WEBUI_DIR / "static"
 MAX_REQUEST_BYTES = 128 * 1024
 
 
@@ -101,7 +104,7 @@ def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | N
 
 def render_ui_html(token: str = "") -> str:
     """Return the packaged shell. ``token`` remains a compatibility argument."""
-    return (WEBUI_DIR / "index.html").read_text(encoding="utf-8")
+    return (STATIC_DIR / "index.html").read_text(encoding="utf-8")
 
 
 def serve_ui(
@@ -126,6 +129,8 @@ def serve_ui(
     graph_runs = GraphRunManager(store, username, root) if username else None
 
     # Endpoints that mutate state or spend money. GET must not reach these.
+    # Paths whose POST mutates state: they demand the CSRF header, and a bare
+    # GET is refused so a cross-origin <img> or <link> cannot trigger them.
     mutating_paths = {
         "/api/memory/promote",
         "/api/provider/smoke",
@@ -140,6 +145,12 @@ def serve_ui(
         "/api/graphs/save",
         "/api/settings",
     }
+
+    # Dual-purpose paths: POST mutates and still needs CSRF, but GET is a plain
+    # read and must be allowed. Only paths with a real GET branch below belong
+    # here; /api/profiles and /api/settings are POST-only and must keep
+    # refusing GET, or the request would fall into their write handlers.
+    readable_paths = {"/api/conversations"}
 
     class Handler(BaseHTTPRequestHandler):
         def _authorized(self, parsed: urllib.parse.ParseResult) -> bool:
@@ -198,9 +209,13 @@ def serve_ui(
                 raise ValueError("JSON body must be an object")
             return data
 
+        def _root_asset(self, name: str) -> None:
+            self._serve_file(STATIC_DIR / Path(name).name)
+
         def _asset(self, name: str) -> None:
-            safe_name = Path(name).name
-            path = WEBUI_DIR / safe_name
+            self._serve_file(STATIC_DIR / "assets" / Path(name).name)
+
+        def _serve_file(self, path: Path) -> None:
             if not path.is_file():
                 self._json({"ok": False, "error": "not found"}, status=404)
                 return
@@ -229,7 +244,7 @@ def serve_ui(
             if not self._authorized(parsed):
                 self._json({"ok": False, "error": "unauthorized"}, status=403)
                 return
-            if method == "GET" and parsed.path in mutating_paths:
+            if method == "GET" and parsed.path in mutating_paths - readable_paths:
                 self._json({"ok": False, "error": "use POST for this endpoint"}, status=405)
                 return
             if method == "POST" and parsed.path in mutating_paths:
@@ -250,6 +265,10 @@ def serve_ui(
                     self.wfile.write(payload)
                 elif parsed.path.startswith("/assets/"):
                     self._asset(parsed.path.removeprefix("/assets/"))
+                elif parsed.path == "/theme-init.js":
+                    # Sits at the bundle root, not under /assets/, because it
+                    # must run before the module bundle parses.
+                    self._root_asset("theme-init.js")
                 elif parsed.path == "/api/bootstrap":
                     from magent.desktop_api import agent_profiles, config_schema
 

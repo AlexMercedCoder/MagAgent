@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import http.client
+import json
+import re
 from pathlib import Path
 
 import pytest
 
 import magent.ui as ui_module
 from magent import workbench
-from magent.ui import render_ui_html, serve_ui, ui_state
+from magent.ui import STATIC_DIR, render_ui_html, serve_ui, ui_state
 from magent.workbench import WorkbenchStore
 
 
@@ -49,20 +51,32 @@ def test_ui_state_does_not_execute_release_check(tmp_path: Path, monkeypatch) ->
     assert state["cockpit"]["release_check"]["command"] == "magent release check"
 
 
-def test_render_ui_html_contains_local_endpoints() -> None:
+def test_render_ui_html_is_the_spa_shell() -> None:
+    """The shell boots the bundle; the views themselves live in the bundle.
+
+    Before the TypeScript port the markup for every view was written by hand
+    into this file, so it could be asserted directly. It is now a Vite entry
+    point, and what matters is that it mounts and references built assets.
+    """
     html = render_ui_html()
 
-    assert "MagAgent" in html
-    assert "New chat" in html
-    assert "Group conversation" in html
-    assert "Graph Kanban" in html
-    assert "Blank graph" in html
-    assert "Generate with AI" in html
-    assert "Add card" in html
-    assert "Profiles" in html
-    assert "Settings" in html
-    assert "Operations" in html
-    assert "/assets/app.js" in html
+    assert "<title>MagAgent</title>" in html
+    assert 'id="root"' in html
+    # Hashed, so a stale or missing build shows up as a broken reference.
+    assert re.search(r'src="/assets/index-[\w-]+\.js"', html)
+    assert re.search(r'href="/assets/index-[\w-]+\.css"', html)
+    # The theme stamp must stay a separate file: the CSP forbids inline script.
+    assert 'src="/theme-init.js"' in html
+    assert "<script>" not in html
+
+
+def test_bundle_carries_every_view() -> None:
+    """A build that dropped a view would still serve a valid shell."""
+    bundle = next((STATIC_DIR / "assets").glob("index-*.js")).read_text(encoding="utf-8")
+
+    for heading in ("Graph Kanban", "Your bots", "Operations", "Profiles", "Settings"):
+        assert heading in bundle, heading
+
 
 
 def test_ui_action_helpers_use_domain_modules(tmp_path: Path, monkeypatch) -> None:
@@ -138,8 +152,19 @@ def test_live_ui_auth_csrf_and_conversation_api(tmp_path: Path, monkeypatch) -> 
         connection.request("GET", "/api/bootstrap")
         assert connection.getresponse().status == 403
 
+        # Listing conversations is a safe read and must succeed. The GET branch
+        # for this path existed but was unreachable: the blanket "mutating
+        # paths refuse GET" guard caught it too, so every list request 405'd.
         connection.request("GET", f"/api/conversations?token={token}")
-        assert connection.getresponse().status == 405
+        listing = connection.getresponse()
+        assert listing.status == 200
+        assert json.loads(listing.read())["ok"] is True
+
+        # Paths that only have a write handler must still refuse GET, or the
+        # request would fall through into that handler.
+        for write_only in ("/api/settings", "/api/profiles", "/api/graphs/run"):
+            connection.request("GET", f"{write_only}?token={token}")
+            assert connection.getresponse().status == 405, write_only
 
         connection.request(
             "POST",

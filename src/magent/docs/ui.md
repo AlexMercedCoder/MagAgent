@@ -133,6 +133,26 @@ Desktop clients such as Mag Command Center should prefer the machine-readable CL
 - `magent plugin enable <name>`
 - `magent plugin disable <name>`
 
+## Building The Interface
+
+The UI is a React and TypeScript application in `webui/`, compiled by Vite into
+`src/magent/webui/static/`. The compiled bundle is committed and packaged in the wheel so installed
+users never need Node.
+
+```bash
+cd webui
+npm ci            # exact, lockfile-pinned; `npm install` may drift the pins
+npx vitest run
+npm run build     # writes ../src/magent/webui/static
+```
+
+Rebuild and commit the output in the same change as any source edit, or the shipped UI silently
+predates its own code. The `Web UI` workflow enforces this and also starts `magent ui` against a
+temporary workspace to confirm the shell is served and the API stays token-gated.
+
+The theme stamp lives in `webui/public/theme-init.js` rather than inline, because the response
+Content-Security-Policy is `script-src 'self'` and would block an inline script.
+
 ## Relationship To `magent dashboard`
 
 `magent dashboard` exports a static HTML workbench snapshot. `magent dashboard --serve` serves that snapshot on localhost, loopback-only and behind a per-launch token, and blocks until interrupted.

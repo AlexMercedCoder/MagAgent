@@ -1,0 +1,102 @@
+name: Web UI
+
+# The Web UI bundle is built by Vite into src/magent/webui/static/, committed,
+# and shipped inside the wheel so installed users never need Node. Nothing
+# verified it before the TypeScript port, and a source edit without a rebuild
+# would publish a UI older than its own code. This makes that a failing check.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "webui/**"
+      - "src/magent/webui/**"
+      - "src/magent/ui.py"
+      - ".github/workflows/webui.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+
+      # `npm ci` refuses a lockfile that disagrees with package.json, which is
+      # what keeps the exact pins honest.
+      - name: Install pinned dependencies
+        run: npm ci
+
+      - name: Type-check and unit-test
+        run: npx vitest run
+
+      - name: Rebuild the bundle
+        run: npm run build
+
+      - name: Fail if the committed bundle is stale
+        run: |
+          if ! git diff --quiet -- ../src/magent/webui/static; then
+            echo "::error::The committed Web UI bundle does not match the current source."
+            echo "Run 'npm run build' in webui/ and commit src/magent/webui/static/."
+            git diff --stat -- ../src/magent/webui/static
+            exit 1
+          fi
+          echo "Committed bundle matches the source."
+
+  # The bundle is only useful if the server serves it. Start the real command
+  # against a temp project and assert the shell, the token gate, and the
+  # CSP-safe theme script.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MagAgent
+        run: python -m pip install -e .
+
+      - name: Serve a temp workspace and check the gate
+        run: |
+          set -euo pipefail
+          workspace="$(mktemp -d)"
+          cd "$workspace"
+          magent ui --project "$workspace" --port 7830 > serve.log 2>&1 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+
+          for _ in $(seq 1 60); do
+            grep -q '"url"' serve.log && break
+            sleep 0.5
+          done
+
+          token="$(grep -oP '"token": "\K[^"]+' serve.log | head -1)"
+          test -n "$token" || { echo "no launch token was printed"; cat serve.log; exit 1; }
+
+          shell_status="$(curl -s -o shell.html -w '%{http_code}' "http://127.0.0.1:7830/?token=$token")"
+          denied="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:7830/api/bootstrap)"
+          allowed="$(curl -s -o /dev/null -w '%{http_code}' -H "X-Magent-Token: $token" -H "X-Magent-CSRF: $token" http://127.0.0.1:7830/api/bootstrap)"
+          theme="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:7830/theme-init.js?token=$token")"
+
+          echo "shell=$shell_status denied=$denied allowed=$allowed theme=$theme"
+          test "$shell_status" = "200"
+          test "$denied" = "403"
+          test "$allowed" = "200"
+          test "$theme" = "200"
+          grep -q 'id="root"' shell.html
+          # The CSP is script-src 'self'; an inline script would be blocked.
+          ! grep -q '<script>' shell.html

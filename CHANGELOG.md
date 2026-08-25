@@ -18,6 +18,16 @@
   composer, which set no background or colour and so rendered as a white box in dark mode.
 - Added a keyboard model: focus the composer, search, start a chat, switch any of the six views,
   close dialogs, and a shortcuts sheet on `/`. Unmodified keys never fire while typing.
+- Rebuilt the local Web UI as a React and TypeScript application under `webui/`, compiled by Vite
+  into `src/magent/webui/static/`. The interface was previously 30 KB of hand-minified JavaScript
+  across six views with no build step, which could not be reviewed in a diff or tested. All six
+  views are ported; the loopback token, CSRF header, Host and Origin checks, CSP, and `no-store`
+  policy are unchanged.
+- Added a `Web UI` workflow that installs from the lockfile, runs the unit tests, rebuilds, and
+  fails when the committed bundle drifts from its source, plus a smoke job that serves a temporary
+  workspace and asserts the token gate.
+- Fixed `GET /api/conversations`, which always returned 405. The blanket "mutating paths refuse GET"
+  guard also caught the list branch, leaving it unreachable. Write-only paths still refuse GET.
 - Replaced raw exception text in the transcript with named failures that state the recovery step,
   covering credentials, rate limits, timeouts, unreachable providers, permission denials, budget
   overflow, unavailable models, cancellation, and profile problems.

@@ -87,3 +87,7 @@ Thumbs.db
 .magent/
 # Don't commit user memory graphs
 memory_backup_*.json
+
+# Web UI build tooling
+webui/node_modules/
+webui/*.tsbuildinfo
