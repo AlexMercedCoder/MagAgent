@@ -542,3 +542,27 @@ textarea,input,select{color:var(--c-18201d)}
   .sidebar.open{transform:none}
 }
 @media(prefers-reduced-motion:reduce){.sidebar{transition:none}}
+
+/* --- Graph authoring ------------------------------------------------------ */
+.graph-goal-buttons{display:flex;flex-wrap:wrap;gap:8px;align-content:start}
+.graph-draft{border:1px solid var(--c-e2c88a);background:var(--c-fdf6e3);border-radius:10px;padding:14px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.graph-draft b{display:block;font-size:13px}
+.graph-draft span{color:var(--muted);font-size:11.5px}
+.graph-draft-save{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.graph-draft-save input{border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;min-width:220px;background:var(--c-fff);color:var(--c-18201d)}
+.chip.state-running{color:var(--c-9a6b17);border-color:var(--c-e2c88a)}
+.chip.state-succeeded,.chip.state-complete{color:var(--c-1d6b4e);border-color:var(--c-76a790)}
+.chip.state-failed{color:var(--c-8a3026);border-color:var(--c-d59a8f)}
+
+/* --- Bots roster and group assembly --------------------------------------- */
+.group-bar{border:1px solid var(--c-76a790);background:var(--c-dff3e9);border-radius:10px;padding:13px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.group-bar b{display:block;font-size:13px}
+.group-bar span{color:var(--muted);font-size:11.5px}
+.group-bar-actions{display:flex;gap:7px}
+.group-hint{flex-basis:100%;color:var(--muted);font-size:11px}
+.bot-card.picked{border-color:var(--c-1d6b4e);box-shadow:0 0 0 1px var(--c-1d6b4e)}
+.bot-card-head{display:flex;align-items:start;justify-content:space-between;gap:10px}
+.bot-pick{display:flex;align-items:center;gap:6px;font:9px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+.bot-pick input{accent-color:var(--c-1d6b4e);cursor:pointer}
+.profile-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}

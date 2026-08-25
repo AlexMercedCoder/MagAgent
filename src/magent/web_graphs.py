@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from magent.agraph.authoring import model_graph_draft, node_template, preview_graph, save_graph
+from magent.agraph.document import load_graph
 from magent.agraph.execute import GraphExecutor
 from magent.agraph.plan import resolved_plan
 from magent.agraph.status import graph_status
@@ -136,6 +137,29 @@ def confined_graph_path(project: str | Path, raw_path: str) -> Path:
     if not candidate.name.lower().endswith(GRAPH_SUFFIXES):
         raise ValueError("graph must use .agraph.yaml, .agraph.yml, or .agraph.json")
     return candidate
+
+
+def read_web_graph(raw_path: str, *, project: str | Path = ".") -> dict[str, Any]:
+    """Return a saved graph's raw document, for editing or export.
+
+    The board needs the document itself, not the execution plan: adding a card
+    to a plan would lose everything the plan does not carry.
+    """
+    try:
+        path = confined_graph_path(project, raw_path)
+    except ValueError as error:
+        return {"ok": False, "error": str(error)}
+    if not path.is_file():
+        return {"ok": False, "error": f"No graph at {raw_path}"}
+    try:
+        document = dict(load_graph(path).data)
+    except Exception as error:  # noqa: BLE001 - surfaced to the client
+        return {"ok": False, "error": str(error)}
+    return {
+        "ok": True,
+        "path": str(path.relative_to(Path(project).resolve())),
+        "document": document,
+    }
 
 
 def graph_catalog(store: WorkbenchStore, project: str | Path) -> dict[str, Any]:

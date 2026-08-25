@@ -1,4 +1,8 @@
+import { useState } from "react";
 import { post } from "../api";
+
+/** The server caps a group at five participants. */
+const MAX_GROUP = 5;
 import type { Conversation, Profile } from "../types";
 
 function initials(name = "M"): string {
@@ -19,20 +23,38 @@ export function BotsView({
   refresh: () => Promise<void>;
   setActiveId: (id: string) => void;
 }) {
-  async function start(profile: Profile) {
+  const [selected, setSelected] = useState<string[]>([]);
+
+  function toggle(name: string) {
+    setSelected((current) =>
+      current.includes(name)
+        ? current.filter((item) => item !== name)
+        : current.length >= MAX_GROUP
+          ? current
+          : [...current, name],
+    );
+  }
+
+  async function open(kind: "bot" | "group", names: string[]) {
     try {
       const created = await post<{ conversation: Conversation }>("/api/conversations", {
-        kind: "bot",
-        profiles: [profile.name],
-        title: `Chat with ${profile.name}`,
+        kind,
+        profiles: names,
+        title: kind === "group" ? `Group: ${names.join(", ")}` : `Chat with ${names[0]}`,
+        // A group needs a coordinator drawn from its own participants; the
+        // first one picked synthesises the round.
+        ...(kind === "group" ? { coordinator: names[0] } : {}),
       });
       await refresh();
       setActiveId(created.conversation.id);
+      setSelected([]);
       onStart();
     } catch (problem) {
       setError((problem as Error).message);
     }
   }
+
+  const start = (profile: Profile) => open("bot", [profile.name]);
 
   return (
     <div className="page">
@@ -40,14 +62,42 @@ export function BotsView({
         <div>
           <div className="eyebrow">SPECIALISTS</div>
           <h1>Your bots</h1>
-          <p>Start a focused conversation with any Open Agent Profile.</p>
+          <p>Talk to any profile on its own, or pick several and put them in a room together.</p>
         </div>
       </div>
+      {selected.length > 0 && (
+        <div className="group-bar" role="status">
+          <div>
+            <b>{selected.length} selected</b>
+            <span>{selected.join(" · ")}</span>
+          </div>
+          <div className="group-bar-actions">
+            <button className="ghost-button" type="button" onClick={() => setSelected([])}>Clear</button>
+            <button className="primary-button" type="button" disabled={selected.length < 2}
+                    onClick={() => void open("group", selected)}>
+              Start group chat
+            </button>
+          </div>
+          {selected.length < 2 && <small className="group-hint">Pick at least two profiles for a group.</small>}
+          {selected.length === MAX_GROUP && <small className="group-hint">Five is the maximum.</small>}
+        </div>
+      )}
       {profiles.length ? (
         <div className="bot-grid">
           {profiles.map((profile) => (
-            <article className="bot-card" key={profile.name}>
-              <div className="mini-mark">{initials(profile.name)}</div>
+            <article className={`bot-card ${selected.includes(profile.name) ? "picked" : ""}`} key={profile.name}>
+              <div className="bot-card-head">
+                <div className="mini-mark">{initials(profile.name)}</div>
+                <label className="bot-pick">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(profile.name)}
+                    onChange={() => toggle(profile.name)}
+                    aria-label={`Add ${profile.name} to a group chat`}
+                  />
+                  <span>Group</span>
+                </label>
+              </div>
               <h2>@{profile.name}</h2>
               <p>{profile.description || "Profile-backed MagAgent specialist."}</p>
               <div className="chip-row">

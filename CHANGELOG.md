@@ -18,6 +18,13 @@
   composer, which set no background or colour and so rendered as a white box in dark mode.
 - Added a keyboard model: focus the composer, search, start a chat, switch any of the six views,
   close dialogs, and a shortcuts sheet on `/`. Unmodified keys never fire while typing.
+- Added profile portability to the Web UI: export an Open Agent Profile as a portable document and
+  import one from a file. Secrets never leave, runtime state and history are stripped both ways, and
+  an imported profile starts this workspace's revision history at 1. A malformed upload reports the
+  problem instead of failing the request.
+- Made the Bots view a roster: chat with one profile, or pick two to five and start a group.
+- Reworked the Graph Kanban lanes to Pending, In progress and Complete, and added blank-board
+  authoring, *Add card*, and graph export alongside the existing file loading and AI drafting.
 - Rebuilt the local Web UI as a React and TypeScript application under `webui/`, compiled by Vite
   into `src/magent/webui/static/`. The interface was previously 30 KB of hand-minified JavaScript
   across six views with no build step, which could not be reviewed in a diff or tested. All six

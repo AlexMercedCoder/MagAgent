@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { post, request } from "../api";
 import type { Profile } from "../types";
 
@@ -32,7 +32,49 @@ export function ProfilesView({
   const [selected, setSelected] = useState<string>(profiles[0]?.name ?? "");
   const [detail, setDetail] = useState<Effective | null>(null);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", instructions: "" });
+  const [form, setForm] = useState({
+    name: "",
+    description: "",
+    instructions: "",
+    provider: "",
+    model: "",
+  });
+  const importInput = useRef<HTMLInputElement>(null);
+
+  /** Download the selected identity as a portable OAP document. */
+  async function exportProfile(name: string) {
+    try {
+      const payload = await request<{ filename: string; document: unknown }>(
+        `/api/profiles/export?name=${encodeURIComponent(name)}`,
+      );
+      const url = URL.createObjectURL(
+        new Blob([JSON.stringify(payload.document, null, 2)], { type: "application/json" }),
+      );
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      anchor.download = payload.filename.replace(/\.md$/, ".json");
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+  }
+
+  /** Adopt an OAP document from a file as a project profile. */
+  async function importProfile(file: File) {
+    try {
+      const document = JSON.parse(await file.text());
+      await post("/api/profiles/import", { document, scope: "project" });
+      await refresh();
+      notify("Profile imported.");
+    } catch (problem) {
+      setError(
+        String(problem).includes("JSON")
+          ? "That file is not a JSON agent profile. Export one first to see the shape."
+          : (problem as Error).message,
+      );
+    }
+  }
 
   useEffect(() => {
     if (!selected && profiles[0]) setSelected(profiles[0].name);
@@ -59,9 +101,15 @@ export function ProfilesView({
   async function create(event: React.FormEvent) {
     event.preventDefault();
     try {
-      await post("/api/profiles", form);
+      await post("/api/profiles", {
+        ...form,
+        // Only send a route when one was actually chosen; otherwise inherit.
+        ...(form.provider || form.model
+          ? { model: { provider: form.provider || undefined, model: form.model || undefined } }
+          : {}),
+      });
       setCreating(false);
-      setForm({ name: "", description: "", instructions: "" });
+      setForm({ name: "", description: "", instructions: "", provider: "", model: "" });
       await refresh();
       notify(`Profile ${form.name} created.`);
       setSelected(form.name);
@@ -80,9 +128,29 @@ export function ProfilesView({
           <h1>Profiles</h1>
           <p>Inspect effective authority or create a reusable specialist.</p>
         </div>
-        <button className="primary-button" type="button" onClick={() => setCreating(true)}>
-          ＋ New profile
-        </button>
+        <div className="profile-actions">
+          <input
+            ref={importInput}
+            type="file"
+            accept=".json,application/json"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void importProfile(file);
+              event.target.value = "";
+            }}
+          />
+          <button className="ghost-button" type="button" onClick={() => importInput.current?.click()}>
+            ↑ Import
+          </button>
+          <button className="ghost-button" type="button" disabled={!selected}
+                  onClick={() => selected && void exportProfile(selected)}>
+            ↓ Export
+          </button>
+          <button className="primary-button" type="button" onClick={() => setCreating(true)}>
+            ＋ New profile
+          </button>
+        </div>
       </div>
 
       <div className="profile-layout">
@@ -161,6 +229,21 @@ export function ProfilesView({
             <label htmlFor="profileInstructions">Role instructions</label>
             <textarea id="profileInstructions" rows={4} value={form.instructions}
                       onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
+            <div className="form-grid">
+              <div>
+                <label htmlFor="profileProvider">Provider</label>
+                <input id="profileProvider" placeholder="inherit" value={form.provider}
+                       onChange={(e) => setForm({ ...form, provider: e.target.value })} />
+              </div>
+              <div>
+                <label htmlFor="profileModel">Model</label>
+                <input id="profileModel" placeholder="inherit" value={form.model}
+                       onChange={(e) => setForm({ ...form, model: e.target.value })} />
+              </div>
+            </div>
+            <p className="context-note">
+              Leave both blank to inherit the workspace route. A profile can narrow authority, never widen it.
+            </p>
             <button className="primary-button" type="submit">Create profile</button>
           </form>
         </div>

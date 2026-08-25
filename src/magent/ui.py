@@ -30,6 +30,7 @@ from magent.web_graphs import (
     generate_web_graph,
     graph_catalog,
     preview_web_graph,
+    read_web_graph,
     save_web_graph,
     web_task_node,
 )
@@ -139,6 +140,7 @@ def serve_ui(
         "/api/conversations/update",
         "/api/conversations/message",
         "/api/profiles",
+        "/api/profiles/import",
         "/api/graphs/run",
         "/api/graphs/draft",
         "/api/graphs/preview-draft",
@@ -450,6 +452,19 @@ def serve_ui(
                             query.get("name", [""])[0], project=root, config=config
                         )
                     )
+                elif parsed.path == "/api/profiles/export":
+                    from magent.config import load_config
+                    from magent.web_profiles import export_document
+
+                    config = load_config(username) if username else None
+                    self._json(
+                        export_document(
+                            query.get("name", [""])[0], project=root, config=config
+                        )
+                    )
+                elif parsed.path == "/api/graphs/document":
+                    # The raw document, for editing on the board or exporting.
+                    self._json(read_web_graph(query.get("path", [""])[0], project=root))
                 elif parsed.path == "/api/profiles":
                     if not username:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)
@@ -481,6 +496,22 @@ def serve_ui(
                         config=load_config(username),
                     )
                     self._json(result, status=201 if result.get("ok") else 400)
+                elif parsed.path == "/api/profiles/import":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        from magent.config import load_config
+                        from magent.web_profiles import import_document
+
+                        body = self._body()
+                        result = import_document(
+                            body.get("document"),
+                            scope=str(body.get("scope") or "project"),
+                            name=str(body.get("name") or ""),
+                            project=root,
+                            config=load_config(username),
+                        )
+                        self._json(result, status=200 if result.get("ok") else 400)
                 elif parsed.path == "/api/settings":
                     from magent.desktop_api import CONFIG_SCHEMA, config_set
 

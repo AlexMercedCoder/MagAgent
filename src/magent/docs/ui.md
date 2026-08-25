@@ -36,7 +36,38 @@ When a turn fails, the transcript names the state and the recovery step, rather 
 
 Group participants run with isolated profile authority. A profile can narrow the globally configured tools and permission posture, but cannot widen them.
 
+## Bots And Group Conversations
+
+The Bots view is a roster of every profile you can talk to. Chat with one on its own, or tick two to
+five and start a group; the first profile picked coordinates the round. Replies are attributed to
+the profile that produced them.
+
+## Portable Identities
+
+A profile can be exported as a portable Open Agent Profile document and imported into another
+workspace, from the Profiles view or through `/api/profiles/export` and `/api/profiles/import`.
+
+Export never includes secret-like fields, and strips runtime accretion (state, history, inbox,
+proposals): a shared profile is a role to adopt, not a snapshot of one machine's session, and
+learned state is untrusted context everywhere else. Import drops the same keys on the way in and
+resets the revision to 1, so a shared identity cannot carry another workspace's learned claims here
+as trusted. A name that already exists is refused with an actionable message rather than silently
+overwriting.
+
+Each profile can declare its own provider and model, or leave both blank to inherit the workspace
+route. A profile narrows authority; it never widens it.
+
 ## Graph Kanban
+
+Cards are a Kanban: every node starts **Pending**, moves to **In progress** while MagAgent works
+it, and lands in **Complete** when it finishes, whichever way it finished.
+
+A graph reaches the board three ways: load a file, start from a blank board and append cards with
+*Add card*, or describe a goal and let the planning model draft one for review. Appending a card
+rewires the document's dependency inputs and graph outputs, because MagAgent validates that every
+declared output is read by something downstream; a board edited without that rewiring only fails at
+save time. Nothing is written until the draft is saved under a name, and *Export* downloads the
+current graph, saved or draft, as a JSON document.
 
 The Graphs view finds `.agraph.yaml`, `.agraph.yml`, and `.agraph.json` files inside the selected project. Choose a graph—or enter a project-relative path—to validate its digest-bound execution plan before running it.
 

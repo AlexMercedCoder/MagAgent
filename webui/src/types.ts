@@ -67,6 +67,7 @@ export type GraphNode = {
   type: string;
   depends_on?: string[];
   profile?: string;
+  /** pending | running | succeeded | failed | skipped | cancelled */
   state?: string;
   summary?: string;
   files_changed?: number;
