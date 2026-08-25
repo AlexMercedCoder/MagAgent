@@ -53,6 +53,14 @@ STATIC_DIR = WEBUI_DIR / "static"
 MAX_REQUEST_BYTES = 128 * 1024
 
 
+def _int_or(raw: str, fallback: int) -> int:
+    """A junk query parameter is a bad value, not a server fault."""
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return fallback
+
+
 def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | None = None) -> dict[str, Any]:
     root = Path(project).resolve()
     memory_quality = {"ok": False, "error": "username unavailable"}
@@ -620,6 +628,26 @@ def serve_ui(
                     self._json(release_notes(root))
                 elif parsed.path == "/api/memory/inbox":
                     self._json(list_memory_inbox(store, root))
+                elif parsed.path == "/api/memory/overview":
+                    from magent.web_memory import overview
+
+                    self._json(overview(username or ""))
+                elif parsed.path == "/api/memory/search":
+                    from magent.web_memory import search as memory_search
+
+                    self._json(
+                        memory_search(
+                            username or "",
+                            query.get("q", [""])[0],
+                            mode=query.get("mode", ["keyword"])[0],
+                            # A junk limit is a bad request, not a 500.
+                            limit=_int_or(query.get("limit", ["20"])[0], 20),
+                        )
+                    )
+                elif parsed.path == "/api/memory/node":
+                    from magent.web_memory import node as memory_node
+
+                    self._json(memory_node(username or "", query.get("id", [""])[0]))
                 elif parsed.path == "/api/memory/promote":
                     candidate_id = query.get("id", [""])[0]
                     if not username:

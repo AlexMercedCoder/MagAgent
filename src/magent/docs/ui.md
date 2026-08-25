@@ -119,6 +119,26 @@ Every plan is displayed in three fixed columns:
 
 Cards show their dependencies, assigned profile, execution state, changed-file count, and final success or failure summary. Graph execution runs through MagAgent's existing durable `GraphExecutor`, task, event, and status contracts. Human gate cards must be reviewed individually before the Run button will start the graph.
 
+## Memory
+
+MagAgent's memory is a linked graph of notes the agent wrote about you and your projects, and it
+shapes every reply. The browser could only see the promotion inbox, so the memory already in force
+was invisible: there was no way to ask what the agent believed, or where a belief came from.
+
+The Memory view reports the graph's size, link count, disk usage, duplicate groups, and suppressed
+notes; lists the notes themselves; and opens any one of them with its full text, the notes it links
+out to, and the notes that link back to it. Backlinks are the useful direction when asking why the
+agent believes something, because they show what referred to a note.
+
+Search runs the same three modes the agent's own recall uses. `semantic` and `hybrid` need an
+embedding index that may not exist, and the memory manager already falls back to keyword search, so
+an unavailable mode degrades rather than failing.
+
+**Everything on this screen reads.** Promotion still goes through `/api/memory/promote`, and
+editing, merging, suppression, and deletion stay in the CLI, where the destructive commands already
+have their confirmations. Both the note roster and each note's body are bounded, because a memory
+graph grows without limit and a browser only ever shows a window of it.
+
 ## Profiles And Settings
 
 The Bots and Profiles views list the profiles available to the selected project and show their effective provider, model, tools, and permission policy. New profiles are validated through the same Open Agent Profile contract used by the CLI before they are written.
@@ -168,6 +188,9 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/release/notes`
 - `/api/cockpit`
 - `/api/memory/inbox`
+- `/api/memory/overview`
+- `/api/memory/search?q=<text>&mode=keyword|hybrid|semantic`
+- `/api/memory/node?id=<node-id>`
 - `/api/memory/promote?id=<candidate-id>`
 - `/api/patch/preview?id=<patch-id>`
 - `/api/checkpoint/diff?id=<checkpoint-id>`

@@ -19,17 +19,26 @@ import { ContextPanel } from "./views/ContextPanel";
 import { BotsView } from "./views/BotsView";
 import { GraphsView } from "./views/GraphsView";
 import { ProfilesView } from "./views/ProfilesView";
+import { MemoryView } from "./views/MemoryView";
 import { SettingsView } from "./views/SettingsView";
 import { OperationsView } from "./views/OperationsView";
 import { ShortcutsSheet } from "./views/ShortcutsSheet";
 
-export type View = "chat" | "bots" | "graphs" | "profiles" | "settings" | "operations";
+export type View =
+  | "chat"
+  | "bots"
+  | "graphs"
+  | "profiles"
+  | "memory"
+  | "settings"
+  | "operations";
 
 const NAV: { id: View; glyph: string; label: string }[] = [
   { id: "chat", glyph: "✦", label: "Chats" },
   { id: "bots", glyph: "◉", label: "Bots" },
   { id: "graphs", glyph: "⌘", label: "Graphs" },
   { id: "profiles", glyph: "◇", label: "Profiles" },
+  { id: "memory", glyph: "❖", label: "Memory" },
   { id: "settings", glyph: "⚙", label: "Settings" },
   { id: "operations", glyph: "⌁", label: "Ops" },
 ];
@@ -301,6 +310,7 @@ export default function App() {
         )}
         {view === "graphs" && <GraphsView profiles={profiles} setError={setError} notify={notify} />}
         {view === "profiles" && <ProfilesView profiles={profiles} refresh={load} setError={setError} notify={notify} />}
+        {view === "memory" && <MemoryView setError={setError} />}
         {view === "settings" && <SettingsView fields={settings} refresh={load} setError={setError} notify={notify} />}
         {view === "operations" && <OperationsView setError={setError} />}
       </main>

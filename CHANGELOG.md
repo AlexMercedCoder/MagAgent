@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added a Memory view to the Web UI. MagAgent's memory is a linked graph of notes the agent wrote
+  about you and your projects and it shapes every reply, but the browser could only see the
+  promotion inbox, so the memory already in force was invisible. The view reports graph size, link
+  count, disk usage, duplicate groups and suppressed notes, lists the notes, searches them in
+  keyword, hybrid or semantic mode, and opens any note with its full text and the notes that link
+  to and from it. It is read-only: editing, merging and deletion stay in the CLI, where the
+  destructive commands already have their confirmations. The roster and each note body are bounded,
+  because a memory graph grows without limit.
 - Added first-run setup to the Web UI. The browser assumed a provider was already configured, so
   opening `magent ui` on a machine that never ran `magent setup` produced a workspace whose first
   message failed with a credential error. Readiness is now checked before the shell renders, and a
@@ -30,7 +38,7 @@
 - Added light and dark themes to the Web UI. All 115 colours were literals, so the OS setting had no
   effect; they are now tokens, with a rail control cycling system, light, and dark. Fixed the
   composer, which set no background or colour and so rendered as a white box in dark mode.
-- Added a keyboard model: focus the composer, search, start a chat, switch any of the six views,
+- Added a keyboard model: focus the composer, search, start a chat, switch any of the seven views,
   close dialogs, and a shortcuts sheet on `/`. Unmodified keys never fire while typing.
 - Added profile portability to the Web UI: export an Open Agent Profile as a portable document and
   import one from a file. Secrets never leave, runtime state and history are stripped both ways, and
