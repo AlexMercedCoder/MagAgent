@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Fixed configuration leaking into the process-wide default. `load_global_config` shallow-copied
+  `DEFAULT_GLOBAL_CONFIG`, so every nested container a caller did not replace pointed straight at
+  the module-level dict, and `_deep_merge` aliased it the same way. Writing to `cfg["providers"]`
+  therefore edited the default for the whole process, and a later load — for a different user or a
+  different workspace — inherited that provider entry, including an inline `api_key`. Every
+  `configure_*` path mutates a loaded config, so all of them were affected. Both paths now deep-copy.
+
 - Let the Web UI answer tool approvals. Its sessions ran with terminal permission prompts switched
   off and no alternative, so every tool above the mode's auto-approve threshold was refused
   outright: the agent could not do real work and never explained why. `check_permission` now takes

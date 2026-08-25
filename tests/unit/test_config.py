@@ -474,3 +474,45 @@ def test_config_proposals_events_permissions_and_model_health(tmp_path: Path, mo
     assert permission_status("alice")["mode"] == "balanced"
     assert any(row["role"] == "review" and row["ok"] for row in health["roles"])
     assert any(row["role"] == "image_maker" for row in health["roles"])
+
+
+# --- the default config must never be edited by a caller ----------------------
+
+
+def test_a_loaded_config_never_aliases_the_module_default(tmp_path, monkeypatch) -> None:
+    """`DEFAULT_GLOBAL_CONFIG.copy()` was shallow.
+
+    Every nested container the caller did not replace pointed straight at the
+    module-level default, so writing to `cfg["providers"]` edited it for the
+    whole process. A later load, for a different user or workspace, then
+    inherited that provider entry along with any inline API key.
+    """
+    redirect_config(monkeypatch, tmp_path)
+
+    config = magent_config.load_global_config()
+    config.setdefault("providers", {})["openai"] = {"api_key": "sk-must-not-leak"}
+
+    assert magent_config.DEFAULT_GLOBAL_CONFIG["providers"] == {}
+
+
+def test_a_later_load_elsewhere_does_not_inherit_an_earlier_edit(
+    tmp_path, monkeypatch
+) -> None:
+    redirect_config(monkeypatch, tmp_path / "first")
+    first = magent_config.load_global_config()
+    first.setdefault("providers", {})["openai"] = {"api_key": "sk-must-not-leak"}
+
+    redirect_config(monkeypatch, tmp_path / "second")
+    assert magent_config.load_global_config()["providers"] == {}
+
+
+def test_the_merge_path_does_not_alias_the_default_either(tmp_path, monkeypatch) -> None:
+    """Loading an existing file goes through `_deep_merge`, not the copy above."""
+    redirect_config(monkeypatch, tmp_path)
+    magent_config.GLOBAL_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    magent_config.GLOBAL_CONFIG.write_text('[defaults]\nprovider = "openai"\n', encoding="utf-8")
+
+    config = magent_config.load_global_config()
+    config.setdefault("providers", {})["anthropic"] = {"api_key": "sk-must-not-leak"}
+
+    assert magent_config.DEFAULT_GLOBAL_CONFIG["providers"] == {}

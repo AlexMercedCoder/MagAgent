@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 import tomllib  # type: ignore[no-redef]
 from pathlib import Path
@@ -536,20 +537,29 @@ def _ensure_state_compatibility() -> None:
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
-    """Recursively merge override into base."""
-    result = base.copy()
+    """Recursively merge override into base.
+
+    The result must not alias `base`'s nested containers. `base` is normally
+    DEFAULT_GLOBAL_CONFIG, a module-level dict, and a shallow copy left every
+    sub-dict the override did not touch pointing straight at it: writing to
+    `cfg["providers"]` then edited the process-wide default, so a later load
+    for a different user or workspace inherited it, inline API key included.
+    """
+    result = copy.deepcopy(base)
     for k, v in override.items():
         if isinstance(v, dict) and isinstance(result.get(k), dict):
             result[k] = _deep_merge(result[k], v)
         else:
-            result[k] = v
+            result[k] = copy.deepcopy(v)
     return result
 
 
 def load_global_config() -> dict[str, Any]:
     _ensure_state_compatibility()
     if not GLOBAL_CONFIG.exists():
-        cfg = DEFAULT_GLOBAL_CONFIG.copy()
+        # Deep, not shallow: callers mutate what they are handed, and a shallow
+        # copy shares every nested container with the module-level default.
+        cfg = copy.deepcopy(DEFAULT_GLOBAL_CONFIG)
     else:
         with GLOBAL_CONFIG.open("rb") as f:
             raw = tomllib.load(f)
