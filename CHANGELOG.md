@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Fixed accessibility defects found by an audit pass over every view in both themes. Small muted
+  text sat between 2.8:1 and 4.4:1 against its real background, below the 4.5:1 AA threshold for
+  text that size; the tokens are recomputed to clear it in both themes. `.ghost-button` was used in
+  three views and never defined, so those buttons fell back to the user agent's default: 21px tall,
+  under the 24px pointer-target minimum, and painted with the browser's grey rather than the
+  theme's. The theme toggle tied with the rail hover rule on specificity and came later, so hovering
+  it applied the hover background but kept the resting colour, leaving it at 1.34:1 in every theme.
+  Each page also carried two `<h1>` elements, the sidebar brand and the page title, while the chat
+  view had none at all.
+
 - Fixed configuration leaking into the process-wide default. `load_global_config` shallow-copied
   `DEFAULT_GLOBAL_CONFIG`, so every nested container a caller did not replace pointed straight at
   the module-level dict, and `_deep_merge` aliased it the same way. Writing to `cfg["providers"]`

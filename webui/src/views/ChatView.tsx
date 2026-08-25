@@ -223,7 +223,7 @@ export function ChatView({
         {!messages.length && (
           <div className="welcome">
             <div className="brand-mark large">M</div>
-            <h2>Your local AI workspace</h2>
+            <h1>Your local AI workspace</h1>
             <p>
               Start a traditional chat, choose a profile-backed bot, or assemble a small group of
               specialists.

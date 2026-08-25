@@ -36,7 +36,7 @@ export function Sidebar({
       <div className="sidebar-head">
         <div>
           <div className="eyebrow">LOCAL WORKSPACE</div>
-          <h1>MagAgent</h1>
+          <p className="brand-name">MagAgent</p>
         </div>
         <button className="icon-button" onClick={() => setOpen(false)} aria-label="Close sidebar">
           ×

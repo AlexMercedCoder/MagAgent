@@ -291,7 +291,10 @@ export default function App() {
             ☰
           </button>
           <div className="workspace-title">
-            <b>{view === "chat" ? active?.title || "New conversation" : ""}</b>
+            {/* The chat view had no page heading at all: with a conversation
+                open the only heading on the page was the context panel's, so
+                heading navigation skipped straight past the transcript. */}
+            {view === "chat" ? <h1>{active?.title || "New conversation"}</h1> : <b />}
           </div>
           <button
             className="icon-button"

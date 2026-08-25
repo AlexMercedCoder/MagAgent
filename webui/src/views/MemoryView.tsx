@@ -108,7 +108,7 @@ export function MemoryView({ setError }: { setError: (message: string) => void }
       <div className="page-head">
         <div>
           <span className="eyebrow">KNOWLEDGE</span>
-          <h2>Memory</h2>
+          <h1>Memory</h1>
           <p>What the agent has kept, and what links to it. Nothing here is editable.</p>
         </div>
         <button className="secondary-button" type="button" onClick={() => void load()}>
