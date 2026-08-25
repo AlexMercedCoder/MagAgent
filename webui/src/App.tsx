@@ -12,6 +12,7 @@ import {
   type ThemeChoice,
 } from "./theme";
 import type { Bootstrap, Conversation, Profile, SettingField } from "./types";
+import { FirstRun } from "./FirstRun";
 import { ChatView } from "./views/ChatView";
 import { Sidebar } from "./views/Sidebar";
 import { ContextPanel } from "./views/ContextPanel";
@@ -45,6 +46,7 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [ready, setReady] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
 
@@ -84,6 +86,15 @@ export default function App() {
     captureLaunchToken();
     (async () => {
       try {
+        // Ask whether a turn can actually run before showing a workspace whose
+        // composer would fail on the first message.
+        const readiness = await request<{ ready?: boolean }>(
+          "/api/onboarding/readiness",
+        ).catch(() => ({ ready: true }));
+        if (!readiness.ready) {
+          setNeedsSetup(true);
+          return;
+        }
         await load();
       } catch (problem) {
         setError((problem as Error).message);
@@ -183,6 +194,20 @@ export default function App() {
         <div className="brand-mark">M</div>
         <p>Opening the workspace…</p>
       </div>
+    );
+  }
+
+  // A machine with no provider has no working composer; saying so beats
+  // presenting one whose first message is guaranteed to fail.
+  if (needsSetup) {
+    return (
+      <FirstRun
+        setError={setError}
+        onReady={() => {
+          setNeedsSetup(false);
+          void load();
+        }}
+      />
     );
   }
 

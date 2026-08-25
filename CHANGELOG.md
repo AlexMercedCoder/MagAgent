@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Added first-run setup to the Web UI. The browser assumed a provider was already configured, so
+  opening `magent ui` on a machine that never ran `magent setup` produced a workspace whose first
+  message failed with a credential error. Readiness is now checked before the shell renders, and a
+  setup panel reports the same checks the CLI does and lets a provider and model be chosen.
+  Credentials are never accepted through the form: `set_default_provider` can persist an inline key
+  into the global config file, so that argument is never passed from this path.
+- Fixed readiness for the shipped default provider. `ollama` needs no key, so `provider_readiness`
+  called it ready on machines where Ollama had never been installed; the first message then failed
+  with a connection error. The local runtime is now probed directly, with a short timeout.
+- Stopped `test_running_daemon_process_observes_durable_cancellation` failing on machine load. Two
+  timing assumptions were too tight and neither concerned cancellation: the wait for the child to
+  reach `running` was capped at ten seconds, and the budget allowed five seconds against a child
+  that slept ten.
+
 - Rendered assistant markdown in the local Web UI: headings, lists, blockquotes, rules, inline and
   fenced code with a copy button, emphasis, and links. Replies previously showed their own `**`
   markers and backticks because content was escaped straight into a text node.

@@ -146,6 +146,7 @@ def serve_ui(
         "/api/graphs/preview-draft",
         "/api/graphs/save",
         "/api/settings",
+        "/api/onboarding/configure",
     }
 
     # Dual-purpose paths: POST mutates and still needs CSRF, but GET is a plain
@@ -462,9 +463,27 @@ def serve_ui(
                             query.get("name", [""])[0], project=root, config=config
                         )
                     )
+                elif parsed.path == "/api/onboarding/readiness":
+                    from magent.web_onboarding import readiness
+
+                    self._json(readiness())
+                elif parsed.path == "/api/onboarding/providers":
+                    from magent.web_onboarding import providers as onboarding_providers
+
+                    self._json(onboarding_providers())
                 elif parsed.path == "/api/graphs/document":
                     # The raw document, for editing on the board or exporting.
                     self._json(read_web_graph(query.get("path", [""])[0], project=root))
+                elif parsed.path == "/api/onboarding/configure":
+                    from magent.web_onboarding import configure
+
+                    body = self._body()
+                    try:
+                        self._json(configure(str(body.get("provider", "")), str(body.get("model", ""))))
+                    except ValueError as problem:
+                        # A bad provider name is the user's mistake, not a
+                        # server fault; raising here would surface as a 500.
+                        self._json({"ok": False, "error": str(problem)}, status=400)
                 elif parsed.path == "/api/profiles":
                     if not username:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)

@@ -12,6 +12,35 @@ magent ui --open
 
 The server binds to `127.0.0.1` and prints the local URL. Press `Ctrl+C` to stop it.
 
+## First Run
+
+The browser assumed a provider was already configured. Open `magent ui` on a machine that never
+ran `magent setup` and the first message failed with a credential error, having never said that no
+provider was chosen.
+
+The boot sequence now asks `/api/onboarding/readiness` before rendering the workspace. When the
+machine cannot run a turn, the setup panel replaces the shell rather than presenting a composer
+that is guaranteed to fail. It reports four checks:
+
+| Step | Blocking | Meaning |
+| --- | --- | --- |
+| Provider | yes | Whether a default provider is selected |
+| Model | no | The model that would be used; falls back to the catalog default |
+| Credential / Local runtime | yes | Whether a key was found, or whether the local runtime answers |
+| Workspace | no | The directory the server was started in |
+
+The shipped default provider is `ollama`. Because a local provider needs no key,
+`provider_readiness` calls it ready, so a machine that had never installed Ollama reported ready
+and then failed on the first message with a connection error. Readiness therefore probes the local
+runtime directly, with a short timeout so a missing runtime does not make the browser wait, and
+the step is labelled `Local runtime` rather than `Credential` when it applies.
+
+A provider and model can be chosen in the panel, which writes only the route.
+**Credentials are never accepted through the form.** `set_default_provider` can persist an inline
+`api_key` into the global config file, and a key typed into a browser form would land there, so
+that argument is never passed from this path: keys stay in the environment or the system keyring
+and the panel reports only whether one was found and which variable it searched.
+
 ## Conversations And Bots
 
 The Chats view supports durable traditional, bot, and group conversations:
@@ -130,6 +159,9 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/graphs/run`
 - `/api/graphs/status?job_id=<web-run-id>`
 - `/api/settings`
+- `/api/onboarding/readiness`
+- `/api/onboarding/providers`
+- `/api/onboarding/configure`
 - `/api/docs/search?q=memory`
 - `/api/docs/topic?slug=overview`
 - `/api/release/check`
