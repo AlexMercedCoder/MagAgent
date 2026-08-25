@@ -41,6 +41,25 @@ A provider and model can be chosen in the panel, which writes only the route.
 that argument is never passed from this path: keys stay in the environment or the system keyring
 and the panel reports only whether one was found and which variable it searched.
 
+## Accessibility
+
+Two audit passes run against a live server, because the properties that matter here are computed
+styles against real backgrounds rather than anything a unit test can assert.
+
+The first pass covers contrast in both themes, accessible names, heading structure, pointer-target
+size, clipped text and horizontal overflow. The second covers the tab ring, focus indication,
+`prefers-reduced-motion`, 200% zoom, and narrow viewports.
+
+Findings fixed: small muted text below the 4.5:1 AA threshold across roughly twenty labels; a
+`.ghost-button` class used in three views but never defined, so those buttons fell back to the user
+agent's default size and colour; a theme toggle that tied with the rail's hover rule on specificity
+and came later, keeping its resting colour against the hover background at 1.34:1; two `<h1>`
+elements per page from the sidebar brand plus the page title, while the chat view had none at all;
+and a search field whose wrapper had no focus treatment, so focusing it changed nothing on screen.
+
+The composer indicates focus through its wrapper rather than an outline on the textarea, which is
+why the search field now does the same.
+
 ## Turns Are Runs
 
 A turn used to execute on the HTTP request thread that started it. Close the tab mid-reply and the

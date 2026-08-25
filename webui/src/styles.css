@@ -643,3 +643,8 @@ textarea,input,select{color:var(--c-18201d)}
    should hover like them. */
 .rail .theme-toggle:hover,
 .rail .theme-toggle:focus-visible{color:var(--c-fff);background:var(--c-263831)}
+
+/* The search field sets `outline:0` and its wrapper had no focus treatment, so
+   focusing it changed nothing at all: keyboard users had no way to tell they
+   were in it. The composer already did this through its wrapper; this matches. */
+.search:focus-within{border-color:var(--c-76a790);box-shadow:0 0 0 3px var(--c-dff3e9)}
