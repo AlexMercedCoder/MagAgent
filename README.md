@@ -526,6 +526,27 @@ dependencies. MagAgent saves and strictly validates the native graph before enab
 moves cards through **To do**, **Current work**, and **Done**, retaining a success or failure
 summary for every completed card.
 
+A turn is a run, not a request. It executes on its own thread and finishes whether or not anyone is
+watching, so closing the tab no longer kills the work and loses the reply. Streams read the run's
+event log from a cursor, so reloading mid-turn picks it back up rather than losing what was said,
+and **Stop** cancels the run itself instead of just the connection, keeping whatever had already
+been written.
+
+Tool approvals reach the browser. The Web UI has a user but no console, so without somewhere to ask
+it could only refuse every tool above the permission mode's auto-approve threshold. A tool needing a
+decision now pauses the turn and asks in the transcript. Unanswered is a denial: a closed tab must
+not leave a tool authorised.
+
+A Memory view browses what the agent has kept — the graph's size and health, full note text, and the
+notes linking to and from each one, searchable in the same modes the agent's own recall uses. It is
+read-only; editing, merging and deletion stay in the CLI where the destructive commands have their
+confirmations.
+
+Opening the UI on a machine that has never been set up shows a setup panel rather than a composer
+whose first message is guaranteed to fail. It never accepts a credential: keys stay in the
+environment or the system keyring, and it reports only whether one was found and which variable it
+expects.
+
 Assistant replies render as markdown: headings, lists, blockquotes, and fenced code blocks with a
 copy button. Model output is treated as untrusted because it can quote a hostile file, a scraped
 page, or a tool result, so embedded HTML stays visible text rather than becoming elements, and only
