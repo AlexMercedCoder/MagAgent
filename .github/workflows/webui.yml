@@ -75,7 +75,7 @@ jobs:
           set -euo pipefail
           workspace="$(mktemp -d)"
           cd "$workspace"
-          magent ui --project "$workspace" --port 7830 > serve.log 2>&1 &
+          PYTHONUNBUFFERED=1 magent ui --project "$workspace" --port 7830 > serve.log 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
 
