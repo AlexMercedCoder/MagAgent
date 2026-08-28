@@ -72,7 +72,8 @@ jobs:
       - name: Immutable specification fixtures
         if: matrix.python-version == '3.12'
         run: |
-          oap-validate upstream-oap/examples --digest
+          oap-validate upstream-oap/examples/*.agent.* upstream-oap/examples/json/* --digest
+          oap-validate upstream-oap/examples/invalid --expect-invalid
           ags-validate upstream-ags/examples --strict
 
       - name: MCP integration tests
