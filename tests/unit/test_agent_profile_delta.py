@@ -97,7 +97,7 @@ def test_checkpoint_restores_previous_revision(tmp_path: Path) -> None:
     assert AgentProfileRegistry(tmp_path).load_path(path).document["state"] == []
 
 
-def test_rebase_applies_when_only_unrelated_state_changed(tmp_path: Path) -> None:
+def test_canonical_delta_rejects_rebase_without_private_snapshot(tmp_path: Path) -> None:
     path, profile = _profile(tmp_path)
     delta = make_delta(
         profile,
@@ -114,9 +114,10 @@ def test_rebase_applies_when_only_unrelated_state_changed(tmp_path: Path) -> Non
     document["metadata"]["revision"] = 2
     atomic_write(path, render_document(document, encoding))
 
-    assert rebase_delta(path, delta)["base_revision"] == 2
-    result = apply_delta(path, delta, auto_rebase=True)
-    assert result["revision"] == 3
+    with pytest.raises(ProfileConflictError, match="regenerate"):
+        rebase_delta(path, delta)
+    with pytest.raises(ProfileConflictError, match="regenerate"):
+        apply_delta(path, delta, auto_rebase=True)
 
 
 def test_rebase_rejects_targeted_state_conflict(tmp_path: Path) -> None:
@@ -136,5 +137,5 @@ def test_rebase_rejects_targeted_state_conflict(tmp_path: Path) -> None:
     document["metadata"]["revision"] = 2
     atomic_write(path, render_document(document, encoding))
 
-    with pytest.raises(ProfileConflictError, match="targeted path"):
+    with pytest.raises(ProfileConflictError, match="regenerate"):
         apply_delta(path, delta, auto_rebase=True)

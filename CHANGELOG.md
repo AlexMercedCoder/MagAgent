@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.99.0 (2026-08-27)
+
+- Aligned OAP and AGS handling with the published 1.0.1 support libraries, including RFC 8785
+  digests, YAML 1.2 booleans, current schemas, and AG131 recursive-subgraph detection.
+- Canonical OAP documents now use the normative schema and safety checks; the older MagAgent
+  dialect remains readable as an explicitly non-canonical migration format.
+- Updated AGS run records so MagAgent-specific fields use the specification's `x-` extension
+  namespace and validate against the published run-record schema.
+- Unified CLI and Web UI profile creation on the canonical OAP authoring path, including the
+  selected provider/model route, canonical lifecycle and state placement, and validated legacy
+  conversion metadata.
+
 ## 0.98.0 (2026-08-25)
 
 - Fixed accessibility defects found by an audit pass over every view in both themes. Small muted

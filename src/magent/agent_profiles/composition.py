@@ -16,7 +16,11 @@ def extension_names(document: dict[str, Any]) -> tuple[str, ...]:
         raw = [raw]
     if not isinstance(raw, list):
         raise ProfileError("profile extends must be a name or an array of names")
-    names = tuple(str(item).strip().lstrip("@").lower() for item in raw if str(item).strip())
+    names = tuple(
+        str(item.get("name") if isinstance(item, dict) else item).strip().lstrip("@").lower()
+        for item in raw
+        if str(item.get("name") if isinstance(item, dict) else item).strip()
+    )
     if len(names) != len(set(names)):
         raise ProfileError("profile extends contains duplicate parent names")
     return names

@@ -60,7 +60,8 @@ def test_build_and_write_complete_profile(tmp_path: Path) -> None:
     assert parsed["metadata"]["name"] == "pair-programmer"
     assert parsed["metadata"]["annotations"] == {"owner": "alex"}
     assert parsed["spec"]["model"]["provider"] == "openrouter"
-    assert parsed["lifecycle"]["on_start"] == "profile-start"
+    assert parsed["kind"] == "AgentProfile"
+    assert parsed["spec"]["lifecycle"]["on_start"] == [{"hook": "profile-start"}]
 
 
 def test_default_profile_persists_and_can_be_cleared(monkeypatch, tmp_path: Path) -> None:
@@ -87,7 +88,7 @@ def test_magagent_builtin_has_general_personality(tmp_path: Path) -> None:
 
     assert profile is not None
     role = profile.document["spec"]["role"]
-    assert "MagAgent" in role["persona"]
+    assert "MagAgent" in role["persona"]["tone"]
     assert role["objectives"]
 
 
@@ -201,7 +202,7 @@ def test_profile_wizard_writes_valid_project_profile(monkeypatch, tmp_path: Path
     assert profile is not None
     assert profile.document["metadata"]["annotations"] == {"team": "product"}
     assert profile.document["spec"]["runtime"]["subagents"]["allow"] == ["review"]
-    assert profile.document["spec"]["permissions"]["network"] == "read"
+    assert profile.document["spec"]["permissions"]["network"] == "allow"
     rendered = output.export_text()
     assert "Where should this profile live?" in rendered
     assert "Permission modes" in rendered

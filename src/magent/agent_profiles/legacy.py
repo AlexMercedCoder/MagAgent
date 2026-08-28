@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 KNOWN = {
-    "name", "description", "mode", "provider", "model", "tools",
-    "permissionMode", "permission_mode", "memory", "memory_mode", "maxTurns", "max_turns",
+    "name",
+    "description",
+    "mode",
+    "provider",
+    "model",
+    "tools",
+    "permissionMode",
+    "permission_mode",
+    "memory",
+    "memory_mode",
+    "maxTurns",
+    "max_turns",
 }
 
 
@@ -25,32 +36,38 @@ def convert_legacy(path: Path, metadata: dict[str, Any], body: str) -> dict[str,
     if isinstance(tools, dict):
         allow = [str(key) for key, value in tools.items() if value is True or value == "allow"]
         deny = [str(key) for key, value in tools.items() if value is False or value == "deny"]
-        spec["tools"] = {"allow": allow, "deny": deny, "legacy_bindings": tools}
+        spec["tools"] = {"allow": allow, "deny": deny}
     permission = metadata.get("permissionMode") or metadata.get("permission_mode")
     if permission:
-        spec["permissions"] = {"default": str(permission)}
+        modes = {"paranoid": "deny", "balanced": "ask", "silent": "allow", "yolo": "allow"}
+        spec["permissions"] = {"default": modes.get(str(permission), str(permission))}
     memory = metadata.get("memory") or metadata.get("memory_mode")
     if memory:
-        spec["memory"] = {"mode": str(memory)}
+        mode = {"read": "read_only", "write": "read_write"}.get(str(memory), "read_only")
+        spec["memory"] = {"stores": [{"name": "legacy-memory", "kind": "custom", "mode": mode}]}
     max_turns = metadata.get("maxTurns") or metadata.get("max_turns")
     runtime: dict[str, Any] = {"mode": str(metadata.get("mode") or "subagent")}
     if max_turns:
         runtime["max_turns"] = int(max_turns)
     spec["runtime"] = runtime
+    spec["lifecycle"] = {"writeback": "propose"}
     annotations = {key: value for key, value in metadata.items() if key not in KNOWN}
     return {
         "oap": "1.0",
+        "kind": "AgentProfile",
         "metadata": {
             "name": name,
-            "description": str(metadata.get("description") or ""),
+            "description": str(metadata.get("description") or name),
             "revision": 1,
-            "annotations": {"magagent.dev/legacy": annotations},
+            **(
+                {"annotations": {"magagent.dev/legacy": json.dumps(annotations, sort_keys=True)}}
+                if annotations
+                else {}
+            ),
         },
         "spec": spec,
-        "state": [],
+        "state": {},
         "history": [],
-        "proposals": [],
-        "lifecycle": {"writeback": "propose"},
     }
 
 

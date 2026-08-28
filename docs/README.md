@@ -36,6 +36,7 @@ magent docs doctor
 - [Threat Model](../src/magent/docs/threat-model.md)
 - [Compatibility And State Migration](../src/magent/docs/compatibility.md)
 - [Release Supply Chain](../src/magent/docs/supply-chain.md)
+- [MagAgent 0.99.0 OAP/AGS Alignment](RELEASE_0.99.0.md)
 - [MagAgent 0.34.0 Release Record](RELEASE_0.34.0.md)
 - [MagAgent 0.35.0 Release Record](RELEASE_0.35.0.md)
 - [MagAgent 0.35.1 Release Record](RELEASE_0.35.1.md)

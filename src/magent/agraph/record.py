@@ -7,13 +7,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import ags
 import jsonschema
 
 from magent import __version__
 from magent.agraph.constants import CONFORMANCE_LEVEL, SUPPORTED_FEATURES
 from magent.agraph.document import GraphDocument
 
-RUN_SCHEMA = Path(__file__).with_name("schema") / "agentic-graph-run-1.0.schema.json"
+_AGS_ROOT = Path(ags.__file__).resolve().parent
+RUN_SCHEMA = _AGS_ROOT / "schema" / "agentic-graph-run-1.0.schema.json"
+if not RUN_SCHEMA.exists():
+    RUN_SCHEMA = _AGS_ROOT.parent / "schema" / "agentic-graph-run-1.0.schema.json"
 
 
 def now_iso() -> str:
@@ -39,7 +43,12 @@ def new_run_record(document: GraphDocument, run_id: str, params: dict[str, Any])
         "params": params,
         "context": document.data.get("context") or {},
         "outputs": {},
-        "usage": {"node_executions": 0, "tool_calls": 0, "wall_clock_seconds": 0.0, "cost_usd": 0.0},
+        "usage": {
+            "node_executions": 0,
+            "tool_calls": 0,
+            "wall_clock_seconds": 0.0,
+            "cost_usd": 0.0,
+        },
         "diagnostics": [],
         "nodes": [],
         "edges_taken": [],
@@ -49,4 +58,6 @@ def new_run_record(document: GraphDocument, run_id: str, params: dict[str, Any])
 
 def validate_run_record(record: dict[str, Any]) -> None:
     schema = json.loads(RUN_SCHEMA.read_text(encoding="utf-8"))
-    jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(record)
+    jsonschema.Draft202012Validator(schema, format_checker=jsonschema.FormatChecker()).validate(
+        record
+    )

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
+from ags import canonical_json as _canonical_json
+from ags import graph_digest
 
 
 class GraphDocumentError(ValueError):
@@ -18,6 +18,14 @@ class GraphDocumentError(ValueError):
 
 class _UniqueKeyLoader(yaml.SafeLoader):
     pass
+
+
+_UniqueKeyLoader.yaml_implicit_resolvers = {
+    key: [(tag, regexp) for tag, regexp in resolvers if tag != "tag:yaml.org,2002:timestamp"]
+    for key, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+for _first in "yYnNoO":
+    _UniqueKeyLoader.yaml_implicit_resolvers.pop(_first, None)
 
 
 def _unique_mapping(loader: yaml.SafeLoader, node: yaml.MappingNode, deep: bool = False) -> Any:
@@ -50,12 +58,7 @@ class GraphDocument:
 
 
 def canonical_json(document: dict[str, Any]) -> str:
-    return json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-
-
-def graph_digest(document: dict[str, Any]) -> str:
-    raw = hashlib.sha256(canonical_json(document).encode("utf-8")).digest()
-    return "sha256-" + base64.b64encode(raw).decode("ascii")
+    return _canonical_json(document).decode("utf-8")
 
 
 def load_graph(source: str | Path | dict[str, Any]) -> GraphDocument:
@@ -76,7 +79,9 @@ def load_graph(source: str | Path | dict[str, Any]) -> GraphDocument:
         except GraphDocumentError:
             raise
         except Exception as exc:
-            raise GraphDocumentError(f"AG001 parse error: {str(exc).replace(chr(10), ' ')}") from exc
+            raise GraphDocumentError(
+                f"AG001 parse error: {str(exc).replace(chr(10), ' ')}"
+            ) from exc
     if not isinstance(data, dict):
         raise GraphDocumentError("AG001 document root must be an object")
     return GraphDocument(path=path, data=data, digest=graph_digest(data))

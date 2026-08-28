@@ -120,7 +120,7 @@ def test_apply_update_clone_export_and_delete_are_guarded(tmp_path: Path) -> Non
     assert updated["profile"]["revision"] == 2
     reloaded = AgentProfileRegistry(tmp_path, Config()).get("researcher")
     assert reloaded is not None
-    assert reloaded.document["history"][-1]["kind"] == "profile_edit"
+    assert reloaded.document["history"][-1]["by"] == "magagent-desktop"
     assert cloned["ok"] is True
     assert exported["secrets_included"] is False
     assert (tmp_path / "exported.md").exists()
@@ -153,7 +153,7 @@ def test_profile_updates_preserve_state_and_support_guarded_rollback(tmp_path: P
     current = AgentProfileRegistry(tmp_path, Config()).get("durable")
 
     assert current is not None
-    assert current.document["state"] == [{"id": "preference", "value": "concise"}]
+    assert current.document["state"] == {"facts": [{"id": "preference", "text": "concise"}]}
     assert checkpoints["checkpoints"][0]["revision"] == 1
     assert restored["ok"] is True
     assert current.document["metadata"]["revision"] == 1
@@ -184,7 +184,9 @@ def test_profile_identity_reaches_research_recipes_and_graph_runtime(
     from magent.recipes import run_recipe
 
     monkeypatch.setattr(store_module, "USERS_DIR", tmp_path / "users")
-    profile = SimpleNamespace(provider="nous-portal", model="deepseek-v4-flash", tools={"read_file"})
+    profile = SimpleNamespace(
+        provider="nous-portal", model="deepseek-v4-flash", tools={"read_file"}
+    )
     graph = GraphExecutor(
         username="desktop-profile-test",
         config=Config(),

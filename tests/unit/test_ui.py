@@ -78,7 +78,6 @@ def test_bundle_carries_every_view() -> None:
         assert heading in bundle, heading
 
 
-
 def test_ui_action_helpers_use_domain_modules(tmp_path: Path, monkeypatch) -> None:
     from magent import ui_actions
 
@@ -186,6 +185,60 @@ def test_live_ui_auth_csrf_and_conversation_api(tmp_path: Path, monkeypatch) -> 
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_profile_creator_posts_a_canonical_oap_document_and_model_route(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from magent import config as magent_config
+    from magent.agent_profiles import desktop
+
+    monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
+    monkeypatch.setattr(magent_config, "load_config", lambda _username: object())
+    captured: dict = {}
+
+    def fake_apply(document, **_kwargs):
+        captured.update(document)
+        return {"ok": True, "name": document["metadata"]["name"]}
+
+    monkeypatch.setattr(desktop, "apply_profile", fake_apply)
+    store = WorkbenchStore("ui-profile-test")
+    result = serve_ui(
+        store, project=tmp_path, username="ui-profile-test", port=0, open_browser=False
+    )
+    if not result["ok"] and "Operation not permitted" in result.get("error", ""):
+        pytest.skip("local socket binding is disabled by the test sandbox")
+    server = result["server"]
+    token = result["token"]
+    connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=5)
+    try:
+        connection.request(
+            "POST",
+            f"/api/profiles?token={token}",
+            body=json.dumps(
+                {
+                    "name": "release-reviewer",
+                    "description": "Reviews a release.",
+                    "instructions": "Cite concrete evidence.",
+                    "model": {"provider": "openai", "model": "gpt-5.6"},
+                }
+            ),
+            headers={"Content-Type": "application/json", "X-Magent-CSRF": token},
+        )
+        response = connection.getresponse()
+        assert response.status == 201, response.read()
+    finally:
+        connection.close()
+        server.shutdown()
+        server.server_close()
+
+    assert captured["oap"] == "1.0"
+    assert captured["kind"] == "AgentProfile"
+    assert captured["spec"]["model"] == {"provider": "openai", "id": "gpt-5.6"}
+    assert captured["spec"]["lifecycle"] == {"writeback": "off"}
+    assert captured["state"] == {}
+    assert "lifecycle" not in captured
+    assert "proposals" not in captured
 
 
 def test_a_turn_survives_the_browser_that_asked_for_it(tmp_path: Path, monkeypatch) -> None:
@@ -461,9 +514,7 @@ def test_a_tool_approval_can_be_answered_from_the_browser(tmp_path: Path, monkey
         answerer.request(
             "POST",
             f"/api/runs/approve?token={token}",
-            body=json.dumps(
-                {"id": run_id, "request_id": asking["request_id"], "approved": True}
-            ),
+            body=json.dumps({"id": run_id, "request_id": asking["request_id"], "approved": True}),
             headers=write_headers,
         )
         assert json.loads(answerer.getresponse().read())["ok"] is True
@@ -477,9 +528,7 @@ def test_a_tool_approval_can_be_answered_from_the_browser(tmp_path: Path, monkey
         answerer.request(
             "POST",
             f"/api/runs/approve?token={token}",
-            body=json.dumps(
-                {"id": run_id, "request_id": asking["request_id"], "approved": True}
-            ),
+            body=json.dumps({"id": run_id, "request_id": asking["request_id"], "approved": True}),
             headers=write_headers,
         )
         stale = json.loads(answerer.getresponse().read())

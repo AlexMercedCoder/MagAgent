@@ -64,7 +64,9 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
 
         try:
             _registry_instance, config = _registry(project)
-            result = preview_profile(_load_document_input(input_path), project=project, config=config)
+            result = preview_profile(
+                _load_document_input(input_path), project=project, config=config
+            )
         except Exception as exc:
             result = {"ok": False, "error": str(exc)}
         console.print_json(data=result)
@@ -157,7 +159,9 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         from magent.agent_profiles.desktop import delete_profile
 
         if not yes:
-            console.print_json(data={"ok": False, "error": "Pass --yes after reviewing the profile."})
+            console.print_json(
+                data={"ok": False, "error": "Pass --yes after reviewing the profile."}
+            )
             raise typer.Exit(1)
         _registry_instance, config = _registry(project)
         result = delete_profile(
@@ -168,9 +172,7 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @agent_app.command("revisions")
-    def agent_revisions_cmd(
-        name: str, project: str = typer.Option(".", "--project", "-p")
-    ) -> None:
+    def agent_revisions_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
         """List restorable authoring revisions for an OAP profile."""
         from magent.agent_profiles.desktop import profile_checkpoints
 
@@ -181,9 +183,7 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @agent_app.command("detail")
-    def agent_detail_cmd(
-        name: str, project: str = typer.Option(".", "--project", "-p")
-    ) -> None:
+    def agent_detail_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
         """Return profile document, effective authority, and revision history."""
         from magent.agent_profiles.desktop import inspect_profile
 
@@ -205,7 +205,9 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         from magent.agent_profiles.desktop import rollback_profile
 
         if not yes:
-            console.print_json(data={"ok": False, "error": "Pass --yes after reviewing the revision."})
+            console.print_json(
+                data={"ok": False, "error": "Pass --yes after reviewing the revision."}
+            )
             raise typer.Exit(1)
         _registry_instance, config = _registry(project)
         result = rollback_profile(
@@ -239,7 +241,12 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
 
         profile, config = _require_profile(name, project)
         if config is None:
-            console.print_json(data={"ok": False, "error": "Configure a MagAgent user before resolving effective policy"})
+            console.print_json(
+                data={
+                    "ok": False,
+                    "error": "Configure a MagAgent user before resolving effective policy",
+                }
+            )
             raise typer.Exit(1)
         granted = {item.get("function", {}).get("name", "") for item in built_in_tool_definitions()}
         effective = resolve_effective_profile(profile, config, granted)
@@ -252,7 +259,9 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
 
         try:
             profile = AgentProfileRegistry(path.parent).load_path(path)
-            console.print_json(data={"ok": True, "profile": profile.as_dict(include_document=False)})
+            console.print_json(
+                data={"ok": True, "profile": profile.as_dict(include_document=False)}
+            )
         except Exception as exc:
             console.print_json(data={"ok": False, "error": str(exc)})
             raise typer.Exit(1) from exc
@@ -267,21 +276,25 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         force: bool = typer.Option(False, "--force"),
     ) -> None:
         """Create a portable OAP Markdown profile."""
-        from magent.agent_profiles.documents import atomic_write, render_document
+        from magent.agent_profiles.authoring import build_profile_document, write_profile
 
         normalized = name.strip().lower()
         path = Path(project).resolve() / ".magent" / "agents" / f"{normalized}.md"
         if path.exists() and not force:
             console.print_json(data={"ok": False, "error": f"Agent already exists: {path}"})
             raise typer.Exit(1)
-        document = {
-            "oap": "1.0",
-            "metadata": {"name": normalized, "description": description or normalized, "revision": 1},
-            "spec": {"role": {"instructions": prompt or f"You are the {normalized} agent. Describe your specialty here."}, "runtime": {"mode": mode}},
-            "state": [], "history": [], "proposals": [], "lifecycle": {"writeback": "propose"},
-        }
-        atomic_write(path, render_document(document, "md"))
-        console.print_json(data={"ok": True, "path": str(path), "profile": document})
+        document = build_profile_document(
+            name=normalized,
+            description=description or normalized,
+            role={
+                "instructions": prompt
+                or f"You are the {normalized} agent. Describe your specialty here."
+            },
+            runtime={"mode": mode},
+            lifecycle={"writeback": "propose"},
+        )
+        result = write_profile(document, scope="project", project=project, overwrite=force)
+        console.print_json(data={**result, "profile": document})
 
     @agent_app.command("convert")
     def agent_convert_cmd(path: Path, write: bool = typer.Option(False, "--write")) -> None:
@@ -306,16 +319,27 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     def agent_state_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
         """Show durable, untrusted state for a profile."""
         profile, _ = _require_profile(name, project)
-        console.print_json(data={"ok": True, "name": profile.name, "revision": profile.revision, "state": profile.document.get("state", [])})
+        console.print_json(
+            data={
+                "ok": True,
+                "name": profile.name,
+                "revision": profile.revision,
+                "state": profile.document.get("state", []),
+            }
+        )
 
     @agent_app.command("history")
     def agent_history_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
         """Show profile state revision history."""
         profile, _ = _require_profile(name, project)
-        console.print_json(data={"ok": True, "name": profile.name, "history": profile.document.get("history", [])})
+        console.print_json(
+            data={"ok": True, "name": profile.name, "history": profile.document.get("history", [])}
+        )
 
     @agent_app.command("rollback")
-    def agent_rollback_cmd(name: str, checkpoint: Path, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_rollback_cmd(
+        name: str, checkpoint: Path, project: str = typer.Option(".", "--project", "-p")
+    ) -> None:
         """Restore a validated profile checkpoint."""
         from magent.agent_profiles.delta import restore_checkpoint
 
@@ -327,12 +351,18 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         console.print_json(data=result)
 
     @agent_app.command("forget")
-    def agent_forget_cmd(name: str, entry_id: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_forget_cmd(
+        name: str, entry_id: str, project: str = typer.Option(".", "--project", "-p")
+    ) -> None:
         """Queue removal of one profile state entry for review."""
         from magent.agent_profiles.delta import ProfileDeltaInbox, make_delta
 
         profile, _ = _require_profile(name, project)
-        delta = make_delta(profile, [{"op": "remove", "path": f"/state/{entry_id}"}], evidence="Explicit CLI forget request")
+        delta = make_delta(
+            profile,
+            [{"op": "remove", "path": f"/state/facts/id:{entry_id}"}],
+            evidence="Explicit CLI forget request",
+        )
         ProfileDeltaInbox(project).add(delta)
         console.print_json(data={"ok": True, "delta": delta})
 
@@ -347,7 +377,9 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     def agent_accept_cmd(
         delta_id: str,
         project: str = typer.Option(".", "--project", "-p"),
-        rebase: bool = typer.Option(True, "--rebase/--no-rebase", help="Rebase when unrelated profile state changed."),
+        rebase: bool = typer.Option(
+            True, "--rebase/--no-rebase", help="Rebase when unrelated profile state changed."
+        ),
     ) -> None:
         """Apply a reviewed profile state delta."""
         from magent.agent_profiles.delta import ProfileDeltaInbox
@@ -360,7 +392,11 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
             raise typer.Exit(1) from exc
 
     @agent_app.command("reject")
-    def agent_reject_cmd(delta_id: str, reason: str = typer.Option("", "--reason"), project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_reject_cmd(
+        delta_id: str,
+        reason: str = typer.Option("", "--reason"),
+        project: str = typer.Option(".", "--project", "-p"),
+    ) -> None:
         """Reject a proposed profile state delta."""
         from magent.agent_profiles.delta import ProfileDeltaInbox
 
@@ -371,7 +407,14 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     def agent_digest_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
         """Show full and spec-only canonical digests."""
         profile, _ = _require_profile(name, project)
-        console.print_json(data={"ok": True, "name": profile.name, "profile_digest": profile.profile_digest, "spec_digest": profile.spec_digest})
+        console.print_json(
+            data={
+                "ok": True,
+                "name": profile.name,
+                "profile_digest": profile.profile_digest,
+                "spec_digest": profile.spec_digest,
+            }
+        )
 
     @agent_app.command("conformance")
     def agent_conformance_cmd() -> None:
@@ -384,7 +427,9 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @agent_app.command("run")
-    def agent_run_cmd(name: str, task: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_run_cmd(
+        name: str, task: str, project: str = typer.Option(".", "--project", "-p")
+    ) -> None:
         """Render a manual @agent invocation for compatibility."""
         from magent.agent_defs import resolve_invocation
 

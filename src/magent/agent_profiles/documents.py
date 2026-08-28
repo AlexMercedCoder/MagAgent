@@ -10,6 +10,7 @@ from typing import Any
 
 import yaml
 from jsonschema import Draft202012Validator
+from oap import validate as oap_validate
 
 from magent.agent_profiles.errors import ProfileValidationError
 
@@ -18,11 +19,14 @@ class _ProfileLoader(yaml.SafeLoader):
     pass
 
 
-# YAML 1.1 timestamps become datetime objects and break canonical JSON.
+# OAP uses YAML 1.2 core semantics. Disable YAML 1.1 timestamps and its
+# yes/no/on/off boolean aliases so cross-implementation digests agree.
 for _key, _rules in list(_ProfileLoader.yaml_implicit_resolvers.items()):
     _ProfileLoader.yaml_implicit_resolvers[_key] = [
         rule for rule in _rules if rule[0] != "tag:yaml.org,2002:timestamp"
     ]
+for _first in "yYnNoO":
+    _ProfileLoader.yaml_implicit_resolvers.pop(_first, None)
 
 
 SCHEMA_PATH = Path(__file__).parent / "schema" / "v1" / "profile.schema.json"
@@ -57,20 +61,58 @@ def parse_document(path: Path) -> tuple[dict[str, Any], str, str]:
         raise ProfileValidationError("profile document must be an object")
     if "oap" in data and body:
         role = data.setdefault("spec", {}).setdefault("role", {})
-        role.setdefault("instructions", body)
+        if "instructions" in role:
+            raise ProfileValidationError(
+                "Markdown profile supplies spec.role.instructions in both frontmatter and body"
+            )
+        if not body.strip():
+            raise ProfileValidationError("Markdown profile requires a non-empty body")
+        role["instructions"] = body.rstrip() + "\n"
     return data, body, encoding
 
 
 def validate_document(document: dict[str, Any]) -> None:
-    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    # Canonical OAP documents are checked against the released normative schema
+    # and all non-schema safety rules. The older MagAgent dialect remains
+    # readable for migration, but is never mistaken for canonical OAP.
+    canonical = document.get("kind") == "AgentProfile"
+    schema = (
+        oap_validate.load_schema("agent-profile.schema.json")
+        if canonical
+        else json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    )
     errors = sorted(Draft202012Validator(schema).iter_errors(document), key=lambda e: list(e.path))
     if errors:
         error = errors[0]
         pointer = "/" + "/".join(str(part) for part in error.path)
         raise ProfileValidationError(f"{pointer or '/'}: {error.message}")
+    if canonical:
+        report = oap_validate.Report(
+            Path(str(document.get("metadata", {}).get("name", "profile")) + ".agent.yaml")
+        )
+        if not oap_validate.check_version(document, report):
+            raise ProfileValidationError("; ".join(report.errors))
+        oap_validate.check_secrets(document, report)
+        oap_validate.check_mcp_refs(document, report)
+        oap_validate.check_paths(document, report)
+        oap_validate.check_variables(document, report)
+        oap_validate.check_state_ids(document, report)
+        oap_validate.check_history(document, report)
+        oap_validate.check_tools_policy(document, report)
+        if report.errors:
+            raise ProfileValidationError("; ".join(report.errors))
     for item in document.get("spec", {}).get("context", {}).get("files", []):
         if not isinstance(item, dict) or not str(item.get("path", "")).strip():
             raise ProfileValidationError("/spec/context/files: every entry requires path")
+
+
+def validate_delta_document(document: dict[str, Any]) -> None:
+    schema = oap_validate.load_schema("agent-state-delta.schema.json")
+    errors = sorted(Draft202012Validator(schema).iter_errors(document), key=lambda e: list(e.path))
+    if errors:
+        error = errors[0]
+        pointer = "/" + "/".join(str(part) for part in error.path)
+        raise ProfileValidationError(f"{pointer or '/'}: {error.message}")
 
 
 def render_document(document: dict[str, Any], encoding: str = "yaml") -> str:
@@ -79,7 +121,13 @@ def render_document(document: dict[str, Any], encoding: str = "yaml") -> str:
     if encoding == "md":
         data = json.loads(json.dumps(document))
         instructions = str(data.get("spec", {}).get("role", {}).pop("instructions", ""))
-        return "---\n" + yaml.safe_dump(data, sort_keys=False).rstrip() + "\n---\n\n" + instructions.strip() + "\n"
+        return (
+            "---\n"
+            + yaml.safe_dump(data, sort_keys=False).rstrip()
+            + "\n---\n\n"
+            + instructions.strip()
+            + "\n"
+        )
     return yaml.safe_dump(document, sort_keys=False, allow_unicode=True)
 
 

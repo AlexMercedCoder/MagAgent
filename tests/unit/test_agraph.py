@@ -42,7 +42,8 @@ def graph(*, nodes: dict | None = None, outputs: dict | None = None, level: int 
         "version": "1.0.0",
         "requires_conformance": level,
         "entrypoints": [next(iter(nodes or {"work": {}}))],
-        "nodes": nodes or {
+        "nodes": nodes
+        or {
             "work": {
                 "type": "task",
                 "title": "Do work",
@@ -51,11 +52,25 @@ def graph(*, nodes: dict | None = None, outputs: dict | None = None, level: int 
                 "requirements": {"tools": [], "permissions": []},
                 "success": {
                     "summary": "A result exists.",
-                    "criteria": [{"id": "result", "kind": "artifact_present", "description": "Result emitted.", "output": "result"}],
+                    "criteria": [
+                        {
+                            "id": "result",
+                            "kind": "artifact_present",
+                            "description": "Result emitted.",
+                            "output": "result",
+                        }
+                    ],
                 },
             }
         },
-        "outputs": outputs or {"result": {"type": "string", "description": "Final result.", "from": "nodes.work.outputs.result"}},
+        "outputs": outputs
+        or {
+            "result": {
+                "type": "string",
+                "description": "Final result.",
+                "from": "nodes.work.outputs.result",
+            }
+        },
     }
 
 
@@ -89,9 +104,21 @@ def test_official_examples_validate(path: Path) -> None:
 
 
 def test_expression_language_is_strict_and_has_no_host_eval() -> None:
-    assert evaluate_expression("len(items) == 2 && contains(items, 'a')", {"items": ["a", "b"]}) is True
-    assert evaluate_expression("default(nodes.optional.outputs.value, 'fallback')", {"nodes": {}}) == "fallback"
-    assert evaluate_expression("default(nodes.present.outputs.value, 'fallback')", {"nodes": {"present": {"outputs": {"value": "kept"}}}}) == "kept"
+    assert (
+        evaluate_expression("len(items) == 2 && contains(items, 'a')", {"items": ["a", "b"]})
+        is True
+    )
+    assert (
+        evaluate_expression("default(nodes.optional.outputs.value, 'fallback')", {"nodes": {}})
+        == "fallback"
+    )
+    assert (
+        evaluate_expression(
+            "default(nodes.present.outputs.value, 'fallback')",
+            {"nodes": {"present": {"outputs": {"value": "kept"}}}},
+        )
+        == "kept"
+    )
     with pytest.raises(AgxEvaluationError):
         evaluate_expression("1 == '1'", {})
     with pytest.raises(AgxEvaluationError):
@@ -101,7 +128,11 @@ def test_expression_language_is_strict_and_has_no_host_eval() -> None:
 def test_optional_graph_output_may_reference_an_inactive_branch(tmp_path: Path) -> None:
     document = graph(
         outputs={
-            "result": {"type": "string", "description": "Required result.", "from": "nodes.work.outputs.result"},
+            "result": {
+                "type": "string",
+                "description": "Required result.",
+                "from": "nodes.work.outputs.result",
+            },
             "optional": {
                 "type": "string",
                 "description": "Optional branch result.",
@@ -136,7 +167,11 @@ def test_optional_graph_output_may_reference_an_inactive_branch(tmp_path: Path) 
         return ""
 
     result = asyncio.run(executor(tmp_path, runner).run(document))
-    assert result["ok"], (result["run"]["diagnostics"], result["run"]["nodes"], result["run"]["outputs"])
+    assert result["ok"], (
+        result["run"]["diagnostics"],
+        result["run"]["nodes"],
+        result["run"]["outputs"],
+    )
     assert result["run"]["outputs"] == {"result": "done"}
 
 
@@ -148,6 +183,14 @@ def test_plan_is_deterministic_and_generated_graph_is_strictly_valid() -> None:
     assert report.ok
     assert "project_scan" in generated["context"]
     assert "repository_map" in generated["context"]
+
+
+def test_cross_harness_minimal_golden_plan() -> None:
+    golden = json.loads((ROOT / "docs/conformance/ags-golden-minimal.json").read_text())
+    document = load_graph(ROOT / "docs/examples/agraph/minimal.agraph.yaml")
+    plan = plan_graph(ROOT / "docs/examples/agraph/minimal.agraph.yaml")
+    assert document.digest == golden["graph_digest"]
+    assert list(plan.order) == golden["topological_order"]
 
 
 def test_generated_graph_completes_real_scheduler_execution(tmp_path: Path) -> None:
@@ -177,15 +220,59 @@ def test_generated_graph_completes_real_scheduler_execution(tmp_path: Path) -> N
     assert result["run"]["outputs"]["verification_report"].startswith("Verified")
     assert result["run"]["metadata"]["graph_snapshot"]["id"] == generated["id"]
     child_tasks = graph_executor.runtime.list_tasks(parent_task_id=result["task_id"])
-    assert {task["metadata"]["node_id"] for task in child_tasks} == {"inspect", "implement", "verify"}
+    assert {task["metadata"]["node_id"] for task in child_tasks} == {
+        "inspect",
+        "implement",
+        "verify",
+    }
 
 
 def test_parallel_nodes_keep_profile_context_isolated(tmp_path: Path) -> None:
     nodes = {
-        "docs": {"type": "task", "title": "Docs", "description": "Write docs.", "x-magagent-profile": "docs", "outputs": {"result": {"type": "string", "description": "Result."}}, "requirements": {"tools": [], "permissions": []}, "success": {"criteria": [{"id": "done", "kind": "artifact_present", "description": "Done.", "output": "result"}]}},
-        "code": {"type": "task", "title": "Code", "description": "Write code.", "x-magagent-profile": "code", "outputs": {"result": {"type": "string", "description": "Result."}}, "requirements": {"tools": [], "permissions": []}, "success": {"criteria": [{"id": "done", "kind": "artifact_present", "description": "Done.", "output": "result"}]}},
+        "docs": {
+            "type": "task",
+            "title": "Docs",
+            "description": "Write docs.",
+            "x-magagent-profile": "docs",
+            "outputs": {"result": {"type": "string", "description": "Result."}},
+            "requirements": {"tools": [], "permissions": []},
+            "success": {
+                "criteria": [
+                    {
+                        "id": "done",
+                        "kind": "artifact_present",
+                        "description": "Done.",
+                        "output": "result",
+                    }
+                ]
+            },
+        },
+        "code": {
+            "type": "task",
+            "title": "Code",
+            "description": "Write code.",
+            "x-magagent-profile": "code",
+            "outputs": {"result": {"type": "string", "description": "Result."}},
+            "requirements": {"tools": [], "permissions": []},
+            "success": {
+                "criteria": [
+                    {
+                        "id": "done",
+                        "kind": "artifact_present",
+                        "description": "Done.",
+                        "output": "result",
+                    }
+                ]
+            },
+        },
     }
-    document = graph(nodes=nodes, outputs={"docs": {"type": "string", "description": "Docs.", "from": "nodes.docs.outputs.result"}, "code": {"type": "string", "description": "Code.", "from": "nodes.code.outputs.result"}})
+    document = graph(
+        nodes=nodes,
+        outputs={
+            "docs": {"type": "string", "description": "Docs.", "from": "nodes.docs.outputs.result"},
+            "code": {"type": "string", "description": "Code.", "from": "nodes.code.outputs.result"},
+        },
+    )
     document["entrypoints"] = ["docs", "code"]
     document["constraints"] = {"max_parallel_nodes": 2}
     seen: dict[str, str] = {}
@@ -206,21 +293,69 @@ def test_parallel_nodes_keep_profile_context_isolated(tmp_path: Path) -> None:
 
 
 def test_durable_pause_waits_at_node_boundary(tmp_path: Path) -> None:
-    second = {"type": "task", "title": "Second", "description": "Second.", "depends_on": ["work"], "inputs": {"prior": {"type": "string", "description": "First result.", "from": "nodes.work.outputs.result"}}, "outputs": {"result": {"type": "string", "description": "Result."}}, "requirements": {"tools": [], "permissions": []}, "success": {"criteria": [{"id": "done", "kind": "artifact_present", "description": "Done.", "output": "result"}]}}
-    document = graph(nodes={**graph()["nodes"], "second": second}, outputs={"result": {"type": "string", "description": "Final.", "from": "nodes.second.outputs.result"}})
+    second = {
+        "type": "task",
+        "title": "Second",
+        "description": "Second.",
+        "depends_on": ["work"],
+        "inputs": {
+            "prior": {
+                "type": "string",
+                "description": "First result.",
+                "from": "nodes.work.outputs.result",
+            }
+        },
+        "outputs": {"result": {"type": "string", "description": "Result."}},
+        "requirements": {"tools": [], "permissions": []},
+        "success": {
+            "criteria": [
+                {
+                    "id": "done",
+                    "kind": "artifact_present",
+                    "description": "Done.",
+                    "output": "result",
+                }
+            ]
+        },
+    }
+    document = graph(
+        nodes={**graph()["nodes"], "second": second},
+        outputs={
+            "result": {
+                "type": "string",
+                "description": "Final.",
+                "from": "nodes.second.outputs.result",
+            }
+        },
+    )
     calls: list[str] = []
 
     async def scenario() -> dict:
         nonlocal graph_executor
+
         async def runner(node, _prompt, _route, _task):
             calls.append(node)
             await asyncio.sleep(0.03)
             emit_output("result", node)
             return ""
+
         store = WorkbenchStore(tmp_path / "pause-store")
-        runtime_task = GraphExecutor(username="test", config=Config(DEFAULT_GLOBAL_CONFIG), project=tmp_path, store=store, agent_runner=runner)
+        runtime_task = GraphExecutor(
+            username="test",
+            config=Config(DEFAULT_GLOBAL_CONFIG),
+            project=tmp_path,
+            store=store,
+            agent_runner=runner,
+        )
         root = runtime_task.runtime.create("agentic_graph", "Pause", project=tmp_path)
-        graph_executor = GraphExecutor(username="test", config=Config(DEFAULT_GLOBAL_CONFIG), project=tmp_path, store=store, agent_runner=runner, root_task_id=root["id"])
+        graph_executor = GraphExecutor(
+            username="test",
+            config=Config(DEFAULT_GLOBAL_CONFIG),
+            project=tmp_path,
+            store=store,
+            agent_runner=runner,
+            root_task_id=root["id"],
+        )
         running = asyncio.create_task(graph_executor.run(document))
         await asyncio.sleep(0.01)
         graph_executor.runtime.pause(root["id"])
@@ -258,7 +393,7 @@ def test_simple_execution_emits_valid_record_and_resume_reuses_success(tmp_path:
     assert first["ok"] and second["ok"]
     assert calls == 1
     assert second["run"]["outputs"] == {"result": "done"}
-    assert first["run"]["summary"] == {
+    assert first["run"]["metadata"]["x-magagent-summary"] == {
         "text": "Graph succeeded: 1 succeeded, 0 failed or blocked, 0 skipped.",
         "succeeded": ["work"],
         "failed": [],
@@ -266,7 +401,11 @@ def test_simple_execution_emits_valid_record_and_resume_reuses_success(tmp_path:
         "total": 1,
     }
     assert [event["type"] for event in events] == [
-        "graph.started", "node.queued", "node.started", "node.completed", "graph.completed"
+        "graph.started",
+        "node.queued",
+        "node.started",
+        "node.completed",
+        "graph.completed",
     ]
     assert all(event["schema_version"] == "magent.graph-event.v1" for event in events)
     snapshot = graph_status(first_executor.store, first["run"]["run_id"])
@@ -296,29 +435,81 @@ def test_expression_decision_activates_only_selected_branch(tmp_path: Path) -> N
             "decision": {
                 "evaluator": "expression",
                 "branches": [
-                    {"label": "yes", "description": "Enabled path.", "when": "params.enabled == true"},
-                    {"label": "no", "description": "Disabled path.", "when": "params.enabled == false"},
+                    {
+                        "label": "yes",
+                        "description": "Enabled path.",
+                        "when": "params.enabled == true",
+                    },
+                    {
+                        "label": "no",
+                        "description": "Disabled path.",
+                        "when": "params.enabled == false",
+                    },
                 ],
             },
         },
         "yes": {
-            "type": "task", "title": "Yes", "description": "Emit yes.",
+            "type": "task",
+            "title": "Yes",
+            "description": "Emit yes.",
             "outputs": {"value": {"type": "string", "description": "Value."}},
             "requirements": {"tools": [], "permissions": []},
-            "success": {"summary": "Done.", "criteria": [{"id": "value", "kind": "artifact_present", "description": "Value.", "output": "value"}]},
+            "success": {
+                "summary": "Done.",
+                "criteria": [
+                    {
+                        "id": "value",
+                        "kind": "artifact_present",
+                        "description": "Value.",
+                        "output": "value",
+                    }
+                ],
+            },
         },
         "no": {
-            "type": "task", "title": "No", "description": "Emit no.",
+            "type": "task",
+            "title": "No",
+            "description": "Emit no.",
             "outputs": {"value": {"type": "string", "description": "Value."}},
             "requirements": {"tools": [], "permissions": []},
-            "success": {"summary": "Done.", "criteria": [{"id": "value", "kind": "artifact_present", "description": "Value.", "output": "value"}]},
+            "success": {
+                "summary": "Done.",
+                "criteria": [
+                    {
+                        "id": "value",
+                        "kind": "artifact_present",
+                        "description": "Value.",
+                        "output": "value",
+                    }
+                ],
+            },
         },
     }
-    document = graph(nodes=nodes, outputs={"value": {"type": "string", "description": "Chosen value.", "from": "nodes.yes.outputs.value"}}, level=2)
+    document = graph(
+        nodes=nodes,
+        outputs={
+            "value": {
+                "type": "string",
+                "description": "Chosen value.",
+                "from": "nodes.yes.outputs.value",
+            }
+        },
+        level=2,
+    )
     document["params"] = {"enabled": {"type": "boolean", "description": "Choose yes."}}
     document["edges"] = [
-        {"from": "choose", "to": "yes", "kind": "conditional", "when": "nodes.choose.outputs.decision == 'yes'"},
-        {"from": "choose", "to": "no", "kind": "conditional", "when": "nodes.choose.outputs.decision == 'no'"},
+        {
+            "from": "choose",
+            "to": "yes",
+            "kind": "conditional",
+            "when": "nodes.choose.outputs.decision == 'yes'",
+        },
+        {
+            "from": "choose",
+            "to": "no",
+            "kind": "conditional",
+            "when": "nodes.choose.outputs.decision == 'no'",
+        },
     ]
     calls = []
 
@@ -355,8 +546,15 @@ def test_human_checkpoints_and_graph_tool_policy(tmp_path: Path) -> None:
     policy = GraphToolPolicy({"read_file"}, ("fs:read:**",))
     token = set_graph_tool_policy(policy)
     try:
-        assert asyncio.run(authorize_graph_tool("read_file", {"path": "README.md"}, str(tmp_path)))["ok"]
-        assert "RT012" in asyncio.run(authorize_graph_tool("write_file", {"path": "x"}, str(tmp_path)))["error"]
+        assert asyncio.run(authorize_graph_tool("read_file", {"path": "README.md"}, str(tmp_path)))[
+            "ok"
+        ]
+        assert (
+            "RT012"
+            in asyncio.run(authorize_graph_tool("write_file", {"path": "x"}, str(tmp_path)))[
+                "error"
+            ]
+        )
     finally:
         reset_graph_tool_policy(token)
 
@@ -387,7 +585,15 @@ def test_resume_rejects_changed_digest(tmp_path: Path) -> None:
 
 
 def test_external_subgraph_uses_uri_params_and_output_mapping(tmp_path: Path) -> None:
-    child = graph(outputs={"result": {"type": "string", "description": "Child result.", "from": "nodes.work.outputs.result"}})
+    child = graph(
+        outputs={
+            "result": {
+                "type": "string",
+                "description": "Child result.",
+                "from": "nodes.work.outputs.result",
+            }
+        }
+    )
     child["id"] = "tests/child"
     child["params"] = {"label": {"type": "string", "description": "Value to emit."}}
     child["nodes"]["work"]["inputs"] = {
@@ -410,7 +616,13 @@ def test_external_subgraph_uses_uri_params_and_output_mapping(tmp_path: Path) ->
                 },
             }
         },
-        outputs={"value": {"type": "string", "description": "Mapped child value.", "from": "nodes.child.outputs.value"}},
+        outputs={
+            "value": {
+                "type": "string",
+                "description": "Mapped child value.",
+                "from": "nodes.child.outputs.value",
+            }
+        },
         level=3,
     )
     parent["params"] = {"label": {"type": "string", "description": "Value for child."}}
@@ -427,7 +639,9 @@ def test_external_subgraph_uses_uri_params_and_output_mapping(tmp_path: Path) ->
     assert result["run"]["outputs"] == {"value": "hello"}
 
 
-def test_run_record_redacts_declared_values_and_environment_secrets(tmp_path: Path, monkeypatch) -> None:
+def test_run_record_redacts_declared_values_and_environment_secrets(
+    tmp_path: Path, monkeypatch
+) -> None:
     monkeypatch.setenv("DEPLOY_TOKEN", "super-secret-value")
     document = graph()
     document["secrets"] = [
@@ -498,10 +712,20 @@ def test_success_criteria_modes_count_only_required_checks(tmp_path: Path) -> No
     criteria = [
         {"id": "pass", "kind": "expression", "description": "Pass.", "expr": "true"},
         {"id": "fail", "kind": "expression", "description": "Fail.", "expr": "false"},
-        {"id": "advice", "kind": "expression", "description": "Advice.", "expr": "false", "severity": "advisory"},
+        {
+            "id": "advice",
+            "kind": "expression",
+            "description": "Advice.",
+            "expr": "false",
+            "severity": "advisory",
+        },
     ]
-    any_ok, _ = asyncio.run(evaluate_criteria(criteria, outputs={}, scope={}, project=tmp_path, mode="any"))
-    two_ok, _ = asyncio.run(evaluate_criteria(criteria, outputs={}, scope={}, project=tmp_path, mode="n_of", count=2))
+    any_ok, _ = asyncio.run(
+        evaluate_criteria(criteria, outputs={}, scope={}, project=tmp_path, mode="any")
+    )
+    two_ok, _ = asyncio.run(
+        evaluate_criteria(criteria, outputs={}, scope={}, project=tmp_path, mode="n_of", count=2)
+    )
     assert any_ok
     assert not two_ok
 
@@ -555,9 +779,7 @@ def test_packaged_yaml_examples_complete_structural_execution(
                 },
             }
         contract = json.loads(
-            prompt.split("Declared outputs:\n", 1)[1].split(
-                "\n\nComplete the task", 1
-            )[0]
+            prompt.split("Declared outputs:\n", 1)[1].split("\n\nComplete the task", 1)[0]
         )
         return {
             "outputs": {

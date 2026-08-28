@@ -23,10 +23,12 @@ BUILTINS: dict[str, dict[str, Any]] = {
                 "Inspect the available context, make concrete progress, verify consequential work, "
                 "and communicate clearly about results and uncertainty."
             ),
-            "persona": (
-                "You are MagAgent: pragmatic, curious, attentive, and comfortable moving between "
-                "software engineering, research, documentation, and practical project work."
-            ),
+            "persona": {
+                "tone": (
+                    "You are MagAgent: pragmatic, curious, attentive, and comfortable moving between "
+                    "software engineering, research, documentation, and practical project work."
+                )
+            },
             "objectives": [
                 "Help the user complete useful work end to end.",
                 "Use tools deliberately and leave verifiable artifacts when requested.",
@@ -41,8 +43,8 @@ BUILTINS: dict[str, dict[str, Any]] = {
     "review": {
         "description": "Read-only code review focused on correctness, security, and tests.",
         "instructions": "You are MagAgent's review agent. Do not make edits unless explicitly asked. Prioritize bugs, regressions, security risks, and missing tests.",
-        "tools": {"deny": ["write_file", "edit_file", "delete_file"]},
-        "permissions": {"default": "paranoid"},
+        "tools": {"policy": "denylist", "deny": ["write_file", "edit_file", "delete_file"]},
+        "permissions": {"default": "deny"},
     },
     "explore": {
         "description": "Fast codebase exploration and context gathering.",
@@ -64,14 +66,16 @@ def _builtin(name: str, value: dict[str, Any]) -> ResolvedProfile:
             spec[key] = value[key]
     document = {
         "oap": "1.0",
+        "kind": "AgentProfile",
         "metadata": {"name": name, "description": value["description"], "revision": 1},
-        "spec": spec,
-        "state": [],
+        "spec": {**spec, "lifecycle": {"writeback": "off"}},
+        "state": {},
         "history": [],
-        "proposals": [],
-        "lifecycle": {"writeback": "off"},
     }
-    return ResolvedProfile(document, None, "managed", digest_spec(document), digest_document(document), "yaml")
+    validate_document(document)
+    return ResolvedProfile(
+        document, None, "managed", digest_spec(document), digest_document(document), "yaml"
+    )
 
 
 @dataclass(frozen=True)
@@ -94,14 +98,21 @@ class AgentProfileRegistry:
         project_paths = self._setting("project_paths", [".magent/agents", ".agents"])
         roots = [
             _Root(Path(str(path)).expanduser().resolve(), "user", "user", 500 - index)
-            for index, path in enumerate(user_paths if isinstance(user_paths, list) else [user_paths])
+            for index, path in enumerate(
+                user_paths if isinstance(user_paths, list) else [user_paths]
+            )
         ]
-        for index, path in enumerate(project_paths if isinstance(project_paths, list) else [project_paths]):
+        for index, path in enumerate(
+            project_paths if isinstance(project_paths, list) else [project_paths]
+        ):
             raw = Path(str(path)).expanduser()
             resolved = (raw if raw.is_absolute() else self.project / raw).resolve()
             label = "project" if str(path).rstrip("/") == ".magent/agents" else "portable"
             roots.append(_Root(resolved, "project", label, 400 - index))
-        roots.extend(_Root(path / "agents", "project", f"plugin:{path.name}", 200) for path in enabled_plugin_paths())
+        roots.extend(
+            _Root(path / "agents", "project", f"plugin:{path.name}", 200)
+            for path in enabled_plugin_paths()
+        )
         return roots
 
     def load_path(self, path: Path, trust: str = "project") -> ResolvedProfile:
@@ -133,7 +144,12 @@ class AgentProfileRegistry:
                 continue
             within: dict[str, ResolvedProfile] = {}
             for path in sorted(root.path.iterdir()):
-                if not path.is_file() or path.suffix.lower() not in {".md", ".yaml", ".yml", ".json"}:
+                if not path.is_file() or path.suffix.lower() not in {
+                    ".md",
+                    ".yaml",
+                    ".yml",
+                    ".json",
+                }:
                     continue
                 profile = self.load_path(path, root.trust)
                 if profile.name in within:
@@ -141,18 +157,28 @@ class AgentProfileRegistry:
                 within[profile.name] = profile
             for name, profile in within.items():
                 if name in selected:
-                    warnings.append(f"{root.label} profile {name!r} shadows {selected[name].trust} source")
+                    warnings.append(
+                        f"{root.label} profile {name!r} shadows {selected[name].trust} source"
+                    )
                 if root.precedence >= source_rank.get(name, -1):
                     selected[name] = profile
                     source_rank[name] = root.precedence
         maximum = int(self._setting("max_profiles", 200))
         if len(selected) > maximum:
-            raise ProfileError(f"profile count {len(selected)} exceeds configured maximum {maximum}")
+            raise ProfileError(
+                f"profile count {len(selected)} exceeds configured maximum {maximum}"
+            )
         return resolve_composition(selected), warnings
 
     def list(self) -> dict[str, Any]:
         profiles, warnings = self.discover()
-        return {"ok": True, "profiles": [profiles[name].as_dict(include_document=False) for name in sorted(profiles)], "warnings": warnings}
+        return {
+            "ok": True,
+            "profiles": [
+                profiles[name].as_dict(include_document=False) for name in sorted(profiles)
+            ],
+            "warnings": warnings,
+        }
 
     def get(self, name: str) -> ResolvedProfile | None:
         profiles, _ = self.discover()

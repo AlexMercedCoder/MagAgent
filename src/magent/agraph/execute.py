@@ -264,7 +264,12 @@ class GraphExecutor:
             # forever, because the raise skipped the write below.
             with contextlib.suppress(Exception):
                 self._persist_record()
-            self._emit("graph.completed", state="cancelled", summary="Graph execution was cancelled.", error_code="GRAPH_CANCELLED")
+            self._emit(
+                "graph.completed",
+                state="cancelled",
+                summary="Graph execution was cancelled.",
+                error_code="GRAPH_CANCELLED",
+            )
             raise
         except Exception as exc:
             self._diagnostic(getattr(exc, "code", "RT001"), "error", str(exc))
@@ -278,7 +283,9 @@ class GraphExecutor:
         self._emit(
             "graph.completed",
             state=self._record["status"],
-            summary=str((self._record.get("summary") or {}).get("text", "")),
+            summary=str(
+                (self._record.get("metadata", {}).get("x-magagent-summary") or {}).get("text", "")
+            ),
             error_code="" if self._record["status"] == "succeeded" else "GRAPH_RUN_FAILED",
         )
         return {
@@ -307,7 +314,15 @@ class GraphExecutor:
                 outputs[node_id] = dict(previous.get("outputs") or {})
                 scope["nodes"][node_id] = {"outputs": outputs[node_id], "status": "succeeded"}
                 self._record["nodes"].append(previous)
-                self._ensure_node_task(full_id, nodes[node_id], state="succeeded", summary=str(previous.get("summary") or "Reused from the prior successful run."))
+                self._ensure_node_task(
+                    full_id,
+                    nodes[node_id],
+                    state="succeeded",
+                    summary=str(
+                        previous.get("x-magagent-summary")
+                        or "Reused from the prior successful run."
+                    ),
+                )
             else:
                 reasons = blocking_reasons(document, node_id, statuses, scope)
                 self._ensure_node_task(full_id, nodes[node_id], state="ready", blocked_by=reasons)
@@ -322,7 +337,13 @@ class GraphExecutor:
             skipped = propagate_skips(document, statuses, scope)
             for node_id in skipped:
                 full_id = f"{scope_path}.{node_id}".strip(".")
-                self._terminalize_nonexecuted(full_id, nodes[node_id], "skipped", "No dependency route became active for this job.", "GRAPH_ROUTE_SKIPPED")
+                self._terminalize_nonexecuted(
+                    full_id,
+                    nodes[node_id],
+                    "skipped",
+                    "No dependency route became active for this job.",
+                    "GRAPH_ROUTE_SKIPPED",
+                )
             candidates = ready_nodes(document, statuses, scope)
             selected = []
             for node_id in candidates:
@@ -344,8 +365,13 @@ class GraphExecutor:
                     statuses[node_id] = "blocked"
                     full_id = f"{scope_path}.{node_id}".strip(".")
                     reasons = blocking_reasons(document, node_id, statuses, scope)
-                    message = "; ".join(item["message"] for item in reasons) or "Node cannot become ready."
-                    self._terminalize_nonexecuted(full_id, nodes[node_id], "blocked", message, "RT021", blocked_by=reasons)
+                    message = (
+                        "; ".join(item["message"] for item in reasons)
+                        or "Node cannot become ready."
+                    )
+                    self._terminalize_nonexecuted(
+                        full_id, nodes[node_id], "blocked", message, "RT021", blocked_by=reasons
+                    )
                     self._diagnostic("RT021", "error", message, node_id=node_id)
                 break
             results = await asyncio.gather(
@@ -370,7 +396,13 @@ class GraphExecutor:
                     )
                     full_id = f"{scope_path}.{node_id}".strip(".")
                     if full_id not in self._node_records:
-                        self._terminalize_nonexecuted(full_id, nodes[node_id], "failed", str(result), getattr(result, "code", "RT001"))
+                        self._terminalize_nonexecuted(
+                            full_id,
+                            nodes[node_id],
+                            "failed",
+                            str(result),
+                            getattr(result, "code", "RT001"),
+                        )
                     continue
                 status, node_outputs = result
                 statuses[node_id] = status
@@ -384,7 +416,13 @@ class GraphExecutor:
                     if status == "pending":
                         statuses[node_id] = "skipped"
                         full_id = f"{scope_path}.{node_id}".strip(".")
-                        self._terminalize_nonexecuted(full_id, nodes[node_id], "skipped", "Skipped because an upstream job failed and the graph failure policy is halt.", "GRAPH_UPSTREAM_FAILED")
+                        self._terminalize_nonexecuted(
+                            full_id,
+                            nodes[node_id],
+                            "skipped",
+                            "Skipped because an upstream job failed and the graph failure policy is halt.",
+                            "GRAPH_UPSTREAM_FAILED",
+                        )
                 break
         return statuses, outputs
 
@@ -426,12 +464,24 @@ class GraphExecutor:
         if node.get("when"):
             try:
                 if not bool(evaluate_expression(str(node["when"]), scope)):
-                    self._terminalize_nonexecuted(full_id, node, "skipped", "The node guard condition evaluated to false.", "GRAPH_GUARD_FALSE")
+                    self._terminalize_nonexecuted(
+                        full_id,
+                        node,
+                        "skipped",
+                        "The node guard condition evaluated to false.",
+                        "GRAPH_GUARD_FALSE",
+                    )
                     return "skipped", {}
             except AgxEvaluationError as exc:
                 policy = (self._document.data.get("policy") if self._document else {}) or {}
                 if policy.get("on_expression_error", "fail") == "skip_node":
-                    self._terminalize_nonexecuted(full_id, node, "skipped", f"The node guard could not be evaluated: {exc}", "RT020")
+                    self._terminalize_nonexecuted(
+                        full_id,
+                        node,
+                        "skipped",
+                        f"The node guard could not be evaluated: {exc}",
+                        "RT020",
+                    )
                     return "skipped", {}
                 raise GraphRunError(str(exc), "RT020") from exc
         resolved_inputs = self._resolve_inputs(node, scope)
@@ -441,7 +491,14 @@ class GraphExecutor:
         task_id = self._ensure_node_task(full_id, node, state="ready")
         task = self.runtime.get(task_id) or {"id": task_id, "attempt": 1}
         self.runtime.transition(task["id"], "running", reason="Graph node started")
-        self._emit_node("node.started", full_id, node, "running", task_id=task["id"], attempt=int(task.get("attempt", 1)))
+        self._emit_node(
+            "node.started",
+            full_id,
+            node,
+            "running",
+            task_id=task["id"],
+            attempt=int(task.get("attempt", 1)),
+        )
         attempts: list[dict[str, Any]] = []
         human_events: list[dict[str, Any]] = []
         outputs: dict[str, Any] = {}
@@ -477,7 +534,9 @@ class GraphExecutor:
                         outputs = await self._run_node_body(
                             full_id, node, resolved_inputs, scope, route, task["id"], feedback
                         )
-                        files_changed = [str(item) for item in outputs.pop("_magent_files_changed", [])]
+                        files_changed = [
+                            str(item) for item in outputs.pop("_magent_files_changed", [])
+                        ]
                         response_summary = str(outputs.pop("_magent_summary", ""))
                         forced_status = str(outputs.pop("_status", ""))
                         self._enforce_usage_budgets(node, usage_before)
@@ -586,16 +645,43 @@ class GraphExecutor:
             task["id"],
             usage=_sum_usage(attempts),
             files_changed=files_changed,
-            final_audit={"ok": final == "succeeded", "summary": summary, "error_code": error_code, "error": str(attempts[-1].get("error", "")) if attempts else ""},
-            metadata={"summary": summary, "result_summary": summary, "dependencies": list(node.get("depends_on") or []), "agent_profile": str(node.get("x-magagent-profile") or "")},
+            final_audit={
+                "ok": final == "succeeded",
+                "summary": summary,
+                "error_code": error_code,
+                "error": str(attempts[-1].get("error", "")) if attempts else "",
+            },
+            metadata={
+                "summary": summary,
+                "result_summary": summary,
+                "dependencies": list(node.get("depends_on") or []),
+                "agent_profile": str(node.get("x-magagent-profile") or ""),
+            },
         )
         self._append_node_record(
-            full_id, node, final, resolved_inputs, attempts, outputs, human_events, summary=summary, files_changed=files_changed, error_code=error_code
+            full_id,
+            node,
+            final,
+            resolved_inputs,
+            attempts,
+            outputs,
+            human_events,
+            summary=summary,
+            files_changed=files_changed,
+            error_code=error_code,
         )
         self._emit_node(
-            "node.completed", full_id, node, final, task_id=task["id"], attempt=len(attempts),
-            summary=summary, error_code=error_code, error=str(attempts[-1].get("error", "")) if attempts else "",
-            files_changed=files_changed, usage=_sum_usage(attempts),
+            "node.completed",
+            full_id,
+            node,
+            final,
+            task_id=task["id"],
+            attempt=len(attempts),
+            summary=summary,
+            error_code=error_code,
+            error=str(attempts[-1].get("error", "")) if attempts else "",
+            files_changed=files_changed,
+            usage=_sum_usage(attempts),
         )
         return final, outputs
 
@@ -641,7 +727,9 @@ class GraphExecutor:
             raise GraphRunError(f"unsupported node type {node_type!r}", "AG303")
         profile_token = self._active_profile.set(self._profile_for_node(node))
         try:
-            return await asyncio.wait_for(coroutine, timeout=timeout) if timeout else await coroutine
+            return (
+                await asyncio.wait_for(coroutine, timeout=timeout) if timeout else await coroutine
+            )
         finally:
             self._active_profile.reset(profile_token)
 
@@ -737,7 +825,9 @@ class GraphExecutor:
             **(outputs if block.get("evaluator", "agent") != "expression" else {}),
         }
 
-    async def _run_gate(self, node_id: str, node: dict[str, Any], scope: dict[str, Any]) -> dict[str, Any]:
+    async def _run_gate(
+        self, node_id: str, node: dict[str, Any], scope: dict[str, Any]
+    ) -> dict[str, Any]:
         gate = node.get("gate") or {}
         prompt = str(
             resolve_value(gate.get("prompt", node.get("description", "Approve this gate?")), scope)
@@ -1122,7 +1212,9 @@ class GraphExecutor:
         resolved = AgentProfileRegistry(self.project, self.config).get(name)
         if resolved is None:
             raise GraphRunError(f"Agent profile not found: {name}", "RT012")
-        granted = {str(item.get("function", {}).get("name", "")) for item in built_in_tool_definitions()}
+        granted = {
+            str(item.get("function", {}).get("name", "")) for item in built_in_tool_definitions()
+        }
         profile = resolve_effective_profile(resolved, self.config, granted)
         self._profile_cache[name] = profile
         return profile
@@ -1406,7 +1498,9 @@ class GraphExecutor:
         if existing:
             return existing
         node_id = full_id.split(".")[-1].split("[")[0]
-        profile_name = str(node.get("x-magagent-profile") or getattr(self.profile, "name", "") or "")
+        profile_name = str(
+            node.get("x-magagent-profile") or getattr(self.profile, "name", "") or ""
+        )
         task = self.runtime.create(
             "agentic_graph_node",
             node.get("title", node_id),
@@ -1430,8 +1524,20 @@ class GraphExecutor:
         )
         self._node_tasks[full_id] = task["id"]
         if summary:
-            self.runtime.update_context(task["id"], final_audit={"ok": state == "succeeded", "summary": summary}, metadata={"result_summary": summary})
-        self._emit_node("node.queued" if state == "ready" else "node.completed", full_id, node, state, task_id=task["id"], summary=summary, blocked_by=blocked_by or [])
+            self.runtime.update_context(
+                task["id"],
+                final_audit={"ok": state == "succeeded", "summary": summary},
+                metadata={"result_summary": summary},
+            )
+        self._emit_node(
+            "node.queued" if state == "ready" else "node.completed",
+            full_id,
+            node,
+            state,
+            task_id=task["id"],
+            summary=summary,
+            blocked_by=blocked_by or [],
+        )
         return task["id"]
 
     def _terminalize_nonexecuted(
@@ -1448,15 +1554,44 @@ class GraphExecutor:
         task = self.runtime.get(task_id)
         if task and task["state"] != state:
             if state == "failed" and task["state"] == "ready":
-                self.runtime.transition(task_id, "blocked", reason=summary, detail={"error_code": error_code})
-            self.runtime.transition(task_id, state, reason=summary, detail={"error_code": error_code, "blocked_by": blocked_by or []})
+                self.runtime.transition(
+                    task_id, "blocked", reason=summary, detail={"error_code": error_code}
+                )
+            self.runtime.transition(
+                task_id,
+                state,
+                reason=summary,
+                detail={"error_code": error_code, "blocked_by": blocked_by or []},
+            )
         self.runtime.update_context(
             task_id,
             final_audit={"ok": False, "summary": summary, "error_code": error_code},
-            metadata={"summary": summary, "result_summary": summary, "blocked_by": blocked_by or []},
+            metadata={
+                "summary": summary,
+                "result_summary": summary,
+                "blocked_by": blocked_by or [],
+            },
         )
-        self._append_node_record(full_id, node, state, {}, [], summary=summary, error_code=error_code, blocked_by=blocked_by or [])
-        self._emit_node("node.completed", full_id, node, state, task_id=task_id, summary=summary, error_code=error_code, blocked_by=blocked_by or [])
+        self._append_node_record(
+            full_id,
+            node,
+            state,
+            {},
+            [],
+            summary=summary,
+            error_code=error_code,
+            blocked_by=blocked_by or [],
+        )
+        self._emit_node(
+            "node.completed",
+            full_id,
+            node,
+            state,
+            task_id=task_id,
+            summary=summary,
+            error_code=error_code,
+            blocked_by=blocked_by or [],
+        )
 
     def _emit(self, event_type: str, *, state: str, **detail: Any) -> dict[str, Any]:
         event = graph_event(
@@ -1475,7 +1610,9 @@ class GraphExecutor:
             self.event_sink(event)
         return event
 
-    def _emit_node(self, event_type: str, full_id: str, node: dict[str, Any], state: str, **detail: Any) -> dict[str, Any]:
+    def _emit_node(
+        self, event_type: str, full_id: str, node: dict[str, Any], state: str, **detail: Any
+    ) -> dict[str, Any]:
         node_id = full_id.split(".")[-1].split("[")[0]
         node_task_id = str(detail.pop("task_id", "") or "")
         event = graph_event(
@@ -1502,13 +1639,23 @@ class GraphExecutor:
 
     def _finalize_root_task(self, failed: bool, *, error: str = "", error_code: str = "") -> None:
         summary = _run_summary(self._record)
-        self._record["summary"] = summary
+        self._record.setdefault("metadata", {})["x-magagent-summary"] = summary
         with contextlib.suppress(Exception):
             self.runtime.update_context(
                 self._root_task_id,
                 usage=self._record.get("usage") or {},
-                final_audit={"ok": not failed, "summary": summary["text"], "error": error, "error_code": error_code, **summary},
-                metadata={"summary": summary["text"], "result_summary": summary["text"], "run_status": self._record.get("status")},
+                final_audit={
+                    "ok": not failed,
+                    "summary": summary["text"],
+                    "error": error,
+                    "error_code": error_code,
+                    **summary,
+                },
+                metadata={
+                    "summary": summary["text"],
+                    "result_summary": summary["text"],
+                    "run_status": self._record.get("status"),
+                },
             )
 
     def _append_node_record(
@@ -1550,18 +1697,19 @@ class GraphExecutor:
             "outputs": _redact_values(node.get("outputs") or {}, outputs or {}),
             "attempts": attempts,
             "usage": _sum_usage(attempts),
-            "dependencies": list(node.get("depends_on") or []),
-            "summary": summary or _node_summary(node, status, outputs or {}, attempts, ""),
-            "files_changed": files_changed or [],
+            "x-magagent-dependencies": list(node.get("depends_on") or []),
+            "x-magagent-summary": summary
+            or _node_summary(node, status, outputs or {}, attempts, ""),
+            "x-magagent-files-changed": files_changed or [],
         }
         if error_code:
-            record["error_code"] = error_code
+            record["x-magagent-error-code"] = error_code
         if blocked_by:
-            record["blocked_by"] = blocked_by
+            record["x-magagent-blocked-by"] = blocked_by
         if attempts and attempts[-1].get("error"):
-            record["error"] = str(attempts[-1]["error"])
+            record["x-magagent-error"] = str(attempts[-1]["error"])
         if node.get("x-magagent-profile"):
-            record["agent_profile"] = str(node["x-magagent-profile"])
+            record["x-magagent-profile"] = str(node["x-magagent-profile"])
         if human_events:
             record["human_events"] = human_events
         if node.get("type") == "decision" and outputs:
@@ -1809,11 +1957,29 @@ def _node_summary(
 
 def _run_summary(record: dict[str, Any]) -> dict[str, Any]:
     nodes = record.get("nodes") or []
-    succeeded = [str(item.get("scope_path") or item.get("node_id")) for item in nodes if item.get("status") == "succeeded"]
-    failed = [str(item.get("scope_path") or item.get("node_id")) for item in nodes if item.get("status") in {"failed", "blocked", "cancelled"}]
-    skipped = [str(item.get("scope_path") or item.get("node_id")) for item in nodes if item.get("status") == "skipped"]
+    succeeded = [
+        str(item.get("scope_path") or item.get("node_id"))
+        for item in nodes
+        if item.get("status") == "succeeded"
+    ]
+    failed = [
+        str(item.get("scope_path") or item.get("node_id"))
+        for item in nodes
+        if item.get("status") in {"failed", "blocked", "cancelled"}
+    ]
+    skipped = [
+        str(item.get("scope_path") or item.get("node_id"))
+        for item in nodes
+        if item.get("status") == "skipped"
+    ]
     text = f"Graph {record.get('status')}: {len(succeeded)} succeeded, {len(failed)} failed or blocked, {len(skipped)} skipped."
-    return {"text": text, "succeeded": succeeded, "failed": failed, "skipped": skipped, "total": len(nodes)}
+    return {
+        "text": text,
+        "succeeded": succeeded,
+        "failed": failed,
+        "skipped": skipped,
+        "total": len(nodes),
+    }
 
 
 def _retry_closure(document: dict[str, Any], selected: set[str]) -> set[str]:

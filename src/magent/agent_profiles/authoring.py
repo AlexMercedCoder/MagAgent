@@ -41,13 +41,62 @@ def build_profile_document(
 ) -> dict[str, Any]:
     """Build and validate a complete OAP v1 document."""
     normalized = normalize_profile_name(name)
-    spec: dict[str, Any] = {"role": _without_empty(role)}
+    normalized_role = _without_empty(role)
+    if isinstance(normalized_role.get("persona"), str):
+        normalized_role["persona"] = {"tone": normalized_role["persona"]}
+    if normalized_role.get("examples") and all(
+        isinstance(item, str) for item in normalized_role["examples"]
+    ):
+        normalized_role["examples"] = [
+            {"input": "Apply this profile to the current request.", "output": item}
+            for item in normalized_role["examples"]
+        ]
+    normalized_tools = _without_empty(tools or {})
+    if normalized_tools.get("skills"):
+        normalized_tools["skills"] = [
+            item if isinstance(item, dict) else {"name": item}
+            for item in normalized_tools["skills"]
+        ]
+    if normalized_tools.get("mcp_servers"):
+        normalized_tools["mcp_servers"] = [
+            item
+            if isinstance(item, dict)
+            else {
+                "name": item,
+                "transport": "stdio",
+                "command": item,
+            }
+            for item in normalized_tools["mcp_servers"]
+        ]
+    normalized_permissions = _without_empty(permissions or {})
+    modes = {"paranoid": "deny", "balanced": "ask", "silent": "allow", "yolo": "allow"}
+    for key in ("default", "shell", "edit", "network"):
+        if normalized_permissions.get(key) in modes:
+            normalized_permissions[key] = modes[normalized_permissions[key]]
+    network_modes = {"none": "deny", "read": "allow", "full": "allow"}
+    if normalized_permissions.get("network") in network_modes:
+        normalized_permissions["network"] = network_modes[normalized_permissions["network"]]
+    normalized_runtime = _without_empty(runtime or {})
+    if isinstance(normalized_runtime.get("subagents"), dict):
+        subagents = normalized_runtime["subagents"]
+        if "max_subagents" in subagents:
+            subagents["max_concurrent"] = subagents.pop("max_subagents")
+        subagents.pop("max_parallel", None)
+    normalized_lifecycle = _without_empty(lifecycle or {"writeback": "propose"})
+    for key in ("on_start", "on_end"):
+        if isinstance(normalized_lifecycle.get(key), str):
+            normalized_lifecycle[key] = [{"hook": normalized_lifecycle[key]}]
+    normalized_memory = _without_empty(memory or {})
+    memory_modes = {"read": "read_only", "write": "read_write"}
+    if normalized_memory.get("mode") in memory_modes:
+        normalized_memory["mode"] = memory_modes[normalized_memory["mode"]]
+    spec: dict[str, Any] = {"role": normalized_role}
     for key, value in (
         ("model", model),
-        ("tools", tools),
-        ("permissions", permissions),
-        ("runtime", runtime),
-        ("memory", memory),
+        ("tools", normalized_tools),
+        ("permissions", normalized_permissions),
+        ("runtime", normalized_runtime),
+        ("memory", normalized_memory),
         ("context", context),
     ):
         cleaned = _without_empty(value or {})
@@ -55,21 +104,24 @@ def build_profile_document(
             spec[key] = cleaned
     document: dict[str, Any] = {
         "oap": "1.0",
+        "kind": "AgentProfile",
         "metadata": {
             "name": normalized,
             "description": description.strip() or normalized,
             "revision": 1,
-            **({"annotations": _without_empty(annotations or {})} if _without_empty(annotations or {}) else {}),
+            **(
+                {"annotations": _without_empty(annotations or {})}
+                if _without_empty(annotations or {})
+                else {}
+            ),
         },
-        "spec": spec,
-        "state": [],
+        "spec": {**spec, "lifecycle": normalized_lifecycle},
+        "state": {},
         "history": [],
-        "proposals": [],
-        "lifecycle": _without_empty(lifecycle or {"writeback": "propose"}),
     }
     inherited = [normalize_profile_name(item) for item in (extends or []) if item.strip()]
     if inherited:
-        document["extends"] = inherited[0] if len(inherited) == 1 else inherited
+        document["extends"] = [{"name": item} for item in inherited]
     validate_document(document)
     return document
 

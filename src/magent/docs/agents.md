@@ -1,6 +1,10 @@
 # Open Agent Profiles
 
-MagAgent implements provisional Open Agent Profile (OAP) v1 Level 3 harness support. Profiles are portable agent identities with composition, role instructions, model preferences, bounded tools, MCP servers, skills, memory stores, delegated agents, runtime limits, and reviewable agent-scoped state. Existing MagAgent Markdown agent definitions continue to load without modification.
+MagAgent `0.99.0` implements Open Agent Profile (OAP) 1.0 Level 3 harness support using
+`open-agent-profile>=1.0.1,<2`. Profiles are portable agent identities with composition, role
+instructions, model preferences, bounded tools, MCP servers, skills, memory stores, delegated
+agents, runtime limits, and reviewable agent-scoped state. Existing MagAgent Markdown agent
+definitions continue to load through the compatibility boundary without modification.
 
 ## Start Here
 
@@ -180,10 +184,11 @@ plus `list` and `apply` for guided configuration presets. `magent agent` provide
 
 ## Current Conformance Boundary
 
-Version 0.95.0 retains provisional OAP v1 Level 3 harness support and adds the
-conflict-safe desktop authoring contract. The complete supplied Level 3 surface is enforced
-in interactive sessions, asks, research, recipes, graph agent nodes, subagents, goals, daemon
-work, and gateways. The declaration remains provisional because the canonical upstream OAP
-repository and reference conformance corpus were not publicly discoverable when this release
-was prepared; MagAgent ships its offline schema and behavioral fixtures without claiming
-unverifiable upstream certification.
+Version 0.99.0 enforces the Level 3 surface in interactive sessions, asks, research, recipes,
+graph agent nodes, subagents, goals, daemon work, and gateways. CI pins the canonical upstream OAP
+repository at commit `7fb633a1a59dd7636ffb0030d254f2f58934f74a`, validates its examples, and runs
+MagAgent's behavioral profile suite. Canonical documents and `AgentStateDelta` records use the
+1.0 schemas and RFC 8785 digests; legacy MagAgent definitions are converted at the compatibility
+boundary. See the [machine-readable result](https://github.com/AlexMercedCoder/MagAgent/blob/main/docs/oap-conformance.json). Optional
+requirements L2-A14 and L3-M2 are not claimed. This is implementation evidence, not third-party
+certification.

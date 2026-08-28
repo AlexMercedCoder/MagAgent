@@ -11,7 +11,9 @@ runner = CliRunner()
 
 
 def test_profile_cli_create_list_show_validate_and_digest(tmp_path: Path) -> None:
-    created = runner.invoke(app, ["agent", "create", "reviewer", "--project", str(tmp_path), "--prompt", "Review."])
+    created = runner.invoke(
+        app, ["agent", "create", "reviewer", "--project", str(tmp_path), "--prompt", "Review."]
+    )
     listed = runner.invoke(app, ["agent", "list", "--project", str(tmp_path)])
     shown = runner.invoke(app, ["agent", "show", "reviewer", "--project", str(tmp_path)])
     path = tmp_path / ".magent" / "agents" / "reviewer.md"
@@ -35,7 +37,7 @@ def test_convert_is_preview_only_without_write_flag(tmp_path: Path) -> None:
 
 def test_agent_conformance_command() -> None:
     result = runner.invoke(app, ["agent", "conformance"])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["ok"] is True
     assert payload["level"] == 3

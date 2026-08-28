@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import tempfile
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -69,7 +70,9 @@ def run_conformance() -> dict[str, Any]:
         return f"{rejected} invalid fixtures rejected"
 
     def encoding_parity() -> str:
-        document = fixtures["valid"][0]
+        document = deepcopy(fixtures["valid"][0])
+        instructions = document["spec"]["role"]["instructions"]
+        document["spec"]["role"]["instructions"] = instructions.rstrip() + "\n"
         expected = digest_document(document)
         with tempfile.TemporaryDirectory() as directory:
             for encoding, suffix in (("yaml", ".yaml"), ("json", ".json"), ("md", ".md")):

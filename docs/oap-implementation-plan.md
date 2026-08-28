@@ -1,7 +1,7 @@
 # Implementing Open Agent Profile (OAP) v1 in MagAgent
 
-> Implementation status: completed through provisional OAP v1 Level 3 in MagAgent 0.93.0.
-> See `docs/RELEASE_0.93.0.md` and `docs/oap-conformance.json` for shipped scope and evidence.
+> Implementation status: aligned with canonical OAP 1.0 Level 3 in MagAgent 0.99.0.
+> See `docs/RELEASE_0.99.0.md` and `docs/oap-conformance.json` for current scope and evidence.
 
 **Status:** Implemented; retained as design history
 **Spec:** `open-agent-profile` repository, `spec/v1/SPEC.md`
@@ -62,7 +62,7 @@ OAP adds the missing layer: a per-agent, bounded, reviewable state block that a 
 - `magent agents` CLI expansion
 - Published conformance statement
 
-### Shipped in Level 3 (0.93.0)
+### Initially shipped in Level 3 (0.93.0), aligned upstream in 0.99.0
 
 - `extends` composition with deterministic lineage and resolution digests
 - `spec.tools.mcp_servers` selection from locally configured servers
@@ -75,7 +75,7 @@ OAP adds the missing layer: a per-agent, bounded, reviewable state block that a 
 - Changes to MagGraph itself
 - Changes to the recipe, playbook, or plan formats
 - Profile-driven installation of MCP servers, skills, plugins, or executable hooks
-- Formal upstream certification until the canonical OAP repository can be pinned
+- Third-party certification; MagAgent publishes implementation evidence against a pinned upstream revision
 
 ---
 
@@ -407,13 +407,11 @@ magent agents digest NAME
 ```json
 {
   "oap": "1.0",
-  "implementation": "magagent",
-  "version": "0.93.0",
+  "implementation": "MagAgent",
+  "implementation_version": "0.99.0",
   "level": 3,
-  "encodings": ["yaml", "json", "md"],
-  "discovery_roots": ["managed", "user", "project", "plugin"],
-  "status": "provisional",
-  "unimplemented": []
+  "fixture_revision": "7fb633a1a59dd7636ffb0030d254f2f58934f74a",
+  "failed": []
 }
 ```
 

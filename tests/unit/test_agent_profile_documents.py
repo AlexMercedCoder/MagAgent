@@ -23,22 +23,50 @@ def _document(name: str = "reviewer") -> dict:
 def test_oap_yaml_json_and_markdown_encodings(tmp_path: Path) -> None:
     document = _document()
     yaml_path = tmp_path / "one.yaml"
-    yaml_path.write_text("oap: '1.0'\nmetadata:\n  name: reviewer\n  revision: 1\nspec:\n  role:\n    instructions: Review.\n", encoding="utf-8")
+    yaml_path.write_text(
+        "oap: '1.0'\nmetadata:\n  name: reviewer\n  revision: 1\nspec:\n  role:\n    instructions: Review.\n",
+        encoding="utf-8",
+    )
     json_path = tmp_path / "two.json"
     json_path.write_text(json.dumps(document), encoding="utf-8")
     md_path = tmp_path / "three.md"
-    md_path.write_text("---\noap: '1.0'\nmetadata:\n  name: reviewer\n  revision: 1\nspec:\n  role: {}\n---\n\nReview from Markdown.\n", encoding="utf-8")
+    md_path.write_text(
+        "---\noap: '1.0'\nmetadata:\n  name: reviewer\n  revision: 1\nspec:\n  role: {}\n---\n\nReview from Markdown.\n",
+        encoding="utf-8",
+    )
 
     for path in (yaml_path, json_path, md_path):
         loaded, _body, _encoding = parse_document(path)
         validate_document(loaded)
         assert loaded["metadata"]["name"] == "reviewer"
-    assert parse_document(md_path)[0]["spec"]["role"]["instructions"] == "Review from Markdown."
+    assert parse_document(md_path)[0]["spec"]["role"]["instructions"] == "Review from Markdown.\n"
+
+
+def test_markdown_rejects_duplicate_instruction_sources(tmp_path: Path) -> None:
+    path = tmp_path / "duplicate.agent.md"
+    path.write_text(
+        "---\noap: '1.0'\nkind: AgentProfile\nmetadata:\n"
+        "  name: duplicate\n  description: Profile with duplicate instructions.\n"
+        "spec:\n  role:\n    instructions: Frontmatter.\n---\n\nBody.\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ProfileValidationError, match="both frontmatter and body"):
+        parse_document(path)
+
+
+def test_yaml_uses_yaml_12_boolean_semantics(tmp_path: Path) -> None:
+    path = tmp_path / "boolean.agent.yaml"
+    path.write_text("value: on\nother: false\n", encoding="utf-8")
+    document, _body, _encoding = parse_document(path)
+    assert document == {"value": "on", "other": False}
 
 
 def test_yaml_timestamp_is_kept_as_string(tmp_path: Path) -> None:
     path = tmp_path / "profile.yaml"
-    path.write_text("oap: '1.0'\nmetadata:\n  name: x\n  revision: 1\n  created: 2026-08-14T10:00:00Z\nspec:\n  role: {}\n", encoding="utf-8")
+    path.write_text(
+        "oap: '1.0'\nmetadata:\n  name: x\n  revision: 1\n  created: 2026-08-14T10:00:00Z\nspec:\n  role: {}\n",
+        encoding="utf-8",
+    )
     document, _body, _encoding = parse_document(path)
     assert document["metadata"]["created"] == "2026-08-14T10:00:00Z"
 
@@ -70,5 +98,6 @@ def test_legacy_load_is_in_memory_and_does_not_modify_file(tmp_path: Path) -> No
     path.write_text(original, encoding="utf-8")
     profile = AgentProfileRegistry(tmp_path).load_path(path)
     assert profile.legacy is True
-    assert profile.document["metadata"]["annotations"]["magagent.dev/legacy"]["custom"] == "preserved"
+    legacy = json.loads(profile.document["metadata"]["annotations"]["magagent.dev/legacy"])
+    assert legacy["custom"] == "preserved"
     assert path.read_text(encoding="utf-8") == original

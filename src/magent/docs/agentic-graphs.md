@@ -1,6 +1,12 @@
 # Agentic Graphs
 
-MagAgent implements Agentic Graph Specification (AGS) 1.0 conformance level 3. Graphs are portable JSON or YAML execution plans with typed inputs and outputs, deterministic dependency scheduling, model-tier routing, harness-checked success criteria, human gates, retries, budgets, and durable run records.
+MagAgent `0.99.0` implements Agentic Graph Specification (AGS) 1.0 conformance Level 3 using
+`agentic-graph-spec>=1.0.1,<2`. CI pins upstream commit
+`f180a4dbd07911f90dd0821f531d7ccd51bb0764`; packaged graph and run-record schema mirrors match
+that revision. Graphs are portable JSON or YAML execution plans with typed inputs and outputs,
+deterministic dependency scheduling, model-tier routing, harness-checked success criteria, human
+gates, retries, budgets, and durable run records. The exact claim is published in the repository's
+[machine-readable AGS result](https://github.com/AlexMercedCoder/MagAgent/blob/main/docs/ags-conformance.json).
 
 ## Start
 

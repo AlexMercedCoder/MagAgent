@@ -309,9 +309,9 @@ class LifecycleRuntimeMixin:
         for proposal in proposals:
             entry_id = str(proposal.get("id") or "learned-behavior")
             operation = {
-                "op": "replace",
-                "path": f"/state/{entry_id}",
-                "value": {"id": entry_id, "content": str(proposal.get("content", ""))},
+                "op": "add",
+                "path": f"/state/facts/id:{entry_id}",
+                "value": {"id": entry_id, "text": str(proposal.get("content", ""))},
             }
             delta = make_delta(
                 profile.resolved, [operation], evidence=str(proposal.get("evidence", ""))

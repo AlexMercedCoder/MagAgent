@@ -46,6 +46,7 @@ _TOOL_ALIASES = {
 
 
 def narrow_permission_mode(policy: str, requested: str) -> str:
+    requested = {"deny": "paranoid", "ask": "balanced", "allow": "yolo"}.get(requested, requested)
     policy = policy if policy in _MODE_ORDER else "balanced"
     requested = requested if requested in _MODE_ORDER else policy
     return min((policy, requested), key=lambda item: _MODE_ORDER[item])
@@ -249,6 +250,9 @@ def resolve_effective_profile(
             )
         mode = narrowed
         requested_network = str(permissions.get("network") or network_access)
+        requested_network = {"deny": "none", "ask": "read", "allow": "read"}.get(
+            requested_network, requested_network
+        )
         if requested_network not in _NETWORK_ORDER:
             requested_network = "none"
         network_access = min(

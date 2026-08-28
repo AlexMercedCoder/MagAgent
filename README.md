@@ -650,7 +650,10 @@ magent graph plan release.agraph.yaml
 magent graph run release.agraph.yaml --project .
 ```
 
-Graph permissions only restrict MagAgent's existing policy; they never expand it. See [Agentic Graphs](src/magent/docs/agentic-graphs.md) and the [examples](docs/examples/agraph/) for authoring, safety, and runtime details.
+Graph permissions only restrict MagAgent's existing policy; they never expand it. See [Agentic Graphs](src/magent/docs/agentic-graphs.md), the [examples](docs/examples/agraph/), and the
+[machine-readable AGS result](docs/ags-conformance.json) for authoring, safety, runtime, and
+conformance details. The corresponding [OAP result](docs/oap-conformance.json) records the pinned
+profile requirements and upstream revision.
 
 The main agent can orchestrate sub-agents, and the cap is configurable:
 

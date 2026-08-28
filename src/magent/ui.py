@@ -148,7 +148,9 @@ def _int_or(raw: str, fallback: int) -> int:
         return fallback
 
 
-def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | None = None) -> dict[str, Any]:
+def ui_state(
+    store: WorkbenchStore, project: str | Path = ".", username: str | None = None
+) -> dict[str, Any]:
     root = Path(project).resolve()
     memory_quality = {"ok": False, "error": "username unavailable"}
     if username:
@@ -156,7 +158,9 @@ def ui_state(store: WorkbenchStore, project: str | Path = ".", username: str | N
             from magent.config import user_memory_dir
             from magent.memory import MemoryManager
 
-            memory_quality = MemoryManager(user_memory_dir(username), username=username).quality_report()
+            memory_quality = MemoryManager(
+                user_memory_dir(username), username=username
+            ).quality_report()
         except Exception as e:
             memory_quality = {"ok": False, "error": str(e)}
     workspace = workspace_status(store, root)
@@ -259,7 +263,11 @@ def serve_ui(
             if host not in {"127.0.0.1", "localhost", "[::1]", "::1"}:
                 return False  # DNS rebinding
             origin = self.headers.get("Origin")
-            if origin and urllib.parse.urlparse(origin).hostname not in {"127.0.0.1", "localhost", "::1"}:
+            if origin and urllib.parse.urlparse(origin).hostname not in {
+                "127.0.0.1",
+                "localhost",
+                "::1",
+            }:
                 return False
             supplied = urllib.parse.parse_qs(parsed.query).get("token", [""])[0]
             if not supplied:
@@ -322,7 +330,9 @@ def serve_ui(
                 return
             payload = path.read_bytes()
             self.send_response(200)
-            self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+            self.send_header(
+                "Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+            )
             self._security_headers()
             self.send_header("Content-Length", str(len(payload)))
             self.end_headers()
@@ -386,7 +396,9 @@ def serve_ui(
                     payload = render_ui_html(token).encode()
                     self.send_response(200)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
-                    self.send_header("Set-Cookie", f"magent_ui={token}; HttpOnly; SameSite=Strict; Path=/")
+                    self.send_header(
+                        "Set-Cookie", f"magent_ui={token}; HttpOnly; SameSite=Strict; Path=/"
+                    )
                     self._security_headers()
                     self.send_header("Content-Length", str(len(payload)))
                     self.end_headers()
@@ -426,7 +438,11 @@ def serve_ui(
                         body = self._body()
                         goal = str(body.get("goal", ""))
                         if body.get("mode") == "ai":
-                            self._json(asyncio.run(generate_web_graph(goal, project=root, username=username)))
+                            self._json(
+                                asyncio.run(
+                                    generate_web_graph(goal, project=root, username=username)
+                                )
+                            )
                         else:
                             self._json(
                                 {
@@ -442,7 +458,9 @@ def serve_ui(
                         body = self._body()
                         document = body.get("document")
                         if not isinstance(document, dict):
-                            self._json({"ok": False, "error": "document must be an object"}, status=400)
+                            self._json(
+                                {"ok": False, "error": "document must be an object"}, status=400
+                            )
                             return
                         result = preview_web_graph(document, project=root, username=username)
                         self._json(result, status=200 if result.get("ok") else 400)
@@ -453,7 +471,9 @@ def serve_ui(
                         body = self._body()
                         document = body.get("document")
                         if not isinstance(document, dict):
-                            self._json({"ok": False, "error": "document must be an object"}, status=400)
+                            self._json(
+                                {"ok": False, "error": "document must be an object"}, status=400
+                            )
                             return
                         result = save_web_graph(
                             document,
@@ -462,7 +482,12 @@ def serve_ui(
                             username=username,
                             expected_digest=str(body.get("expected_digest", "")),
                         )
-                        self._json(result, status=200 if result.get("ok") else (409 if result.get("conflict") else 400))
+                        self._json(
+                            result,
+                            status=200
+                            if result.get("ok")
+                            else (409 if result.get("conflict") else 400),
+                        )
                 elif parsed.path == "/api/graphs/status":
                     if graph_runs is None:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)
@@ -479,7 +504,9 @@ def serve_ui(
                         body = self._body()
                         params = body.get("params") or {}
                         if not isinstance(params, dict):
-                            self._json({"ok": False, "error": "params must be an object"}, status=400)
+                            self._json(
+                                {"ok": False, "error": "params must be an object"}, status=400
+                            )
                             return
                         result = graph_runs.start(
                             str(body.get("path", "")),
@@ -513,7 +540,10 @@ def serve_ui(
                     conversation_id = str(body.get("conversation_id", ""))
                     content = str(body.get("content", "")).strip()
                     if not content or len(content) > 32000:
-                        self._json({"ok": False, "error": "message must contain 1 to 32000 characters"}, status=400)
+                        self._json(
+                            {"ok": False, "error": "message must contain 1 to 32000 characters"},
+                            status=400,
+                        )
                         return
                     conversation = conversations.get(conversation_id)
                     if conversation is None:
@@ -522,11 +552,16 @@ def serve_ui(
                     turn_lock = conversation_locks.setdefault(conversation_id, threading.Lock())
                     if not turn_lock.acquire(blocking=False):
                         self._json(
-                            {"ok": False, "error": "a turn is already running for this conversation"},
+                            {
+                                "ok": False,
+                                "error": "a turn is already running for this conversation",
+                            },
                             status=409,
                         )
                         return
-                    conversations.append_message(conversation_id, role="user", content=content, speaker="You")
+                    conversations.append_message(
+                        conversation_id, role="user", content=content, speaker="You"
+                    )
                     conversation = conversations.get(conversation_id) or conversation
 
                     # The turn runs on its own thread and records its reply
@@ -551,9 +586,7 @@ def serve_ui(
 
                     config = load_config(username) if username else None
                     self._json(
-                        inspect_profile(
-                            query.get("name", [""])[0], project=root, config=config
-                        )
+                        inspect_profile(query.get("name", [""])[0], project=root, config=config)
                     )
                 elif parsed.path == "/api/profiles/export":
                     from magent.config import load_config
@@ -561,9 +594,7 @@ def serve_ui(
 
                     config = load_config(username) if username else None
                     self._json(
-                        export_document(
-                            query.get("name", [""])[0], project=root, config=config
-                        )
+                        export_document(query.get("name", [""])[0], project=root, config=config)
                     )
                 elif parsed.path == "/api/onboarding/readiness":
                     from magent.web_onboarding import readiness
@@ -581,7 +612,9 @@ def serve_ui(
 
                     body = self._body()
                     try:
-                        self._json(configure(str(body.get("provider", "")), str(body.get("model", ""))))
+                        self._json(
+                            configure(str(body.get("provider", "")), str(body.get("model", "")))
+                        )
                     except ValueError as problem:
                         # A bad provider name is the user's mistake, not a
                         # server fault; raising here would surface as a 500.
@@ -590,26 +623,27 @@ def serve_ui(
                     if not username:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)
                         return
+                    from magent.agent_profiles.authoring import build_profile_document
                     from magent.agent_profiles.desktop import apply_profile
                     from magent.config import load_config
 
                     body = self._body()
-                    document = {
-                        "oap": "1.0",
-                        "metadata": {
-                            "name": str(body.get("name", "")).strip(),
-                            "description": str(body.get("description", "")).strip(),
-                            "revision": 1,
-                        },
-                        "spec": {
-                            "role": {"instructions": str(body.get("instructions", "")).strip()},
-                            "permissions": {"default": str(body.get("permission_mode", "balanced"))},
-                        },
-                        "state": [],
-                        "history": [],
-                        "proposals": [],
-                        "lifecycle": {"writeback": "off"},
-                    }
+                    route = dict(body.get("model") or {})
+                    try:
+                        document = build_profile_document(
+                            name=str(body.get("name", "")),
+                            description=str(body.get("description", "")),
+                            role={"instructions": str(body.get("instructions", "")).strip()},
+                            model={
+                                "provider": route.get("provider"),
+                                "id": route.get("id") or route.get("model"),
+                            },
+                            permissions={"default": body.get("permission_mode")},
+                            lifecycle={"writeback": "off"},
+                        )
+                    except ValueError as problem:
+                        self._json({"ok": False, "error": str(problem)}, status=400)
+                        return
                     result = apply_profile(
                         document,
                         scope=str(body.get("scope", "project")),
@@ -640,14 +674,20 @@ def serve_ui(
                     setting_path = str(body.get("path", ""))
                     allowed = {str(item["path"]): item for item in CONFIG_SCHEMA}
                     if setting_path not in allowed:
-                        self._json({"ok": False, "error": "setting is not editable in the guided UI"}, status=400)
+                        self._json(
+                            {"ok": False, "error": "setting is not editable in the guided UI"},
+                            status=400,
+                        )
                     else:
                         field = allowed[setting_path]
                         value = body.get("value")
                         field_type = field.get("type")
                         invalid = bool(
                             (field_type == "boolean" and not isinstance(value, bool))
-                            or (field_type == "integer" and (not isinstance(value, int) or isinstance(value, bool)))
+                            or (
+                                field_type == "integer"
+                                and (not isinstance(value, int) or isinstance(value, bool))
+                            )
                             or (field_type in {"string", "enum"} and not isinstance(value, str))
                             or (field.get("choices") and value not in field["choices"])
                         )
@@ -671,7 +711,9 @@ def serve_ui(
                                 setting_path,
                                 value,
                                 username=username,
-                                scope=str(body.get("scope", allowed[setting_path].get("scope", "global"))),
+                                scope=str(
+                                    body.get("scope", allowed[setting_path].get("scope", "global"))
+                                ),
                             )
                         )
                 elif parsed.path == "/api/state":
@@ -681,7 +723,13 @@ def serve_ui(
                 elif parsed.path == "/api/docs/search":
                     self._json(search_docs(query.get("q", [""])[0]))
                 elif parsed.path == "/api/docs/topic":
-                    self._json({"ok": True, "topic": query.get("slug", [""])[0], "content": read_topic(query.get("slug", [""])[0])})
+                    self._json(
+                        {
+                            "ok": True,
+                            "topic": query.get("slug", [""])[0],
+                            "content": read_topic(query.get("slug", [""])[0]),
+                        }
+                    )
                 elif parsed.path == "/api/release/check":
                     self._json(run_release_check(store, root))
                 elif parsed.path == "/api/readiness":
@@ -690,7 +738,9 @@ def serve_ui(
                     else:
                         from magent.config import load_config
 
-                        self._json(readiness_report(username, load_config(username), store, project=root))
+                        self._json(
+                            readiness_report(username, load_config(username), store, project=root)
+                        )
                 elif parsed.path == "/api/model/health":
                     self._json(model_health_report(store))
                 elif parsed.path == "/api/provider/smoke":
