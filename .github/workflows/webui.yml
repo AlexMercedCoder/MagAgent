@@ -75,6 +75,10 @@ jobs:
           set -euo pipefail
           workspace="$(mktemp -d)"
           cd "$workspace"
+          # The CLI deliberately requires an active user before exposing the
+          # operations UI. A hosted runner has no MagAgent state, so exercise
+          # the same first-run prerequisite a real installation uses.
+          magent user create ci-smoke
           PYTHONUNBUFFERED=1 magent ui --project "$workspace" --port 7830 > serve.log 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
@@ -84,8 +88,12 @@ jobs:
             sleep 0.5
           done
 
+          if ! grep -q '"url"' serve.log; then
+            echo "UI did not become ready"
+            cat serve.log
+            exit 1
+          fi
           token="$(grep -oP '"token": "\K[^"]+' serve.log | head -1)"
-          test -n "$token" || { echo "no launch token was printed"; cat serve.log; exit 1; }
 
           shell_status="$(curl -s -o shell.html -w '%{http_code}' "http://127.0.0.1:7830/?token=$token")"
           denied="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:7830/api/bootstrap)"
