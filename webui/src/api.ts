@@ -158,12 +158,13 @@ export async function streamMessage(
   content: string,
   onEvent: (event: ChatEvent) => void,
   signal?: AbortSignal,
+  context: string[] = [],
 ): Promise<void> {
   const response = await fetch("/api/conversations/message", {
     method: "POST",
     headers: headers(true),
     credentials: "same-origin",
-    body: JSON.stringify({ conversation_id: conversationId, content }),
+    body: JSON.stringify({ conversation_id: conversationId, content, context }),
     signal,
   });
   await readRunStream(response, onEvent);

@@ -22,6 +22,9 @@ import { ProfilesView } from "./views/ProfilesView";
 import { MemoryView } from "./views/MemoryView";
 import { SettingsView } from "./views/SettingsView";
 import { OperationsView } from "./views/OperationsView";
+import { WorkspaceView } from "./views/WorkspaceView";
+import { RunCenterView } from "./views/RunCenterView";
+import { ExtensionsView } from "./views/ExtensionsView";
 import { ShortcutsSheet } from "./views/ShortcutsSheet";
 
 export type View =
@@ -30,6 +33,9 @@ export type View =
   | "graphs"
   | "profiles"
   | "memory"
+  | "workspace"
+  | "runs"
+  | "extensions"
   | "settings"
   | "operations";
 
@@ -39,6 +45,9 @@ const NAV: { id: View; glyph: string; label: string }[] = [
   { id: "graphs", glyph: "⌘", label: "Graphs" },
   { id: "profiles", glyph: "◇", label: "Profiles" },
   { id: "memory", glyph: "❖", label: "Memory" },
+  { id: "workspace", glyph: "▤", label: "Files" },
+  { id: "runs", glyph: "▶", label: "Runs" },
+  { id: "extensions", glyph: "⬡", label: "Tools" },
   { id: "settings", glyph: "⚙", label: "Settings" },
   { id: "operations", glyph: "⌁", label: "Ops" },
 ];
@@ -58,6 +67,7 @@ export default function App() {
   const [needsSetup, setNeedsSetup] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
+  const [contextPaths, setContextPaths] = useState<string[]>([]);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -308,7 +318,7 @@ export default function App() {
         </div>
 
         {view === "chat" && (
-          <ChatView active={active} refresh={refreshConversations} setError={setError} notify={notify} />
+          <ChatView active={active} refresh={refreshConversations} setError={setError} notify={notify} context={contextPaths} clearContext={() => setContextPaths([])} />
         )}
         {view === "bots" && (
           <BotsView profiles={profiles} setError={setError} onStart={() => setView("chat")}
@@ -317,6 +327,9 @@ export default function App() {
         {view === "graphs" && <GraphsView profiles={profiles} setError={setError} notify={notify} />}
         {view === "profiles" && <ProfilesView profiles={profiles} refresh={load} setError={setError} notify={notify} />}
         {view === "memory" && <MemoryView setError={setError} />}
+        {view === "workspace" && <WorkspaceView selected={contextPaths} setSelected={setContextPaths} activeConversation={activeId} setError={setError} notify={notify} />}
+        {view === "runs" && <RunCenterView setError={setError} notify={notify} />}
+        {view === "extensions" && <ExtensionsView setError={setError} notify={notify} />}
         {view === "settings" && <SettingsView fields={settings} refresh={load} setError={setError} notify={notify} />}
         {view === "operations" && <OperationsView setError={setError} />}
       </main>

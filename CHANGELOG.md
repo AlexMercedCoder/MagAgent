@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0 (unreleased)
+
+- Closed the local Web UI's project-context gap with confined file/artifact discovery, bounded
+  previews and uploads, message context selection, Git diffs and explicit staging controls,
+  branch/worktree management, and a shell-free bounded command console.
+- Added a unified run center for chat runs, graph history, durable execution tasks, pause/resume/
+  cancel/retry controls, governed interval graph schedules, completion summaries, and opt-in
+  browser notifications.
+- Added an extensions surface for integrity-checked plugins, discovered skills, configured MCP
+  server names, and built-in web/browser/tool-backend readiness without returning credentials.
+- Kept the UI security boundary loopback-only and token/CSRF protected; added explicit destructive
+  confirmations, project path confinement, upload/context/output limits, and schedule shutdown.
+- Added backend security/lifecycle tests, frontend navigation coverage, rebuilt packaged assets,
+  and expanded the local UI and release documentation.
+
 ## 0.99.0 (2026-08-27)
 
 - Aligned OAP and AGS handling with the published 1.0.1 support libraries, including RFC 8785

@@ -117,3 +117,22 @@ export type ChatEvent =
   | { type: "conversation"; conversation: Conversation }
   | { type: "cancelled" }
   | { type: "error"; error: string; kind?: string; action?: string; detail?: string };
+
+export type WorkspaceFile = {
+  path: string;
+  name: string;
+  size: number;
+  mime: string;
+  artifact?: boolean;
+};
+
+export type Schedule = {
+  id: string;
+  path: string;
+  interval_minutes: number;
+  status: "active" | "paused";
+  next_run_at?: number;
+  last_run_at?: number | null;
+  last_job_id?: string;
+  last_error?: string;
+};

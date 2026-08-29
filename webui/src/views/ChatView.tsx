@@ -20,11 +20,15 @@ export function ChatView({
   refresh,
   setError,
   notify,
+  context,
+  clearContext,
 }: {
   active: Conversation | null;
   refresh: () => Promise<void>;
   setError: (message: string) => void;
   notify: (message: string) => void;
+  context: string[];
+  clearContext: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -130,11 +134,12 @@ export function ChatView({
     setBusy(true);
     setDraft("");
     await consume(
-      (onEvent, signal) => streamMessage(active.id, content, onEvent, signal),
+      (onEvent, signal) => streamMessage(active.id, content, onEvent, signal, context),
       [{ id: `local-${Date.now()}`, role: "user", content, speaker: "You", status: "complete" }],
       active.profiles?.[0] || "MagAgent",
     );
-  }, [draft, active, busy, consume]);
+    clearContext();
+  }, [draft, active, busy, consume, context, clearContext]);
 
   const decide = useCallback(
     async (approved: boolean) => {
@@ -274,6 +279,12 @@ export function ChatView({
       </div>
 
       <div className="composer-wrap">
+        {context.length > 0 && (
+          <div className="context-chips" aria-label="Attached workspace context">
+            {context.map((path) => <span key={path}>{path}</span>)}
+            <button type="button" onClick={clearContext}>Clear</button>
+          </div>
+        )}
         <form
           className="composer"
           onSubmit={(event) => {

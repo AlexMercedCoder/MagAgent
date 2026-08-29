@@ -208,6 +208,12 @@ class RunStore:
         with self._lock:
             return self._runs.get(run_id)
 
+    def list(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return newest run snapshots for the browser run center."""
+        with self._lock:
+            runs = sorted(self._runs.values(), key=lambda run: run.started_at, reverse=True)
+        return [run.snapshot() for run in runs[: max(1, min(int(limit), 500))]]
+
     def active_for(self, conversation_id: str) -> Run | None:
         """The run a reloading browser should reattach to.
 

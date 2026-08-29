@@ -520,6 +520,21 @@ Run `magent ui --open` for a lightweight, local Mag Command Center alternative p
 the CLI. It provides durable multi-conversation chat, profile-backed bots, small coordinated bot
 groups, profile creation, guided non-secret settings, and the existing operations cockpit.
 
+The release-ready workspace adds three operator surfaces:
+
+- **Files** securely discovers and previews project files and common artifacts, accepts bounded
+  browser uploads, and attaches up to 20 selected files to the next message. Text context is
+  inlined within a 750 KB budget; larger and binary files are passed as confined project paths.
+  It also exposes working/staged diffs, explicit staging/unstaging/discard controls, branch and
+  worktree inspection/creation/removal, and a shell-free command console with output and time caps.
+- **Runs** consolidates chat runs, graph history, durable execution tasks, and interval graph
+  schedules. Tasks retain their native pause/resume/cancel/retry controls, schedules still pass
+  graph validation and gate approval, and opt-in browser notifications report completed work.
+- **Tools** inventories built-in tool backends (including local web and optional Playwright browser
+  support), installed plugins with integrity state, discovered skills, and configured MCP servers.
+  Plugins can be enabled only after their existing integrity/conformance check succeeds. Secret
+  material is never returned to the browser.
+
 The Graphs view can open existing `.agraph` files, start a blank workflow, or ask the configured
 planning model to propose a graph from a goal. Task cards support profile selection and explicit
 dependencies. MagAgent saves and strictly validates the native graph before enabling Run, then

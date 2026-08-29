@@ -36,6 +36,8 @@ from magent.web_graphs import (
     web_task_node,
 )
 from magent.web_runs import STREAM_WAIT_SECONDS, TERMINAL_STATES, RunCancelled, RunStore
+from magent.web_schedules import ScheduleStore
+from magent.web_workspace import WorkspaceError, WorkspaceService, extension_inventory
 from magent.workbench import (
     WorkbenchStore,
     checkpoint_sessions,
@@ -52,7 +54,7 @@ WEBUI_DIR = Path(__file__).with_name("webui")
 # Vite writes the built bundle here. It is committed and ships inside the
 # wheel, so installed users never need Node.
 STATIC_DIR = WEBUI_DIR / "static"
-MAX_REQUEST_BYTES = 128 * 1024
+MAX_REQUEST_BYTES = 8 * 1024 * 1024
 
 
 def _turn_worker(
@@ -63,6 +65,7 @@ def _turn_worker(
     username: str,
     root: Path,
     release: Callable[[], None],
+    context_refs: list[dict[str, Any]] | None = None,
 ) -> Callable[[Any], None]:
     """Build the body of a chat run.
 
@@ -100,7 +103,10 @@ def _turn_worker(
                     role="assistant",
                     content=result["content"],
                     speaker=result["speaker"],
-                    metadata={key: value for key, value in result.items() if key != "content"},
+                    metadata={
+                        **{key: value for key, value in result.items() if key != "content"},
+                        "context": list(context_refs or []),
+                    },
                 )
             run.append({"type": "done", "conversation": conversations.get(conversation_id)})
         except RunCancelled:
@@ -228,6 +234,10 @@ def serve_ui(
     conversation_locks: dict[str, threading.Lock] = {}
     runs = RunStore()
     graph_runs = GraphRunManager(store, username, root) if username else None
+    workspace = WorkspaceService(root)
+    schedules = ScheduleStore(store, graph_runs, root) if graph_runs else None
+    if schedules:
+        schedules.start()
 
     # Endpoints that mutate state or spend money. GET must not reach these.
     # Paths whose POST mutates state: they demand the CSRF header, and a bare
@@ -249,13 +259,21 @@ def serve_ui(
         "/api/onboarding/configure",
         "/api/runs/cancel",
         "/api/runs/approve",
+        "/api/workspace/upload",
+        "/api/workspace/git",
+        "/api/workspace/worktrees",
+        "/api/workspace/terminal",
+        "/api/extensions/plugins",
+        "/api/tasks/action",
+        "/api/schedules",
+        "/api/schedules/action",
     }
 
     # Dual-purpose paths: POST mutates and still needs CSRF, but GET is a plain
     # read and must be allowed. Only paths with a real GET branch below belong
     # here; /api/profiles and /api/settings are POST-only and must keep
     # refusing GET, or the request would fall into their write handlers.
-    readable_paths = {"/api/conversations"}
+    readable_paths = {"/api/conversations", "/api/schedules", "/api/workspace/git"}
 
     class Handler(BaseHTTPRequestHandler):
         def _authorized(self, parsed: urllib.parse.ParseResult) -> bool:
@@ -422,6 +440,124 @@ def serve_ui(
                             "settings": config_schema(username),
                         }
                     )
+                elif parsed.path == "/api/workspace/files":
+                    self._json(
+                        workspace.list_files(
+                            query.get("q", [""])[0],
+                            _int_or(query.get("limit", ["500"])[0], 500),
+                        )
+                    )
+                elif parsed.path == "/api/workspace/file":
+                    self._json(workspace.preview(query.get("path", [""])[0]))
+                elif parsed.path == "/api/workspace/diff":
+                    self._json(workspace.diff(query.get("staged", ["false"])[0] == "true"))
+                elif parsed.path == "/api/workspace/git" and method == "GET":
+                    self._json(workspace.git())
+                elif parsed.path == "/api/workspace/git":
+                    body = self._body()
+                    self._json(
+                        workspace.git_action(str(body.get("action", "")), str(body.get("path", "")))
+                    )
+                elif parsed.path == "/api/workspace/upload":
+                    body = self._body()
+                    self._json(
+                        workspace.upload(
+                            str(body.get("name", "")),
+                            str(body.get("data", "")),
+                            str(body.get("conversation_id", "shared")),
+                        ),
+                        status=201,
+                    )
+                elif parsed.path == "/api/workspace/terminal":
+                    body = self._body()
+                    self._json(workspace.terminal(str(body.get("command", ""))))
+                elif parsed.path == "/api/workspace/worktrees":
+                    body = self._body()
+                    action = str(body.get("action", "create"))
+                    if action == "remove":
+                        self._json(workspace.remove_worktree(str(body.get("directory", ""))))
+                    else:
+                        self._json(
+                            workspace.create_worktree(
+                                str(body.get("branch", "")),
+                                str(body.get("directory", "")),
+                                bool(body.get("create_branch", False)),
+                            )
+                        )
+                elif parsed.path == "/api/extensions":
+                    self._json(extension_inventory(username, root))
+                elif parsed.path == "/api/extensions/plugins":
+                    from magent.plugins import set_plugin_enabled
+
+                    body = self._body()
+                    result = set_plugin_enabled(
+                        str(body.get("name", "")), bool(body.get("enabled"))
+                    )
+                    self._json(result, status=200 if result.get("ok") else 400)
+                elif parsed.path == "/api/tasks":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        from magent.desktop_api import execution_tasks
+
+                        self._json(
+                            execution_tasks(
+                                username, limit=_int_or(query.get("limit", ["100"])[0], 100)
+                            )
+                        )
+                elif parsed.path == "/api/tasks/action":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        from magent.desktop_api import execution_task_action
+
+                        body = self._body()
+                        result = execution_task_action(
+                            username,
+                            str(body.get("task_id", "")),
+                            str(body.get("action", "")),
+                            reason="Requested from the local Web UI",
+                        )
+                        self._json(result, status=200 if result.get("ok") else 400)
+                elif parsed.path == "/api/run-center":
+                    graph_data = graph_catalog(store, root)
+                    self._json(
+                        {
+                            "ok": True,
+                            "chat_runs": runs.list(),
+                            "graph_runs": graph_data.get("runs", []),
+                            "schedules": schedules.list().get("schedules", []) if schedules else [],
+                        }
+                    )
+                elif parsed.path == "/api/schedules" and method == "GET":
+                    self._json(
+                        schedules.list()
+                        if schedules
+                        else {"ok": False, "error": "username unavailable"}
+                    )
+                elif parsed.path == "/api/schedules":
+                    if schedules is None:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        body = self._body()
+                        self._json(
+                            schedules.create(
+                                str(body.get("path", "")),
+                                int(body.get("interval_minutes", 60)),
+                                params=dict(body.get("params") or {}),
+                                approved_gates=list(body.get("approved_gates") or []),
+                            ),
+                            status=201,
+                        )
+                elif parsed.path == "/api/schedules/action":
+                    if schedules is None:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        body = self._body()
+                        result = schedules.action(
+                            str(body.get("id", "")), str(body.get("action", ""))
+                        )
+                        self._json(result, status=200 if result.get("ok") else 404)
                 elif parsed.path == "/api/conversations" and method == "GET":
                     self._json({"ok": True, "conversations": conversations.list()})
                 elif parsed.path == "/api/graphs":
@@ -559,8 +695,15 @@ def serve_ui(
                             status=409,
                         )
                         return
+                    context_prompt, context_refs = workspace.context_prompt(
+                        body.get("context") or []
+                    )
                     conversations.append_message(
-                        conversation_id, role="user", content=content, speaker="You"
+                        conversation_id,
+                        role="user",
+                        content=content,
+                        speaker="You",
+                        metadata={"context": context_refs},
                     )
                     conversation = conversations.get(conversation_id) or conversation
 
@@ -573,10 +716,11 @@ def serve_ui(
                         _turn_worker(
                             conversations,
                             conversation,
-                            content,
+                            content + context_prompt,
                             username=username,
                             root=root,
                             release=turn_lock.release,
+                            context_refs=context_refs,
                         ),
                     )
                     self._stream_run(run, after=0)
@@ -837,6 +981,8 @@ def serve_ui(
                     self._json(inspect_checkpoint_diff(store, query.get("id", [""])[0]))
                 else:
                     self._json({"ok": False, "error": "not found"}, status=404)
+            except WorkspaceError as e:
+                self._json({"ok": False, "error": str(e)}, status=400)
             except Exception as e:
                 self._json({"ok": False, "error": str(e)}, status=500)
 
@@ -848,6 +994,15 @@ def serve_ui(
     except OSError as e:
         return {"ok": False, "error": f"Could not bind 127.0.0.1:{port}: {e}", "port": port}
 
+    if schedules:
+        shutdown_server = server.shutdown
+
+        def shutdown() -> None:
+            schedules.stop()
+            shutdown_server()
+
+        server.shutdown = shutdown  # type: ignore[method-assign]
+
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     # The token travels in the opened URL; without it every request is refused.
@@ -855,4 +1010,11 @@ def serve_ui(
     if open_browser:
         webbrowser.open(url)
     # Returning the server lets callers shut it down instead of leaking it.
-    return {"ok": True, "url": url, "project": str(root), "token": token, "server": server}
+    return {
+        "ok": True,
+        "url": url,
+        "project": str(root),
+        "token": token,
+        "server": server,
+        "schedules": schedules,
+    }

@@ -2,6 +2,49 @@
 
 `magent ui` starts a local-only chat workspace for the current MagAgent user and project. It packages a lightweight conversational alternative to Mag Command Center directly with the CLI while retaining the local operations dashboard as a secondary view. It is not a hosted service.
 
+## Workspace Files And Artifacts
+
+The **Files** view is the project-context boundary for the browser. It lists at most 1,000 files at
+a time and skips dependency/build directories, Git internals, and MagAgent state. The only internal
+files exposed are browser attachments under `.magent/attachments/`. Preview and every Git action
+resolve the requested path against the selected project and refuse traversal and symlink escapes.
+
+Uploads are limited to 5 MB. A message can reference at most 20 files; text-like files no larger
+than 256 KB are inlined until the combined 750 KB context budget is reached, while binary and larger
+files are named as project paths for the agent's governed file tools. The transcript records the
+selected references as message metadata.
+
+The same view includes read-only status/diff/branch/worktree inspection and explicit mutation
+controls. Discard and worktree removal require browser confirmation, and Git itself refuses removal
+of a dirty worktree. The command console uses `shlex` plus `subprocess` argument arrays with
+`shell=False`, a 60-second timeout, and a 256 KB output cap; pipes, redirects, substitutions, and
+environment expansion are therefore not silently interpreted by a shell.
+
+## Run Center And Scheduling
+
+The **Runs** view polls one consolidated status surface for Web chat runs, durable Agent Runtime
+tasks, graph history, and graph schedules. Durable tasks use their existing lifecycle rules for
+pause, resume, cancel, and retry. Desktop notifications are opt-in and fire only when a previously
+seen run transitions to a terminal state.
+
+Graph schedules are atomic, project-scoped workbench records with a bounded interval. They execute
+only while this local UI process is running, and starting one still calls the normal graph preview, validation,
+digest, isolation, budget, and human-gate path. A schedule stores no credential and reports its last
+job id or failure. It can be paused, resumed, run immediately, or deleted.
+
+## Extensions And Browser Tools
+
+The **Tools** view makes the harness extension surface discoverable: built-in local/web/browser
+backends, plugins, skills, and MCP servers. Plugin enablement delegates to the existing signed
+manifest/conformance verifier and refuses a package whose integrity check fails. The MCP inventory
+reports names and enabled state only—commands, environment variables, credentials, and tokens are
+not returned. Playwright browser support is shown as an optional local backend rather than an
+embedded unrestricted browser.
+
+The layout remains responsive for local access from another viewport, but the server is deliberately
+loopback-only. Remote/mobile synchronization is not implied; use MagAgent's authenticated gateway
+adapters for remote channels instead of exposing this local control plane.
+
 ## Start the UI
 
 ```bash

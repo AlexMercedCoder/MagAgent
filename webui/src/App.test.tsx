@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -67,5 +67,17 @@ describe("App", () => {
 
     expect(await screen.findByLabelText("Primary navigation")).toBeInTheDocument();
     expect(screen.queryByText("Set up MagAgent")).not.toBeInTheDocument();
+  });
+
+  it("exposes workspace, run-center, and extension views", async () => {
+    render(<App />);
+    await screen.findByLabelText("Primary navigation");
+
+    fireEvent.click(screen.getByTitle("Files"));
+    expect(await screen.findByRole("heading", { name: "Workspace" })).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle("Runs"));
+    expect(await screen.findByRole("heading", { name: "Run center" })).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle("Tools"));
+    expect(await screen.findByRole("heading", { name: "Extensions" })).toBeInTheDocument();
   });
 });

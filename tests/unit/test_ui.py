@@ -74,7 +74,16 @@ def test_bundle_carries_every_view() -> None:
     """A build that dropped a view would still serve a valid shell."""
     bundle = next((STATIC_DIR / "assets").glob("index-*.js")).read_text(encoding="utf-8")
 
-    for heading in ("Graph Kanban", "Your bots", "Operations", "Profiles", "Settings"):
+    for heading in (
+        "Graph Kanban",
+        "Your bots",
+        "Operations",
+        "Profiles",
+        "Settings",
+        "Workspace",
+        "Run center",
+        "Extensions",
+    ):
         assert heading in bundle, heading
 
 
@@ -158,6 +167,21 @@ def test_live_ui_auth_csrf_and_conversation_api(tmp_path: Path, monkeypatch) -> 
         listing = connection.getresponse()
         assert listing.status == 200
         assert json.loads(listing.read())["ok"] is True
+
+        (tmp_path / "README.md").write_text("workspace context", encoding="utf-8")
+        connection.request("GET", f"/api/workspace/files?token={token}")
+        workspace_files = connection.getresponse()
+        assert workspace_files.status == 200
+        assert any(
+            item["path"] == "README.md" for item in json.loads(workspace_files.read())["files"]
+        )
+
+        connection.request("GET", f"/api/run-center?token={token}")
+        assert connection.getresponse().status == 200
+
+        # Git status supports a safe GET and protected POST actions.
+        connection.request("GET", f"/api/workspace/git?token={token}")
+        assert connection.getresponse().status == 200
 
         # Paths that only have a write handler must still refuse GET, or the
         # request would fall through into that handler.
