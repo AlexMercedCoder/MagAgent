@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 (unreleased)
+## 1.0.0 (2026-08-29)
 
 - Closed the local Web UI's project-context gap with confined file/artifact discovery, bounded
   previews and uploads, message context selection, Git diffs and explicit staging controls,

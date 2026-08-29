@@ -1,4 +1,6 @@
-# MagAgent 1.0.0 — Release Candidate Record
+# MagAgent 1.0.0 — Release Record
+
+Released on 2026-08-29.
 
 MagAgent 1.0.0 closes the major local Web UI gaps identified against modern coding-agent harnesses
 while preserving MagAgent's local-first, governed execution model.
