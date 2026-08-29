@@ -84,9 +84,13 @@ def test_mcp_catalog_command_help() -> None:
 
 
 def test_cli_cache_commands_and_compose_slash(monkeypatch) -> None:
-    doctor = runner.invoke(cli_main.app, ["cache", "doctor", "--provider", "openai", "--model", "gpt-5", "--json"])
+    doctor = runner.invoke(
+        cli_main.app, ["cache", "doctor", "--provider", "openai", "--model", "gpt-5", "--json"]
+    )
     assert doctor.exit_code == 0
-    assert json.loads(doctor.output)["request_hints"]["prompt_cache_key"].startswith("magent-project-")
+    assert json.loads(doctor.output)["request_hints"]["prompt_cache_key"].startswith(
+        "magent-project-"
+    )
 
     calls = []
 
@@ -98,7 +102,11 @@ def test_cli_cache_commands_and_compose_slash(monkeypatch) -> None:
     from magent import tui
 
     monkeypatch.setattr(cli_main, "read_multiline_prompt", lambda _username: "line 1\nline 2")
-    monkeypatch.setattr(tui, "print_streaming_response", lambda stream, loop: loop.run_until_complete(_drain(stream)))
+    monkeypatch.setattr(
+        tui,
+        "print_streaming_response",
+        lambda stream, loop: loop.run_until_complete(_drain(stream)),
+    )
 
     import asyncio
 
@@ -177,7 +185,9 @@ def test_cli_first_configuration_commands(tmp_path: Path, monkeypatch) -> None:
         ["provider", "set", "openai", "--model", "gpt-5", "--api-key-env", "OPENAI_API_KEY"],
     )
     detected = runner.invoke(cli_main.app, ["provider", "detect"])
-    roles = runner.invoke(cli_main.app, ["model", "set-role", "review", "anthropic/claude-sonnet-5"])
+    roles = runner.invoke(
+        cli_main.app, ["model", "set-role", "review", "anthropic/claude-sonnet-5"]
+    )
     memory = runner.invoke(
         cli_main.app,
         ["memory", "configure", "--mode", "inbox-first", "--no-semantic", "--write-every", "2"],
@@ -251,7 +261,9 @@ def test_provider_wizard_can_store_inline_api_key(tmp_path: Path, monkeypatch) -
     assert magent_config.GLOBAL_CONFIG.stat().st_mode & 0o777 == 0o600
 
 
-def test_model_image_wizard_sets_image_role_without_changing_default_provider(tmp_path: Path, monkeypatch) -> None:
+def test_model_image_wizard_sets_image_role_without_changing_default_provider(
+    tmp_path: Path, monkeypatch
+) -> None:
     redirect_config(monkeypatch, tmp_path)
     magent_config.create_user("cli-user")
     magent_config.set_current_user("cli-user")
@@ -350,7 +362,15 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     magent_config.set_current_user("cli-user")
     provider = runner.invoke(
         cli_main.app,
-        ["provider", "set", "mistral", "--model", "mistral-large-latest", "--api-key-env", "MISTRAL_API_KEY"],
+        [
+            "provider",
+            "set",
+            "mistral",
+            "--model",
+            "mistral-large-latest",
+            "--api-key-env",
+            "MISTRAL_API_KEY",
+        ],
     )
     matrix = runner.invoke(cli_main.app, ["provider", "matrix"])
     explained = runner.invoke(cli_main.app, ["provider", "explain", "mistral"])
@@ -367,7 +387,9 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     readiness = runner.invoke(cli_main.app, ["readiness", "--project", str(tmp_path)])
     permission = runner.invoke(cli_main.app, ["permission", "set", "paranoid"])
     permission_status = runner.invoke(cli_main.app, ["permission", "status"])
-    proposed = runner.invoke(cli_main.app, ["config", "propose", "use manual memory and paranoid permissions"])
+    proposed = runner.invoke(
+        cli_main.app, ["config", "propose", "use manual memory and paranoid permissions"]
+    )
     proposals = runner.invoke(cli_main.app, ["config", "proposals"])
     backup = runner.invoke(cli_main.app, ["config", "backup"])
     show = runner.invoke(cli_main.app, ["config", "show"])
@@ -381,7 +403,9 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
         cli_main.app,
         ["docs", "generate-config", "--out", str(tmp_path / "config-reference.md")],
     )
-    perf = runner.invoke(cli_main.app, ["performance", "doctor", "--json", "--project", str(tmp_path)])
+    perf = runner.invoke(
+        cli_main.app, ["performance", "doctor", "--json", "--project", str(tmp_path)]
+    )
     workbench_stats = runner.invoke(cli_main.app, ["workbench", "stats"])
     workbench_prune = runner.invoke(cli_main.app, ["workbench", "prune", "--dry-run"])
     workbench_compact = runner.invoke(cli_main.app, ["workbench", "compact"])
@@ -394,7 +418,9 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     assert env.exit_code == 0
     assert any(item["provider"] == "mistral" for item in json.loads(env.output)["providers"])
     assert recommended.exit_code == 0
-    assert any(item["id"] == "mistral" for item in json.loads(recommended.output)["recommendations"])
+    assert any(
+        item["id"] == "mistral" for item in json.loads(recommended.output)["recommendations"]
+    )
     assert provider_models.exit_code == 0
     assert "mistral-large-latest" in json.loads(provider_models.output)["models"]
     assert provider_model_recommend.exit_code == 0
@@ -402,7 +428,9 @@ def test_cli_provider_ux_and_config_safety_commands(tmp_path: Path, monkeypatch)
     assert catalog.exit_code == 0
     assert json.loads(catalog.output)["ok"] is True
     assert test_matrix.exit_code == 0
-    assert any(item["provider"] == "mistral" for item in json.loads(test_matrix.output)["providers"])
+    assert any(
+        item["provider"] == "mistral" for item in json.loads(test_matrix.output)["providers"]
+    )
     assert model_health.exit_code == 0
     assert readiness.exit_code == 0
     assert permission.exit_code == 0
@@ -489,7 +517,9 @@ def test_cli_desktop_integration_commands(tmp_path: Path, monkeypatch) -> None:
     assert config_set.exit_code == 0
     assert json.loads(config_set.output)["value"] == "desktop-model"
     assert config_schema.exit_code == 0
-    assert any(item["path"] == "defaults.model" for item in json.loads(config_schema.output)["fields"])
+    assert any(
+        item["path"] == "defaults.model" for item in json.loads(config_schema.output)["fields"]
+    )
     assert data_list.exit_code == 0
     assert memory_graph.exit_code == 0
 
@@ -617,7 +647,9 @@ def test_cli_ask_failure_closes_durable_execution_task(tmp_path: Path, monkeypat
     assert tasks[0]["final_audit"]["error"] == "provider unavailable"
 
 
-def test_cli_research_command_defaults_to_readable_output_and_can_write(monkeypatch, tmp_path: Path) -> None:
+def test_cli_research_command_defaults_to_readable_output_and_can_write(
+    monkeypatch, tmp_path: Path
+) -> None:
     from magent.tools import ToolExecutor
 
     async def fake_deep_research(self, topic, questions=None, max_sources=6, fetch_sources=True):
@@ -658,7 +690,16 @@ def test_cli_research_command_defaults_to_readable_output_and_can_write(monkeypa
 
     json_result = runner.invoke(
         cli_main.app,
-        ["research", "desktop agents", "--question", "memory UX", "--max-sources", "3", "--no-fetch", "--json"],
+        [
+            "research",
+            "desktop agents",
+            "--question",
+            "memory UX",
+            "--max-sources",
+            "3",
+            "--no-fetch",
+            "--json",
+        ],
     )
     assert json_result.exit_code == 0
     payload = json.loads(json_result.output)
@@ -682,6 +723,12 @@ def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -
 
     import magent.ui
 
+    class NotSerializable:
+        pass
+
+    server = NotSerializable()
+    schedules = NotSerializable()
+    blocked_on: list[object] = []
     monkeypatch.setattr(
         magent.ui,
         "serve_ui",
@@ -690,17 +737,21 @@ def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -
             "url": f"http://127.0.0.1:{port}/",
             "project": project,
             "username": username,
+            "server": server,
+            "schedules": schedules,
         },
     )
     # signal.pause() does not exist on Windows, so the server is now blocked
     # on a portable, interruptible wait instead.
-    monkeypatch.setattr(cli_main, "_block_until_interrupt", lambda server=None: None)
+    monkeypatch.setattr(cli_main, "_block_until_interrupt", blocked_on.append)
 
     result = runner.invoke(cli_main.app, ["ui", "--project", str(project), "--port", "9999"])
 
     assert result.exit_code == 0
     assert "http://127.0.0.1:9999/" in result.output
     assert "cli-test" in result.output
+    assert blocked_on == [server]
+    assert "NotSerializable" not in result.output
 
 
 def test_cli_dashboard_serve_does_not_print_the_server_handle(tmp_path: Path, monkeypatch) -> None:
@@ -770,10 +821,16 @@ def test_cli_context_map_and_memory_promote(tmp_path: Path, monkeypatch) -> None
     memory = FakeMemory()
     monkeypatch.setattr(command_context, "_get_memory_manager", lambda: (memory, "cli-test"))
 
-    mapped = runner.invoke(cli_main.app, ["context", "map", "--project", str(project), "--query", "release"])
-    mapped_json = runner.invoke(cli_main.app, ["context", "map", "--project", str(project), "--query", "release", "--json"])
+    mapped = runner.invoke(
+        cli_main.app, ["context", "map", "--project", str(project), "--query", "release"]
+    )
+    mapped_json = runner.invoke(
+        cli_main.app, ["context", "map", "--project", str(project), "--query", "release", "--json"]
+    )
     listed = runner.invoke(cli_main.app, ["memory", "promote", "--project", str(project)])
-    promoted = runner.invoke(cli_main.app, ["memory", "promote", "task", "task_0001", "--project", str(project)])
+    promoted = runner.invoke(
+        cli_main.app, ["memory", "promote", "task", "task_0001", "--project", str(project)]
+    )
 
     assert mapped.exit_code == 0
     assert "Context Map" in mapped.output
@@ -890,11 +947,16 @@ def test_cli_goal_orchestrated_background_and_goal_run_preview(tmp_path: Path, m
     assert payload["queued"]["kind"] == "orchestrated_goal"
     assert payload["plan"]["status"] == "queued"
 
-    manual = runner.invoke(cli_main.daemon_app, ["enqueue", "orchestrated_goal", payload["plan"]["id"], "--project", str(project)])
+    manual = runner.invoke(
+        cli_main.daemon_app,
+        ["enqueue", "orchestrated_goal", payload["plan"]["id"], "--project", str(project)],
+    )
     assert manual.exit_code == 0
     assert json.loads(manual.output)["payload"]["id"] == payload["plan"]["id"]
 
-    preview = runner.invoke(cli_main.app, ["goal-run", payload["plan"]["id"], "--dry-run", "--json"])
+    preview = runner.invoke(
+        cli_main.app, ["goal-run", payload["plan"]["id"], "--dry-run", "--json"]
+    )
     assert preview.exit_code == 0
     preview_payload = json.loads(preview.output)
     assert preview_payload["next_step"] == 1
@@ -940,7 +1002,10 @@ def test_cli_goal_run_executes_saved_plan_with_fake_runner(tmp_path: Path, monke
 
     monkeypatch.setattr(subagents, "SubAgentRunner", FakeRunner)
 
-    run = runner.invoke(cli_main.app, ["goal-run", plan_id, "--provider", "ollama", "--model", "qwen2.5-coder:32b", "--json"])
+    run = runner.invoke(
+        cli_main.app,
+        ["goal-run", plan_id, "--provider", "ollama", "--model", "qwen2.5-coder:32b", "--json"],
+    )
     assert run.exit_code == 0, run.output
     payload = json.loads(run.output)
     assert payload["status"] == "completed"
@@ -1008,10 +1073,19 @@ def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch
     tools = runner.invoke(cli_main.app, ["tools", "disable", "web"])
     explained = runner.invoke(cli_main.app, ["tools", "explain", "web"])
     inbox = runner.invoke(cli_main.app, ["memory", "inbox", "--project", str(project)])
-    inbox_json = runner.invoke(cli_main.app, ["memory", "inbox", "--json", "--project", str(project)])
+    inbox_json = runner.invoke(
+        cli_main.app, ["memory", "inbox", "--json", "--project", str(project)]
+    )
     accepted = runner.invoke(
         cli_main.app,
-        ["memory", "inbox", "accept", "promoted_task_task_0001_remember_inbox_task", "--project", str(project)],
+        [
+            "memory",
+            "inbox",
+            "accept",
+            "promoted_task_task_0001_remember_inbox_task",
+            "--project",
+            str(project),
+        ],
     )
 
     assert playbook.exit_code == 0
@@ -1054,7 +1128,9 @@ def test_cli_code_and_test_commands(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(cli_main, "_store", lambda: store)
 
     indexed = runner.invoke(cli_main.app, ["code", "index", "--project", str(project)])
-    symbols = runner.invoke(cli_main.app, ["code", "symbols", "create_order", "--project", str(project)])
+    symbols = runner.invoke(
+        cli_main.app, ["code", "symbols", "create_order", "--project", str(project)]
+    )
     related_code = runner.invoke(
         cli_main.app,
         ["code", "related", str(project / "src" / "orders.py"), "--project", str(project)],
@@ -1116,7 +1192,9 @@ def test_cli_project_patch_workspace_and_release_commands(tmp_path: Path, monkey
     doctor = runner.invoke(cli_main.app, ["project", "doctor", "--path", str(project)])
     preview = runner.invoke(cli_main.app, ["patch", "preview", patch["id"]])
     explain = runner.invoke(cli_main.app, ["patch", "explain", patch["id"]])
-    workspace_status = runner.invoke(cli_main.app, ["workspace", "status", "--project", str(project)])
+    workspace_status = runner.invoke(
+        cli_main.app, ["workspace", "status", "--project", str(project)]
+    )
     release_check = runner.invoke(cli_main.app, ["release", "check", "--project", str(project)])
     release_notes = runner.invoke(cli_main.app, ["release", "notes", "--project", str(project)])
 
@@ -1201,13 +1279,17 @@ def test_checkpoint_commands_offer_machine_readable_output(tmp_path: Path, monke
     monkeypatch.setattr(cli_main, "_store", lambda: store)
     target = tmp_path / "example.txt"
     target.write_text("before\n", encoding="utf-8")
-    checkpoint = workbench.create_checkpoint("checkpoint-cli", tmp_path, target, "edit_file", session_id="session-1")
+    checkpoint = workbench.create_checkpoint(
+        "checkpoint-cli", tmp_path, target, "edit_file", session_id="session-1"
+    )
     target.write_text("after\n", encoding="utf-8")
 
     listed = runner.invoke(cli_main.app, ["checkpoint", "list", "--json"])
     diffed = runner.invoke(cli_main.app, ["checkpoint", "diff", checkpoint["id"], "--json"])
     sessions = runner.invoke(cli_main.app, ["checkpoint", "session-list", "--json"])
-    session_diff = runner.invoke(cli_main.app, ["checkpoint", "session-diff", "session-1", "--json"])
+    session_diff = runner.invoke(
+        cli_main.app, ["checkpoint", "session-diff", "session-1", "--json"]
+    )
 
     assert listed.exit_code == 0
     assert json.loads(listed.output)["checkpoints"][0]["id"] == checkpoint["id"]

@@ -630,7 +630,9 @@ def research_cmd(
     ),
     out: str | None = typer.Option(None, "--out", "-o", help="Output path for --write."),
     project: str = typer.Option(".", "--project", "-p", help="Active project directory."),
-    agent: str | None = typer.Option(None, "--agent", help="Apply an OAP profile's tool and network policy."),
+    agent: str | None = typer.Option(
+        None, "--agent", help="Apply an OAP profile's tool and network policy."
+    ),
 ):
     """Run deep web research without starting a full agent session."""
     from magent.tools import ToolExecutor
@@ -698,7 +700,8 @@ def _write_research_report(
     path = (
         Path(out).expanduser()
         if out
-        else Path(project).resolve() / f"{_slugify_filename(str(result.get('topic') or 'research'))}.md"
+        else Path(project).resolve()
+        / f"{_slugify_filename(str(result.get('topic') or 'research'))}.md"
     )
     path = path.resolve(strict=False)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -2651,7 +2654,9 @@ def recipe_save_cmd(
 def recipe_run_cmd(
     name: str = typer.Argument(...),
     project: str = typer.Option(".", "--project", "-p"),
-    agent: str = typer.Option("", "--agent", help="Attach an OAP profile to the materialized plan."),
+    agent: str = typer.Option(
+        "", "--agent", help="Attach an OAP profile to the materialized plan."
+    ),
     json_output: bool = typer.Option(False, "--json", hidden=True),
 ):
     """Create a pending execution plan from a workflow recipe."""
@@ -3283,8 +3288,14 @@ def subagent_wizard_cmd():
         console,
         "Subagent settings",
         [
-            ("maximum", "Total focused workers the main agent may create for one task; 0 disables delegation."),
-            ("parallel", "Workers allowed to run concurrently. Lower values reduce resource and quota spikes."),
+            (
+                "maximum",
+                "Total focused workers the main agent may create for one task; 0 disables delegation.",
+            ),
+            (
+                "parallel",
+                "Workers allowed to run concurrently. Lower values reduce resource and quota spikes.",
+            ),
             ("model role", "Configured model role used by workers, usually coding or cheap."),
             ("blank", "Run in the current project with normal checkpoint protections."),
             ("copy", "Use an isolated filesystem copy."),
@@ -3385,7 +3396,9 @@ def tutorial_cmd():
 
 @app.command("get-started", rich_help_panel="Start Here")
 def get_started_cmd(
-    json_output: bool = typer.Option(False, "--json", help="Return the guide and key commands as JSON."),
+    json_output: bool = typer.Option(
+        False, "--json", help="Return the guide and key commands as JSON."
+    ),
 ):
     """Show a clear first-use guide for MagAgent."""
     from rich.markdown import Markdown
@@ -3753,7 +3766,12 @@ def ui_cmd(
     result = serve_ui(
         _store(), project=project, username=username, port=port, open_browser=open_browser
     )
-    console.print_json(data={key: value for key, value in result.items() if key != "server"})
+    # The server and schedule store are live runtime handles, not response data.
+    # Rendering either through Rich's JSON encoder aborts the CLI after the
+    # socket has already been bound.
+    console.print_json(
+        data={key: value for key, value in result.items() if key not in {"server", "schedules"}}
+    )
     if not result.get("ok"):
         raise typer.Exit(1)
     console.print("[dim]Press Ctrl+C to stop.[/dim]")
@@ -4267,12 +4285,16 @@ def gateway_wizard_cmd(platform: str = typer.Argument(..., help="slack, discord,
         app_token = Prompt.ask("Slack app token (xapp-...)", password=True, default="")
     allowed_users = [
         item.strip()
-        for item in Prompt.ask("Allowed user IDs (comma-separated, optional)", default="").split(",")
+        for item in Prompt.ask("Allowed user IDs (comma-separated, optional)", default="").split(
+            ","
+        )
         if item.strip()
     ]
     allowed_channels = [
         item.strip()
-        for item in Prompt.ask("Allowed channel IDs (comma-separated, optional)", default="").split(",")
+        for item in Prompt.ask("Allowed channel IDs (comma-separated, optional)", default="").split(
+            ","
+        )
         if item.strip()
     ]
     console.print(

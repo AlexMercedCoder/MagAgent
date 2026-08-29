@@ -17,6 +17,8 @@ while preserving MagAgent's local-first, governed execution model.
 - A discoverable extension inventory for built-in tool backends, Playwright browser readiness,
   plugins and their integrity status, skills, and MCP server names.
 - Packaged React assets, API and lifecycle tests, and complete user/security documentation.
+- Release-smoke coverage for the installed CLI startup path, including non-serializable live
+  server and scheduler handles.
 
 ## Security Boundaries
 

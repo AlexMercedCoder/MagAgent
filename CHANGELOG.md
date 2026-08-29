@@ -14,6 +14,8 @@
   confirmations, project path confinement, upload/context/output limits, and schedule shutdown.
 - Added backend security/lifecycle tests, frontend navigation coverage, rebuilt packaged assets,
   and expanded the local UI and release documentation.
+- Kept live server and scheduler handles out of CLI JSON output so the installed `magent ui`
+  command remains alive after binding its loopback server.
 
 ## 0.99.0 (2026-08-27)
 
