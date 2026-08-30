@@ -11,6 +11,7 @@ class FakeSession:
 
     def __init__(self, **kwargs):
         self.profile = kwargs.get("profile")
+        self.config = kwargs.get("config")
         self.session_id = f"session-{len(self.created) + 1}"
         self.conversation = []
         self.ended = False
@@ -27,7 +28,7 @@ class FakeSession:
 
 def _patch_runtime(monkeypatch):
     FakeSession.created = []
-    config = SimpleNamespace()
+    config = SimpleNamespace(_user={}, _global={})
     monkeypatch.setattr(web_chat, "load_config", lambda _username: config)
     monkeypatch.setattr(
         web_chat,
@@ -85,3 +86,14 @@ def test_web_chat_runner_bounds_group_and_adds_coordinator_synthesis(monkeypatch
     ]
     assert len(FakeSession.created) == 4
     assert all(session.ended for session in FakeSession.created)
+
+
+def test_web_chat_runner_applies_permission_mode_without_persisting(monkeypatch) -> None:
+    _patch_runtime(monkeypatch)
+    result = WebChatRunner("alex", ".", permission_mode="paranoid").run(
+        {"kind": "chat", "profiles": [], "messages": []},
+        "Inspect safely",
+    )
+
+    assert result[0]["speaker"] == "MagAgent"
+    assert FakeSession.created[0].config._user["permissions"]["mode"] == "paranoid"

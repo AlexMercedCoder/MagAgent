@@ -367,6 +367,7 @@ def extension_inventory(username: str | None, project: str | Path) -> dict[str, 
     from magent.plugins import list_plugins
     from magent.skills import SkillRegistry
     from magent.tool_gateway import gateway_status
+    from magent.web_extensions import public_mcp_config
 
     registry = SkillRegistry(extra_dirs=[Path(project) / ".magent" / "skills"])
     registry.load(respect_lockfile=False)
@@ -377,15 +378,11 @@ def extension_inventory(username: str | None, project: str | Path) -> dict[str, 
 
         config = load_config(username)
         for name, value in sorted(config.mcp_servers.get("servers", {}).items()):
+            public = public_mcp_config(value) if isinstance(value, dict) else {}
             mcp.append(
                 {
                     "name": name,
-                    "enabled": bool(value.get("enabled", True))
-                    if isinstance(value, dict)
-                    else True,
-                    "command": str(value.get("command") or "") if isinstance(value, dict) else "",
-                    "args": list(value.get("args") or []) if isinstance(value, dict) else [],
-                    "url": str(value.get("url") or "") if isinstance(value, dict) else "",
+                    **public,
                 }
             )
         capabilities = gateway_status(config).get("backends", [])

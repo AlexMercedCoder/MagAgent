@@ -536,10 +536,12 @@ The release-ready workspace adds three operator surfaces:
   material is never returned to the browser.
 
 The Graphs view can open existing `.agraph` files, start a blank workflow, or ask the configured
-planning model to propose a graph from a goal. Task cards support profile selection and explicit
-dependencies. MagAgent saves and strictly validates the native graph before enabling Run, then
-moves cards through **To do**, **Current work**, and **Done**, retaining a success or failure
-summary for every completed card.
+planning model to propose a graph from a goal. Every card is editable before execution, including
+its profile, dependencies, logical tools, skills, MCP servers, workspace, and portable permission
+requirements. MagAgent saves and strictly validates the native graph before enabling Run, then
+moves cards through **Pending**, **In progress**, and **Complete**. A durable run-health panel,
+event counter, last-check time, animated active cards, and per-card outcomes remain attached when
+you leave the view and return.
 
 A turn is a run, not a request. It executes on its own thread and finishes whether or not anyone is
 watching, so closing the tab no longer kills the work and loses the reply. Streams read the run's
@@ -553,9 +555,8 @@ decision now pauses the turn and asks in the transcript. Unanswered is a denial:
 not leave a tool authorised.
 
 A Memory view browses what the agent has kept — the graph's size and health, full note text, and the
-notes linking to and from each one, searchable in the same modes the agent's own recall uses. It is
-read-only; editing, merging and deletion stay in the CLI where the destructive commands have their
-confirmations.
+notes linking to and from each one, searchable in the same modes the agent's own recall uses. Notes
+can be created and edited explicitly, and deletion requires browser confirmation.
 
 Opening the UI on a machine that has never been set up shows a setup panel rather than a composer
 whose first message is guaranteed to fail. It never accepts a credential: keys stay in the

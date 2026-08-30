@@ -24,7 +24,7 @@ from magent.ui_actions import (
     promote_memory_candidate,
     run_release_check,
 )
-from magent.web_conversations import ConversationStore
+from magent.web_conversations import ConversationStore, folder_catalog
 from magent.web_graphs import (
     GraphRunManager,
     blank_graph_document,
@@ -91,6 +91,7 @@ def _turn_worker(
                 username,
                 root,
                 on_approval=lambda description, tier: run.request_approval(description, int(tier)),
+                permission_mode=str(conversation.get("permission_mode") or "balanced"),
             ).run(
                 conversation,
                 prompt,
@@ -253,6 +254,7 @@ def serve_ui(
         "/api/profiles",
         "/api/profiles/import",
         "/api/profiles/delete",
+        "/api/profiles/clone",
         "/api/graphs/run",
         "/api/graphs/draft",
         "/api/graphs/preview-draft",
@@ -267,6 +269,7 @@ def serve_ui(
         "/api/workspace/terminal",
         "/api/extensions/plugins",
         "/api/extensions/manage",
+        "/api/extensions/mcp/test",
         "/api/memory/nodes",
         "/api/tasks/action",
         "/api/schedules",
@@ -432,18 +435,26 @@ def serve_ui(
                     # must run before the module bundle parses.
                     self._root_asset("theme-init.js")
                 elif parsed.path == "/api/bootstrap":
+                    from magent.config import load_config
                     from magent.desktop_api import agent_profiles, config_schema
+
+                    configured_mode = (
+                        load_config(username).permission_mode if username else "balanced"
+                    )
 
                     self._json(
                         {
                             "ok": True,
                             "csrf_token": token,
                             "project": str(root),
+                            "permission_mode": configured_mode,
                             "conversations": conversations.list(),
                             "profiles": agent_profiles(str(root)),
                             "settings": config_schema(username),
                         }
                     )
+                elif parsed.path == "/api/folders":
+                    self._json(folder_catalog(query.get("path", [""])[0], project=root))
                 elif parsed.path == "/api/workspace/files":
                     self._json(
                         workspace.list_files(
@@ -511,6 +522,11 @@ def serve_ui(
                         result = manage_mcp(body)
                     else:
                         result = {"ok": False, "error": "Unknown extension type."}
+                    self._json(result, status=200 if result.get("ok") else 400)
+                elif parsed.path == "/api/extensions/mcp/test":
+                    from magent.web_extensions import test_mcp
+
+                    result = test_mcp(self._body())
                     self._json(result, status=200 if result.get("ok") else 400)
                 elif parsed.path == "/api/tasks":
                     if not username:
@@ -672,7 +688,9 @@ def serve_ui(
                     body = self._body()
                     selected_root = Path(str(body.get("project") or root)).expanduser().resolve()
                     if not selected_root.is_dir():
-                        self._json({"ok": False, "error": "Choose an existing project folder."}, status=400)
+                        self._json(
+                            {"ok": False, "error": "Choose an existing project folder."}, status=400
+                        )
                         return
                     record = conversations.create(
                         title=str(body.get("title", "New conversation")),
@@ -680,20 +698,27 @@ def serve_ui(
                         project=str(selected_root),
                         profiles=list(body.get("profiles") or []),
                         coordinator=str(body.get("coordinator", "")),
+                        permission_mode=str(body.get("permission_mode") or "balanced"),
                     )
                     self._json({"ok": True, "conversation": record}, status=201)
                 elif parsed.path == "/api/conversations/update":
                     body = self._body()
-                    updates: dict[str, Any] = {
-                        "title": body.get("title"),
-                        "archived": bool(body.get("archived", False)),
-                    }
+                    updates: dict[str, Any] = {}
+                    if "title" in body:
+                        updates["title"] = body.get("title")
+                    if "archived" in body:
+                        updates["archived"] = bool(body.get("archived"))
                     if "project" in body:
                         selected_root = Path(str(body.get("project") or "")).expanduser().resolve()
                         if not selected_root.is_dir():
-                            self._json({"ok": False, "error": "Choose an existing project folder."}, status=400)
+                            self._json(
+                                {"ok": False, "error": "Choose an existing project folder."},
+                                status=400,
+                            )
                             return
                         updates["project"] = str(selected_root)
+                    if "permission_mode" in body:
+                        updates["permission_mode"] = body.get("permission_mode")
                     record = conversations.update(
                         str(body.get("conversation_id", "")),
                         **updates,
@@ -705,8 +730,11 @@ def serve_ui(
                     removed = conversations.delete(conversation_id)
                     conversation_locks.pop(conversation_id, None)
                     self._json(
-                        {"ok": removed, "conversation_id": conversation_id,
-                         **({} if removed else {"error": "conversation not found"})},
+                        {
+                            "ok": removed,
+                            "conversation_id": conversation_id,
+                            **({} if removed else {"error": "conversation not found"}),
+                        },
                         status=200 if removed else 404,
                     )
                 elif parsed.path == "/api/conversations/message":
@@ -738,7 +766,13 @@ def serve_ui(
                         return
                     conversation_root = Path(str(conversation.get("project") or root)).resolve()
                     if not conversation_root.is_dir():
-                        self._json({"ok": False, "error": "This conversation's project folder no longer exists. Edit the conversation and choose an existing folder."}, status=400)
+                        self._json(
+                            {
+                                "ok": False,
+                                "error": "This conversation's project folder no longer exists. Edit the conversation and choose an existing folder.",
+                            },
+                            status=400,
+                        )
                         return
                     conversation_workspace = WorkspaceService(conversation_root)
                     context_prompt, context_refs = conversation_workspace.context_prompt(
@@ -777,6 +811,16 @@ def serve_ui(
                     config = load_config(username) if username else None
                     self._json(
                         inspect_profile(query.get("name", [""])[0], project=root, config=config)
+                    )
+                elif parsed.path == "/api/profiles/contract":
+                    from magent.agent_profiles.desktop import profile_contract
+                    from magent.config import load_config
+
+                    self._json(
+                        profile_contract(
+                            project=root,
+                            config=load_config(username) if username else None,
+                        )
                     )
                 elif parsed.path == "/api/profiles/export":
                     from magent.config import load_config
@@ -828,7 +872,15 @@ def serve_ui(
                                 "provider": route.get("provider"),
                                 "id": route.get("id") or route.get("model"),
                             },
-                            permissions={"default": body.get("permission_mode")},
+                            tools={
+                                "allow": list(body.get("tools") or []),
+                                "skills": list(body.get("skills") or []),
+                                "mcp_servers": list(body.get("mcp_servers") or []),
+                            },
+                            permissions={
+                                "default": body.get("permission_mode"),
+                                "network": body.get("network_mode"),
+                            },
                             lifecycle={"writeback": "off"},
                         )
                     except ValueError as problem:
@@ -847,6 +899,22 @@ def serve_ui(
                         if result.get("ok")
                         else (409 if result.get("conflict") else 400),
                     )
+                elif parsed.path == "/api/profiles/clone":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        from magent.agent_profiles.desktop import clone_profile
+                        from magent.config import load_config
+
+                        body = self._body()
+                        result = clone_profile(
+                            str(body.get("source") or ""),
+                            str(body.get("name") or ""),
+                            scope=str(body.get("scope") or "project"),
+                            project=root,
+                            config=load_config(username),
+                        )
+                        self._json(result, status=201 if result.get("ok") else 400)
                 elif parsed.path == "/api/profiles/import":
                     if not username:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)
@@ -872,11 +940,17 @@ def serve_ui(
 
                         body = self._body()
                         result = delete_profile(
-                            str(body.get("name", "")), project=root,
+                            str(body.get("name", "")),
+                            project=root,
                             config=load_config(username),
                             expected_digest=str(body.get("expected_digest", "")),
                         )
-                        self._json(result, status=200 if result.get("ok") else (409 if result.get("conflict") else 400))
+                        self._json(
+                            result,
+                            status=200
+                            if result.get("ok")
+                            else (409 if result.get("conflict") else 400),
+                        )
                 elif parsed.path == "/api/settings":
                     from magent.desktop_api import CONFIG_SCHEMA, config_set
 

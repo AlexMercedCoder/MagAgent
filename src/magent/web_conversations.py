@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import builtins
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from magent.workbench_store import WorkbenchStore
 
 CONVERSATION_KINDS = {"chat", "bot", "group"}
 MAX_GROUP_PARTICIPANTS = 5
+PERMISSION_MODES = {"paranoid", "balanced", "silent", "yolo"}
 
 
 def _now() -> str:
@@ -32,7 +34,11 @@ class ConversationStore:
 
     def get(self, conversation_id: str) -> dict[str, Any] | None:
         return next(
-            (item for item in self.store.read(self.collection, []) if item.get("id") == conversation_id),
+            (
+                item
+                for item in self.store.read(self.collection, [])
+                if item.get("id") == conversation_id
+            ),
             None,
         )
 
@@ -44,11 +50,14 @@ class ConversationStore:
         project: str,
         profiles: builtins.list[str] | None = None,
         coordinator: str = "",
+        permission_mode: str = "balanced",
     ) -> dict[str, Any]:
         kind = kind.strip().lower()
         if kind not in CONVERSATION_KINDS:
             raise ValueError(f"kind must be one of {', '.join(sorted(CONVERSATION_KINDS))}")
-        selected = list(dict.fromkeys(str(item).strip() for item in (profiles or []) if str(item).strip()))
+        selected = list(
+            dict.fromkeys(str(item).strip() for item in (profiles or []) if str(item).strip())
+        )
         if kind == "bot" and len(selected) != 1:
             raise ValueError("bot conversations require exactly one profile")
         if kind == "group":
@@ -56,6 +65,11 @@ class ConversationStore:
                 raise ValueError("group conversations require 2 to 5 profiles")
             if coordinator not in selected:
                 raise ValueError("the coordinator must be one of the group profiles")
+        permission_mode = permission_mode.strip().lower()
+        if permission_mode not in PERMISSION_MODES:
+            raise ValueError(
+                "permission mode must be one of " + ", ".join(sorted(PERMISSION_MODES))
+            )
         now = _now()
         return self.store.append(
             self.collection,
@@ -66,6 +80,7 @@ class ConversationStore:
                 "project": project,
                 "profiles": selected,
                 "coordinator": coordinator if kind == "group" else "",
+                "permission_mode": permission_mode,
                 "messages": [],
                 "archived": False,
                 "updated_at": now,
@@ -73,7 +88,15 @@ class ConversationStore:
         )
 
     def update(self, conversation_id: str, **updates: Any) -> dict[str, Any]:
-        allowed = {"title", "archived", "project", "profiles", "coordinator", "kind"}
+        allowed = {
+            "title",
+            "archived",
+            "project",
+            "profiles",
+            "coordinator",
+            "kind",
+            "permission_mode",
+        }
         safe = {key: value for key, value in updates.items() if key in allowed}
         if "title" in safe:
             safe["title"] = str(safe["title"]).strip()[:100] or "New conversation"
@@ -81,8 +104,17 @@ class ConversationStore:
             safe["project"] = str(safe["project"]).strip()
         if "profiles" in safe:
             safe["profiles"] = list(
-                dict.fromkeys(str(item).strip() for item in (safe["profiles"] or []) if str(item).strip())
+                dict.fromkeys(
+                    str(item).strip() for item in (safe["profiles"] or []) if str(item).strip()
+                )
             )
+        if "permission_mode" in safe:
+            mode = str(safe["permission_mode"] or "").strip().lower()
+            if mode not in PERMISSION_MODES:
+                raise ValueError(
+                    "permission mode must be one of " + ", ".join(sorted(PERMISSION_MODES))
+                )
+            safe["permission_mode"] = mode
         record = self.store.update_item(self.collection, conversation_id, **safe)
         if record is None:
             raise KeyError("conversation not found")
@@ -133,3 +165,39 @@ class ConversationStore:
             raise KeyError("conversation not found")
 
         return self.store.mutate(self.collection, [], change)
+
+
+def folder_catalog(raw_path: str = "", *, project: str | Path = ".") -> dict[str, Any]:
+    """Return a bounded, directory-only listing for the local folder picker.
+
+    Selecting a project already permits an arbitrary existing local directory;
+    this endpoint only replaces error-prone path typing with an authenticated
+    browser. Files and their contents are never returned.
+    """
+
+    home = Path.home().resolve()
+    current = Path(raw_path).expanduser().resolve() if raw_path.strip() else home
+    if not current.is_dir():
+        raise ValueError("Choose an existing folder to browse.")
+    try:
+        children = sorted(
+            (
+                {"name": item.name, "path": str(item.resolve())}
+                for item in current.iterdir()
+                if item.is_dir()
+            ),
+            key=lambda item: item["name"].casefold(),
+        )[:300]
+    except PermissionError as error:
+        raise ValueError("That folder cannot be opened with your current permissions.") from error
+    roots: list[dict[str, str]] = []
+    for label, value in (("Home", home), ("UI project", Path(project).resolve())):
+        if str(value) not in {item["path"] for item in roots}:
+            roots.append({"name": label, "path": str(value)})
+    return {
+        "ok": True,
+        "path": str(current),
+        "parent": str(current.parent) if current.parent != current else "",
+        "directories": children,
+        "roots": roots,
+    }

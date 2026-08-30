@@ -8,10 +8,12 @@ function initials(name = "M"): string {
 export function ContextPanel({
   active,
   boot,
+  onPermissionChange,
   onClose,
 }: {
   active: Conversation | null;
   boot: Bootstrap | null;
+  onPermissionChange: (conversation: Conversation, permissionMode: string) => void;
   onClose: () => void;
 }) {
   const kind =
@@ -35,7 +37,7 @@ export function ContextPanel({
       </div>
       <div className="context-field">
         <span className="eyebrow">Project</span>
-        <div className="context-value">{boot?.project || "—"}</div>
+        <div className="context-value">{active?.project || boot?.project || "—"}</div>
       </div>
       <div className="context-field">
         <span className="eyebrow">Participants</span>
@@ -43,10 +45,7 @@ export function ContextPanel({
       </div>
       <div className="context-field">
         <span className="eyebrow">Safety</span>
-        <div className="context-row">
-          <span>Permission mode</span>
-          <b>{boot?.permission_mode || "Balanced"}</b>
-        </div>
+        <label className="context-permission">Permission mode<select disabled={!active} value={active?.permission_mode || boot?.permission_mode || "balanced"} onChange={(event) => active && onPermissionChange(active, event.target.value)}><option value="paranoid">Paranoid</option><option value="balanced">Balanced</option><option value="silent">Silent</option><option value="yolo">Yolo</option></select></label>
         <p className="context-note">
           Profiles can narrow authority, but never widen the configured ceiling.
         </p>

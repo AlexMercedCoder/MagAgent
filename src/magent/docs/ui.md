@@ -45,9 +45,14 @@ The inventory is actionable without becoming a source-code editor. A reviewed lo
 can be installed or removed, and installed plugins can be enabled or disabled through the existing
 integrity checks. Project Skills can be created, edited, and deleted beneath
 `.magent/skills/<name>/SKILL.md`. MCP registrations can be created, edited, enabled, and removed;
-the form accepts a command plus argument list or a remote URL, but never accepts or returns MCP
-environment secrets. Plugin package source is deliberately not edited in the browser—replace the
-reviewed package instead, so its manifest and integrity evidence remain meaningful.
+the form supports stdio, Streamable HTTP, and explicitly acknowledged legacy SSE transports,
+modern/legacy/automatic compatibility, working directories, timeouts, headers, environment
+references, and a pre-save connection test. Authentication fields name environment variables;
+stored credentials and literal secret values are never returned to the browser. MCP negotiates an
+exact protocol version during initialization, so the compatibility control describes server era
+rather than pretending MCP has a simple “1.0 versus 2.0” switch. Plugin package source is
+deliberately not edited in the browser—replace the reviewed package instead, so its manifest and
+integrity evidence remain meaningful.
 
 The layout remains responsive for local access from another viewport, but the server is deliberately
 loopback-only. Remote/mobile synchronization is not implied; use MagAgent's authenticated gateway
@@ -170,13 +175,15 @@ The Chats view supports durable traditional, bot, and group conversations:
 - streamed response text with speaker attribution
 - persisted local histories that survive UI restarts
 - assistant replies rendered as markdown, with a copy button on fenced code blocks
-- deletion with transcript confirmation, and per-conversation project-folder reassignment
+- deletion with transcript confirmation, per-conversation project-folder reassignment, and a
+  conversation-scoped permission mode that can be selected before the first message or changed later
 
-New conversation setup happens before the first message. Choose the conversation type, an existing
-local project folder, up to five profile-backed participants, and (for groups) a coordinator. Each
-conversation pins that project and its participants; the project can later be changed from the
-folder control beside the conversation. MagAgent validates that the target exists and is a
-directory before using it for files, Git, tools, or a turn.
+New conversation setup happens before the first message. Choose the conversation type, browse to an
+existing local project folder, select a permission mode, choose up to five profile-backed
+participants, and (for groups) a coordinator. Each conversation pins that project, permission mode,
+and its participants; the project and permission mode can later be changed from the conversation
+controls. MagAgent validates that the target exists and is a directory before using it for files,
+Git, tools, or a turn. A conversation-scoped choice does not rewrite the user's global default.
 
 Markdown rendering treats model output as untrusted, because it can quote a hostile file, a scraped page, or a tool result. Every text run is escaped before any markup is introduced, raw HTML is never parsed into elements, and only `http`, `https`, `mailto`, and same-document links become anchors; a `javascript:` or `data:` URL renders as plain text. Your own messages are shown literally, exactly as typed.
 
@@ -211,9 +218,11 @@ overwriting.
 Each profile can declare its own provider and model, or leave both blank to inherit the workspace
 route. A profile narrows authority; it never widens it.
 
-Project and user profiles can be edited or deleted from a styled dialog. Managed profiles remain
-read-only. Updates carry the profile digest that was inspected, so a second tab cannot silently
-overwrite a newer revision.
+Project and user profiles can be edited or deleted from a styled dialog. Their editor covers the
+provider, model, permission and network ceilings, built-in tools, Skills, and MCP servers. Managed
+profiles remain immutable OAP baselines; **Customize as a copy** creates a project-owned profile
+that can be narrowed without altering the shipped identity. Updates carry the profile digest that
+was inspected, so a second tab cannot silently overwrite a newer revision.
 
 ## Graph Kanban
 
@@ -241,7 +250,11 @@ You can also author a workflow directly in the browser:
 *Load graph* is explicit rather than hidden in the file selector. Saving keeps the board populated
 from the canonical saved document. Running records the returned job id and polls that exact job;
 preview and run responses are normalized from their versioned plan/run envelopes before cards are
-placed into Pending, In progress, or Complete.
+placed into Pending, In progress, or Complete. The browser stores that job identity for the tab and
+reattaches when the user visits Runs and comes back, so the board does not reset. A health strip
+reports polling health, events observed, the job id, and the latest successful check; active cards
+pulse and final cards retain actionable failure or skip reasons. Undeclared-tool failures point to
+the card editor and name the missing capability rather than displaying only a validator code.
 
 ## Memory Editing
 
@@ -275,10 +288,10 @@ Search runs the same three modes the agent's own recall uses. `semantic` and `hy
 embedding index that may not exist, and the memory manager already falls back to keyword search, so
 an unavailable mode degrades rather than failing.
 
-**Everything on this screen reads.** Promotion still goes through `/api/memory/promote`, and
-editing, merging, suppression, and deletion stay in the CLI, where the destructive commands already
-have their confirmations. Both the note roster and each note's body are bounded, because a memory
-graph grows without limit and a browser only ever shows a window of it.
+Explicit memories can be created and edited on this screen, and deletion requires confirmation.
+Promotion still goes through `/api/memory/promote`; bulk merging and suppression remain CLI
+operations. Both the note roster and each note's body are bounded, because a memory graph grows
+without limit and a browser only ever shows a window of it.
 
 ## Profiles And Settings
 
@@ -309,6 +322,7 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/state`
 - `/api/bootstrap`
 - `/api/conversations`
+- `/api/folders?path=<local-directory>`
 - `/api/conversations/message`
 - `/api/runs?conversation_id=<conversation-id>`
 - `/api/runs/events?id=<run-id>&after=<cursor>`
@@ -316,6 +330,8 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/runs/approve`
 - `/api/profile`
 - `/api/profiles`
+- `/api/profiles/contract`
+- `/api/profiles/clone`
 - `/api/graphs`
 - `/api/graphs/preview?path=<project-relative-graph>`
 - `/api/graphs/draft`
@@ -336,7 +352,9 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/memory/overview`
 - `/api/memory/search?q=<text>&mode=keyword|hybrid|semantic`
 - `/api/memory/node?id=<node-id>`
+- `/api/memory/nodes`
 - `/api/memory/promote?id=<candidate-id>`
+- `/api/extensions/mcp/test`
 - `/api/patch/preview?id=<patch-id>`
 - `/api/checkpoint/diff?id=<checkpoint-id>`
 

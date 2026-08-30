@@ -17,6 +17,7 @@ export type Conversation = {
   project: string;
   profiles: string[];
   coordinator?: string;
+  permission_mode?: "paranoid" | "balanced" | "silent" | "yolo";
   messages: Message[];
   archived?: boolean;
   updated_at: string;
@@ -65,8 +66,10 @@ export type GraphNode = {
   id: string;
   title: string;
   type: string;
+  description?: string;
   depends_on?: string[];
   profile?: string;
+  tools?: string[];
   /** pending | running | succeeded | failed | skipped | cancelled */
   state?: string;
   summary?: string;

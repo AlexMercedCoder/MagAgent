@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from magent import workbench_store
-from magent.web_conversations import ConversationStore
+from magent.web_conversations import ConversationStore, folder_catalog
 from magent.workbench_store import WorkbenchStore
 
 
@@ -16,7 +16,13 @@ def conversations(tmp_path: Path, monkeypatch) -> ConversationStore:
 
 
 def test_conversation_crud_is_durable(conversations: ConversationStore) -> None:
-    created = conversations.create(title="API review", kind="chat", project="/tmp/project")
+    created = conversations.create(
+        title="API review",
+        kind="chat",
+        project="/tmp/project",
+        permission_mode="paranoid",
+    )
+    assert created["permission_mode"] == "paranoid"
     message = conversations.append_message(
         created["id"], role="user", content="Review this API", speaker="You"
     )
@@ -27,9 +33,12 @@ def test_conversation_crud_is_durable(conversations: ConversationStore) -> None:
     assert loaded["messages"] == [message]
     assert conversations.list()[0]["title"] == "API review"
 
-    conversations.update(created["id"], title="Reviewed API", archived=True)
+    conversations.update(
+        created["id"], title="Reviewed API", archived=True, permission_mode="silent"
+    )
     assert conversations.list() == []
     assert conversations.list(include_archived=True)[0]["title"] == "Reviewed API"
+    assert conversations.list(include_archived=True)[0]["permission_mode"] == "silent"
     assert conversations.delete(created["id"]) is True
     assert conversations.delete(created["id"]) is False
     assert conversations.list(include_archived=True) == []
@@ -39,9 +48,7 @@ def test_bot_conversation_requires_one_profile(conversations: ConversationStore)
     with pytest.raises(ValueError, match="exactly one"):
         conversations.create(title="Bot", kind="bot", project=".", profiles=[])
 
-    created = conversations.create(
-        title="Review bot", kind="bot", project=".", profiles=["review"]
-    )
+    created = conversations.create(title="Review bot", kind="bot", project=".", profiles=["review"])
     assert created["profiles"] == ["review"]
 
 
@@ -69,3 +76,21 @@ def test_group_conversation_requires_bounded_members_and_coordinator(
         coordinator="review",
     )
     assert created["profiles"] == ["review", "docs"]
+
+
+def test_permission_modes_are_validated(conversations: ConversationStore) -> None:
+    with pytest.raises(ValueError, match="permission mode"):
+        conversations.create(title="Unsafe", kind="chat", project=".", permission_mode="guess")
+
+
+def test_folder_catalog_lists_directories_without_file_contents(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    child = project / "child"
+    child.mkdir(parents=True)
+    (project / "secret.txt").write_text("not returned", encoding="utf-8")
+
+    listing = folder_catalog(str(project), project=project)
+
+    assert listing["path"] == str(project.resolve())
+    assert listing["directories"] == [{"name": "child", "path": str(child.resolve())}]
+    assert all(item["name"] != "secret.txt" for item in listing["directories"])

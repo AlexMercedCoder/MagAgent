@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Bootstrap, Conversation, Profile } from "../types";
+import { FolderPicker } from "./FolderPicker";
 
 /**
  * Conversation rail. A direct child of `.app-shell`, which is a four-column
@@ -14,6 +15,7 @@ export function Sidebar({
   onCreate,
   onDelete,
   onProjectChange,
+  setError,
   open,
   setOpen,
 }: {
@@ -22,9 +24,10 @@ export function Sidebar({
   setActiveId: (id: string) => void;
   profiles: Profile[];
   boot: Bootstrap | null;
-  onCreate: (kind: "chat" | "bot" | "group", profileNames?: string[], project?: string, coordinator?: string) => void;
+  onCreate: (kind: "chat" | "bot" | "group", profileNames?: string[], project?: string, coordinator?: string, permissionMode?: string) => void;
   onDelete: (conversation: Conversation) => void;
   onProjectChange: (conversation: Conversation, project: string) => void;
+  setError: (message: string) => void;
   open: boolean;
   setOpen: (open: boolean) => void;
 }) {
@@ -35,6 +38,8 @@ export function Sidebar({
   const [project, setProject] = useState(boot?.project || "");
   const [chosen, setChosen] = useState<string[]>([]);
   const [coordinator, setCoordinator] = useState("");
+  const [permissionMode, setPermissionMode] = useState(boot?.permission_mode || "balanced");
+  const [browsingFor, setBrowsingFor] = useState<Conversation | "new" | null>(null);
 
   useEffect(() => {
     const openDialog = () => { setKind("chat"); setCreating(true); };
@@ -135,7 +140,7 @@ export function Sidebar({
           </button>
           <div className="conversation-row-actions">
             <button className="conversation-project" type="button" title="Change project folder" aria-label={`Change project for ${item.title}`}
-              onClick={() => { const next = window.prompt("Project folder for this conversation", item.project); if (next && next !== item.project) onProjectChange(item, next); }}>▱</button>
+              onClick={() => setBrowsingFor(item)}>▱</button>
             <button className="conversation-delete" type="button" aria-label={`Delete ${item.title}`}
               onClick={() => { if (window.confirm(`Delete “${item.title}” and its transcript?`)) onDelete(item); }}>×</button>
           </div>
@@ -154,7 +159,7 @@ export function Sidebar({
           <form className="modal" onSubmit={(event) => {
             event.preventDefault();
             const selected = kind === "chat" ? [] : chosen;
-            onCreate(kind, selected, project || boot?.project || ".", kind === "group" ? (coordinator || selected[0] || "") : "");
+            onCreate(kind, selected, project || boot?.project || ".", kind === "group" ? (coordinator || selected[0] || "") : "", permissionMode);
             setCreating(false);
           }}>
             <div className="dialog-head"><div><div className="eyebrow">NEW CONVERSATION</div><h2>Choose context first</h2></div><button className="icon-button" type="button" onClick={() => setCreating(false)}>×</button></div>
@@ -163,8 +168,9 @@ export function Sidebar({
               <option value="chat">Standard chat</option><option value="bot">Bot conversation</option><option value="group">Group conversation</option>
             </select>
             <label htmlFor="conversationProject">Project folder</label>
-            <input id="conversationProject" required value={project} list="recentProjects" onChange={(event) => setProject(event.target.value)} />
+            <div className="input-action"><input id="conversationProject" required value={project} list="recentProjects" onChange={(event) => setProject(event.target.value)} /><button className="ghost-button" type="button" onClick={() => setBrowsingFor("new")}>Browse…</button></div>
             <datalist id="recentProjects">{Array.from(new Set([boot?.project, ...conversations.map((item) => item.project)].filter(Boolean))).map((item) => <option key={item} value={item} />)}</datalist>
+            <label htmlFor="conversationPermission">Permission mode</label><select id="conversationPermission" value={permissionMode} onChange={(event) => setPermissionMode(event.target.value)}><option value="paranoid">Paranoid — ask for every side effect</option><option value="balanced">Balanced — confirm risky actions</option><option value="silent">Silent — allow routine project work</option><option value="yolo">Yolo — broad automation</option></select>
             {kind !== "chat" && <fieldset className="profile-picker"><legend>Participants</legend>{profiles.map((profile) => <label className="profile-choice" key={profile.name}><input type={kind === "bot" ? "radio" : "checkbox"} name="participants" checked={chosen.includes(profile.name)} onChange={(event) => setChosen((current) => kind === "bot" ? (event.target.checked ? [profile.name] : []) : event.target.checked ? [...current, profile.name] : current.filter((name) => name !== profile.name))} />@{profile.name}</label>)}</fieldset>}
             {kind === "group" && <><label htmlFor="conversationCoordinator">Coordinator</label><select id="conversationCoordinator" value={coordinator} onChange={(event) => setCoordinator(event.target.value)}><option value="">Choose automatically</option>{chosen.map((name) => <option key={name} value={name}>@{name}</option>)}</select></>}
             <p className="context-note">The project and participants are pinned before the first message. You can create chats in any existing local folder.</p>
@@ -172,6 +178,8 @@ export function Sidebar({
           </form>
         </div>
       )}
+
+      {browsingFor && <FolderPicker initial={browsingFor === "new" ? project : browsingFor.project} setError={setError} onClose={() => setBrowsingFor(null)} onChoose={(selected) => { if (browsingFor === "new") setProject(selected); else onProjectChange(browsingFor, selected); setBrowsingFor(null); }} />}
 
       <div className="project-card">
         <div className="project-icon">⌘</div>

@@ -189,6 +189,7 @@ export default function App() {
       chosen: string[] = [],
       project = boot?.project || ".",
       coordinator = "",
+      permissionMode = boot?.permission_mode || "balanced",
     ) => {
       try {
         const created = await post<{ conversation: Conversation }>("/api/conversations", {
@@ -196,6 +197,7 @@ export default function App() {
           profiles: chosen,
           project,
           coordinator,
+          permission_mode: permissionMode,
           title: kind === "bot" && chosen[0] ? `Chat with ${chosen[0]}` : "New conversation",
         });
         await refreshConversations();
@@ -206,7 +208,7 @@ export default function App() {
         setError((problem as Error).message);
       }
     },
-    [boot?.project, refreshConversations],
+    [boot?.project, boot?.permission_mode, refreshConversations],
   );
 
   const deleteConversation = useCallback(async (conversation: Conversation) => {
@@ -224,6 +226,16 @@ export default function App() {
       await post("/api/conversations/update", { conversation_id: conversation.id, project });
       await refreshConversations();
       notify("Conversation project updated.");
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+  }, [notify, refreshConversations]);
+
+  const changeConversationPermission = useCallback(async (conversation: Conversation, permissionMode: string) => {
+    try {
+      await post("/api/conversations/update", { conversation_id: conversation.id, permission_mode: permissionMode });
+      await refreshConversations();
+      notify(`Permission mode changed to ${permissionMode}.`);
     } catch (problem) {
       setError((problem as Error).message);
     }
@@ -301,6 +313,7 @@ export default function App() {
         onCreate={createConversation}
         onDelete={deleteConversation}
         onProjectChange={changeConversationProject}
+        setError={setError}
         open={sidebarOpen}
         setOpen={setSidebarOpen}
       />
@@ -358,7 +371,7 @@ export default function App() {
       </main>
 
       {contextOpen && (
-        <ContextPanel active={active} boot={boot} onClose={() => setContextOpen(false)} />
+        <ContextPanel active={active} boot={boot} onPermissionChange={changeConversationPermission} onClose={() => setContextOpen(false)} />
       )}
 
       {showShortcuts && (

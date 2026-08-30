@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { post, request } from "../api";
+import { humanizeError, post, request } from "../api";
 import type { GraphNode, Profile } from "../types";
 
 /**
@@ -19,6 +19,21 @@ const LANES: { id: string; title: string; note: string; states: string[] }[] = [
   { id: "complete", title: "Complete", note: "Finished, with the outcome", states: ["succeeded", "failed", "skipped", "cancelled", "complete"] },
 ];
 
+const GRAPH_RUN_KEY = "magent:last-graph-run";
+const GRAPH_TOOLS = [
+  ["file_read", "Read project files"],
+  ["file_search", "Search project code"],
+  ["file_write", "Create or edit files"],
+  ["shell_exec", "Run shell commands"],
+  ["web_search", "Search the web"],
+  ["web_fetch", "Fetch web pages or APIs"],
+  ["browser", "Use browser tools"],
+  ["data", "Query structured data"],
+  ["database", "Query databases"],
+  ["image", "Create or inspect images"],
+  ["document", "Create documents or presentations"],
+] as const;
+
 function laneFor(node: GraphNode): string {
   const state = (node.state || "").toLowerCase();
   return LANES.find((lane) => lane.states.includes(state))?.id ?? "pending";
@@ -27,6 +42,18 @@ function laneFor(node: GraphNode): string {
 type GraphDoc = Record<string, unknown> & { nodes?: Record<string, Record<string, unknown>> };
 
 type NodeMap = Record<string, Record<string, unknown>>;
+type CardEditor = {
+  id: string;
+  title: string;
+  description: string;
+  profile: string;
+  dependencies: string[];
+  tools: string[];
+  skills: string[];
+  mcpServers: string[];
+  permissions: string;
+  workspace: "none" | "read_only" | "read_write";
+};
 
 /**
  * Wire a hand-edited board back into a valid AGS document.
@@ -100,8 +127,10 @@ function cardsFrom(document: GraphDoc): GraphNode[] {
     id,
     title: String(node.title ?? id),
     type: String(node.type ?? "task"),
+    description: String(node.description ?? ""),
     depends_on: (node.depends_on as string[]) ?? [],
-    profile: String(node["x-agent-profile"] ?? ""),
+    profile: String(node["x-magagent-profile"] ?? ""),
+    tools: (((node.requirements as Record<string, unknown> | undefined)?.tools as string[]) ?? []),
     state: "pending",
   }));
 }
@@ -111,24 +140,26 @@ function cardsFromPlan(rows: Record<string, unknown>[]): GraphNode[] {
     id: String(node.id ?? node.node_id ?? ""),
     title: String(node.title ?? node.id ?? node.node_id ?? "Untitled card"),
     type: String(node.type ?? "task"),
+    description: String(node.description ?? ""),
     depends_on: (node.depends_on ?? node.dependencies ?? []) as string[],
     profile: String(node.profile ?? node.agent_profile ?? ""),
     state: String(node.state ?? "pending"),
-    summary: String(node.summary ?? node.error ?? ""),
+    summary: humanizeError(String(node.summary ?? node.error ?? "")),
     files_changed: Array.isArray(node.files_changed) ? node.files_changed.length : Number(node.files_changed ?? 0),
   }));
 }
 
-function Card({ node }: { node: GraphNode }) {
+function Card({ node, editable, onEdit }: { node: GraphNode; editable: boolean; onEdit: () => void }) {
   const state = (node.state || "pending").toLowerCase();
   return (
-    <article className="kanban-card">
+    <article className={`kanban-card ${state === "running" ? "running" : ""} ${editable ? "editable" : ""}`}>
       <div className="kanban-card-top">
         <span className="chip">{(node.type || "task").toUpperCase()}</span>
         <span className={`chip state-${state}`}>{state.toUpperCase()}</span>
       </div>
       <b>{node.title}</b>
       <small>{node.id}</small>
+      {node.description && <p className="kanban-description">{node.description}</p>}
       <div className="kanban-card-body">
         {node.depends_on?.length ? (
           <span>Depends on <b>{node.depends_on.join(", ")}</b></span>
@@ -137,10 +168,12 @@ function Card({ node }: { node: GraphNode }) {
         )}
       </div>
       {node.summary && <p className="kanban-summary">{node.summary}</p>}
+      {node.tools?.length ? <p className="kanban-tools">Tools: {node.tools.join(", ")}</p> : null}
       <div className="kanban-card-foot">
         <span>@{node.profile || "run-default"}</span>
         <span>{node.files_changed ?? 0} files changed</span>
       </div>
+      {editable && <button type="button" className="card-edit-button" onClick={onEdit}>Edit card</button>}
     </article>
   );
 }
@@ -164,7 +197,56 @@ export function GraphsView({
   const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState("");
   const [status, setStatus] = useState("Ready");
+  const [jobId, setJobId] = useState("");
+  const [runSummary, setRunSummary] = useState("");
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [eventCount, setEventCount] = useState(0);
+  const [cardEditor, setCardEditor] = useState<CardEditor | null>(null);
+  const [graphChoices, setGraphChoices] = useState<{ skills: string[]; mcp: string[] }>({ skills: [], mcp: [] });
   const poll = useRef<number | null>(null);
+
+  const watchJob = useCallback(
+    (id: string, graphPath: string) => {
+      if (poll.current) window.clearInterval(poll.current);
+      setJobId(id);
+      const update = async () => {
+        try {
+          const state = await request<{
+            state?: string;
+            status?: string;
+            summary?: string | Record<string, unknown>;
+            nodes?: Record<string, unknown>[];
+            events?: unknown[];
+            run_id?: string;
+          }>(`/api/graphs/status?job_id=${encodeURIComponent(id)}`);
+          if (state.nodes?.length) setNodes(cardsFromPlan(state.nodes));
+          const runState = String(state.state || state.status || "");
+          if (runState) setStatus(runState);
+          setRunSummary(
+            typeof state.summary === "string"
+              ? state.summary
+              : String((state.summary as { text?: string } | undefined)?.text || ""),
+          );
+          setEventCount(state.events?.length || 0);
+          setLastUpdate(Date.now());
+          sessionStorage.setItem(
+            GRAPH_RUN_KEY,
+            JSON.stringify({ job_id: id, run_id: state.run_id || "", path: graphPath }),
+          );
+          if (["succeeded", "failed", "cancelled", "complete", "completed"].includes(runState.toLowerCase())) {
+            if (poll.current) window.clearInterval(poll.current);
+            poll.current = null;
+            setBusy("");
+          }
+        } catch (problem) {
+          setRunSummary(`Status refresh failed: ${(problem as Error).message}. Retrying automatically…`);
+        }
+      };
+      void update();
+      poll.current = window.setInterval(() => void update(), 1500);
+    },
+    [],
+  );
 
   const refreshCatalog = useCallback(async () => {
     const data = await request<{ graphs?: { path: string; name?: string }[] }>("/api/graphs");
@@ -174,10 +256,29 @@ export function GraphsView({
 
   useEffect(() => {
     void refreshCatalog().catch((problem) => setError((problem as Error).message));
+    void request<{ skills?: { name?: string }[]; mcp_servers?: { name?: string }[] }>("/api/extensions")
+      .then((data) => setGraphChoices({
+        skills: (data.skills || []).map((item) => item.name || "").filter(Boolean),
+        mcp: (data.mcp_servers || []).map((item) => item.name || "").filter(Boolean),
+      }))
+      .catch(() => setGraphChoices({ skills: [], mcp: [] }));
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(GRAPH_RUN_KEY) || "null") as
+        | { job_id?: string; run_id?: string; path?: string }
+        | null;
+      const statusId = saved?.job_id || saved?.run_id || "";
+      if (statusId && saved?.path) {
+        setPath(saved.path);
+        setStatus("Reconnecting…");
+        watchJob(statusId, saved.path);
+      }
+    } catch {
+      sessionStorage.removeItem(GRAPH_RUN_KEY);
+    }
     return () => {
       if (poll.current) window.clearInterval(poll.current);
     };
-  }, [refreshCatalog, setError]);
+  }, [refreshCatalog, setError, watchJob]);
 
   const loadSaved = useCallback(
     async (target: string) => {
@@ -205,9 +306,9 @@ export function GraphsView({
 
   useEffect(() => {
     // An unsaved draft owns the board; loading a plan would wipe its cards.
-    if (draft) return;
+    if (draft || jobId) return;
     void loadSaved(path);
-  }, [path, loadSaved, draft]);
+  }, [path, loadSaved, draft, jobId]);
 
   function adoptDraft(document: GraphDoc, note: string) {
     setDraft(document);
@@ -326,35 +427,98 @@ export function GraphsView({
       const started = await post<{ job_id?: string }>("/api/graphs/run", { path });
       if (!started.job_id) throw new Error("The graph runner did not return a job id.");
       setStatus("Running");
+      setRunSummary("Runner accepted the graph and is preparing the first ready card.");
+      setLastUpdate(Date.now());
+      setEventCount(0);
       notify("Run started.");
-      if (poll.current) window.clearInterval(poll.current);
-      poll.current = window.setInterval(async () => {
-        try {
-          const state = await request<{ state?: string; status?: string; nodes?: Record<string, unknown>[] }>(
-            `/api/graphs/status?job_id=${encodeURIComponent(started.job_id!)}`,
-          );
-          if (state.nodes?.length) setNodes(cardsFromPlan(state.nodes));
-          const runState = state.state || state.status || "";
-          if (runState) setStatus(runState);
-          const finished = ["succeeded", "failed", "cancelled", "complete"].includes(
-            String(runState).toLowerCase(),
-          );
-          if (finished && poll.current) {
-            window.clearInterval(poll.current);
-            poll.current = null;
-            setBusy("");
-          }
-        } catch {
-          /* a transient poll failure should not tear down the board */
-        }
-      }, 1500);
+      sessionStorage.setItem(GRAPH_RUN_KEY, JSON.stringify({ job_id: started.job_id, path }));
+      watchJob(started.job_id, path);
     } catch (problem) {
       setError((problem as Error).message);
       setBusy("");
     }
   }
 
+  async function openCard(nodeId: string) {
+    if (busy === "run") return;
+    try {
+      let document = draft;
+      if (!document && path) {
+        const loaded = await request<{ document: GraphDoc }>(
+          `/api/graphs/document?path=${encodeURIComponent(path)}`,
+        );
+        document = loaded.document;
+        setDraft(document);
+        setDraftPath(path);
+        setPlan(null);
+        setJobId("");
+        if (poll.current) window.clearInterval(poll.current);
+      }
+      const node = document?.nodes?.[nodeId];
+      if (!document || !node) return;
+      const requirements = (node.requirements as Record<string, unknown>) || {};
+      setCardEditor({
+        id: nodeId,
+        title: String(node.title || nodeId),
+        description: String(node.description || ""),
+        profile: String(node["x-magagent-profile"] || ""),
+        dependencies: (node.depends_on as string[]) || [],
+        tools: ((requirements.tools as Array<string | { name?: string }>) || []).map((item) =>
+          typeof item === "string" ? item : String(item.name || ""),
+        ).filter(Boolean),
+        skills: ((requirements.skills as string[]) || []),
+        mcpServers: ((requirements.mcp_servers as string[]) || []),
+        permissions: ((requirements.permissions as string[]) || []).join("\n"),
+        workspace: (String(requirements.workspace || "read_only") as CardEditor["workspace"]),
+      });
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+  }
+
+  function saveCard(event: React.FormEvent) {
+    event.preventDefault();
+    if (!draft || !cardEditor || !draft.nodes?.[cardEditor.id]) return;
+    const current = draft.nodes[cardEditor.id];
+    const permissions = cardEditor.permissions
+      .split(/[,\n]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const requirements = {
+      ...((current.requirements as Record<string, unknown>) || {}),
+      tools: cardEditor.tools,
+      skills: cardEditor.skills,
+      mcp_servers: cardEditor.mcpServers,
+      permissions,
+      workspace: cardEditor.workspace,
+    };
+    const updated: Record<string, unknown> = {
+      ...current,
+      title: cardEditor.title.trim(),
+      description: cardEditor.description.trim(),
+      depends_on: cardEditor.dependencies,
+      requirements,
+    };
+    if (cardEditor.profile) updated["x-magagent-profile"] = cardEditor.profile;
+    else delete updated["x-magagent-profile"];
+    const document = rebuildStructure({
+      ...draft,
+      nodes: { ...draft.nodes, [cardEditor.id]: updated },
+    });
+    adoptDraft(document, "Unsaved card changes");
+    setCardEditor(null);
+  }
+
+  function deleteCard() {
+    if (!draft || !cardEditor) return;
+    const remaining = { ...(draft.nodes || {}) };
+    delete remaining[cardEditor.id];
+    adoptDraft(rebuildStructure({ ...draft, nodes: remaining }), "Unsaved card deletion");
+    setCardEditor(null);
+  }
+
   const canAuthor = Boolean(draft || path);
+  const running = ["queued", "running", "active", "reconnecting…"].includes(status.toLowerCase());
 
   return (
     <div className="page">
@@ -427,7 +591,12 @@ export function GraphsView({
 
       <section className="graph-picker">
         <label htmlFor="graphSelect">Graph file</label>
-        <select id="graphSelect" value={path} onChange={(event) => setPath(event.target.value)}>
+        <select id="graphSelect" value={path} onChange={(event) => {
+          setJobId("");
+          setRunSummary("");
+          sessionStorage.removeItem(GRAPH_RUN_KEY);
+          setPath(event.target.value);
+        }}>
           <option value="">Choose a graph…</option>
           {graphs.map((item) => (
             <option key={item.path} value={item.path}>{item.name || item.path}</option>
@@ -447,6 +616,22 @@ export function GraphsView({
         </section>
       )}
 
+      {jobId && !draft && (
+        <section className={`graph-run-health ${running ? "running" : "settled"}`} aria-live="polite">
+          <span className="run-health-dot" aria-hidden="true" />
+          <div>
+            <b>{running ? "Graph runner is active" : `Graph run ${status}`}</b>
+            <p>{runSummary || (running ? "Waiting for the next runner event…" : "The latest run state is shown on the board.")}</p>
+          </div>
+          <dl>
+            <div><dt>Status</dt><dd>{status}</dd></div>
+            <div><dt>Events</dt><dd>{eventCount}</dd></div>
+            <div><dt>Job</dt><dd title={jobId}>{jobId}</dd></div>
+            <div><dt>Last check</dt><dd>{lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : "—"}</dd></div>
+          </dl>
+        </section>
+      )}
+
       <div className="kanban">
         {LANES.map((lane) => {
           const cards = nodes.filter((node) => laneFor(node) === lane.id);
@@ -460,7 +645,9 @@ export function GraphsView({
                 <span className="count">{cards.length}</span>
               </header>
               {cards.length ? (
-                cards.map((node) => <Card key={node.id} node={node} />)
+                cards.map((node) => (
+                  <Card key={node.id} node={node} editable={!running} onEdit={() => void openCard(node.id)} />
+                ))
               ) : (
                 <div className="lane-empty">
                   {lane.id === "pending"
@@ -478,6 +665,35 @@ export function GraphsView({
           Cards run as <b>@run-default</b> unless a node names a profile. {profiles.length} profile
           {profiles.length === 1 ? "" : "s"} available.
         </p>
+      )}
+
+
+      {cardEditor && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Edit ${cardEditor.title}`}
+          onClick={(event) => { if (event.target === event.currentTarget) setCardEditor(null); }}>
+          <form className="modal graph-card-editor" onSubmit={saveCard}>
+            <div className="dialog-head"><div><div className="eyebrow">GRAPH CARD</div><h2>Edit {cardEditor.id}</h2></div><button className="icon-button" type="button" onClick={() => setCardEditor(null)}>×</button></div>
+            <label>Title<input required value={cardEditor.title} onChange={(event) => setCardEditor({ ...cardEditor, title: event.target.value })} /></label>
+            <label>Description<textarea required rows={4} value={cardEditor.description} onChange={(event) => setCardEditor({ ...cardEditor, description: event.target.value })} /></label>
+            <label>Agent profile<select value={cardEditor.profile} onChange={(event) => setCardEditor({ ...cardEditor, profile: event.target.value })}><option value="">Run default</option>{profiles.map((profile) => <option key={profile.name} value={profile.name}>@{profile.name}</option>)}</select></label>
+            <fieldset className="dependency-picker"><legend>Dependencies</legend><p>This card waits until every selected card completes.</p><div>{nodes.filter((item) => item.id !== cardEditor.id).map((item) => <label key={item.id}><input type="checkbox" checked={cardEditor.dependencies.includes(item.id)} onChange={(event) => setCardEditor({ ...cardEditor, dependencies: event.target.checked ? [...cardEditor.dependencies, item.id] : cardEditor.dependencies.filter((id) => id !== item.id) })} />{item.title}</label>)}</div></fieldset>
+            <fieldset className="capability-picker"><legend>Declared tool capabilities</legend><p>The runner blocks every tool not declared here. Choose everything this card may need.</p><div>{GRAPH_TOOLS.map(([name, label]) => <label key={name}><input type="checkbox" checked={cardEditor.tools.includes(name)} onChange={(event) => {
+              const tools = event.target.checked ? [...cardEditor.tools, name] : cardEditor.tools.filter((item) => item !== name);
+              const suggested = name === "file_write" ? ["fs:read:**", "fs:write:**"] : name === "shell_exec" ? ["shell:exec:*"] : name.startsWith("web_") || name === "browser" ? ["net:fetch:https://**"] : name.startsWith("file_") ? ["fs:read:**"] : [];
+              const currentPermissions = cardEditor.permissions.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
+              setCardEditor({ ...cardEditor, tools, permissions: event.target.checked ? Array.from(new Set([...currentPermissions, ...suggested])).join("\n") : cardEditor.permissions });
+            }} /> <span><b>{name}</b><small>{label}</small></span></label>)}</div>
+              <label>Additional tool names<input value={cardEditor.tools.filter((tool) => !GRAPH_TOOLS.some(([known]) => known === tool)).join(", ")} placeholder="custom_tool, another_tool" onChange={(event) => { const known = cardEditor.tools.filter((tool) => GRAPH_TOOLS.some(([name]) => name === tool)); const custom = event.target.value.split(",").map((item) => item.trim()).filter(Boolean); setCardEditor({ ...cardEditor, tools: [...known, ...custom] }); }} /></label>
+            </fieldset>
+            {(graphChoices.skills.length > 0 || graphChoices.mcp.length > 0) && <div className="form-grid">
+              <fieldset className="compact-picker"><legend>Skills</legend>{graphChoices.skills.map((name) => <label key={name}><input type="checkbox" checked={cardEditor.skills.includes(name)} onChange={(event) => setCardEditor({ ...cardEditor, skills: event.target.checked ? [...cardEditor.skills, name] : cardEditor.skills.filter((item) => item !== name) })} />{name}</label>)}</fieldset>
+              <fieldset className="compact-picker"><legend>MCP servers</legend>{graphChoices.mcp.map((name) => <label key={name}><input type="checkbox" checked={cardEditor.mcpServers.includes(name)} onChange={(event) => setCardEditor({ ...cardEditor, mcpServers: event.target.checked ? [...cardEditor.mcpServers, name] : cardEditor.mcpServers.filter((item) => item !== name) })} />{name}</label>)}</fieldset>
+            </div>}
+            <div className="form-grid"><label>Workspace access<select value={cardEditor.workspace} onChange={(event) => setCardEditor({ ...cardEditor, workspace: event.target.value as CardEditor["workspace"] })}><option value="none">None</option><option value="read_only">Read only</option><option value="read_write">Read and write</option></select></label><label>Permissions <small>one per line</small><textarea rows={4} value={cardEditor.permissions} placeholder={"fs:read:**\nfs:write:src/**\nshell:exec:pytest*"} onChange={(event) => setCardEditor({ ...cardEditor, permissions: event.target.value })} /></label></div>
+            <p className="context-note">Saving updates the draft only. Use Save graph above to validate and write it.</p>
+            <div className="graph-card-dialog-actions"><button className="danger-button" type="button" onClick={deleteCard}>Delete card</button><span /><button className="ghost-button" type="button" onClick={() => setCardEditor(null)}>Cancel</button><button className="primary-button" type="submit">Apply changes</button></div>
+          </form>
+        </div>
       )}
     </div>
   );

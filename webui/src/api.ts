@@ -13,6 +13,22 @@ const AUTH_STORAGE_KEY = "magent-ui-token";
 
 let token = "";
 
+export function humanizeError(detail: string): string {
+  const text = detail.trim();
+  const undeclared = text.match(/RT012 tool ['"]([^'"]+)['"] was not declared by this graph node/i);
+  if (undeclared) {
+    return `This graph card tried to use “${undeclared[1]}”, but that capability is not declared. Edit the failed card, add it under Declared tool capabilities, save the graph, and run it again.`;
+  }
+  if (/\[\] should be non-empty|\{\} should be non-empty/i.test(text)) {
+    const pointer = text.match(/\/(spec|metadata)\/[^:;]+/)?.[0]?.replaceAll("/", " › ").replace(/^ › /, "");
+    return `${pointer ? `${pointer}: ` : ""}An optional profile section was included without any choices. Select at least one item in that section, or leave the section unset so it inherits the workspace default.`;
+  }
+  if (/graph validation failed/i.test(text) && !text.includes(":")) {
+    return "The graph is not valid yet. Review the highlighted card fields, declared tools, permissions, dependencies, and outputs before saving.";
+  }
+  return text;
+}
+
 /**
  * Capture the launch token once, then strip it from the address bar so it does
  * not survive in history, bookmarks, or a shared screenshot.
@@ -75,6 +91,7 @@ async function responseError(response: Response): Promise<Error> {
       /* not JSON after all */
     }
   }
+  detail = humanizeError(detail);
 
   if (response.status === 403) {
     return new Error(
@@ -102,7 +119,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   if (!response.ok) throw await responseError(response);
   const data = (await response.json()) as T & { ok?: boolean; error?: string };
   // The API reports domain failures in the body with ok:false and HTTP 200.
-  if (data && data.ok === false) throw new Error(data.error || "Request failed");
+  if (data && data.ok === false) throw new Error(humanizeError(data.error || "Request failed"));
   return data;
 }
 

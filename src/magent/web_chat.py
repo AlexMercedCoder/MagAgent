@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -32,18 +33,19 @@ class WebChatRunner:
         project: str | Path,
         *,
         on_approval: ApprovalCallback | None = None,
+        permission_mode: str = "",
     ):
         self.username = username
         self.project = str(Path(project).resolve())
         self.on_approval = on_approval
+        self.permission_mode = permission_mode
 
     def _profile(self, name: str, config: Any):
         resolved = AgentProfileRegistry(self.project, config).get(name)
         if resolved is None:
             raise ValueError(f"Agent profile not found: {name}")
         granted = {
-            str(item.get("function", {}).get("name", ""))
-            for item in built_in_tool_definitions()
+            str(item.get("function", {}).get("name", "")) for item in built_in_tool_definitions()
         }
         return resolve_effective_profile(resolved, config, granted)
 
@@ -56,7 +58,11 @@ class WebChatRunner:
         on_chunk: ChunkCallback | None = None,
         should_continue: CancelCheck | None = None,
     ) -> dict[str, Any]:
-        config = load_config(self.username)
+        config = copy.deepcopy(load_config(self.username))
+        if self.permission_mode:
+            # Conversation modes are session-local ceilings. Do not persist a
+            # chat-specific choice back into the user's global configuration.
+            config._user.setdefault("permissions", {})["mode"] = self.permission_mode
         profile = self._profile(profile_name, config) if profile_name else None
         provider = build_provider(
             config,
