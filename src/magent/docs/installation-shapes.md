@@ -17,13 +17,14 @@ python -m pip install "mag-agent[docs]"     # Word, PowerPoint, spreadsheets, PD
 python -m pip install "mag-agent[media]"    # local raster image work
 python -m pip install "mag-agent[desktop]"  # clipboard, metrics, notifications, images
 python -m pip install "mag-agent[browser]"  # Playwright and article extraction
+python -m pip install "mag-agent[webmcp]"   # minimal Playwright WebMCP bridge
 python -m pip install "mag-agent[gateway]"  # Slack, Discord, Telegram
 python -m pip install "mag-agent[mcp]"      # MCP SDK and Streamable HTTP transport
 python -m pip install "mag-agent[lsp]"      # Python language server
 python -m pip install "mag-agent[full]"     # all Python capabilities
 ```
 
-After installing browser support, run `playwright install` for browser binaries. TypeScript, Rust, and Go language servers are external executables discovered from `PATH`.
+After installing browser or WebMCP support, run `playwright install chromium` for the browser binary. TypeScript, Rust, and Go language servers are external executables discovered from `PATH`.
 
 Use `magent tools doctor` for a machine-readable readiness report and exact install commands. Optional tools return the same actionable command when their dependency is absent rather than failing with an import traceback.
 

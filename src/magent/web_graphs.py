@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -46,7 +47,11 @@ def blank_graph_document(goal: str = "") -> dict[str, Any]:
         "version": "1.0.0",
         "requires_conformance": 1,
         "constraints": {"max_parallel_nodes": 1, "max_node_executions": 50},
-        "policy": {"on_expression_error": "fail", "on_node_failure": "halt", "checkpointing": "per_node"},
+        "policy": {
+            "on_expression_error": "fail",
+            "on_node_failure": "halt",
+            "checkpointing": "per_node",
+        },
         "entrypoints": [],
         "nodes": {},
         "outputs": {},
@@ -59,7 +64,9 @@ def web_task_node(index: int = 1) -> dict[str, Any]:
     node.update(
         title=f"New task {index}",
         description="Describe the outcome this card must produce.",
-        outputs={"summary": {"type": "markdown", "description": "Completion summary and evidence."}},
+        outputs={
+            "summary": {"type": "markdown", "description": "Completion summary and evidence."}
+        },
         success={
             "summary": "The card completed and produced a summary.",
             "criteria": [
@@ -75,7 +82,13 @@ def web_task_node(index: int = 1) -> dict[str, Any]:
     return node
 
 
-async def generate_web_graph(goal: str, *, project: str | Path, username: str) -> dict[str, Any]:
+async def generate_web_graph(
+    goal: str,
+    *,
+    project: str | Path,
+    username: str,
+    progress: Any = None,
+) -> dict[str, Any]:
     """Generate a review-only graph proposal using the configured planning model."""
     objective = goal.strip()
     if not objective:
@@ -88,10 +101,139 @@ async def generate_web_graph(goal: str, *, project: str | Path, username: str) -
             "Create a concise dependency graph of executable task cards for this goal. "
             "Every task must have a clear title, instructions, outputs, and success criteria."
         ),
+        progress=progress,
     )
 
 
-def preview_web_graph(document: dict[str, Any], *, project: str | Path, username: str) -> dict[str, Any]:
+class GraphDraftManager:
+    """Generate graph proposals in background jobs with safe progress events."""
+
+    def __init__(self, project: str | Path, username: str):
+        self.project = Path(project).resolve()
+        self.username = username
+        self._jobs: dict[str, dict[str, Any]] = {}
+        self._lock = threading.Lock()
+
+    def start(self, goal: str) -> dict[str, Any]:
+        objective = goal.strip()
+        if not objective:
+            return {"ok": False, "error": "Describe a goal before generating a graph"}
+        job_id = uuid.uuid4().hex
+        job = {
+            "ok": True,
+            "job_id": job_id,
+            "status": "queued",
+            "stage": "queued",
+            "message": "Graph generation is queued.",
+            "started_at": time.time(),
+            "activity": [],
+        }
+        with self._lock:
+            if len(self._jobs) >= 20:
+                oldest = min(self._jobs, key=lambda key: self._jobs[key]["started_at"])
+                self._jobs.pop(oldest, None)
+            self._jobs[job_id] = job
+        threading.Thread(target=self._run, args=(job_id, objective), daemon=True).start()
+        return self.status(job_id)
+
+    def status(self, job_id: str) -> dict[str, Any]:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return {"ok": False, "error": "Graph generation job was not found"}
+            return {
+                key: value
+                for key, value in job.items()
+                if key not in {"started_at", "loop", "task"}
+            }
+
+    def cancel(self, job_id: str) -> dict[str, Any]:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return {"ok": False, "error": "Graph generation job was not found"}
+            if job["status"] in {"succeeded", "failed", "cancelled"}:
+                return {
+                    key: value
+                    for key, value in job.items()
+                    if key not in {"started_at", "loop", "task"}
+                }
+            job.update(
+                status="cancelled",
+                stage="cancelled",
+                message="Graph generation was cancelled.",
+                result={"ok": False, "error": "Graph generation was cancelled."},
+            )
+            loop = job.get("loop")
+            task = job.get("task")
+        if loop is not None and task is not None:
+            loop.call_soon_threadsafe(task.cancel)
+        return self.status(job_id)
+
+    def _progress(self, job_id: str, event: dict[str, Any]) -> None:
+        item = {**event, "at": time.time()}
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            if job["status"] == "cancelled":
+                return
+            job["status"] = "running"
+            job["stage"] = str(event.get("stage") or "running")
+            job["message"] = str(event.get("message") or "Generating graph…")
+            job["activity"] = [*job["activity"], item][-40:]
+
+    def _run(self, job_id: str, goal: str) -> None:
+        loop = asyncio.new_event_loop()
+        try:
+            task = loop.create_task(
+                generate_web_graph(
+                    goal,
+                    project=self.project,
+                    username=self.username,
+                    progress=lambda event: self._progress(job_id, event),
+                )
+            )
+            with self._lock:
+                job = self._jobs[job_id]
+                job.update(loop=loop, task=task)
+                cancelled = job["status"] == "cancelled"
+            if cancelled:
+                task.cancel()
+            result = loop.run_until_complete(task)
+            with self._lock:
+                job = self._jobs[job_id]
+                if job["status"] == "cancelled":
+                    return
+                job["result"] = result
+                job["status"] = "succeeded" if result.get("ok") else "failed"
+                job["stage"] = "complete" if result.get("ok") else "failed"
+                job["message"] = (
+                    "Graph generation completed."
+                    if result.get("ok")
+                    else str(result.get("error") or "Graph generation failed")
+                )
+        except asyncio.CancelledError:
+            return
+        except Exception as error:  # noqa: BLE001 - returned to the loopback UI
+            with self._lock:
+                job = self._jobs[job_id]
+                job["status"] = "failed"
+                job["stage"] = "failed"
+                job["message"] = str(error)
+                job["result"] = {"ok": False, "error": str(error)}
+        finally:
+            with self._lock:
+                stored_job = self._jobs.get(job_id)
+                if stored_job:
+                    stored_job.pop("task", None)
+                    stored_job.pop("loop", None)
+            loop.close()
+
+
+def preview_web_graph(
+    document: dict[str, Any], *, project: str | Path, username: str
+) -> dict[str, Any]:
     if not isinstance(document, dict):
         return {"ok": False, "error": "document must be an object"}
     result = preview_graph(document, project=project, config=load_config(username))
@@ -121,8 +263,14 @@ def _with_validation_error(result: dict[str, Any]) -> dict[str, Any]:
     if result.get("ok") or result.get("error"):
         return result
     findings = (result.get("validation") or {}).get("findings") or []
-    messages = [str(item.get("message") or "").strip() for item in findings if item.get("severity") == "error"]
-    result["error"] = "; ".join(message for message in messages[:4] if message) or "Graph validation failed"
+    messages = [
+        str(item.get("message") or "").strip()
+        for item in findings
+        if item.get("severity") == "error"
+    ]
+    result["error"] = (
+        "; ".join(message for message in messages[:4] if message) or "Graph validation failed"
+    )
     return result
 
 
@@ -213,7 +361,11 @@ def graph_catalog(store: WorkbenchStore, project: str | Path) -> dict[str, Any]:
         )
         if len(runs) >= 30:
             break
-    return {"ok": True, "graphs": sorted(found.values(), key=lambda item: item["name"]), "runs": runs}
+    return {
+        "ok": True,
+        "graphs": sorted(found.values(), key=lambda item: item["name"]),
+        "runs": runs,
+    }
 
 
 class GraphRunManager:
@@ -262,6 +414,7 @@ class GraphRunManager:
             "graph_digest": str(plan.get("graph_digest") or ""),
             "state": "queued",
             "summary": "Waiting for the graph runner.",
+            "activity": "Queued for the graph runner.",
             "plan": plan,
             "events": [],
             "nodes": [
@@ -269,7 +422,8 @@ class GraphRunManager:
                     "node_id": item["id"],
                     "title": item.get("title") or item["id"],
                     "type": item.get("type", "task"),
-                    "profile": item.get("agent_profile") or (item.get("resolved_profile") or {}).get("name", ""),
+                    "profile": item.get("agent_profile")
+                    or (item.get("resolved_profile") or {}).get("name", ""),
                     "dependencies": item.get("dependencies") or [],
                     "state": "pending",
                     "summary": "",
@@ -304,7 +458,9 @@ class GraphRunManager:
         if durable:
             snapshot.update(
                 state=durable.get("state") or snapshot["state"],
-                summary=(durable.get("summary") or {}).get("text") or durable.get("summary") or snapshot["summary"],
+                summary=(durable.get("summary") or {}).get("text")
+                or durable.get("summary")
+                or snapshot["summary"],
                 nodes=durable.get("nodes") or snapshot["nodes"],
             )
         return snapshot
@@ -318,6 +474,7 @@ class GraphRunManager:
                 if event.get("type") == "graph.started":
                     job["state"] = "running"
                     job["summary"] = str(event.get("summary") or "Graph execution started.")
+                job["activity"] = _graph_event_activity(event)
                 if event.get("node_id"):
                     node = next(
                         (item for item in job["nodes"] if item["node_id"] == event["node_id"]),
@@ -354,7 +511,9 @@ class GraphRunManager:
             with self._lock:
                 job = self._jobs[job_id]
                 job["run_id"] = str(record.get("run_id") or job["run_id"])
-                job["state"] = str(record.get("status") or ("succeeded" if result.get("ok") else "failed"))
+                job["state"] = str(
+                    record.get("status") or ("succeeded" if result.get("ok") else "failed")
+                )
                 summary = record.get("summary") or {}
                 job["summary"] = str(summary.get("text") or summary or job["summary"])
         except BaseException as exc:
@@ -362,3 +521,25 @@ class GraphRunManager:
                 job = self._jobs[job_id]
                 job["state"] = "failed"
                 job["summary"] = str(exc)
+                job["activity"] = f"Graph runner failed: {str(exc)[:240]}"
+
+
+def _graph_event_activity(event: dict[str, Any]) -> str:
+    """Return a concise, non-sensitive description for the live graph health UI."""
+    kind = str(event.get("type") or "graph.event")
+    title = str(event.get("title") or event.get("node_id") or "the graph")
+    state = str(event.get("state") or "active")
+    if kind == "graph.started":
+        return "Graph execution started; finding the first ready card."
+    if kind == "node.started":
+        attempt = int(event.get("attempt") or 1)
+        return f"Running {title} (attempt {attempt})."
+    if kind == "node.tool.requested":
+        return f"{title} requested the declared tool {event.get('tool', 'unknown')}."
+    if kind == "node.completed":
+        error = str(event.get("error") or "").strip()
+        suffix = f" {error[:180]}" if error else ""
+        return f"{title} finished with status {state}.{suffix}"
+    if kind == "graph.completed":
+        return f"Graph execution finished with status {state}."
+    return str(event.get("summary") or f"{title}: {kind} ({state}).")[:240]

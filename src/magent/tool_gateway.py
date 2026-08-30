@@ -70,7 +70,8 @@ def gateway_status(config: Any) -> dict[str, Any]:
             enabled = key in providers
         elif key == "mcp":
             enabled = bool(mcp_servers)
-        backends.append({"id": key, "enabled": enabled, **item})
+        configured = image_role if key == "image" else enabled if key == "browser" else None
+        backends.append({"id": key, "enabled": enabled, "configured": configured, **item})
     return {"ok": True, "backends": backends}
 
 
@@ -78,5 +79,9 @@ def explain_backend(name: str) -> dict[str, Any]:
     key = name.strip().lower()
     item = TOOL_BACKENDS.get(key)
     if not item:
-        return {"ok": False, "error": f"Unknown tool backend: {name}", "known": sorted(TOOL_BACKENDS)}
+        return {
+            "ok": False,
+            "error": f"Unknown tool backend: {name}",
+            "known": sorted(TOOL_BACKENDS),
+        }
     return {"ok": True, "id": key, **item}

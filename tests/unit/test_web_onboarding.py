@@ -182,6 +182,39 @@ def test_providers_are_listed_with_their_key_variable(isolated: Path) -> None:
     assert by_name["openai"]["api_key_env"] == "OPENAI_API_KEY"
     assert by_name["ollama"]["needs_key"] is False
     assert by_name["ollama"]["local"] is True
+    assert "default_provider" in listed and "default_model" in listed
+    assert any(item["value"] == "openai/gpt-image-1" for item in listed["image_models"])
+
+
+def test_configure_can_explicitly_store_a_key_in_protected_config(isolated: Path) -> None:
+    state = web_onboarding.configure(
+        "openai", "gpt-4o-mini", credential="test-secret", credential_storage="config"
+    )
+
+    assert state["credential_storage"] == "config"
+    assert "test-secret" in magent_config.GLOBAL_CONFIG.read_text(encoding="utf-8")
+    assert magent_config.GLOBAL_CONFIG.stat().st_mode & 0o777 == 0o600
+
+
+def test_configure_prefers_keyring_for_a_supplied_key(isolated: Path, monkeypatch) -> None:
+    from magent import auth_store
+
+    saved: dict[str, str] = {}
+    monkeypatch.setattr(
+        auth_store,
+        "save_keyring_secret",
+        lambda provider, secret: saved.update(provider=provider, secret=secret) or {"ok": True},
+    )
+    monkeypatch.setattr(auth_store, "keyring_account", lambda provider: f"magent:{provider}")
+    monkeypatch.setattr(web_onboarding, "readiness", lambda: {"ok": True, "ready": True})
+
+    state = web_onboarding.configure("openai", credential="test-secret")
+
+    assert saved == {"provider": "openai", "secret": "test-secret"}
+    assert state["credential_storage"] == "keyring"
+    written = magent_config.GLOBAL_CONFIG.read_text(encoding="utf-8")
+    assert "test-secret" not in written
+    assert "magent:openai" in written
 
 
 def test_at_least_one_listed_provider_needs_no_key(isolated: Path) -> None:
@@ -213,7 +246,7 @@ def test_a_ready_machine_carries_no_reason(isolated: Path, monkeypatch) -> None:
 
 
 def test_a_local_provider_step_is_labelled_for_its_runtime(isolated: Path, monkeypatch) -> None:
-    """"Credential" is the wrong word for a runtime that needs no key."""
+    """ "Credential" is the wrong word for a runtime that needs no key."""
     monkeypatch.setattr(web_onboarding, "_local_reachable", lambda *_: (False, "not answering"))
     state = web_onboarding.configure("ollama")
 

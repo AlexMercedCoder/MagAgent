@@ -91,11 +91,12 @@ and then failed on the first message with a connection error. Readiness therefor
 runtime directly, with a short timeout so a missing runtime does not make the browser wait, and
 the step is labelled `Local runtime` rather than `Credential` when it applies.
 
-A provider and model can be chosen in the panel, which writes only the route.
-**Credentials are never accepted through the form.** `set_default_provider` can persist an inline
-`api_key` into the global config file, and a key typed into a browser form would land there, so
-that argument is never passed from this path: keys stay in the environment or the system keyring
-and the panel reports only whether one was found and which variable it searched.
+A provider and model can be chosen in first-run setup or Settings. The configured provider/model
+are selected when the asynchronous catalogue arrives, rather than reverting to a placeholder.
+Hosted-provider keys can be stored in the OS keyring (recommended); users who explicitly choose
+config-file storage see a warning, and MagAgent tightens the file to user-only permissions.
+Existing secrets are never returned to the browser. Environment variables and `magent auth add`
+remain supported alternatives.
 
 ## Accessibility
 
@@ -218,6 +219,16 @@ overwriting.
 Each profile can declare its own provider and model, or leave both blank to inherit the workspace
 route. A profile narrows authority; it never widens it.
 
+Profile source badges are semantic and never expose a raw filesystem path: **Managed** is the
+read-only built-in set, **Project** is `.magent/agents`, **Portable** is the cross-harness `.agents`
+folder, **Universal** is `~/.agentprofiles`, and **User** is MagAgent's native user directory. Both
+manual and generated profile forms let the author choose among those writable scopes before save.
+
+**Generate profile** accepts a natural-language description, lets the configured review model
+select only capabilities present in the local catalog, validates the resulting OAP document, and
+opens the ordinary profile editor for review. Generation does not bypass profile validation,
+dependency checks, managed-policy narrowing, or save approval.
+
 Project and user profiles can be edited or deleted from a styled dialog. Their editor covers the
 provider, model, permission and network ceilings, built-in tools, Skills, and MCP servers. Managed
 profiles remain immutable OAP baselines; **Customize as a copy** creates a project-owned profile
@@ -228,6 +239,11 @@ was inspected, so a second tab cannot silently overwrite a newer revision.
 
 Cards are a Kanban: every node starts **Pending**, moves to **In progress** while MagAgent works
 it, and lands in **Complete** when it finishes, whichever way it finished.
+
+Failed cards show the runtime error and code before the model's final conversational summary. An
+expandable attempt section identifies each attempt's status, output-contract error, and failed
+success criteria, so a statement such as “now emitting the output” cannot hide that no declared
+output was actually recorded.
 
 A graph reaches the board three ways: load a file, start from a blank board and append cards with
 *Add card*, or describe a goal and let the planning model draft one for review. Appending a card
@@ -247,7 +263,11 @@ You can also author a workflow directly in the browser:
 - edit or delete cards before execution
 - save and strictly validate the native `.agraph` document before Run is enabled
 
-*Load graph* is explicit rather than hidden in the file selector. Saving keeps the board populated
+*Load graph* is explicit rather than hidden in the file selector. AI drafting starts a background
+job and polls its lifecycle, so changing sections does not cancel the model request. The health
+strip reports preparation, model-request, parsing, strict-validation, and bounded repair phases
+with elapsed time. This operational trace deliberately does not reveal hidden chain-of-thought or
+raw model output. Saving keeps the board populated
 from the canonical saved document. Running records the returned job id and polls that exact job;
 preview and run responses are normalized from their versioned plan/run envelopes before cards are
 placed into Pending, In progress, or Complete. The browser stores that job identity for the tab and
@@ -297,7 +317,11 @@ without limit and a browser only ever shows a window of it.
 
 The Bots and Profiles views list the profiles available to the selected project and show their effective provider, model, tools, and permission policy. New profiles are validated through the same Open Agent Profile contract used by the CLI before they are written.
 
-The Settings view only exposes schema-guided, non-secret configuration fields. API keys and other secret-bearing configuration are never returned to the browser.
+The Settings view exposes schema-guided configuration plus provider onboarding. Provider keys may
+be written to the OS keyring or, after an explicit warning, the protected global config; secret
+values are never returned to the browser. The Extensions image-model editor is populated from
+known image routes and disables routes whose provider is not currently credential-ready, while
+retaining a custom `provider/model` escape hatch.
 
 ## Operations
 
@@ -335,6 +359,8 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/graphs`
 - `/api/graphs/preview?path=<project-relative-graph>`
 - `/api/graphs/draft`
+- `/api/graphs/draft/start`
+- `/api/graphs/draft/status?job_id=<draft-job-id>`
 - `/api/graphs/preview-draft`
 - `/api/graphs/save`
 - `/api/graphs/run`
@@ -407,3 +433,19 @@ Content-Security-Policy is `script-src 'self'` and would block an inline script.
 `magent dashboard` exports a static HTML workbench snapshot. `magent dashboard --serve` serves that snapshot on localhost, loopback-only and behind a per-launch token, and blocks until interrupted.
 
 `magent ui` is the interactive local chat and operations workspace. Use it for ongoing conversations, profile-backed bots, bounded group chats, guided settings, and live operational inspection.
+
+## Long-running authoring feedback
+
+Graph and profile generation display an active health panel with elapsed time. The Graphs and Profiles views remain mounted when another section is selected, so polling continues and unsaved graph drafts are restored from session storage. Graph card serialization omits empty optional AGS sections instead of producing misleading OAP validation errors.
+
+Graph generation reports model-request, parse, strict-validation, repair, timeout, and completion
+events. Validation repairs include short finding summaries so the operator can understand why a
+retry occurred. Private chain-of-thought is never requested or displayed. Each provider attempt is
+bounded to 120 seconds by default (`MAGENT_GRAPH_DRAFT_ATTEMPT_TIMEOUT`, clamped to 30–300 seconds),
+and the Graph page can cancel an active draft request.
+
+Settings uses detected provider readiness to populate the image-model selector. When no supported
+image provider is ready, the selector says that no image models were detected instead of presenting
+an unlabeled empty input. Unknown existing routes remain visible as custom configuration.
+
+The profile rail labels `managed` profiles as built-in/read-only, `project` profiles as workspace-editable, and `portable` profiles as shared from the universal profile location. The Extensions view provides lifecycle controls for project skills, plugins, MCP servers, the configured image model, and browser automation; credentials are referenced by environment-variable name rather than displayed.

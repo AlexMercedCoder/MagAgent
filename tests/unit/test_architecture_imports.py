@@ -120,6 +120,7 @@ def test_tool_helper_modules_expose_executor_building_blocks() -> None:
     assert "path" in definition["function"]["parameters"]["required"]
     assert {"write_file", "deep_research", "create_pptx"} <= built_in_names
     assert {"browser_snapshot", "browser_screenshot"} <= browser_names
+    assert {"webmcp_open", "webmcp_list_tools", "webmcp_call_tool"} <= built_in_names
     assert DEFAULT_TOOL_BUDGETS["read_file"] >= DEFAULT_TOOL_BUDGETS["default"]
     assert str(ToolResult).startswith("dict")
 

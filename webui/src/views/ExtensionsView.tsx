@@ -9,7 +9,9 @@ type Mcp = {
   cwd?: string; env?: Record<string, string>; url?: string; headers?: Record<string, string>;
   timeout?: number; allow_deprecated_transport?: boolean;
 };
-type ExtensionData = { plugins?: Plugin[]; skills?: Skill[]; mcp_servers?: Mcp[]; capabilities?: { id: string; label: string; description?: string; enabled: boolean }[] };
+type Capability = { id: string; label: string; description?: string; enabled: boolean; configured?: string | boolean | null };
+type ExtensionData = { plugins?: Plugin[]; skills?: Skill[]; mcp_servers?: Mcp[]; capabilities?: Capability[] };
+type ImageModelChoice = { id: string; label: string; value: string; provider?: string; available?: boolean };
 type Kind = "plugin" | "skill" | "mcp";
 type Editor = {
   kind: Kind; original?: string; name: string; source: string; description: string; body: string;
@@ -73,8 +75,12 @@ export function ExtensionsView({ setError, notify }: { setError: (message: strin
   const [data, setData] = useState<ExtensionData>({});
   const [editor, setEditor] = useState<Editor | null>(null);
   const [testing, setTesting] = useState(false);
+  const [capabilityEditor, setCapabilityEditor] = useState<Capability | null>(null);
+  const [imageModel, setImageModel] = useState("");
+  const [imageModels, setImageModels] = useState<ImageModelChoice[]>([]);
+  const [customImageModel, setCustomImageModel] = useState("");
 
-  async function load() { try { setData(await request<ExtensionData>("/api/extensions")); } catch (problem) { setError((problem as Error).message); } }
+  async function load() { try { const [extensions, onboarding] = await Promise.all([request<ExtensionData>("/api/extensions"), request<{ image_models?: ImageModelChoice[] }>("/api/onboarding/providers")]); setData(extensions); setImageModels(onboarding.image_models || []); } catch (problem) { setError((problem as Error).message); } }
   useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   async function toggle(name: string, enabled: boolean) {
@@ -103,9 +109,19 @@ export function ExtensionsView({ setError, notify }: { setError: (message: strin
     catch (problem) { setError((problem as Error).message); }
   }
 
+  async function saveCapability(event: React.FormEvent) {
+    event.preventDefault(); if (!capabilityEditor) return;
+    try {
+      const path = capabilityEditor.id === "image" ? "models.image_maker" : "tools.browser_enabled";
+      const value = capabilityEditor.id === "image" ? (imageModel === "__custom__" ? customImageModel : imageModel).trim() : !capabilityEditor.enabled;
+      await post("/api/settings", { path, value, scope: "global" });
+      notify(`${capabilityEditor.label} updated.`); setCapabilityEditor(null); await load();
+    } catch (problem) { setError((problem as Error).message); }
+  }
+
   return <section className="view active page-view extensions-page">
     <div className="page-head"><div><div className="eyebrow">TOOLS & INTEGRATIONS</div><h1>Extensions</h1><p>Install local plugins and manage project skills and MCP connections. Credentials are referenced by environment variable and are never revealed here.</p></div></div>
-    <div className="card-grid">{(data.capabilities || []).map((item) => <article className="detail-card" key={item.id}><h3>{item.label}</h3><p>{item.description}</p><span className="tag">{item.enabled ? "Ready" : "Not configured"}</span></article>)}</div>
+    <div className="card-grid">{(data.capabilities || []).map((item) => <article className="detail-card" key={item.id}><h3>{item.label}</h3><p>{item.description}</p><span className="tag">{item.enabled ? "Ready" : "Not configured"}</span>{typeof item.configured === "string" && item.configured && <p className="mono">{item.configured}</p>}{["image", "browser"].includes(item.id) && <div className="detail-actions"><button className="ghost-button" type="button" onClick={() => { setCapabilityEditor(item); const current = typeof item.configured === "string" ? item.configured : ""; const known = imageModels.some((choice) => choice.value === current); setImageModel(current && !known ? "__custom__" : current); setCustomImageModel(current && !known ? current : ""); }}>{item.id === "browser" ? (item.enabled ? "Disable" : "Enable") : (item.enabled ? "Edit configuration" : "Configure")}</button></div>}</article>)}</div>
     <div className="section-heading"><h2>Plugins</h2><button className="primary-button" type="button" onClick={() => setEditor(emptyEditor("plugin"))}>＋ Install plugin</button></div>
     <div className="card-grid">{(data.plugins || []).map((item) => <article className="detail-card" key={item.name}><h3>{item.name}</h3><p>Version {item.version || "unknown"} · integrity {item.integrity || "unrecorded"}</p><div className="detail-actions"><button className="secondary-button" disabled={item.valid === false && !item.enabled} type="button" onClick={() => void toggle(item.name, !item.enabled)}>{item.enabled ? "Disable" : "Enable"}</button><button className="danger-button" type="button" onClick={() => void remove("plugin", item.name)}>Uninstall</button></div></article>)}{!(data.plugins || []).length && <p>No plugins installed.</p>}</div>
     <div className="section-heading"><h2>Project skills</h2><button className="primary-button" type="button" onClick={() => setEditor(emptyEditor("skill"))}>＋ New skill</button></div>
@@ -124,5 +140,6 @@ export function ExtensionsView({ setError, notify }: { setError: (message: strin
         <div className="mcp-test-row"><button className="ghost-button" type="button" disabled={testing} onClick={() => void testConnection()}>{testing ? "Testing…" : "Test connection"}</button><span>Testing may start the local command or contact the remote URL, but does not save it.</span></div>
       </>}
       <button className="primary-button" type="submit">Save</button></form></div>}
+    {capabilityEditor && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Configure ${capabilityEditor.label}`} onClick={(event) => { if (event.target === event.currentTarget) setCapabilityEditor(null); }}><form className="modal" onSubmit={saveCapability}><div className="dialog-head"><div><div className="eyebrow">CAPABILITY</div><h2>{capabilityEditor.id === "browser" ? `${capabilityEditor.enabled ? "Disable" : "Enable"} browser automation` : "Configure image generation"}</h2></div><button className="icon-button" type="button" onClick={() => setCapabilityEditor(null)}>×</button></div>{capabilityEditor.id === "image" ? <><p>Select an image model whose provider is available on this machine. Configure missing provider access in Settings first.</p><label>Image model<select value={imageModel} onChange={(event) => setImageModel(event.target.value)}><option value="">Not configured</option>{imageModels.filter((choice) => choice.id !== "custom").map((choice) => <option key={choice.id} value={choice.value} disabled={!choice.available}>{choice.label}{choice.available ? "" : " · configure provider first"}</option>)}<option value="__custom__">Custom provider/model…</option></select></label>{imageModel === "__custom__" && <label>Custom route<input required placeholder="provider/model" value={customImageModel} onChange={(event) => setCustomImageModel(event.target.value)} /></label>}<div className="detail-actions"><button className="ghost-button" type="button" onClick={() => { setImageModel(""); setCustomImageModel(""); }}>Clear</button><button className="primary-button" type="submit">Save configuration</button></div></> : <><p>Profile and permission ceilings still apply when browser automation is enabled.</p><button className="primary-button" type="submit">{capabilityEditor.enabled ? "Disable" : "Enable"}</button></>}</form></div>}
   </section>;
 }

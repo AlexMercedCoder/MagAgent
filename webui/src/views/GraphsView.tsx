@@ -20,6 +20,7 @@ const LANES: { id: string; title: string; note: string; states: string[] }[] = [
 ];
 
 const GRAPH_RUN_KEY = "magent:last-graph-run";
+const GRAPH_DRAFT_KEY = "magent:graph-draft";
 const GRAPH_TOOLS = [
   ["file_read", "Read project files"],
   ["file_search", "Search project code"],
@@ -40,6 +41,7 @@ function laneFor(node: GraphNode): string {
 }
 
 type GraphDoc = Record<string, unknown> & { nodes?: Record<string, Record<string, unknown>> };
+type DraftActivity = { stage?: string; message?: string; attempt?: number; finding_count?: number; details?: string[]; at?: number };
 
 type NodeMap = Record<string, Record<string, unknown>>;
 type CardEditor = {
@@ -144,7 +146,10 @@ function cardsFromPlan(rows: Record<string, unknown>[]): GraphNode[] {
     depends_on: (node.depends_on ?? node.dependencies ?? []) as string[],
     profile: String(node.profile ?? node.agent_profile ?? ""),
     state: String(node.state ?? "pending"),
-    summary: humanizeError(String(node.summary ?? node.error ?? "")),
+    summary: humanizeError(String(node.summary ?? "")),
+    error: humanizeError(String(node.error ?? "")),
+    error_code: String(node.error_code ?? ""),
+    attempts: Array.isArray(node.attempts) ? node.attempts as GraphNode["attempts"] : [],
     files_changed: Array.isArray(node.files_changed) ? node.files_changed.length : Number(node.files_changed ?? 0),
   }));
 }
@@ -167,7 +172,30 @@ function Card({ node, editable, onEdit }: { node: GraphNode; editable: boolean; 
           <span><b>Entry card</b> · no dependencies</span>
         )}
       </div>
+      {node.error && (
+        <div className="kanban-error" role="alert">
+          <b>{node.error_code ? `${node.error_code}: ` : "Why it failed: "}</b>
+          {node.error}
+        </div>
+      )}
       {node.summary && <p className="kanban-summary">{node.summary}</p>}
+      {node.attempts && node.attempts.length > 0 && state === "failed" && (
+        <details className="kanban-attempts">
+          <summary>{node.attempts.length} attempt{node.attempts.length === 1 ? "" : "s"}</summary>
+          {node.attempts.map((attempt, index) => (
+            <div key={`${attempt.attempt ?? index}-${attempt.status ?? "unknown"}`}>
+              <b>Attempt {attempt.attempt ?? index + 1}: {attempt.status ?? "unknown"}</b>
+              {attempt.error && <p>{humanizeError(attempt.error)}</p>}
+              {(attempt.criteria ?? []).map((criterion) => (
+                <small key={criterion.id ?? "criterion"}>
+                  {criterion.passed ? "Passed" : "Failed"}: {criterion.id ?? "criterion"}
+                  {criterion.evidence != null ? ` · evidence ${String(criterion.evidence)}` : ""}
+                </small>
+              ))}
+            </div>
+          ))}
+        </details>
+      )}
       {node.tools?.length ? <p className="kanban-tools">Tools: {node.tools.join(", ")}</p> : null}
       <div className="kanban-card-foot">
         <span>@{node.profile || "run-default"}</span>
@@ -199,10 +227,16 @@ export function GraphsView({
   const [status, setStatus] = useState("Ready");
   const [jobId, setJobId] = useState("");
   const [runSummary, setRunSummary] = useState("");
+  const [runActivity, setRunActivity] = useState("");
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [eventCount, setEventCount] = useState(0);
   const [cardEditor, setCardEditor] = useState<CardEditor | null>(null);
   const [graphChoices, setGraphChoices] = useState<{ skills: string[]; mcp: string[] }>({ skills: [], mcp: [] });
+  const [operationStarted, setOperationStarted] = useState<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [draftActivity, setDraftActivity] = useState<DraftActivity[]>([]);
+  const [draftStage, setDraftStage] = useState("Preparing graph generation…");
+  const [draftJobId, setDraftJobId] = useState("");
   const poll = useRef<number | null>(null);
 
   const watchJob = useCallback(
@@ -215,6 +249,7 @@ export function GraphsView({
             state?: string;
             status?: string;
             summary?: string | Record<string, unknown>;
+            activity?: string;
             nodes?: Record<string, unknown>[];
             events?: unknown[];
             run_id?: string;
@@ -227,6 +262,7 @@ export function GraphsView({
               ? state.summary
               : String((state.summary as { text?: string } | undefined)?.text || ""),
           );
+          setRunActivity(state.activity || "");
           setEventCount(state.events?.length || 0);
           setLastUpdate(Date.now());
           sessionStorage.setItem(
@@ -263,6 +299,16 @@ export function GraphsView({
       }))
       .catch(() => setGraphChoices({ skills: [], mcp: [] }));
     try {
+      const savedDraft = JSON.parse(sessionStorage.getItem(GRAPH_DRAFT_KEY) || "null") as
+        | { document?: GraphDoc; path?: string; goal?: string }
+        | null;
+      if (savedDraft?.document) {
+        setDraft(savedDraft.document);
+        setNodes(cardsFrom(savedDraft.document));
+        setDraftPath(savedDraft.path || "workflow.agraph.yaml");
+        setGoal(savedDraft.goal || "");
+        setStatus("Unsaved draft restored");
+      }
       const saved = JSON.parse(sessionStorage.getItem(GRAPH_RUN_KEY) || "null") as
         | { job_id?: string; run_id?: string; path?: string }
         | null;
@@ -279,6 +325,19 @@ export function GraphsView({
       if (poll.current) window.clearInterval(poll.current);
     };
   }, [refreshCatalog, setError, watchJob]);
+
+  useEffect(() => {
+    if (!draft) return;
+    sessionStorage.setItem(GRAPH_DRAFT_KEY, JSON.stringify({ document: draft, path: draftPath, goal }));
+  }, [draft, draftPath, goal]);
+
+  useEffect(() => {
+    if (!operationStarted) { setElapsed(0); return; }
+    const tick = () => setElapsed(Math.max(0, Math.floor((Date.now() - operationStarted) / 1000)));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [operationStarted]);
 
   const loadSaved = useCallback(
     async (target: string) => {
@@ -319,12 +378,50 @@ export function GraphsView({
 
   async function makeDraft(mode: "blank" | "ai") {
     setBusy(mode);
-    if (mode === "ai") setStatus("Drafting…");
+    setOperationStarted(Date.now());
+    if (mode === "ai") {
+      setStatus("Drafting…");
+      setDraftActivity([]);
+      setDraftStage("Starting a background graph draft…");
+    }
     try {
-      const created = await post<{ document: GraphDoc; node_template?: Record<string, unknown> }>(
-        "/api/graphs/draft",
-        { goal, mode },
-      );
+      let created: { document: GraphDoc; node_template?: Record<string, unknown> };
+      if (mode === "ai") {
+        const started = await post<{ job_id?: string; message?: string }>("/api/graphs/draft/start", { goal });
+        if (!started.job_id) throw new Error(started.message || "Graph generation did not return a job id.");
+        setDraftJobId(started.job_id);
+        let result: {
+          document?: GraphDoc;
+          node_template?: Record<string, unknown>;
+          fallback?: boolean;
+          fallback_reason?: string;
+        } | undefined;
+        for (let check = 0; check < 900; check += 1) {
+          const state = await request<{
+            status?: string; stage?: string; message?: string; activity?: DraftActivity[];
+            result?: { ok?: boolean; error?: string; document?: GraphDoc; node_template?: Record<string, unknown>; fallback?: boolean; fallback_reason?: string };
+          }>(`/api/graphs/draft/status?job_id=${encodeURIComponent(started.job_id)}`);
+          setDraftStage(state.message || state.stage || "Generating graph…");
+          setDraftActivity(state.activity || []);
+          if (state.status === "succeeded") {
+            result = state.result;
+            if (result?.fallback) {
+              notify(`The planning model did not return a valid draft. MagAgent loaded a validated capability-aware fallback instead. ${result.fallback_reason || ""}`.trim());
+            }
+            break;
+          }
+          if (state.status === "failed") throw new Error(state.result?.error || state.message || "Graph generation failed.");
+          if (state.status === "cancelled") { setStatus("Generation cancelled"); return; }
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        }
+        if (!result?.document) throw new Error("Graph generation timed out before producing a validated draft.");
+        created = { document: result.document, node_template: result.node_template };
+      } else {
+        created = await post<{ document: GraphDoc; node_template?: Record<string, unknown> }>(
+          "/api/graphs/draft",
+          { goal, mode },
+        );
+      }
       if (created.node_template) setTemplate(created.node_template);
       adoptDraft(created.document, "Unsaved draft");
       setDraftPath(draftPath || "workflow.agraph.yaml");
@@ -334,6 +431,18 @@ export function GraphsView({
       setStatus("Ready");
     } finally {
       setBusy("");
+      setOperationStarted(null);
+      setDraftJobId("");
+    }
+  }
+
+  async function cancelDraft() {
+    if (!draftJobId) return;
+    try {
+      await post("/api/graphs/draft/cancel", { job_id: draftJobId });
+      setDraftStage("Cancellation requested; stopping the active model request…");
+    } catch (problem) {
+      setError((problem as Error).message);
     }
   }
 
@@ -377,11 +486,16 @@ export function GraphsView({
 
   async function saveDraft() {
     if (!draft || !draftPath.trim()) return;
+    if (!Object.keys(draft.nodes || {}).length) {
+      setError("Add at least one card before saving this graph. A blank board is only a starting point, not a runnable graph.");
+      return;
+    }
     setBusy("save");
     try {
       const savedResult = await post<{ path?: string }>("/api/graphs/save", { document: draft, path: draftPath.trim() });
       const found = await refreshCatalog();
       setDraft(null);
+      sessionStorage.removeItem(GRAPH_DRAFT_KEY);
       const saved = found.find((item) => item.path === savedResult.path || item.path.endsWith(draftPath.trim()));
       const savedPath = saved?.path ?? savedResult.path ?? "";
       setPath(savedPath);
@@ -484,14 +598,18 @@ export function GraphsView({
       .split(/[,\n]/)
       .map((item) => item.trim())
       .filter(Boolean);
-    const requirements = {
+    const requirements: Record<string, unknown> = {
       ...((current.requirements as Record<string, unknown>) || {}),
-      tools: cardEditor.tools,
-      skills: cardEditor.skills,
-      mcp_servers: cardEditor.mcpServers,
-      permissions,
       workspace: cardEditor.workspace,
     };
+    if (cardEditor.tools.length) requirements.tools = cardEditor.tools;
+    else delete requirements.tools;
+    if (cardEditor.skills.length) requirements.skills = cardEditor.skills;
+    else delete requirements.skills;
+    if (cardEditor.mcpServers.length) requirements.mcp_servers = cardEditor.mcpServers;
+    else delete requirements.mcp_servers;
+    if (permissions.length) requirements.permissions = permissions;
+    else delete requirements.permissions;
     const updated: Record<string, unknown> = {
       ...current,
       title: cardEditor.title.trim(),
@@ -565,6 +683,15 @@ export function GraphsView({
         </div>
       </section>
 
+      {busy === "ai" && (
+        <section className="operation-health" role="status" aria-live="polite">
+          <span className="operation-spinner" aria-hidden="true" />
+          <div className="operation-health-copy"><b>Generating and validating the graph</b><p>{draftStage}</p><small>{elapsed >= 90 ? "This request is taking longer than usual; you can cancel it safely. " : ""}This shows lifecycle and validation activity, not the model's private reasoning.</small>{draftActivity.length > 0 && <ol className="operation-activity">{draftActivity.slice(-5).map((item, index) => <li key={`${item.at || index}-${item.stage}`}>{item.message || item.stage}{item.attempt ? ` · attempt ${item.attempt}` : ""}{item.details?.length ? <ul>{item.details.map((detail) => <li key={detail}>{detail}</li>)}</ul> : null}</li>)}</ol>}</div>
+          <button className="ghost-button operation-cancel" type="button" onClick={() => void cancelDraft()} disabled={!draftJobId}>Cancel</button>
+          <span>{elapsed}s</span>
+        </section>
+      )}
+
       {draft && (
         <section className="graph-draft" role="status">
           <div>
@@ -582,7 +709,7 @@ export function GraphsView({
             <button className="primary-button" type="button" onClick={() => void saveDraft()} disabled={busy === "save" || !draftPath.trim()}>
               {busy === "save" ? "Saving…" : "Save graph"}
             </button>
-            <button className="ghost-button" type="button" onClick={() => { setDraft(null); void loadSaved(path); }}>
+            <button className="ghost-button" type="button" onClick={() => { setDraft(null); sessionStorage.removeItem(GRAPH_DRAFT_KEY); void loadSaved(path); }}>
               Discard
             </button>
           </div>
@@ -621,7 +748,11 @@ export function GraphsView({
           <span className="run-health-dot" aria-hidden="true" />
           <div>
             <b>{running ? "Graph runner is active" : `Graph run ${status}`}</b>
-            <p>{runSummary || (running ? "Waiting for the next runner event…" : "The latest run state is shown on the board.")}</p>
+            <p className="graph-run-activity">
+              <span>Most recent activity</span>
+              {runActivity || (running ? "Waiting for the next runner event…" : runSummary || "The latest run state is shown on the board.")}
+            </p>
+            {!running && runSummary && runSummary !== runActivity && <p>{runSummary}</p>}
           </div>
           <dl>
             <div><dt>Status</dt><dd>{status}</dd></div>

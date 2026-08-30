@@ -48,6 +48,8 @@ def test_config_schema_reports_guided_fields(tmp_path: Path, monkeypatch) -> Non
     assert provider["value"] == "openai"
     assert provider["category"] == "provider"
     assert any(item["path"] == "session_messaging.policy" for item in schema["fields"])
+    assert any(item["path"] == "models.image_maker" for item in schema["fields"])
+    assert any(item["path"] == "tools.browser_enabled" for item in schema["fields"])
 
 
 def test_sqlite_desktop_helpers_list_query_and_schema(tmp_path: Path, monkeypatch) -> None:

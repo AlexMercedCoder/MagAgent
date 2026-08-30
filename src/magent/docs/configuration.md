@@ -81,6 +81,10 @@ During `magent configure`, cloud providers offer three credential paths:
 - paste an API key and let MagAgent save it in local config
 - reference an environment variable such as `OPENCODE_ZEN_KEY`, `OPENCODE_ZEN_API_KEY`, or `NOUS_API_KEY`
 - store an API key in the OS keyring with `magent auth add <provider>`
+
+The local Web UI offers the same provider/model selection in first-run setup and Settings. It can
+store a newly supplied key in the OS keyring (the default) or, only after an explicit warning, in
+the user-only global config. Existing secret values are never sent back to the browser.
 - skip credentials and configure them later
 
 After credential setup, the wizard requests the selected provider's current
@@ -286,7 +290,7 @@ Open Agent Profile discovery and reviewed state use conservative global ceilings
 [agent_profiles]
 enabled = true
 default_profile = "magagent"
-user_paths = ["~/.config/magent/agents"]
+user_paths = ["~/.config/magent/agents", "~/.agentprofiles"]
 project_paths = [".magent/agents", ".agents"]
 writeback = "propose"
 max_state_tokens = 1200
@@ -298,6 +302,20 @@ max_delegation_depth = 3
 `writeback` is a ceiling, not a grant. A profile cannot request a more permissive mode.
 Profile tools and permissions are always intersected with the active MagAgent policy. See
 `magent docs show agents` and use `magent agent explain NAME` to inspect the effective result.
+`~/.agentprofiles` is the universal OAP user root; MagAgent's native user root has precedence on a
+name collision, and project roots still win over both.
+
+Generate a schema-valid draft from a description with:
+
+```bash
+magent profile generate "A cautious release reviewer that cites test evidence"
+magent profile generate "A reusable cross-harness reviewer" --scope universal
+```
+
+The Profiles page exposes the same review-first generator. In an ordinary session, the bundled
+`oap-profile-authoring` skill may call `create_agent_profile`: agent-initiated calls persist a
+proposal under `.magent/profile-proposals`, while saving still crosses the trusted permission
+boundary before a profile is activated.
 The active user's `preferences.default_agent_profile` overrides the global default. Create one
 without editing TOML via `magent profile wizard`, inspect it with `magent profile default`, and
 change it with `magent profile set-default NAME`. The managed `magagent` profile is always the

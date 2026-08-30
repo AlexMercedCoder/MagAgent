@@ -5,12 +5,10 @@ all of it was already done: open `magent ui` on a machine with no provider and
 the first message failed with a credential error, having never said that no
 provider was chosen.
 
-This exposes the same readiness signal the CLI reports, and lets a provider and
-model be selected from the browser. Credentials are deliberately not part of it.
-`set_default_provider` accepts an inline `api_key` and writes it into the global
-config file; that path is not reachable from here, so keys stay in the
-environment or the system keyring and readiness reports only whether one was
-found and which variable was searched.
+This exposes the same readiness signal the CLI reports and lets a provider,
+model, and optional credential be configured from the loopback, token-gated UI.
+Credentials default to the OS keyring; explicit config-file storage is supported
+with a visible warning for systems where keyring integration is unavailable.
 """
 
 from __future__ import annotations
@@ -77,7 +75,9 @@ def readiness() -> dict[str, Any]:
     if local:
         # `provider_readiness` calls any local provider ready because it needs
         # no key. That is true of the credential and false of the runtime.
-        running, detail = _local_reachable(provider, str(providers.get(provider, {}).get("base_url") or ""))
+        running, detail = _local_reachable(
+            provider, str(providers.get(provider, {}).get("base_url") or "")
+        )
         credential = {**credential, "ready": running, "reason": detail}
     steps: list[dict[str, Any]] = [
         {
@@ -126,7 +126,9 @@ def readiness() -> dict[str, Any]:
     # Only the provider and its credential decide whether a first message can
     # succeed; the model falls back to a catalog default and the workspace is
     # wherever the server was started.
-    blocking = [step for step in steps if step["id"] in {"provider", "credential"} and not step["ok"]]
+    blocking = [
+        step for step in steps if step["id"] in {"provider", "credential"} and not step["ok"]
+    ]
 
     reason = ""
     if blocking:
@@ -154,13 +156,18 @@ def readiness() -> dict[str, Any]:
 
 def providers() -> dict[str, Any]:
     """Providers that can be selected, and where each expects its key."""
-    from magent.config_ux import DEFAULT_MODELS
+    from magent.config import load_global_config
+    from magent.config_ux import DEFAULT_MODELS, image_model_choices, provider_readiness
     from magent.provider_catalog import PROVIDER_CATALOG, PROVIDER_ORDER
 
+    config = load_global_config()
+    configured = config.get("providers", {}) or {}
+    default_provider, default_model = _default_provider()
     listed = []
     for name in PROVIDER_ORDER:
         metadata = PROVIDER_CATALOG.get(name, {}) or {}
         local = bool(metadata.get("local")) or name in LOCAL_PROVIDERS
+        state = provider_readiness(name, configured.get(name, {}))
         listed.append(
             {
                 "name": name,
@@ -171,29 +178,74 @@ def providers() -> dict[str, Any]:
                 # zero-credential way to see the whole loop working.
                 "needs_key": not local and bool(metadata.get("env")),
                 "local": local,
+                "configured": name in configured or name == default_provider,
+                "credential_ready": bool(state.get("ready")),
+                "credential_reason": str(state.get("reason") or ""),
             }
         )
-    return {"ok": True, "providers": listed, "local_providers": list(LOCAL_PROVIDERS)}
+    image_models = []
+    by_name = {item["name"]: item for item in listed}
+    for item in image_model_choices():
+        provider = str(item.get("provider") or "")
+        image_models.append(
+            {
+                **item,
+                "available": bool(provider and by_name.get(provider, {}).get("credential_ready")),
+            }
+        )
+    return {
+        "ok": True,
+        "providers": listed,
+        "local_providers": list(LOCAL_PROVIDERS),
+        "default_provider": default_provider,
+        "default_model": default_model,
+        "image_models": image_models,
+    }
 
 
-def configure(provider: str, model: str = "") -> dict[str, Any]:
+def configure(
+    provider: str,
+    model: str = "",
+    *,
+    credential: str = "",
+    credential_storage: str = "keyring",
+) -> dict[str, Any]:
     """Record the provider and model choice, then re-report readiness.
 
-    Only the route is written. `set_default_provider` can also take an inline
-    API key and persist it to the global config; that argument is deliberately
-    never passed from here, because a key typed into a browser form would end up
-    in a file on disk.
+    Credentials default to the OS keyring. Config-file storage is accepted only
+    when the caller explicitly chooses it; config permissions are tightened by
+    the shared configuration helper.
     """
+    from magent.auth_store import keyring_account, save_keyring_secret
     from magent.config_ux import set_default_provider
 
     provider = (provider or "").strip()
     if not provider:
         raise ValueError("Choose a provider first.")
 
-    result = set_default_provider(provider, (model or "").strip() or None)
+    secret = (credential or "").strip()
+    storage = (credential_storage or "keyring").strip().lower()
+    if storage not in {"keyring", "config"}:
+        raise ValueError("Credential storage must be keyring or config.")
+    if secret and storage == "keyring":
+        stored = save_keyring_secret(provider, secret)
+        if not stored.get("ok"):
+            raise ValueError(str(stored.get("error") or "The key could not be stored."))
+        result = set_default_provider(
+            provider,
+            (model or "").strip() or None,
+            api_key_keyring=keyring_account(provider),
+        )
+    else:
+        result = set_default_provider(
+            provider,
+            (model or "").strip() or None,
+            api_key=secret if storage == "config" else "",
+        )
     if not result.get("ok"):
         raise ValueError(str(result.get("error") or "That provider could not be selected."))
 
     state = readiness()
     state["configured"] = {"provider": result.get("provider"), "model": result.get("model")}
+    state["credential_storage"] = storage if secret else "unchanged"
     return state

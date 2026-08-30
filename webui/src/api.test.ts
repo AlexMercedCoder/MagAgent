@@ -10,7 +10,7 @@ describe("humanizeError", () => {
 
   it("explains empty optional OAP sections", () => {
     expect(humanizeError("[] should be non-empty; {} should be non-empty")).toContain(
-      "leave the section unset",
+      "remove the empty section",
     );
   });
 });

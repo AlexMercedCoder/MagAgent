@@ -304,10 +304,15 @@ Browser automation is optional:
 
 ```bash
 pip install "mag-agent[browser]"
-playwright install
+playwright install chromium
 magent browser snapshot https://example.com
 magent browser screenshot https://example.com --out example.png
 ```
+
+The same extra enables the built-in, origin-restricted alexmerced.app WebMCP gateway. In a normal
+session the agent can discover the bundled `alexmerced-webmcp` skill, open an app page, inspect its
+live tools, and invoke one under the regular network and mutation permission policy. The dedicated
+browser profile is stored beneath `~/.local/share/magent/webmcp/` so browser-local app data persists.
 
 ### File & Code Tools
 
@@ -344,6 +349,9 @@ tool handlers. This metadata is not chain-of-thought.
 | `http_request` | Full HTTP client: GET/POST/PUT/PATCH/DELETE | Auto |
 | `browser_snapshot` | Capture title and visible text with Playwright | Auto |
 | `browser_screenshot` | Capture a page screenshot with Playwright | Auto |
+| `webmcp_open` | Open an alexmerced.app page and discover its live page-scoped tools | Auto |
+| `webmcp_list_tools` | Inspect exact WebMCP names and input schemas on the current page | Auto |
+| `webmcp_call_tool` | Invoke one discovered alexmerced.app tool | Read calls auto; mutations confirm |
 
 ### Data Tools
 
@@ -538,10 +546,17 @@ The release-ready workspace adds three operator surfaces:
 The Graphs view can open existing `.agraph` files, start a blank workflow, or ask the configured
 planning model to propose a graph from a goal. Every card is editable before execution, including
 its profile, dependencies, logical tools, skills, MCP servers, workspace, and portable permission
-requirements. MagAgent saves and strictly validates the native graph before enabling Run, then
-moves cards through **Pending**, **In progress**, and **Complete**. A durable run-health panel,
+requirements. Generation is constrained to MagAgent's canonical logical-tool catalog, and invalid
+or invented tool names plus missing permission families are repaired or rejected before the draft
+is offered as runnable. Deterministic drafts use the same capability-aware baseline, so obvious web
+research declares `web_search`/`web_fetch` and file-building work declares write and shell access.
+If the planning provider times out or exhausts validation repairs, the UI identifies the result as
+a safe runnable fallback and preserves the provider/validation reason for review rather than
+showing a generic failure. MagAgent saves and strictly validates the native graph before enabling Run,
+then moves cards through **Pending**, **In progress**, and **Complete**. A durable run-health panel,
 event counter, last-check time, animated active cards, and per-card outcomes remain attached when
-you leave the view and return.
+you leave the view and return. The health panel also reports the active card and its latest safe
+lifecycle or declared-tool event; it never exposes private reasoning or tool arguments.
 
 A turn is a run, not a request. It executes on its own thread and finishes whether or not anyone is
 watching, so closing the tab no longer kills the work and loses the reply. Streams read the run's
@@ -1109,7 +1124,7 @@ src/magent/
 ├── skills/           # SKILL.md discovery, matching, lockfile
 ├── subagents/        # Sub-agent runner
 ├── tokens.py         # Lightweight token budgeting helpers
-├── tools/            # 40 built-in tools (file, web/browser, db, system, image)
+├── tools/            # 47 built-in tools (file, web/WebMCP, browser, db, system, image)
 │   ├── executor.py   # Stable ToolExecutor dispatch facade
 │   ├── artifacts.py  # Document, diagram, and image capability tools
 │   ├── data.py       # JSON query and named SQLite facade tools

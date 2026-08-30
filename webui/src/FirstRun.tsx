@@ -9,10 +9,9 @@ import { request, post } from "./api";
  * error, with nothing saying a provider was never chosen. This shows the same
  * readiness `magent doctor` reports and lets a provider be picked here.
  *
- * Credentials are deliberately absent. `set_default_provider` can persist an
- * inline key into the global config file, and a key typed into a browser form
- * would land there, so keys stay in the environment or the system keyring and
- * this panel reports only whether one was found and which variable it expects.
+ * Hosted credentials can be saved to the OS keyring, or explicitly to the
+ * protected MagAgent config when keyring integration is unavailable. Existing
+ * secrets are never returned to the browser.
  */
 
 type Step = {
@@ -40,6 +39,7 @@ type Provider = {
   api_key_env: string;
   needs_key: boolean;
   local: boolean;
+  credential_ready?: boolean;
 };
 
 export function FirstRun({
@@ -54,25 +54,25 @@ export function FirstRun({
   const [chosen, setChosen] = useState("");
   const [model, setModel] = useState("");
   const [saving, setSaving] = useState(false);
+  const [credential, setCredential] = useState("");
+  const [credentialStorage, setCredentialStorage] = useState<"keyring" | "config">("keyring");
 
   useEffect(() => {
     (async () => {
       try {
         const [state, list] = await Promise.all([
           request<Readiness>("/api/onboarding/readiness"),
-          request<{ providers: Provider[] }>("/api/onboarding/providers"),
+          request<{ providers: Provider[]; default_provider?: string; default_model?: string }>("/api/onboarding/providers"),
         ]);
         setReadiness(state);
         setProviders(list.providers || []);
+        setChosen(list.default_provider || "");
+        setModel(list.default_model || "");
       } catch (problem) {
         setError((problem as Error).message);
       }
     })();
   }, [setError]);
-
-  useEffect(() => {
-    setModel(providers.find((item) => item.name === chosen)?.default_model ?? "");
-  }, [chosen, providers]);
 
   async function apply(provider: string, chosenModel = "") {
     setSaving(true);
@@ -80,7 +80,10 @@ export function FirstRun({
       const state = await post<Readiness>("/api/onboarding/configure", {
         provider,
         model: chosenModel,
+        credential,
+        credential_storage: credentialStorage,
       });
+      setCredential("");
       setReadiness(state);
       if (state.ready) onReady();
     } catch (problem) {
@@ -125,7 +128,7 @@ export function FirstRun({
           <select
             id="providerPick"
             value={chosen}
-            onChange={(event) => setChosen(event.target.value)}
+            onChange={(event) => { const value = event.target.value; setChosen(value); setModel(providers.find((item) => item.name === value)?.default_model || ""); }}
           >
             <option value="">Choose a provider…</option>
             {providers.map((provider) => (
@@ -145,11 +148,13 @@ export function FirstRun({
                 placeholder={selected.default_model}
               />
               {selected.needs_key && (
-                <p className="first-run-key">
-                  Export <code>{selected.api_key_env}</code> in the shell that runs{" "}
-                  <code>magent ui</code>, or store it with <code>magent auth add</code>. Keys are
-                  never typed into this page.
-                </p>
+                <div className="first-run-credential">
+                  <label htmlFor="credentialPick">API key <small>{selected.credential_ready ? "leave blank to keep the existing credential" : `or export ${selected.api_key_env}`}</small></label>
+                  <input id="credentialPick" type="password" autoComplete="off" value={credential} onChange={(event) => setCredential(event.target.value)} placeholder={selected.credential_ready ? "Credential already configured" : "Paste provider API key"} />
+                  <label htmlFor="credentialStorage">Credential storage</label>
+                  <select id="credentialStorage" value={credentialStorage} onChange={(event) => setCredentialStorage(event.target.value as "keyring" | "config")}><option value="keyring">OS keyring (recommended)</option><option value="config">MagAgent config file</option></select>
+                  {credentialStorage === "config" && <p className="credential-warning">This writes the key to MagAgent's user config. Its permissions are tightened, but the OS keyring is safer when available.</p>}
+                </div>
               )}
             </>
           )}

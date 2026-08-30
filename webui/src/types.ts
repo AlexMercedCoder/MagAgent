@@ -73,6 +73,14 @@ export type GraphNode = {
   /** pending | running | succeeded | failed | skipped | cancelled */
   state?: string;
   summary?: string;
+  error?: string;
+  error_code?: string;
+  attempts?: Array<{
+    attempt?: number;
+    status?: string;
+    error?: string;
+    criteria?: Array<{ id?: string; passed?: boolean; evidence?: unknown }>;
+  }>;
   files_changed?: number;
 };
 

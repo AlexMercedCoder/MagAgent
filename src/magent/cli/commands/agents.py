@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 import sys
@@ -46,6 +47,35 @@ def _require_profile(name: str, project: str):
 
 
 def register_agent_commands(agent_app: typer.Typer) -> None:
+    @agent_app.command("generate-draft")
+    def agent_generate_draft_cmd(
+        prompt: str = typer.Argument(..., help="Natural-language profile request."),
+        name: str = typer.Option("", "--name"),
+        extends: str = typer.Option("", "--extends"),
+        project: str = typer.Option(".", "--project", "-p"),
+        autonomous: bool = typer.Option(False, "--autonomous"),
+    ) -> None:
+        """Return a validated, non-persisted OAP generation proposal."""
+        from magent.agent_profiles.generation import generate_profile_proposal
+
+        _registry_instance, config = _registry(project)
+        if config is None:
+            console.print_json(data={"ok": False, "error": "Configure a MagAgent user first."})
+            raise typer.Exit(1)
+        result = asyncio.run(
+            generate_profile_proposal(
+                prompt,
+                project=project,
+                config=config,
+                name=name,
+                extends=extends,
+                autonomous=autonomous,
+            )
+        )
+        console.print_json(data=result)
+        if not result.get("ok"):
+            raise typer.Exit(1)
+
     @agent_app.command("schema")
     def agent_schema_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
         """Return the versioned OAP editor contract and local choices."""

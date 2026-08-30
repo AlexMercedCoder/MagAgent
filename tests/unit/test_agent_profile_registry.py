@@ -45,3 +45,32 @@ def test_managed_builtins_are_oap_profiles(tmp_path: Path) -> None:
     assert profile is not None
     assert profile.document["oap"] == "1.0"
     assert profile.trust == "managed"
+
+
+def test_default_roots_include_universal_user_directory(tmp_path: Path) -> None:
+    roots = AgentProfileRegistry(tmp_path).roots()
+    assert Path("~/.agentprofiles").expanduser().resolve() in {item.path for item in roots}
+
+
+def test_project_precedes_native_user_and_native_user_precedes_universal(
+    tmp_path: Path,
+) -> None:
+    class Config:
+        def get(self, section: str, key: str, default=None):
+            assert section == "agent_profiles"
+            values = {
+                "user_paths": [str(native), str(universal)],
+                "project_paths": [".magent/agents", ".agents"],
+            }
+            return values.get(key, default)
+
+    native = tmp_path / "native"
+    universal = tmp_path / "universal"
+    _write(universal / "same.md", "same")
+    _write(native / "same.md", "same")
+    _write(tmp_path / ".agents" / "same.md", "same")
+    registry = AgentProfileRegistry(tmp_path, Config())
+
+    profile = registry.get("same")
+    assert profile is not None
+    assert profile.source_path == (tmp_path / ".agents" / "same.md").resolve()

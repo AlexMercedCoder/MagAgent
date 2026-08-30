@@ -26,7 +26,9 @@ def _walk(app: typer.Typer, prefix: tuple[str, ...] = ()) -> list[tuple[str, ...
     leaves: list[tuple[str, ...]] = []
 
     for command in app.registered_commands:
-        name = command.name or (command.callback.__name__.replace("_", "-") if command.callback else "")
+        name = command.name or (
+            command.callback.__name__.replace("_", "-") if command.callback else ""
+        )
         if name:
             leaves.append((*prefix, name))
 
@@ -45,7 +47,9 @@ def _duplicate_names(app: typer.Typer, prefix: str = "") -> list[str]:
 
     seen: set[str] = set()
     for command in app.registered_commands:
-        name = command.name or (command.callback.__name__.replace("_", "-") if command.callback else "")
+        name = command.name or (
+            command.callback.__name__.replace("_", "-") if command.callback else ""
+        )
         if name in seen:
             duplicates.append(f"{prefix}{name}")
         seen.add(name)
@@ -104,9 +108,7 @@ def test_config_schema_keeps_the_user_variant() -> None:
     config = root.commands["config"]
     schema = config.commands["schema"]
     option_names = {
-        option
-        for parameter in schema.params
-        for option in getattr(parameter, "opts", [])
+        option for parameter in schema.params for option in getattr(parameter, "opts", [])
     }
 
     assert "--user" in option_names
@@ -154,9 +156,13 @@ def test_tool_required_lists_match_implementations(tmp_path) -> None:
         expected = {param for param in actual if param in properties}
 
         if declared != expected:
-            mismatches.append(f"{name}: declared {sorted(declared)}, implementation needs {sorted(expected)}")
+            mismatches.append(
+                f"{name}: declared {sorted(declared)}, implementation needs {sorted(expected)}"
+            )
 
-    assert not mismatches, "tool schemas disagree with their implementations:\n" + "\n".join(mismatches)
+    assert not mismatches, "tool schemas disagree with their implementations:\n" + "\n".join(
+        mismatches
+    )
 
 
 def test_no_tool_marks_a_defaulted_parameter_as_required(tmp_path) -> None:
@@ -164,7 +170,9 @@ def test_no_tool_marks_a_defaulted_parameter_as_required(tmp_path) -> None:
     from magent.tools import ToolExecutor
 
     executor = ToolExecutor(str(tmp_path))
-    definitions = {d["function"]["name"]: d["function"]["parameters"] for d in executor.get_tool_definitions()}
+    definitions = {
+        d["function"]["name"]: d["function"]["parameters"] for d in executor.get_tool_definitions()
+    }
 
     expectations = {
         "read_file_range": {"path"},
@@ -174,6 +182,9 @@ def test_no_tool_marks_a_defaulted_parameter_as_required(tmp_path) -> None:
         "db_schema": {"table"},
         "browser_snapshot": {"url"},
         "browser_screenshot": {"url", "path"},
+        "webmcp_open": set(),
+        "webmcp_list_tools": set(),
+        "webmcp_call_tool": {"name"},
     }
     for name, expected in expectations.items():
         if name in definitions:

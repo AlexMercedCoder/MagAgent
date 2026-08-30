@@ -7,11 +7,17 @@ import re
 import warnings
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
-from magent.browser import browser_screenshot, browser_snapshot
+from magent.browser import (
+    WEBMCP_ORIGIN,
+    browser_screenshot,
+    browser_snapshot,
+    webmcp_inspect,
+    webmcp_invoke,
+)
 from magent.net_policy import (
     UrlPolicyError,
     classify_network_action,
@@ -74,7 +80,9 @@ def _clean_search_result(item: dict[str, Any]) -> dict[str, str]:
 
 def _is_low_value_search_url(url: str) -> bool:
     host = urlparse(url).netloc.lower().removeprefix("www.")
-    return any(host == domain or host.endswith(f".{domain}") for domain in _LOW_VALUE_SEARCH_DOMAINS)
+    return any(
+        host == domain or host.endswith(f".{domain}") for domain in _LOW_VALUE_SEARCH_DOMAINS
+    )
 
 
 def _rank_search_results(
@@ -431,5 +439,80 @@ class WebToolsMixin:
             return {"ok": False, "error": str(e), "blocked_by": "network-policy"}
         return await browser_screenshot(url, str(abs_path), wait_ms=wait_ms)
 
+    def _alexmerced_webmcp_url(self, path: str = "") -> str:
+        requested = str(path or "").strip()
+        if not requested:
+            return str(getattr(self, "_webmcp_url", WEBMCP_ORIGIN + "/"))
+        url = urljoin(WEBMCP_ORIGIN + "/", requested.lstrip("/"))
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or parsed.netloc.lower() != "alexmerced.app":
+            raise ValueError("The built-in WebMCP bridge only opens https://alexmerced.app.")
+        return url
 
-__all__ = ["WebToolsMixin", "browser_screenshot", "browser_snapshot"]
+    async def webmcp_open(self, path: str = "/", wait_ms: int = 750) -> ToolResult:
+        """Open one alexmerced.app page and discover its live WebMCP tools."""
+        try:
+            url = self._alexmerced_webmcp_url(path)
+        except ValueError as error:
+            return {"ok": False, "error": str(error), "blocked_by": "origin-policy"}
+        tier = RiskTier.AUTO
+        self._log_tool("webmcp_open", url, tier)
+        perm = self._check_permission(f"Open alexmerced.app WebMCP page: {url}", tier)
+        if not perm.approved:
+            return self._permission_denied(perm)
+        self._webmcp_url = url
+        return await webmcp_inspect(url, wait_ms=wait_ms)
+
+    async def webmcp_list_tools(self, path: str = "", wait_ms: int = 750) -> ToolResult:
+        """List live tools on the current or requested alexmerced.app page."""
+        return await self.webmcp_open(path or self._alexmerced_webmcp_url(), wait_ms=wait_ms)
+
+    async def webmcp_call_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any] | None = None,
+        path: str = "",
+        wait_ms: int = 750,
+    ) -> ToolResult:
+        """Invoke one live alexmerced.app WebMCP tool with explicit mutation approval."""
+        try:
+            url = self._alexmerced_webmcp_url(path)
+        except ValueError as error:
+            return {"ok": False, "error": str(error), "blocked_by": "origin-policy"}
+        read_prefixes = (
+            "list_",
+            "get_",
+            "search_",
+            "read_",
+            "describe_",
+            "plan_",
+            "explain_",
+            "test_",
+            "evaluate",
+            "current",
+            "summary",
+            "due_",
+            "infer_",
+            "compute_",
+        )
+        operation = name.split("_", 1)[-1]
+        tier = (
+            RiskTier.AUTO
+            if name.startswith(read_prefixes) or operation.startswith(read_prefixes)
+            else RiskTier.CONFIRM
+        )
+        self._log_tool("webmcp_call_tool", f"{name} on {url}", tier)
+        perm = self._check_permission(f"Call alexmerced.app WebMCP tool {name} on {url}", tier)
+        if not perm.approved:
+            return self._permission_denied(perm)
+        self._webmcp_url = url
+        return await webmcp_invoke(url, name, arguments or {}, wait_ms=wait_ms)
+
+
+__all__ = [
+    "WebToolsMixin",
+    "browser_screenshot",
+    "browser_snapshot",
+    "webmcp_inspect",
+    "webmcp_invoke",
+]

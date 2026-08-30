@@ -520,7 +520,7 @@ class GraphExecutor:
             outputs = {}
             node_usage_token = self._node_usage.set({})
             criteria_results: list[CriterionResult] = []
-            policy_token = set_graph_tool_policy(self._tool_policy(node, scope))
+            policy_token = set_graph_tool_policy(self._tool_policy(node, scope, full_id))
             try:
                 isolation = str((node.get("constraints") or {}).get("isolation", "shared"))
                 # Open the workspace relative to the *current* workspace, not
@@ -1299,7 +1299,9 @@ class GraphExecutor:
             if not _secret_value(str(secret)):
                 raise GraphRunError(f"required secret {secret!r} is unavailable", "RT012")
 
-    def _tool_policy(self, node: dict[str, Any], scope: dict[str, Any]) -> GraphToolPolicy:
+    def _tool_policy(
+        self, node: dict[str, Any], scope: dict[str, Any], full_id: str = ""
+    ) -> GraphToolPolicy:
         requirements = node.get("requirements") or {}
         allowed = {
             tool for item in requirements.get("tools") or [] for tool in tools_for_requirement(item)
@@ -1323,6 +1325,15 @@ class GraphExecutor:
             nonlocal node_tool_calls
             node_tool_calls += 1
             self._record["usage"]["tool_calls"] += 1
+            if full_id:
+                self._emit_node(
+                    "node.tool.requested",
+                    full_id,
+                    node,
+                    "running",
+                    tool=_tool,
+                    summary=f"Requested declared tool {_tool}.",
+                )
             if node_tool_limit and node_tool_calls > node_tool_limit:
                 return "RT030 node tool-call budget exceeded"
             return None

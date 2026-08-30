@@ -90,9 +90,13 @@ def parse_skill_file(path: Path) -> Skill | None:
     if isinstance(description, dict):
         description = str(description)
     version = str(frontmatter.get("version", "1.0"))
-    tools_required = frontmatter.get("tools_required", [])
+    tools_required = frontmatter.get("tools_required", frontmatter.get("tools-required", []))
+    if isinstance(tools_required, str):
+        tools_required = [item for item in tools_required.split() if item]
 
-    trigger_keywords: list[str] = frontmatter.get("trigger_keywords", [])
+    trigger_keywords: list[str] = frontmatter.get(
+        "trigger_keywords", frontmatter.get("trigger-keywords", [])
+    )
     activate_match = re.search(
         r"##\s+When to Activate\n+(.*?)(?=\n##|\Z)", body, re.DOTALL | re.IGNORECASE
     )

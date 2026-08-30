@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.0 (2026-08-30)
+
 - Completed local Web UI lifecycle controls for conversations, project folders, Open Agent
   Profiles, MagGraph memory nodes, project Skills, plugins, and MCP server registrations.
 - Repaired Graph Kanban preview/run/status/save contracts, added an explicit graph loader, and
@@ -9,6 +11,12 @@
 - Replaced raw non-repository Git stderr with a contextual notice and constrained provider, model,
   profile, permission, and theme settings to discovered or validated choices.
 - Added backend and frontend regression coverage and rebuilt the packaged Web UI assets.
+- Added prompt-driven OAP profile generation for direct sessions and governed subagent proposals,
+  including the universal `~/.agentprofiles` discovery root and portable/project/user scopes.
+- Added native, origin-confined alexmerced.app WebMCP discovery and invocation tools with a
+  persistent browser profile and bundled usage skill.
+- Added persistent graph drafting and execution telemetry, card capability editing, actionable
+  validation failures, provider onboarding, and bounded operation progress throughout the UI.
 
 ## 1.0.0 (2026-08-29)
 

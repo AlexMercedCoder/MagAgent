@@ -75,8 +75,11 @@ executor used by live runs.
 
 - `minimal`, `standard`, `advanced`, and `frontier` intelligence tiers map to the `cheap`, `coding`, `coding`, and `frontier` model roles. If `frontier` is not configured, MagAgent uses `review`.
 - A node receives only its declared logical tools. AGS tools map to MagAgent tools as documented by `magent system info`; undeclared tools fail with `RT012`.
+- Model-authored drafts receive the exact canonical logical-tool catalog. Strict preview rejects invented or unavailable names (for example, `net_fetch`) with a nearest canonical suggestion, and rejects web, shell, read, or write capabilities that omit their matching permission family. Invalid model drafts enter the bounded repair loop instead of appearing as runnable graphs.
+- External research normally declares both `web_search` and `web_fetch` with a `net:` permission. Producing project files adds `file_write` and `fs:write:**`; invoking build or test commands adds `shell_exec` and a `shell:exec:` permission.
+- Before model review, the deterministic draft infers obvious capability families from the goal. If the provider times out, MagAgent immediately returns that strictly validated draft rather than repeating a stalled request. If model repair is exhausted, the same draft is returned with a visible fallback explanation and the model's validation findings; generation only fails when both proposals are invalid.
 - Graph permissions are a ceiling beneath the user's MagAgent permission policy. They never grant additional access.
-- `graph_emit_output` is the reliable output contract. `path_hint` can discover a file after the node returns.
+- `graph_emit_output` is the reliable output contract. It is an internal execution capability that remains available even when selective tool loading or user tool packs narrow ordinary tools; nodes must still declare their substantive file, shell, web, and other capabilities. `path_hint` can discover a file after the node returns.
 - `before_start`, `before_side_effects`, and `after_outputs` checkpoints are enforced by the harness. A required checkpoint that cannot be displayed fails with `RT015`.
 - `shared`, `worktree`, and copied `sandbox` workspaces are supported. Unsupported or unavailable isolation fails with `RT014`; MagAgent does not silently downgrade it. Container-isolated agent sessions are currently refused.
 - Resume reuses completed node outputs only when the canonical graph digest matches. Use `--force` only after reviewing graph changes.
@@ -89,6 +92,11 @@ queued, started, and completed events with stable state, dependency, profile, su
 error-code, changed-file, and blocker fields. The final line is a
 `magent.graph-result.v1` envelope, and the process exits nonzero when any job fails or is
 blocked.
+
+The Web UI run-health panel shows safe operational activity from the same lifecycle stream: the
+active card, attempt, most recently requested declared tool, completion state, and concise error.
+It intentionally does not expose private model reasoning, prompts, tool arguments, credentials, or
+raw intermediate output.
 
 `magent graph status RUN_ID --json` returns a reconnectable `magent.graph-status.v1`
 snapshot reconstructed from the durable graph task and its child job tasks. Terminal jobs

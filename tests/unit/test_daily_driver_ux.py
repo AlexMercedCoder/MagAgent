@@ -29,7 +29,9 @@ def test_saved_shell_approvals_are_stored_verbatim() -> None:
     pattern = executor._shell_trust_pattern(command, 2)
 
     assert pattern == command
-    assert executor._shell_trust_pattern("curl -X POST https://example.com | head", 2) != "curl * | *"
+    assert (
+        executor._shell_trust_pattern("curl -X POST https://example.com | head", 2) != "curl * | *"
+    )
 
     # The approval covers the exact command and nothing more.
     executor.session_shell_patterns.append(pattern)
@@ -55,11 +57,13 @@ def test_session_retry_and_undo_helpers() -> None:
 
 def test_tool_gateway_reports_configured_backends() -> None:
     config = SimpleNamespace(
-        get=lambda *keys, default=None: {"nous-portal": {}, "opencode-go": {}}
-        if keys == ("providers",)
-        else {"github": {}}
-        if keys == ("mcp", "servers")
-        else default,
+        get=lambda *keys, default=None: (
+            {"nous-portal": {}, "opencode-go": {}}
+            if keys == ("providers",)
+            else {"github": {}}
+            if keys == ("mcp", "servers")
+            else default
+        ),
         model_for_role=lambda role: "openai/gpt-image-1" if role == "image_maker" else "",
     )
 
@@ -67,4 +71,6 @@ def test_tool_gateway_reports_configured_backends() -> None:
 
     enabled = {item["id"] for item in status["backends"] if item["enabled"]}
     assert {"local", "web", "image", "nous-portal", "opencode-go", "mcp"} <= enabled
+    image = next(item for item in status["backends"] if item["id"] == "image")
+    assert image["configured"] == "openai/gpt-image-1"
     assert explain_backend("nous-portal")["subscription"] is True

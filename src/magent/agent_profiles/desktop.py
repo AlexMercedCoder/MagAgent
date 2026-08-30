@@ -50,9 +50,9 @@ def profile_contract(project: str | Path = ".", config: Any | None = None) -> di
         "contract": PROFILE_CONTRACT,
         "schema": json.loads(SCHEMA_PATH.read_text(encoding="utf-8")),
         "choices": {
-            "scopes": ["user", "project", "portable"],
+            "scopes": ["user", "universal", "project", "portable"],
             "permission_modes": ["paranoid", "balanced", "silent", "yolo"],
-            "network_modes": ["none", "read", "full"],
+            "network_modes": ["none", "ask", "read", "full"],
             "memory_modes": ["off", "read", "write", "read_write"],
             "writeback_modes": ["off", "propose", "auto"],
             "tools": tools,

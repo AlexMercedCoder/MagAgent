@@ -414,6 +414,53 @@ def test_simple_execution_emits_valid_record_and_resume_reuses_success(tmp_path:
     assert snapshot["nodes"][0]["summary"] == "done"
 
 
+def test_declared_tool_request_emits_safe_graph_activity_without_failing(
+    tmp_path: Path,
+) -> None:
+    document = graph()
+    document["nodes"]["work"]["requirements"] = {
+        "tools": ["web_fetch"],
+        "permissions": ["net:fetch:https://**"],
+    }
+    events: list[dict] = []
+
+    async def runner(_node, _prompt, _route, _task):
+        authorization = await authorize_graph_tool(
+            "web_fetch", {"url": "https://example.com/history"}, str(tmp_path)
+        )
+        assert authorization == {"ok": True}
+        emit_output("result", "done")
+        return ""
+
+    result = asyncio.run(executor(tmp_path, runner, event_sink=events.append).run(document))
+
+    assert result["ok"] is True
+    tool_event = next(event for event in events if event["type"] == "node.tool.requested")
+    assert tool_event["tool"] == "web_fetch"
+    assert tool_event["summary"] == "Requested declared tool web_fetch."
+    assert "url" not in tool_event
+
+
+def test_failed_status_exposes_missing_output_and_attempt_evidence(tmp_path: Path) -> None:
+    async def runner(_node, _prompt, _route, _task):
+        return "I finished the research but did not emit its declared output."
+
+    graph_executor = executor(tmp_path, runner)
+    result = asyncio.run(graph_executor.run(graph()))
+    snapshot = graph_status(graph_executor.store, result["run"]["run_id"])
+
+    assert result["ok"] is False
+    assert snapshot is not None
+    node = snapshot["nodes"][0]
+    assert node["state"] == "failed"
+    assert node["error_code"] == "GRAPH_NODE_FAILED"
+    assert node["error"] == "missing required outputs: result"
+    assert node["attempts"][-1]["error"] == "missing required outputs: result"
+    assert node["attempts"][-1]["criteria"] == [
+        {"id": "result", "passed": False, "evidence": "null"}
+    ]
+
+
 def test_selective_retry_invalidates_selected_job_and_dependents() -> None:
     document = graph(
         nodes={

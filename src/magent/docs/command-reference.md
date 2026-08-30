@@ -16,6 +16,7 @@ Generated from the active Typer command tree.
 - `magent agent explain`
 - `magent agent export`
 - `magent agent forget`
+- `magent agent generate-draft`
 - `magent agent history`
 - `magent agent import`
 - `magent agent inbox`
@@ -431,6 +432,7 @@ Generated from the active Typer command tree.
 - `magent profile apply`
 - `magent profile clear-default`
 - `magent profile default`
+- `magent profile generate`
 - `magent profile list`
 - `magent profile set-default`
 - `magent profile wizard`

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import shutil
 import time
 from pathlib import Path
@@ -9,6 +11,7 @@ import pytest
 import magent.web_graphs as web_graphs
 from magent.config import DEFAULT_GLOBAL_CONFIG, Config
 from magent.web_graphs import (
+    GraphDraftManager,
     GraphRunManager,
     blank_graph_document,
     confined_graph_path,
@@ -51,6 +54,21 @@ def test_graph_catalog_and_path_confinement(graph_project, tmp_path: Path) -> No
     assert confined_graph_target(project, "new.agraph.yaml") == project / "new.agraph.yaml"
     with pytest.raises(ValueError, match="must use"):
         confined_graph_target(project, "new.yaml")
+
+
+def test_graph_tool_event_becomes_safe_live_activity() -> None:
+    assert (
+        web_graphs._graph_event_activity(
+            {
+                "type": "node.tool.requested",
+                "title": "Research sushi history",
+                "state": "running",
+                "tool": "web_fetch",
+                "args": {"url": "https://secret.example/token"},
+            }
+        )
+        == "Research sushi history requested the declared tool web_fetch."
+    )
 
 
 def test_blank_graph_cards_validate_and_save(graph_project, monkeypatch) -> None:
@@ -98,8 +116,68 @@ def test_invalid_web_graph_returns_a_human_validation_error(graph_project, monke
     assert result["error"] != "Graph validation failed"
 
 
+def test_graph_preview_rejects_invented_tool_with_canonical_suggestion(
+    graph_project, monkeypatch
+) -> None:
+    project, _graph, _store = graph_project
+    monkeypatch.setattr(web_graphs, "load_config", lambda _username: Config(DEFAULT_GLOBAL_CONFIG))
+    document = blank_graph_document("Research sushi history")
+    node = web_task_node()
+    node["requirements"] = {
+        "tools": ["net_fetch"],
+        "permissions": ["net:fetch:https://**"],
+        "workspace": "read_only",
+    }
+    document["nodes"] = {"research": node}
+    document["entrypoints"] = ["research"]
+    document["outputs"] = {
+        "result": {
+            "type": "markdown",
+            "description": "Research result.",
+            "from": "nodes.research.outputs.summary",
+        }
+    }
+
+    result = preview_web_graph(document, project=project, username="alex")
+
+    assert result["ok"] is False
+    messages = [item["message"] for item in result["validation"]["findings"]]
+    assert any("net_fetch" in message and "web_fetch" in message for message in messages)
+
+
+def test_graph_preview_requires_network_permission_for_web_tools(
+    graph_project, monkeypatch
+) -> None:
+    project, _graph, _store = graph_project
+    monkeypatch.setattr(web_graphs, "load_config", lambda _username: Config(DEFAULT_GLOBAL_CONFIG))
+    document = blank_graph_document("Research sushi history")
+    node = web_task_node()
+    node["requirements"] = {
+        "tools": ["web_search", "web_fetch"],
+        "permissions": ["fs:read:**"],
+        "workspace": "read_only",
+    }
+    document["nodes"] = {"research": node}
+    document["entrypoints"] = ["research"]
+    document["outputs"] = {
+        "result": {
+            "type": "markdown",
+            "description": "Research result.",
+            "from": "nodes.research.outputs.summary",
+        }
+    }
+
+    result = preview_web_graph(document, project=project, username="alex")
+
+    assert result["ok"] is False
+    messages = [item["message"] for item in result["validation"]["findings"]]
+    assert any("net" in message and "web_fetch" in message for message in messages)
+
+
 @pytest.mark.asyncio
-async def test_ai_graph_generation_uses_review_only_model_contract(graph_project, monkeypatch) -> None:
+async def test_ai_graph_generation_uses_review_only_model_contract(
+    graph_project, monkeypatch
+) -> None:
     project, _graph, _store = graph_project
     expected = {"ok": True, "document": {"id": "generated"}}
     captured = {}
@@ -116,6 +194,156 @@ async def test_ai_graph_generation_uses_review_only_model_contract(graph_project
     assert result == expected
     assert captured["goal"] == "Build the onboarding flow"
     assert "dependency graph" in captured["instruction"]
+
+
+def test_background_draft_reports_safe_progress(graph_project, monkeypatch) -> None:
+    project, _graph, _store = graph_project
+
+    async def fake_generate(goal, **kwargs):
+        kwargs["progress"](
+            {
+                "stage": "requesting",
+                "message": "The planning model is drafting the graph.",
+                "attempt": 1,
+            }
+        )
+        kwargs["progress"](
+            {
+                "stage": "validated",
+                "message": "The generated graph passed strict AGS validation.",
+                "attempt": 1,
+            }
+        )
+        return {"ok": True, "document": {"id": "generated", "nodes": {}}}
+
+    monkeypatch.setattr(web_graphs, "generate_web_graph", fake_generate)
+    manager = GraphDraftManager(project, "alex")
+    job = manager.start("Build a small site")
+    deadline = time.monotonic() + 2
+    while job["status"] not in {"succeeded", "failed"} and time.monotonic() < deadline:
+        time.sleep(0.01)
+        job = manager.status(job["job_id"])
+
+    assert job["status"] == "succeeded"
+    assert [event["stage"] for event in job["activity"]] == ["requesting", "validated"]
+    assert job["result"]["document"]["id"] == "generated"
+    assert all("reasoning" not in event for event in job["activity"])
+
+
+def test_background_draft_can_cancel_an_active_provider_request(graph_project, monkeypatch) -> None:
+    project, _graph, _store = graph_project
+
+    async def fake_generate(_goal, **kwargs):
+        kwargs["progress"]({"stage": "requesting", "message": "Waiting for provider."})
+        await asyncio.sleep(30)
+        return {"ok": True, "document": {"id": "too-late"}}
+
+    monkeypatch.setattr(web_graphs, "generate_web_graph", fake_generate)
+    manager = GraphDraftManager(project, "alex")
+    job = manager.start("Build a small site")
+    deadline = time.monotonic() + 2
+    while job["status"] == "queued" and time.monotonic() < deadline:
+        time.sleep(0.01)
+        job = manager.status(job["job_id"])
+
+    cancelled = manager.cancel(job["job_id"])
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["result"]["error"] == "Graph generation was cancelled."
+
+
+@pytest.mark.asyncio
+async def test_model_graph_draft_timeout_returns_capability_aware_fallback(
+    monkeypatch, tmp_path
+) -> None:
+    import magent.agraph.authoring as authoring
+    import magent.cli.command_context as command_context
+
+    class StalledProvider:
+        display_name = "stalled-test-provider"
+
+        async def complete(self, *_args, **_kwargs):
+            await asyncio.sleep(30)
+            return "{}"
+
+    monkeypatch.setattr(
+        command_context, "build_provider_for_role", lambda *_args: StalledProvider()
+    )
+    monkeypatch.setattr(authoring, "MODEL_ATTEMPT_TIMEOUT_SECONDS", 0.01)
+    events = []
+    result = await authoring.model_graph_draft(
+        "research the history of sushi and then create an html/css/js website",
+        project=tmp_path,
+        config=Config(DEFAULT_GLOBAL_CONFIG),
+        progress=events.append,
+    )
+
+    assert result["ok"] is True
+    assert result["fallback"] is True
+    assert [event["stage"] for event in events].count("timeout") == 1
+    assert events[-1]["stage"] == "fallback"
+    nodes = result["document"]["nodes"]
+    assert nodes["inspect"]["requirements"]["tools"] == [
+        "file_read",
+        "file_search",
+        "web_search",
+        "web_fetch",
+    ]
+    assert "net:fetch:https://**" in nodes["inspect"]["requirements"]["permissions"]
+    assert "file_write" in nodes["implement"]["requirements"]["tools"]
+
+
+@pytest.mark.asyncio
+async def test_model_graph_draft_repairs_invented_tool_name(monkeypatch, tmp_path) -> None:
+    import magent.agraph.authoring as authoring
+    import magent.cli.command_context as command_context
+
+    valid = blank_graph_document("Research sushi history")
+    node = web_task_node()
+    node["requirements"] = {
+        "tools": ["web_search", "web_fetch"],
+        "permissions": ["net:fetch:https://**"],
+        "workspace": "read_only",
+    }
+    valid["nodes"] = {"research": node}
+    valid["entrypoints"] = ["research"]
+    valid["outputs"] = {
+        "result": {
+            "type": "markdown",
+            "description": "Research result.",
+            "from": "nodes.research.outputs.summary",
+        }
+    }
+    invalid = json.loads(json.dumps(valid).replace('"web_fetch"', '"net_fetch"'))
+
+    class RepairingProvider:
+        display_name = "repairing-test-provider"
+
+        def __init__(self):
+            self.calls: list[str] = []
+
+        async def complete(self, messages, **_kwargs):
+            self.calls.append(json.dumps(messages))
+            return json.dumps(invalid if len(self.calls) == 1 else valid)
+
+    provider = RepairingProvider()
+    monkeypatch.setattr(command_context, "build_provider_for_role", lambda *_args: provider)
+    events = []
+
+    result = await authoring.model_graph_draft(
+        "Research sushi history",
+        project=tmp_path,
+        config=Config(DEFAULT_GLOBAL_CONFIG),
+        progress=events.append,
+    )
+
+    assert result["ok"] is True
+    assert result["document"]["nodes"]["research"]["requirements"]["tools"] == [
+        "web_search",
+        "web_fetch",
+    ]
+    assert "allowed_logical_tools" in provider.calls[0]
+    assert "Did you mean 'web_fetch'" in provider.calls[1]
+    assert [event["stage"] for event in events].count("repairing") == 1
 
 
 def test_graph_preview_exposes_dependencies_and_profiles(graph_project, monkeypatch) -> None:
@@ -157,6 +385,16 @@ def test_background_run_moves_cards_to_done_with_summaries(graph_project, monkey
                 )
                 self.emit(
                     {
+                        "type": "node.tool.requested",
+                        "run_id": "run_1",
+                        "node_id": node_id,
+                        "title": title,
+                        "state": "running",
+                        "tool": "read_file",
+                    }
+                )
+                self.emit(
+                    {
                         "type": "node.completed",
                         "run_id": "run_1",
                         "node_id": node_id,
@@ -192,3 +430,5 @@ def test_background_run_moves_cards_to_done_with_summaries(graph_project, monkey
     assert job["state"] == "succeeded"
     assert all(node["state"] == "succeeded" for node in job["nodes"])
     assert all(node["summary"].endswith("completed.") for node in job["nodes"])
+    assert job["activity"] == "Graph execution finished with status succeeded."
+    assert any(event["type"] == "node.tool.requested" for event in job["events"])

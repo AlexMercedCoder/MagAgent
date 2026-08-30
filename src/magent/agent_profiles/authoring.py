@@ -130,12 +130,14 @@ def profile_path(name: str, *, scope: str, project: str | Path = ".") -> Path:
     normalized = normalize_profile_name(name)
     if scope == "user":
         root = magent_config.CONFIG_DIR / "agents"
+    elif scope == "universal":
+        root = Path("~/.agentprofiles").expanduser()
     elif scope == "project":
         root = Path(project).expanduser().resolve() / ".magent" / "agents"
     elif scope == "portable":
         root = Path(project).expanduser().resolve() / ".agents"
     else:
-        raise ValueError("Profile scope must be user, project, or portable.")
+        raise ValueError("Profile scope must be user, universal, project, or portable.")
     return root / f"{normalized}.md"
 
 

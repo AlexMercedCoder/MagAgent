@@ -26,6 +26,7 @@ from magent.ui_actions import (
 )
 from magent.web_conversations import ConversationStore, folder_catalog
 from magent.web_graphs import (
+    GraphDraftManager,
     GraphRunManager,
     blank_graph_document,
     generate_web_graph,
@@ -235,6 +236,7 @@ def serve_ui(
     conversation_locks: dict[str, threading.Lock] = {}
     runs = RunStore()
     graph_runs = GraphRunManager(store, username, root) if username else None
+    graph_drafts = GraphDraftManager(root, username) if username else None
     workspace = WorkspaceService(root)
     schedules = ScheduleStore(store, graph_runs, root) if graph_runs else None
     if schedules:
@@ -255,8 +257,11 @@ def serve_ui(
         "/api/profiles/import",
         "/api/profiles/delete",
         "/api/profiles/clone",
+        "/api/profiles/generate",
         "/api/graphs/run",
         "/api/graphs/draft",
+        "/api/graphs/draft/start",
+        "/api/graphs/draft/cancel",
         "/api/graphs/preview-draft",
         "/api/graphs/save",
         "/api/settings",
@@ -596,11 +601,29 @@ def serve_ui(
                     self._json({"ok": True, "conversations": conversations.list()})
                 elif parsed.path == "/api/graphs":
                     self._json(graph_catalog(store, root))
+                elif parsed.path == "/api/graphs/draft/status" and method == "GET":
+                    if graph_drafts is None:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        result = graph_drafts.status(query.get("job_id", [""])[0])
+                        self._json(result, status=200 if result.get("ok") else 404)
                 elif parsed.path == "/api/graphs/preview":
                     if graph_runs is None:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)
                     else:
                         self._json(graph_runs.preview(query.get("path", [""])[0]))
+                elif parsed.path == "/api/graphs/draft/start":
+                    if graph_drafts is None:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        result = graph_drafts.start(str(self._body().get("goal", "")))
+                        self._json(result, status=202 if result.get("ok") else 400)
+                elif parsed.path == "/api/graphs/draft/cancel":
+                    if graph_drafts is None:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        result = graph_drafts.cancel(str(self._body().get("job_id", "")))
+                        self._json(result, status=200 if result.get("ok") else 404)
                 elif parsed.path == "/api/graphs/draft":
                     if not username:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)
@@ -847,12 +870,35 @@ def serve_ui(
                     body = self._body()
                     try:
                         self._json(
-                            configure(str(body.get("provider", "")), str(body.get("model", "")))
+                            configure(
+                                str(body.get("provider", "")),
+                                str(body.get("model", "")),
+                                credential=str(body.get("credential", "")),
+                                credential_storage=str(body.get("credential_storage", "keyring")),
+                            )
                         )
                     except ValueError as problem:
                         # A bad provider name is the user's mistake, not a
                         # server fault; raising here would surface as a 500.
                         self._json({"ok": False, "error": str(problem)}, status=400)
+                elif parsed.path == "/api/profiles/generate":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                        return
+                    from magent.agent_profiles.generation import generate_profile_proposal
+                    from magent.config import load_config
+
+                    body = self._body()
+                    result = asyncio.run(
+                        generate_profile_proposal(
+                            str(body.get("prompt") or ""),
+                            project=root,
+                            config=load_config(username),
+                            name=str(body.get("name") or ""),
+                            extends=str(body.get("extends") or ""),
+                        )
+                    )
+                    self._json(result, status=200 if result.get("ok") else 400)
                 elif parsed.path == "/api/profiles":
                     if not username:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)

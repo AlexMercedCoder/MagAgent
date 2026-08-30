@@ -94,10 +94,10 @@ class AgentProfileRegistry:
     def roots(self) -> list[_Root]:
         from magent.plugins import enabled_plugin_paths
 
-        user_paths = self._setting("user_paths", [str(CONFIG_DIR / "agents")])
+        user_paths = self._setting("user_paths", [str(CONFIG_DIR / "agents"), "~/.agentprofiles"])
         project_paths = self._setting("project_paths", [".magent/agents", ".agents"])
         roots = [
-            _Root(Path(str(path)).expanduser().resolve(), "user", "user", 500 - index)
+            _Root(Path(str(path)).expanduser().resolve(), "user", "user", 300 - index)
             for index, path in enumerate(
                 user_paths if isinstance(user_paths, list) else [user_paths]
             )
@@ -108,7 +108,7 @@ class AgentProfileRegistry:
             raw = Path(str(path)).expanduser()
             resolved = (raw if raw.is_absolute() else self.project / raw).resolve()
             label = "project" if str(path).rstrip("/") == ".magent/agents" else "portable"
-            roots.append(_Root(resolved, "project", label, 400 - index))
+            roots.append(_Root(resolved, "project", label, 500 - index))
         roots.extend(
             _Root(path / "agents", "project", f"plugin:{path.name}", 200)
             for path in enabled_plugin_paths()

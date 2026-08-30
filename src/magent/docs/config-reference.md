@@ -121,7 +121,7 @@ Stored at `~/.config/magent/config.toml`.
 
 - `agent_profiles.enabled` default: `True`
 - `agent_profiles.default_profile` default: `'magagent'`
-- `agent_profiles.user_paths` default: `['~/.config/magent/agents']`
+- `agent_profiles.user_paths` default: `['~/.config/magent/agents', '~/.agentprofiles']`
 - `agent_profiles.project_paths` default: `['.magent/agents', '.agents']`
 - `agent_profiles.writeback` default: `'propose'`
 - `agent_profiles.max_state_tokens` default: `1200`

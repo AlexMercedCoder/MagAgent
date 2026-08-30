@@ -15,7 +15,7 @@ Built-in packs:
 
 - `files`: file reads, writes, Word/PowerPoint artifact creation, SVG/diagram/local image creation, AI image generation, diffs, archives, image reads, and docs search
 - `shell`: shell, Python subprocess, package install, search, git, and system info
-- `web`: DDGS/DuckDuckGo web search with relevance filtering, fetch, deep research, HTTP requests, browser snapshots, and browser screenshots
+- `web`: DDGS/DuckDuckGo web search with relevance filtering, fetch, deep research, HTTP requests, browser snapshots/screenshots, and the origin-restricted alexmerced.app WebMCP gateway
 - `data`: JSON query helpers
 - `db`: named SQLite database helpers
 - `desktop`: notifications, clipboard, and open-file helpers

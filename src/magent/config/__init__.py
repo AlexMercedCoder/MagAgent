@@ -142,7 +142,7 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
     "agent_profiles": {
         "enabled": True,
         "default_profile": "magagent",
-        "user_paths": ["~/.config/magent/agents"],
+        "user_paths": ["~/.config/magent/agents", "~/.agentprofiles"],
         "project_paths": [".magent/agents", ".agents"],
         "writeback": "propose",
         "max_state_tokens": 1200,

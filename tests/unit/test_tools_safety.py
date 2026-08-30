@@ -26,11 +26,7 @@ def test_file_read_outside_cwd_requires_confirmation(tmp_path: Path) -> None:
 async def test_outline_file_reports_python_symbols(tmp_path: Path) -> None:
     source = tmp_path / "demo.py"
     source.write_text(
-        "class Demo:\n"
-        "    def method(self):\n"
-        "        pass\n\n"
-        "async def run():\n"
-        "    pass\n",
+        "class Demo:\n    def method(self):\n        pass\n\nasync def run():\n    pass\n",
         encoding="utf-8",
     )
     tools = ToolExecutor(str(tmp_path))
@@ -44,9 +40,18 @@ async def test_outline_file_reports_python_symbols(tmp_path: Path) -> None:
 
 def test_shell_control_read_only_chains_do_not_prompt_spam() -> None:
     assert classify_shell_command("cat file.html 2>&1 | wc -l") == RiskTier.SILENT
-    assert classify_shell_command("wc -l file.html 2>/dev/null; echo ---; tail -5 file.html") == RiskTier.SILENT
-    assert classify_shell_command("pip list 2>/dev/null | grep -iE 'docx|pptx|python'") == RiskTier.SILENT
-    assert classify_shell_command('cd /tmp && python3 -c "import docx; print(docx.__version__)"') == RiskTier.SILENT
+    assert (
+        classify_shell_command("wc -l file.html 2>/dev/null; echo ---; tail -5 file.html")
+        == RiskTier.SILENT
+    )
+    assert (
+        classify_shell_command("pip list 2>/dev/null | grep -iE 'docx|pptx|python'")
+        == RiskTier.SILENT
+    )
+    assert (
+        classify_shell_command('cd /tmp && python3 -c "import docx; print(docx.__version__)"')
+        == RiskTier.SILENT
+    )
     assert classify_shell_command("curl -s 'https://example.com' | head -500") == RiskTier.AUTO
     assert (
         classify_shell_command(
@@ -128,7 +133,9 @@ async def test_web_search_prefers_relevant_ddgs_results(monkeypatch, tmp_path: P
     monkeypatch.setitem(sys.modules, "ddgs", SimpleNamespace(DDGS=FakeDDGS))
     tools = ToolExecutor(str(tmp_path), permission_mode="silent")
 
-    result = await tools.web_search("Complete history of cheese from ancient origins", max_results=8)
+    result = await tools.web_search(
+        "Complete history of cheese from ancient origins", max_results=8
+    )
 
     assert result["ok"] is True
     assert result["source"] == "ddgs"
@@ -174,7 +181,9 @@ async def test_dispatch_reports_missing_required_arguments(tmp_path: Path) -> No
 async def test_write_file_accepts_common_content_aliases(tmp_path: Path) -> None:
     tools = ToolExecutor(str(tmp_path), permission_mode="yolo")
 
-    html = await tools.dispatch("write_file", {"path": "page.html", "html": "<!doctype html><h1>ok</h1>"})
+    html = await tools.dispatch(
+        "write_file", {"path": "page.html", "html": "<!doctype html><h1>ok</h1>"}
+    )
     file_content = await tools.dispatch(
         "write_file",
         {
@@ -222,7 +231,9 @@ async def test_document_tools_create_docx_and_pptx(tmp_path: Path) -> None:
     from docx import Document
     from pptx import Presentation
 
-    document_text = "\n".join(paragraph.text for paragraph in Document(tmp_path / "history_of_oranges.docx").paragraphs)
+    document_text = "\n".join(
+        paragraph.text for paragraph in Document(tmp_path / "history_of_oranges.docx").paragraphs
+    )
     presentation = Presentation(tmp_path / "history_of_oranges.pptx")
 
     assert "History of Oranges" in document_text
@@ -381,7 +392,9 @@ async def test_dispatch_strips_tool_activity_metadata(tmp_path: Path) -> None:
     )
 
     assert result["ok"] is True
-    assert (tmp_path / "notes" / "activity.txt").read_text(encoding="utf-8") == "metadata ignored by handler"
+    assert (tmp_path / "notes" / "activity.txt").read_text(
+        encoding="utf-8"
+    ) == "metadata ignored by handler"
 
 
 @pytest.mark.asyncio
@@ -568,6 +581,40 @@ async def test_browser_tools_delegate_through_web_capability(monkeypatch, tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_webmcp_tools_are_origin_locked_and_delegate(monkeypatch, tmp_path: Path) -> None:
+    inspected: list[tuple[str, int]] = []
+    invoked: list[tuple[str, str, dict[str, object], int]] = []
+
+    async def fake_inspect(url: str, wait_ms: int = 750):
+        inspected.append((url, wait_ms))
+        return {"ok": True, "url": url, "tools": [{"name": "quarry_list_tables"}]}
+
+    async def fake_invoke(url: str, name: str, arguments: dict, wait_ms: int = 750):
+        invoked.append((url, name, arguments, wait_ms))
+        return {"ok": True, "url": url, "tool": name, "result": {"content": []}}
+
+    monkeypatch.setattr(web_module, "webmcp_inspect", fake_inspect)
+    monkeypatch.setattr(web_module, "webmcp_invoke", fake_invoke)
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent")
+
+    opened = await tools.webmcp_open("/quarry", wait_ms=125)
+    called = await tools.webmcp_call_tool("quarry_list_tables", {"verbose": True}, wait_ms=250)
+    blocked = await tools.webmcp_open("https://example.com/steal")
+
+    assert opened["ok"] is True
+    assert inspected == [("https://alexmerced.app/quarry", 125)]
+    assert called["ok"] is True
+    assert invoked == [
+        ("https://alexmerced.app/quarry", "quarry_list_tables", {"verbose": True}, 250)
+    ]
+    assert blocked == {
+        "ok": False,
+        "error": "The built-in WebMCP bridge only opens https://alexmerced.app.",
+        "blocked_by": "origin-policy",
+    }
+
+
+@pytest.mark.asyncio
 async def test_archive_tools_roundtrip_zip(tmp_path: Path) -> None:
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "demo.txt").write_text("hello", encoding="utf-8")
@@ -658,8 +705,12 @@ async def test_run_shell_expands_bash_brace_directories(tmp_path: Path, monkeypa
 
 
 @pytest.mark.asyncio
-async def test_run_shell_uses_longer_default_timeout_for_js_installs(tmp_path: Path, monkeypatch) -> None:
-    tools = ToolExecutor(str(tmp_path), permission_mode="silent", trusted_shell_patterns=["npm install"])
+async def test_run_shell_uses_longer_default_timeout_for_js_installs(
+    tmp_path: Path, monkeypatch
+) -> None:
+    tools = ToolExecutor(
+        str(tmp_path), permission_mode="silent", trusted_shell_patterns=["npm install"]
+    )
     captured: dict[str, int] = {}
 
     class FakeProc:

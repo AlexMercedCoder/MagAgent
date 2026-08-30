@@ -78,7 +78,11 @@ Inside an ordinary interactive session, `@review task` activates that profile fo
 
 ## Discovery And Trust
 
-Profiles resolve in this order: user profiles in `~/.config/magent/agents/`, project profiles in `.magent/agents/`, portable profiles in `.agents/`, enabled plugin `agents/` directories, then managed built-ins. Higher entries win and collisions are reported. Duplicate names in one root are errors. Trust is derived from the root, so a project file cannot become managed by declaring `metadata.trust`.
+Profiles resolve by precedence: project profiles in `.magent/agents/`, portable project profiles in
+`.agents/`, native user profiles in `~/.config/magent/agents/`, universal user profiles in
+`~/.agentprofiles/`, enabled plugin `agents/` directories, then managed built-ins. Earlier entries
+win and collisions are reported. Duplicate names in one root are errors. Trust is derived from the
+root, so a project file cannot become managed by declaring `metadata.trust`.
 
 ## OAP Markdown Format
 

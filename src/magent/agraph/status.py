@@ -81,14 +81,32 @@ def graph_status(
                 ),
                 "error_code": str(
                     (task or {}).get("final_audit", {}).get("error_code")
+                    or record_item.get("x-magagent-error-code")
                     or record_item.get("error_code")
                     or ""
                 ),
                 "error": str(
                     (task or {}).get("final_audit", {}).get("error")
+                    or record_item.get("x-magagent-error")
                     or record_item.get("error")
                     or ""
                 ),
+                "attempts": [
+                    {
+                        "attempt": item.get("attempt"),
+                        "status": item.get("status"),
+                        "error": str(item.get("error") or ""),
+                        "criteria": [
+                            {
+                                "id": criterion.get("id"),
+                                "passed": criterion.get("passed"),
+                                "evidence": criterion.get("evidence"),
+                            }
+                            for criterion in (item.get("success") or {}).get("results") or []
+                        ],
+                    }
+                    for item in record_item.get("attempts") or []
+                ],
                 "files_changed": list(
                     (task or {}).get("files_changed")
                     or record_item.get("x-magagent-files-changed")

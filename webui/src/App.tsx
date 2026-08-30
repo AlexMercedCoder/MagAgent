@@ -360,8 +360,12 @@ export default function App() {
           <BotsView profiles={profiles} setError={setError} onStart={() => setView("chat")}
                     refresh={refreshConversations} setActiveId={setActiveId} />
         )}
-        {view === "graphs" && <GraphsView profiles={profiles} setError={setError} notify={notify} />}
-        {view === "profiles" && <ProfilesView profiles={profiles} refresh={load} setError={setError} notify={notify} />}
+        <div className={`persistent-view ${view === "graphs" ? "active" : ""}`} aria-hidden={view !== "graphs"}>
+          <GraphsView profiles={profiles} setError={setError} notify={notify} />
+        </div>
+        <div className={`persistent-view ${view === "profiles" ? "active" : ""}`} aria-hidden={view !== "profiles"}>
+          <ProfilesView profiles={profiles} refresh={load} setError={setError} notify={notify} />
+        </div>
         {view === "memory" && <MemoryView setError={setError} notify={notify} />}
         {view === "workspace" && <WorkspaceView selected={contextPaths} setSelected={setContextPaths} activeConversation={activeId} setError={setError} notify={notify} />}
         {view === "runs" && <RunCenterView setError={setError} notify={notify} />}

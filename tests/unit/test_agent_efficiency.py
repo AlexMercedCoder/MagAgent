@@ -36,6 +36,25 @@ def test_selective_tools_adds_web_and_database_tools(tmp_path):
     assert "db_query" in names
 
 
+def test_selective_tools_keeps_graph_output_emission_available(tmp_path):
+    executor = ToolExecutor(cwd=str(tmp_path), username="alice")
+    selected = executor.get_tool_definitions_for_message(
+        "Declared outputs: findings. Call graph_emit_output(name, value)."
+    )
+
+    assert "graph_emit_output" in {item["function"]["name"] for item in selected}
+    assert "graph_emit_output" in {
+        item["function"]["name"] for item in executor.get_tool_definitions()
+    }
+
+
+def test_coordination_pack_exposes_profile_and_session_tools(tmp_path):
+    executor = ToolExecutor(cwd=str(tmp_path), username="alice")
+    names = {item["function"]["name"] for item in executor.get_tool_definitions()}
+
+    assert {"create_agent_profile", "list_sessions", "send_session_message"} <= names
+
+
 def test_selective_tools_adds_document_artifact_tools(tmp_path):
     executor = ToolExecutor(cwd=str(tmp_path), username="alice")
     selected = executor.get_tool_definitions_for_message(

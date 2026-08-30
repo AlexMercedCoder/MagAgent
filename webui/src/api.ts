@@ -21,7 +21,7 @@ export function humanizeError(detail: string): string {
   }
   if (/\[\] should be non-empty|\{\} should be non-empty/i.test(text)) {
     const pointer = text.match(/\/(spec|metadata)\/[^:;]+/)?.[0]?.replaceAll("/", " › ").replace(/^ › /, "");
-    return `${pointer ? `${pointer}: ` : ""}An optional profile section was included without any choices. Select at least one item in that section, or leave the section unset so it inherits the workspace default.`;
+    return `${pointer ? `${pointer}: ` : ""}An optional section was included without any choices. Add at least one item to that section, or remove the empty section so the workspace default is inherited.`;
   }
   if (/graph validation failed/i.test(text) && !text.includes(":")) {
     return "The graph is not valid yet. Review the highlighted card fields, declared tools, permissions, dependencies, and outputs before saving.";

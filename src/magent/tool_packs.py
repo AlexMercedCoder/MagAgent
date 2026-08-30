@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+ALWAYS_AVAILABLE_TOOLS = {"graph_emit_output"}
+
 PACKS: dict[str, dict[str, Any]] = {
     "files": {
         "description": "Read, write, inspect, diff, archive, and image-file operations.",
@@ -30,7 +32,14 @@ PACKS: dict[str, dict[str, Any]] = {
     },
     "shell": {
         "description": "Shell, Python subprocess, package install, search, git, and system inspection.",
-        "tools": ["run_shell", "run_python", "install_package", "search_codebase", "git_op", "system_info"],
+        "tools": [
+            "run_shell",
+            "run_python",
+            "install_package",
+            "search_codebase",
+            "git_op",
+            "system_info",
+        ],
     },
     "web": {
         "description": "Web search, web fetch, deep research, raw HTTP requests, and Playwright browser helpers.",
@@ -41,6 +50,9 @@ PACKS: dict[str, dict[str, Any]] = {
             "http_request",
             "browser_snapshot",
             "browser_screenshot",
+            "webmcp_open",
+            "webmcp_list_tools",
+            "webmcp_call_tool",
         ],
     },
     "data": {
@@ -54,6 +66,10 @@ PACKS: dict[str, dict[str, Any]] = {
     "desktop": {
         "description": "Desktop notification, clipboard, and open-file helpers.",
         "tools": ["notify", "clipboard_read", "clipboard_write", "open_file"],
+    },
+    "coordination": {
+        "description": "Create agent profiles and coordinate with other local MagAgent sessions.",
+        "tools": ["create_agent_profile", "list_sessions", "send_session_message"],
     },
 }
 
@@ -106,15 +122,19 @@ def enabled_packs(store: Any | None) -> set[str]:
     return set(PACKS) - disabled
 
 
-def filter_tool_definitions(definitions: list[dict[str, Any]], store: Any | None) -> list[dict[str, Any]]:
+def filter_tool_definitions(
+    definitions: list[dict[str, Any]], store: Any | None
+) -> list[dict[str, Any]]:
     """Filter OpenAI tool definitions by enabled capability packs."""
-    enabled_tools: set[str] = set()
+    enabled_tools: set[str] = set(ALWAYS_AVAILABLE_TOOLS)
     for name in enabled_packs(store):
         enabled_tools.update(PACKS.get(name, {}).get("tools", []))
     return [item for item in definitions if item.get("function", {}).get("name") in enabled_tools]
 
 
-def filter_tool_definitions_for_user(definitions: list[dict[str, Any]], username: str) -> list[dict[str, Any]]:
+def filter_tool_definitions_for_user(
+    definitions: list[dict[str, Any]], username: str
+) -> list[dict[str, Any]]:
     """Best-effort filter for agent runtime tool definitions."""
     try:
         from magent.workbench import WorkbenchStore

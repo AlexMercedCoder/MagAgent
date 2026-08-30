@@ -31,6 +31,22 @@ from magent.tools.db import db_list_tables, db_query, db_schema, list_databases
 
 CONFIG_SCHEMA: list[dict[str, Any]] = [
     {
+        "path": "models.image_maker",
+        "label": "Image model",
+        "type": "string",
+        "scope": "global",
+        "category": "extensions",
+        "description": "Provider/model route used by image generation tools; clear it to disable the capability.",
+    },
+    {
+        "path": "tools.browser_enabled",
+        "label": "Browser automation",
+        "type": "boolean",
+        "scope": "global",
+        "category": "extensions",
+        "description": "Enable the locally installed browser automation backend.",
+    },
+    {
         "path": "defaults.provider",
         "label": "Default provider",
         "type": "string",
@@ -248,9 +264,7 @@ def agent_profiles(project: str = ".") -> dict[str, Any]:
     username = get_current_user()
     config = load_config(username) if username else None
     result = AgentProfileRegistry(project, config).list()
-    result["default_profile"] = (
-        config.default_agent_profile if config is not None else "magagent"
-    )
+    result["default_profile"] = config.default_agent_profile if config is not None else "magagent"
     return result
 
 

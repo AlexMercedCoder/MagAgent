@@ -32,7 +32,20 @@ type ProfileChoices = {
   network_modes: string[];
 };
 
-const emptyChoices: ProfileChoices = { tools: [], skills: [], mcp_servers: [], permission_modes: ["paranoid", "balanced", "silent", "yolo"], network_modes: ["none", "read", "full"] };
+type ProfileScope = "project" | "portable" | "universal" | "user";
+
+function profileOrigin(profile: Pick<Profile, "source" | "trust">): { key: string; label: string } {
+  const source = String(profile.source || "").toLowerCase();
+  const trust = String(profile.trust || "").toLowerCase();
+  if (source === "managed" || trust === "managed") return { key: "managed", label: "Managed" };
+  if (source.includes("/.agentprofiles/")) return { key: "universal", label: "Universal" };
+  if (source.includes("/.agents/")) return { key: "portable", label: "Portable" };
+  if (source.includes("/.magent/agents/")) return { key: "project", label: "Project" };
+  if (source.includes("/.config/magent/") || source === "user") return { key: "user", label: "User" };
+  return { key: trust || "project", label: trust || "Project" };
+}
+
+const emptyChoices: ProfileChoices = { tools: [], skills: [], mcp_servers: [], permission_modes: ["paranoid", "balanced", "silent", "yolo"], network_modes: ["none", "ask", "read", "full"] };
 
 /** Browse Open Agent Profiles and inspect the authority each one resolves to. */
 export function ProfilesView({
@@ -50,6 +63,12 @@ export function ProfilesView({
   const [detail, setDetail] = useState<Effective | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generationPrompt, setGenerationPrompt] = useState("");
+  const [generationName, setGenerationName] = useState("");
+  const [generationScope, setGenerationScope] = useState<ProfileScope>("project");
+  const [generationBusy, setGenerationBusy] = useState(false);
+  const [generationElapsed, setGenerationElapsed] = useState(0);
   const [providers, setProviders] = useState<ProviderChoice[]>([]);
   const [choices, setChoices] = useState<ProfileChoices>(emptyChoices);
   const [cloneName, setCloneName] = useState("");
@@ -64,8 +83,17 @@ export function ProfilesView({
     mcp_servers: [] as string[],
     permission_mode: "",
     network_mode: "",
+    scope: "project" as ProfileScope,
   });
   const importInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!generationBusy) { setGenerationElapsed(0); return; }
+    const started = Date.now();
+    const tick = () => setGenerationElapsed(Math.floor((Date.now() - started) / 1000));
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [generationBusy]);
 
   useEffect(() => {
     request<{ providers?: ProviderChoice[] }>("/api/onboarding/providers")
@@ -157,15 +185,54 @@ export function ProfilesView({
         mcp_servers: form.mcp_servers,
         permission_mode: form.permission_mode || undefined,
         network_mode: form.network_mode || undefined,
+        scope: form.scope,
       });
       setCreating(false);
-      setForm({ name: "", description: "", instructions: "", provider: "", model: "", tools: [], skills: [], mcp_servers: [], permission_mode: "", network_mode: "" });
+      setForm({ name: "", description: "", instructions: "", provider: "", model: "", tools: [], skills: [], mcp_servers: [], permission_mode: "", network_mode: "", scope: "project" });
       await refresh();
       notify(`Profile ${form.name} ${editing ? "updated" : "created"}.`);
       setSelected(form.name);
       setEditing(false);
     } catch (problem) {
       setError((problem as Error).message);
+    }
+  }
+
+  async function generateProfile(event: React.FormEvent) {
+    event.preventDefault();
+    if (!generationPrompt.trim()) return;
+    setGenerationBusy(true);
+    try {
+      const result = await post<{ document?: Record<string, any>; warnings?: string[] }>(
+        "/api/profiles/generate",
+        { prompt: generationPrompt.trim(), name: generationName.trim() },
+      );
+      const document = result.document || {};
+      const metadata = document.metadata || {};
+      const spec = document.spec || {};
+      const tools = spec.tools || {};
+      const references = (value: any[]) => (value || []).map((item) => typeof item === "string" ? item : item.name).filter(Boolean);
+      setForm({
+        name: String(metadata.name || generationName),
+        description: String(metadata.description || ""),
+        instructions: String(spec.role?.instructions || ""),
+        provider: String(spec.model?.provider || ""),
+        model: String(spec.model?.id || ""),
+        tools: (tools.allow || []).map(String),
+        skills: references(tools.skills || []),
+        mcp_servers: references(tools.mcp_servers || []),
+        permission_mode: String({ deny: "paranoid", ask: "balanced", allow: "silent" }[spec.permissions?.default as "deny"] || ""),
+        network_mode: String({ deny: "none", ask: "ask", allow: "full" }[spec.permissions?.network as "deny"] || ""),
+        scope: generationScope,
+      });
+      setEditing(false);
+      setGenerating(false);
+      setCreating(true);
+      notify("Generated a validated profile draft. Review it before creating the profile.");
+    } catch (problem) {
+      setError((problem as Error).message);
+    } finally {
+      setGenerationBusy(false);
     }
   }
 
@@ -192,6 +259,7 @@ export function ProfilesView({
         mcp_servers: references(tools.mcp_servers || []),
         permission_mode: String({ deny: "paranoid", ask: "balanced", allow: "silent" }[spec.permissions?.default as "deny"] || spec.permissions?.default || ""),
         network_mode: String({ deny: "none", allow: "read" }[spec.permissions?.network as "deny"] || spec.permissions?.network || ""),
+        scope: profileOrigin({ source: detail?.source, trust: detail?.trust }).key === "portable" ? "portable" : profileOrigin({ source: detail?.source, trust: detail?.trust }).key === "universal" ? "universal" : profileOrigin({ source: detail?.source, trust: detail?.trust }).key === "user" ? "user" : "project",
       });
       setEditing(true);
       setCreating(true);
@@ -251,7 +319,10 @@ export function ProfilesView({
                   onClick={() => selected && void exportProfile(selected)}>
             ↓ Export
           </button>
-          <button className="primary-button" type="button" onClick={() => { setEditing(false); setForm({ name: "", description: "", instructions: "", provider: "", model: "", tools: [], skills: [], mcp_servers: [], permission_mode: "", network_mode: "" }); setCreating(true); }}>
+          <button className="ghost-button" type="button" onClick={() => setGenerating(true)}>
+            ✦ Generate profile
+          </button>
+          <button className="primary-button" type="button" onClick={() => { setEditing(false); setForm({ name: "", description: "", instructions: "", provider: "", model: "", tools: [], skills: [], mcp_servers: [], permission_mode: "", network_mode: "", scope: "project" }); setCreating(true); }}>
             ＋ New profile
           </button>
         </div>
@@ -259,6 +330,7 @@ export function ProfilesView({
 
       <div className="profile-layout">
         <div className="profile-list">
+          <div className="profile-origin-legend"><b>Profile sources</b><span><i className="managed" /> Managed: built-in, read-only</span><span><i className="project" /> Project: this workspace's .magent directory</span><span><i className="portable" /> Portable: this project's .agents directory</span><span><i className="universal" /> Universal: shared from ~/.agentprofiles</span><span><i className="user" /> User: MagAgent user configuration</span></div>
           {profiles.map((profile) => (
             <button
               key={profile.name}
@@ -266,8 +338,7 @@ export function ProfilesView({
               className={`profile-row ${selected === profile.name ? "active" : ""}`}
               onClick={() => setSelected(profile.name)}
             >
-              <b>@{profile.name}</b>
-              <small>{profile.trust || profile.source || "project"}</small>
+              {(() => { const origin = profileOrigin(profile); return <span className="profile-row-heading"><b>@{profile.name}</b><small className={`profile-origin ${origin.key}`}>{origin.label}</small></span>; })()}
             </button>
           ))}
           {!profiles.length && <div className="empty-small"><b>No profiles</b></div>}
@@ -341,6 +412,14 @@ export function ProfilesView({
             <label htmlFor="profileInstructions">Role instructions</label>
             <textarea id="profileInstructions" rows={4} value={form.instructions}
                       onChange={(e) => setForm({ ...form, instructions: e.target.value })} />
+            <label htmlFor="profileScope">Save location</label>
+            <select id="profileScope" value={form.scope} disabled={editing} onChange={(event) => setForm({ ...form, scope: event.target.value as ProfileScope })}>
+              <option value="project">Project · .magent/agents</option>
+              <option value="portable">Portable with project · .agents</option>
+              <option value="universal">Universal across harnesses · ~/.agentprofiles</option>
+              <option value="user">This MagAgent user · config agents</option>
+            </select>
+            {editing && <p className="context-note">Editing preserves the existing profile location. Export or clone it to move it to another scope.</p>}
             <div className="form-grid">
               <div>
                 <label htmlFor="profileProvider">Provider</label>
@@ -366,6 +445,7 @@ export function ProfilesView({
           </form>
         </div>
       )}
+      {generating && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Generate profile" onClick={(event) => { if (event.target === event.currentTarget && !generationBusy) setGenerating(false); }}><form className="modal" onSubmit={generateProfile}><div className="dialog-head"><div><div className="eyebrow">OAP PROFILE AUTHOR</div><h2>Generate a specialist</h2></div><button className="icon-button" type="button" disabled={generationBusy} onClick={() => setGenerating(false)} aria-label="Close">×</button></div><p>Describe who the agent should be, when to use it, and any limits it needs. MagAgent will only reference locally available capabilities and will open the validated result for review.</p><label htmlFor="generationPrompt">What should this agent do?</label><textarea id="generationPrompt" required rows={7} value={generationPrompt} disabled={generationBusy} onChange={(event) => setGenerationPrompt(event.target.value)} placeholder="Create a cautious accessibility reviewer that inspects frontend changes, explains WCAG issues, and never edits files without asking…" /><label htmlFor="generationName">Preferred name <small>(optional)</small></label><input id="generationName" pattern="[a-z0-9][a-z0-9._-]*" value={generationName} disabled={generationBusy} onChange={(event) => setGenerationName(event.target.value)} placeholder="accessibility-reviewer" /><label htmlFor="generationScope">Where should it be saved after review?</label><select id="generationScope" value={generationScope} disabled={generationBusy} onChange={(event) => setGenerationScope(event.target.value as ProfileScope)}><option value="project">Project · .magent/agents</option><option value="portable">Portable with project · .agents</option><option value="universal">Universal across harnesses · ~/.agentprofiles</option><option value="user">This MagAgent user</option></select><p className="context-note">Generation creates a draft, not authority. You review the complete OAP profile and effective permissions before it is saved.</p>{generationBusy && <div className="operation-health" role="status" aria-live="polite"><span className="operation-spinner" aria-hidden="true"/><div><b>Authoring and validating the profile</b><p>The model is matching your prompt to locally available tools, skills, and policy.</p></div><span>{generationElapsed}s</span></div>}<button className="primary-button" type="submit" disabled={generationBusy}>{generationBusy ? "Generating validated draft…" : "Generate validated draft"}</button></form></div>}
       {cloneName && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Customize managed profile" onClick={(event) => { if (event.target === event.currentTarget) setCloneName(""); }}><form className="modal" onSubmit={cloneManaged}><div className="dialog-head"><div><div className="eyebrow">EDITABLE COPY</div><h2>Customize @{selected}</h2></div><button className="icon-button" type="button" onClick={() => setCloneName("")}>×</button></div><p>The managed original stays intact. This project copy starts with the same OAP policy and can be narrowed independently.</p><label>New profile name<input required pattern="[a-z0-9][a-z0-9._-]*" value={cloneName} onChange={(event) => setCloneName(event.target.value)} /></label><button className="primary-button" type="submit">Create editable copy</button></form></div>}
     </div>
   );

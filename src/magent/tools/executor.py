@@ -242,6 +242,66 @@ class ToolExecutor(
 
         return emit_output(name, value)
 
+    async def _create_agent_profile(
+        self,
+        prompt: str,
+        name: str = "",
+        extends: str = "",
+        scope: str = "project",
+        save: bool = False,
+    ) -> ToolResult:
+        """Generate a profile; autonomous sessions safely fall back to a proposal."""
+        from magent.agent_profiles.generation import (
+            accept_generated_profile,
+            generate_profile_proposal,
+            store_profile_proposal,
+        )
+        from magent.config import load_config
+
+        config = self.config or load_config(self.username)
+        proposal = await generate_profile_proposal(
+            prompt,
+            project=self.cwd,
+            config=config,
+            name=name,
+            extends=extends,
+            autonomous=not save,
+        )
+        if not proposal.get("ok"):
+            return proposal
+        pending = store_profile_proposal(
+            proposal,
+            project=self.cwd,
+            reason="autonomous-subagent" if not save else "session-request",
+        )
+        if not save:
+            return {
+                "ok": True,
+                "saved": False,
+                "requires_review": True,
+                "proposal_id": pending["proposal_id"],
+                "proposal_path": pending["path"],
+                "document": proposal["document"],
+            }
+        permission = self._check_permission(
+            f"Save generated OAP profile @{proposal['document']['metadata']['name']} to {scope}",
+            RiskTier.CONFIRM,
+        )
+        if not permission.approved:
+            return {
+                **self._permission_denied(permission),
+                "saved": False,
+                "proposal_id": pending["proposal_id"],
+                "proposal_path": pending["path"],
+                "message": "The validated profile remains available for review.",
+            }
+        result = accept_generated_profile(proposal, scope=scope, project=self.cwd, config=config)
+        return {
+            **result,
+            "proposal_id": pending["proposal_id"],
+            "generated": True,
+        }
+
     # ─────────────────────────────────────────────
     # TOOL DEFINITIONS (OpenAI function-calling format)
     # ─────────────────────────────────────────────
@@ -257,7 +317,8 @@ class ToolExecutor(
         if self.allowed_tools is None:
             return definitions
         return [
-            item for item in definitions
+            item
+            for item in definitions
             if item.get("function", {}).get("name") in self.allowed_tools
         ]
 
@@ -362,6 +423,13 @@ class ToolExecutor(
             "browser_screenshot": lambda: self.browser_screenshot(
                 a["url"], a["path"], a.get("wait_ms", 500)
             ),
+            "webmcp_open": lambda: self.webmcp_open(a.get("path", "/"), a.get("wait_ms", 750)),
+            "webmcp_list_tools": lambda: self.webmcp_list_tools(
+                a.get("path", ""), a.get("wait_ms", 750)
+            ),
+            "webmcp_call_tool": lambda: self.webmcp_call_tool(
+                a["name"], a.get("arguments"), a.get("path", ""), a.get("wait_ms", 750)
+            ),
             "json_query": lambda: self.json_query(a["path_or_json"], a["query"]),
             "system_info": lambda: self.system_info(),
             "notify": lambda: self.notify(a["title"], a["message"], a.get("urgency", "normal")),
@@ -380,6 +448,13 @@ class ToolExecutor(
             "db_list_databases": lambda: self.db_list_databases(),
             "git_op": lambda: self.git_op(a["subcommand"], *a.get("args", [])),
             "magent_docs_search": lambda: self.magent_docs_search(a["query"], a.get("limit", 5)),
+            "create_agent_profile": lambda: self._create_agent_profile(
+                a["prompt"],
+                a.get("name", ""),
+                a.get("extends", ""),
+                a.get("scope", "project"),
+                bool(a.get("save", False)),
+            ),
             "list_sessions": lambda: self.list_sessions(),
             "send_session_message": lambda: self.send_session_message(
                 a["target"], a["message"], a.get("task_id", "")

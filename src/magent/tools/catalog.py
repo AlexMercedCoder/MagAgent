@@ -247,6 +247,32 @@ def built_in_tool_definitions() -> list[dict[str, Any]]:
             },
         ),
         tool_def(
+            "webmcp_open",
+            "Open an alexmerced.app page in a persistent local browser and discover the WebMCP tools registered there.",
+            {
+                "path": ("string", "App path such as /quarry, /quire, or /laneway (default: /)"),
+                "wait_ms": ("integer", "Milliseconds to wait for tool registration (default: 750)"),
+            },
+        ),
+        tool_def(
+            "webmcp_list_tools",
+            "List live WebMCP tools on the current alexmerced.app page, optionally navigating to another app path first.",
+            {
+                "path": ("string", "Optional alexmerced.app path"),
+                "wait_ms": ("integer", "Milliseconds to wait for tool registration (default: 750)"),
+            },
+        ),
+        tool_def(
+            "webmcp_call_tool",
+            "Call a live WebMCP tool registered by the current alexmerced.app page. Mutating calls require permission.",
+            {
+                "name": ("string", "Exact discovered WebMCP tool name"),
+                "arguments": ("object", "Arguments matching the discovered input schema"),
+                "path": ("string", "Optional alexmerced.app path to open before calling"),
+                "wait_ms": ("integer", "Milliseconds to wait for tool registration (default: 750)"),
+            },
+        ),
+        tool_def(
             "json_query",
             "Run a JMESPath query over a JSON file or JSON string.",
             {
@@ -324,6 +350,17 @@ def built_in_tool_definitions() -> list[dict[str, Any]]:
             },
         ),
         tool_def(
+            "create_agent_profile",
+            "Generate a validated Open Agent Profile specialist. Autonomous calls create a reviewable proposal; save=true requests user approval before persistence.",
+            {
+                "prompt": ("string", "Describe the specialist and when it should be used"),
+                "name": ("string", "Optional lowercase profile name"),
+                "extends": ("string", "Optional existing base profile name"),
+                "scope": ("string", "project, portable, user, or universal (default project)"),
+                "save": ("boolean", "Optional; request approval to save instead of proposal-only"),
+            },
+        ),
+        tool_def(
             "list_sessions",
             "List other live local MagAgent sessions available to the current user.",
             {},
@@ -360,18 +397,29 @@ def select_tool_definitions_for_message(
         "git_op",
         "system_info",
         "magent_docs_search",
+        "create_agent_profile",
         "list_sessions",
         "send_session_message",
     }
+    # Graph execution prompts explicitly require this tool. Selective tool
+    # pruning previously removed it even though the prompt told the model to
+    # call it, guaranteeing a missing-output failure for providers that obey
+    # the advertised tool list.
+    if "graph_emit_output" in text or "declared outputs" in text:
+        selected.add("graph_emit_output")
     if any(word in text for word in ("delete", "remove", "clean up", "rename")):
         selected.add("delete_file")
-    if any(word in text for word in ("web", "url", "http", "api", "docs", "latest", "search online")):
+    if any(
+        word in text for word in ("web", "url", "http", "api", "docs", "latest", "search online")
+    ):
         selected.update({"web_search", "web_fetch", "http_request"})
     if any(word in text for word in ("research", "compare", "survey", "investigate", "market")):
         selected.update({"web_search", "web_fetch", "deep_research", "http_request"})
     if any(word in text for word in ("browser", "screenshot", "page", "playwright")):
         selected.update({"browser_snapshot", "browser_screenshot"})
-    if any(word in text for word in ("json", "csv", "sqlite", "database", "sql", "dataframe", "query")):
+    if any(
+        word in text for word in ("json", "csv", "sqlite", "database", "sql", "dataframe", "query")
+    ):
         selected.update(
             {
                 "json_query",
@@ -424,6 +472,8 @@ def select_tool_definitions_for_message(
         )
     ):
         selected.update({"create_docx", "create_pptx"})
-    if len(text.split()) > 120 or any(word in text for word in ("everything", "full access", "all tools")):
+    if len(text.split()) > 120 or any(
+        word in text for word in ("everything", "full access", "all tools")
+    ):
         selected.update(by_name)
     return [by_name[name] for name in by_name if name in selected]
