@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Completed local Web UI lifecycle controls for conversations, project folders, Open Agent
+  Profiles, MagGraph memory nodes, project Skills, plugins, and MCP server registrations.
+- Repaired Graph Kanban preview/run/status/save contracts, added an explicit graph loader, and
+  restored a responsive three-column board with actionable run feedback.
+- Replaced raw non-repository Git stderr with a contextual notice and constrained provider, model,
+  profile, permission, and theme settings to discovered or validated choices.
+- Added backend and frontend regression coverage and rebuilt the packaged Web UI assets.
+
 ## 1.0.0 (2026-08-29)
 
 - Closed the local Web UI's project-context gap with confined file/artifact discovery, bounded

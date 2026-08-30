@@ -1,13 +1,12 @@
-"""Read-only memory browsing for the local Web UI.
+"""Memory browsing and reviewed editing for the local Web UI.
 
 MagAgent's memory is a linked graph of notes the agent has written about the
 user and their projects, and it shaped every reply. The browser could only see
 the promotion inbox, so the memory that was already in force was invisible:
 there was no way to ask what the agent believed, or where a belief came from.
 
-Everything here reads. Promotion still goes through `/api/memory/promote`, and
-editing, merging, and deletion stay in the CLI, where the destructive commands
-already have their confirmations.
+Mutations are deliberately small and use the same MemoryManager operations as
+the CLI. The browser supplies the confirmation for destructive actions.
 """
 
 from __future__ import annotations
@@ -144,3 +143,50 @@ def node(username: str, node_id: str) -> dict[str, Any]:
         # something: they show what referred to this note.
         "backlinks": list(manager.backlinks(node_id)),
     }
+
+
+def create(username: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Create one explicit, user-authored memory node."""
+    if not username:
+        return {"ok": False, "error": "username unavailable"}
+    node_id = str(payload.get("id") or "").strip()
+    body = str(payload.get("body") or "").strip()
+    if not node_id or not body:
+        return {"ok": False, "error": "A node id and body are required."}
+    manager = _manager(username)
+    if manager.read_node(node_id):
+        return {"ok": False, "error": f"A memory node called {node_id} already exists."}
+    written = manager.write_memories(
+        [{"id": node_id, "type": str(payload.get("type") or "fact"), "body": body,
+          "links": list(payload.get("links") or [])}]
+    )
+    if not written:
+        return {"ok": False, "error": "The memory store is unavailable or rejected the node."}
+    return node(username, node_id)
+
+
+def update(username: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Update the body and links of one memory node."""
+    if not username:
+        return {"ok": False, "error": "username unavailable"}
+    node_id = str(payload.get("id") or "").strip()
+    manager = _manager(username)
+    result = manager.update_node(
+        node_id,
+        body=str(payload.get("body") or ""),
+        links=list(payload.get("links") or []),
+    )
+    if result.get("ok"):
+        return node(username, node_id)
+    return result
+
+
+def delete(username: str, node_id: str) -> dict[str, Any]:
+    """Delete one memory node after confirmation in the browser."""
+    if not username:
+        return {"ok": False, "error": "username unavailable"}
+    node_id = (node_id or "").strip()
+    if not node_id:
+        return {"ok": False, "error": "A node id is required."}
+    removed = _manager(username).delete_node(node_id)
+    return {"ok": removed, "id": node_id, **({} if removed else {"error": f"No memory node called {node_id}."})}

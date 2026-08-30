@@ -199,6 +199,16 @@ class WorkspaceService:
 
     def git(self) -> dict[str, Any]:
         status = self._git(["status", "--short", "--branch"], check=False)
+        if not status["ok"] and "not a git repository" in str(status.get("error", "")).lower():
+            return {
+                "ok": True,
+                "is_repository": False,
+                "status": [],
+                "branches": [],
+                "worktrees": [],
+                "notice": "This project folder is not a Git repository. Git actions are unavailable until you initialize one.",
+                "error": "",
+            }
         worktrees = self._git(["worktree", "list", "--porcelain"], check=False)
         branches = self._git(["branch", "--format=%(refname:short)"], check=False)
         parsed_worktrees = self._parse_worktrees(worktrees.get("stdout", ""))
@@ -206,6 +216,7 @@ class WorkspaceService:
             item["current"] = str(Path(item.get("worktree", "")).resolve() == self.root).lower()
         return {
             "ok": status["ok"],
+            "is_repository": True,
             "status": status.get("stdout", "").splitlines(),
             "branches": branches.get("stdout", "").splitlines(),
             "worktrees": parsed_worktrees,
@@ -372,6 +383,9 @@ def extension_inventory(username: str | None, project: str | Path) -> dict[str, 
                     "enabled": bool(value.get("enabled", True))
                     if isinstance(value, dict)
                     else True,
+                    "command": str(value.get("command") or "") if isinstance(value, dict) else "",
+                    "args": list(value.get("args") or []) if isinstance(value, dict) else [],
+                    "url": str(value.get("url") or "") if isinstance(value, dict) else "",
                 }
             )
         capabilities = gateway_status(config).get("backends", [])
@@ -388,7 +402,22 @@ def extension_inventory(username: str | None, project: str | Path) -> dict[str, 
     return {
         "ok": True,
         "plugins": plugins,
-        "skills": registry.list_all(),
+        "skills": [
+            {
+                **item,
+                "editable": str(item.get("path") or "").startswith(
+                    str((Path(project).resolve() / ".magent" / "skills").resolve())
+                ),
+                "body": (
+                    Path(str(item.get("path"))).read_text(encoding="utf-8")[:20000]
+                    if str(item.get("path") or "").startswith(
+                        str((Path(project).resolve() / ".magent" / "skills").resolve())
+                    )
+                    else ""
+                ),
+            }
+            for item in registry.list_all()
+        ],
         "mcp_servers": mcp,
         "capabilities": capabilities,
     }

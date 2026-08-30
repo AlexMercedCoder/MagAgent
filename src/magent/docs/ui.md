@@ -41,6 +41,14 @@ reports names and enabled state only—commands, environment variables, credenti
 not returned. Playwright browser support is shown as an optional local backend rather than an
 embedded unrestricted browser.
 
+The inventory is actionable without becoming a source-code editor. A reviewed local plugin source
+can be installed or removed, and installed plugins can be enabled or disabled through the existing
+integrity checks. Project Skills can be created, edited, and deleted beneath
+`.magent/skills/<name>/SKILL.md`. MCP registrations can be created, edited, enabled, and removed;
+the form accepts a command plus argument list or a remote URL, but never accepts or returns MCP
+environment secrets. Plugin package source is deliberately not edited in the browser—replace the
+reviewed package instead, so its manifest and integrity evidence remain meaningful.
+
 The layout remains responsive for local access from another viewport, but the server is deliberately
 loopback-only. Remote/mobile synchronization is not implied; use MagAgent's authenticated gateway
 adapters for remote channels instead of exposing this local control plane.
@@ -162,6 +170,13 @@ The Chats view supports durable traditional, bot, and group conversations:
 - streamed response text with speaker attribution
 - persisted local histories that survive UI restarts
 - assistant replies rendered as markdown, with a copy button on fenced code blocks
+- deletion with transcript confirmation, and per-conversation project-folder reassignment
+
+New conversation setup happens before the first message. Choose the conversation type, an existing
+local project folder, up to five profile-backed participants, and (for groups) a coordinator. Each
+conversation pins that project and its participants; the project can later be changed from the
+folder control beside the conversation. MagAgent validates that the target exists and is a
+directory before using it for files, Git, tools, or a turn.
 
 Markdown rendering treats model output as untrusted, because it can quote a hostile file, a scraped page, or a tool result. Every text run is escaped before any markup is introduced, raw HTML is never parsed into elements, and only `http`, `https`, `mailto`, and same-document links become anchors; a `javascript:` or `data:` URL renders as plain text. Your own messages are shown literally, exactly as typed.
 
@@ -196,6 +211,10 @@ overwriting.
 Each profile can declare its own provider and model, or leave both blank to inherit the workspace
 route. A profile narrows authority; it never widens it.
 
+Project and user profiles can be edited or deleted from a styled dialog. Managed profiles remain
+read-only. Updates carry the profile digest that was inspected, so a second tab cannot silently
+overwrite a newer revision.
+
 ## Graph Kanban
 
 Cards are a Kanban: every node starts **Pending**, moves to **In progress** while MagAgent works
@@ -218,6 +237,18 @@ You can also author a workflow directly in the browser:
 - select dependencies from the other cards on the board
 - edit or delete cards before execution
 - save and strictly validate the native `.agraph` document before Run is enabled
+
+*Load graph* is explicit rather than hidden in the file selector. Saving keeps the board populated
+from the canonical saved document. Running records the returned job id and polls that exact job;
+preview and run responses are normalized from their versioned plan/run envelopes before cards are
+placed into Pending, In progress, or Complete.
+
+## Memory Editing
+
+The Memory view supports explicit user-authored node creation plus reviewed edits and deletion.
+Node ids, types, Markdown bodies, and links use the same `MemoryManager` operations as MagAgent's
+runtime. Destructive removal requires browser confirmation and the roster refreshes after every
+mutation.
 
 AI-generated graphs are proposals only. They remain editable and never run automatically. Saves are confined to the selected project, and subsequent edits use the graph digest to detect conflicting disk changes.
 

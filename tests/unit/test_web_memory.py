@@ -44,6 +44,20 @@ class FakeManager:
     def backlinks(self, node_id: str) -> list[str]:
         return [other for other, node in self._nodes.items() if node_id in node.get("links", [])]
 
+    def write_memories(self, records: list[dict[str, Any]]) -> int:
+        for record in records:
+            self._nodes[record["id"]] = {**record, "path": f"{record['id']}.md"}
+        return len(records)
+
+    def update_node(self, node_id: str, *, body: str, links: list[str]) -> dict[str, Any]:
+        if node_id not in self._nodes:
+            return {"ok": False, "error": "missing"}
+        self._nodes[node_id].update(body=body, links=links)
+        return {"ok": True}
+
+    def delete_node(self, node_id: str) -> bool:
+        return self._nodes.pop(node_id, None) is not None
+
 
 def _node(node_id: str, body: str = "a note", links: list[str] | None = None) -> dict[str, Any]:
     return {
@@ -207,3 +221,21 @@ def test_a_short_note_is_not_marked_truncated(graph: FakeManager) -> None:
 
 def test_node_needs_a_username(graph: FakeManager) -> None:
     assert web_memory.node("", "alpha")["ok"] is False
+
+
+def test_memory_nodes_can_be_created_updated_and_deleted(graph: FakeManager) -> None:
+    created = web_memory.create(
+        "alex", {"id": "gamma", "type": "preference", "body": "Use tabs", "links": ["alpha"]}
+    )
+    assert created["body"] == "Use tabs"
+
+    updated = web_memory.update("alex", {"id": "gamma", "body": "Use spaces", "links": []})
+    assert updated["body"] == "Use spaces"
+
+    assert web_memory.delete("alex", "gamma")["ok"] is True
+    assert web_memory.node("alex", "gamma")["ok"] is False
+
+
+def test_memory_create_rejects_duplicates_and_incomplete_input(graph: FakeManager) -> None:
+    assert web_memory.create("alex", {"id": "alpha", "body": "duplicate"})["ok"] is False
+    assert web_memory.create("alex", {"id": "new", "body": ""})["ok"] is False

@@ -248,9 +248,11 @@ def serve_ui(
         "/api/release/check",
         "/api/conversations",
         "/api/conversations/update",
+        "/api/conversations/delete",
         "/api/conversations/message",
         "/api/profiles",
         "/api/profiles/import",
+        "/api/profiles/delete",
         "/api/graphs/run",
         "/api/graphs/draft",
         "/api/graphs/preview-draft",
@@ -264,6 +266,8 @@ def serve_ui(
         "/api/workspace/worktrees",
         "/api/workspace/terminal",
         "/api/extensions/plugins",
+        "/api/extensions/manage",
+        "/api/memory/nodes",
         "/api/tasks/action",
         "/api/schedules",
         "/api/schedules/action",
@@ -494,6 +498,20 @@ def serve_ui(
                         str(body.get("name", "")), bool(body.get("enabled"))
                     )
                     self._json(result, status=200 if result.get("ok") else 400)
+                elif parsed.path == "/api/extensions/manage":
+                    from magent.web_extensions import manage_mcp, manage_plugin, manage_skill
+
+                    body = self._body()
+                    kind = str(body.get("kind") or "")
+                    if kind == "plugin":
+                        result = manage_plugin(body)
+                    elif kind == "skill":
+                        result = manage_skill(root, body)
+                    elif kind == "mcp":
+                        result = manage_mcp(body)
+                    else:
+                        result = {"ok": False, "error": "Unknown extension type."}
+                    self._json(result, status=200 if result.get("ok") else 400)
                 elif parsed.path == "/api/tasks":
                     if not username:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)
@@ -652,22 +670,45 @@ def serve_ui(
                         self._json(result, status=202)
                 elif parsed.path == "/api/conversations" and method == "POST":
                     body = self._body()
+                    selected_root = Path(str(body.get("project") or root)).expanduser().resolve()
+                    if not selected_root.is_dir():
+                        self._json({"ok": False, "error": "Choose an existing project folder."}, status=400)
+                        return
                     record = conversations.create(
                         title=str(body.get("title", "New conversation")),
                         kind=str(body.get("kind", "chat")),
-                        project=str(root),
+                        project=str(selected_root),
                         profiles=list(body.get("profiles") or []),
                         coordinator=str(body.get("coordinator", "")),
                     )
                     self._json({"ok": True, "conversation": record}, status=201)
                 elif parsed.path == "/api/conversations/update":
                     body = self._body()
+                    updates: dict[str, Any] = {
+                        "title": body.get("title"),
+                        "archived": bool(body.get("archived", False)),
+                    }
+                    if "project" in body:
+                        selected_root = Path(str(body.get("project") or "")).expanduser().resolve()
+                        if not selected_root.is_dir():
+                            self._json({"ok": False, "error": "Choose an existing project folder."}, status=400)
+                            return
+                        updates["project"] = str(selected_root)
                     record = conversations.update(
                         str(body.get("conversation_id", "")),
-                        title=body.get("title"),
-                        archived=bool(body.get("archived", False)),
+                        **updates,
                     )
                     self._json({"ok": True, "conversation": record})
+                elif parsed.path == "/api/conversations/delete":
+                    body = self._body()
+                    conversation_id = str(body.get("conversation_id", ""))
+                    removed = conversations.delete(conversation_id)
+                    conversation_locks.pop(conversation_id, None)
+                    self._json(
+                        {"ok": removed, "conversation_id": conversation_id,
+                         **({} if removed else {"error": "conversation not found"})},
+                        status=200 if removed else 404,
+                    )
                 elif parsed.path == "/api/conversations/message":
                     if not username:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)
@@ -695,7 +736,12 @@ def serve_ui(
                             status=409,
                         )
                         return
-                    context_prompt, context_refs = workspace.context_prompt(
+                    conversation_root = Path(str(conversation.get("project") or root)).resolve()
+                    if not conversation_root.is_dir():
+                        self._json({"ok": False, "error": "This conversation's project folder no longer exists. Edit the conversation and choose an existing folder."}, status=400)
+                        return
+                    conversation_workspace = WorkspaceService(conversation_root)
+                    context_prompt, context_refs = conversation_workspace.context_prompt(
                         body.get("context") or []
                     )
                     conversations.append_message(
@@ -718,7 +764,7 @@ def serve_ui(
                             conversation,
                             content + context_prompt,
                             username=username,
-                            root=root,
+                            root=conversation_root,
                             release=turn_lock.release,
                             context_refs=context_refs,
                         ),
@@ -793,8 +839,14 @@ def serve_ui(
                         scope=str(body.get("scope", "project")),
                         project=root,
                         config=load_config(username),
+                        expected_digest=str(body.get("expected_digest", "")),
                     )
-                    self._json(result, status=201 if result.get("ok") else 400)
+                    self._json(
+                        result,
+                        status=(200 if result.get("operation") == "update" else 201)
+                        if result.get("ok")
+                        else (409 if result.get("conflict") else 400),
+                    )
                 elif parsed.path == "/api/profiles/import":
                     if not username:
                         self._json({"ok": False, "error": "username unavailable"}, status=400)
@@ -811,6 +863,20 @@ def serve_ui(
                             config=load_config(username),
                         )
                         self._json(result, status=200 if result.get("ok") else 400)
+                elif parsed.path == "/api/profiles/delete":
+                    if not username:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        from magent.agent_profiles.desktop import delete_profile
+                        from magent.config import load_config
+
+                        body = self._body()
+                        result = delete_profile(
+                            str(body.get("name", "")), project=root,
+                            config=load_config(username),
+                            expected_digest=str(body.get("expected_digest", "")),
+                        )
+                        self._json(result, status=200 if result.get("ok") else (409 if result.get("conflict") else 400))
                 elif parsed.path == "/api/settings":
                     from magent.desktop_api import CONFIG_SCHEMA, config_set
 
@@ -969,6 +1035,20 @@ def serve_ui(
                     from magent.web_memory import node as memory_node
 
                     self._json(memory_node(username or "", query.get("id", [""])[0]))
+                elif parsed.path == "/api/memory/nodes":
+                    from magent import web_memory
+
+                    body = self._body()
+                    action = str(body.get("action") or "create")
+                    if action == "create":
+                        result = web_memory.create(username or "", body)
+                    elif action == "update":
+                        result = web_memory.update(username or "", body)
+                    elif action == "delete":
+                        result = web_memory.delete(username or "", str(body.get("id") or ""))
+                    else:
+                        result = {"ok": False, "error": "Unknown memory action."}
+                    self._json(result, status=200 if result.get("ok") else 400)
                 elif parsed.path == "/api/memory/promote":
                     candidate_id = query.get("id", [""])[0]
                     if not username:

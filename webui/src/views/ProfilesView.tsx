@@ -14,8 +14,11 @@ type Effective = {
   profile_digest?: string;
   revision?: number;
   trust?: string;
+  source?: string;
   error?: string;
 };
+
+type ProviderChoice = { name?: string; id?: string; display_name?: string; default_model?: string };
 
 /** Browse Open Agent Profiles and inspect the authority each one resolves to. */
 export function ProfilesView({
@@ -32,6 +35,8 @@ export function ProfilesView({
   const [selected, setSelected] = useState<string>(profiles[0]?.name ?? "");
   const [detail, setDetail] = useState<Effective | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [providers, setProviders] = useState<ProviderChoice[]>([]);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -40,6 +45,12 @@ export function ProfilesView({
     model: "",
   });
   const importInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    request<{ providers?: ProviderChoice[] }>("/api/onboarding/providers")
+      .then((data) => setProviders(data.providers || []))
+      .catch(() => setProviders([]));
+  }, []);
 
   /** Download the selected identity as a portable OAP document. */
   async function exportProfile(name: string) {
@@ -107,18 +118,52 @@ export function ProfilesView({
         ...(form.provider || form.model
           ? { model: { provider: form.provider || undefined, model: form.model || undefined } }
           : {}),
+        ...(editing ? { expected_digest: detail?.profile_digest || detail?.digest || "" } : {}),
       });
       setCreating(false);
       setForm({ name: "", description: "", instructions: "", provider: "", model: "" });
       await refresh();
-      notify(`Profile ${form.name} created.`);
+      notify(`Profile ${form.name} ${editing ? "updated" : "created"}.`);
       setSelected(form.name);
+      setEditing(false);
     } catch (problem) {
       setError((problem as Error).message);
     }
   }
 
   const permissions = detail?.permissions;
+  const writable = Boolean(detail && detail.source !== "managed");
+
+  async function editProfile() {
+    if (!selected) return;
+    try {
+      const exported = await request<{ document?: Record<string, any> }>(`/api/profiles/export?name=${encodeURIComponent(selected)}`);
+      const document = exported.document || {};
+      const metadata = document.metadata || {};
+      const spec = document.spec || {};
+      setForm({
+        name: selected,
+        description: String(metadata.description || detail?.description || ""),
+        instructions: String(spec.role?.instructions || ""),
+        provider: String(spec.model?.provider || ""),
+        model: String(spec.model?.id || ""),
+      });
+      setEditing(true);
+      setCreating(true);
+    } catch (problem) { setError((problem as Error).message); }
+  }
+
+  async function deleteSelected() {
+    if (!selected || !detail) return;
+    if (!window.confirm(`Delete profile @${selected}? Existing conversations keep their transcript but can no longer run with it.`)) return;
+    try {
+      await post("/api/profiles/delete", { name: selected, expected_digest: detail.profile_digest || detail.digest || "" });
+      setSelected("");
+      setDetail(null);
+      await refresh();
+      notify(`Profile ${selected} deleted.`);
+    } catch (problem) { setError((problem as Error).message); }
+  }
 
   return (
     <div className="page">
@@ -205,6 +250,10 @@ export function ProfilesView({
               <p className="context-note">
                 A profile can narrow the configured tools and permissions, never widen them.
               </p>
+              {writable ? <div className="detail-actions">
+                <button className="ghost-button" type="button" onClick={() => void editProfile()}>Edit profile</button>
+                <button className="danger-button" type="button" onClick={() => void deleteSelected()}>Delete profile</button>
+              </div> : <p className="context-note">This managed profile is read-only. Create a project profile to customize or remove it.</p>}
             </>
           ) : (
             <div className="empty-panel"><h2>Select a profile</h2></div>
@@ -217,11 +266,11 @@ export function ProfilesView({
              onClick={(event) => { if (event.target === event.currentTarget) setCreating(false); }}>
           <form className="modal" onSubmit={create}>
             <div className="dialog-head">
-              <div><div className="eyebrow">NEW PROFILE</div><h2>Create a specialist</h2></div>
-              <button className="icon-button" type="button" onClick={() => setCreating(false)} aria-label="Close">×</button>
+              <div><div className="eyebrow">{editing ? "EDIT PROFILE" : "NEW PROFILE"}</div><h2>{editing ? `Edit @${selected}` : "Create a specialist"}</h2></div>
+              <button className="icon-button" type="button" onClick={() => { setCreating(false); setEditing(false); }} aria-label="Close">×</button>
             </div>
             <label htmlFor="profileName">Name</label>
-            <input id="profileName" required value={form.name}
+            <input id="profileName" required value={form.name} disabled={editing}
                    onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <label htmlFor="profileDescription">Description</label>
             <input id="profileDescription" value={form.description}
@@ -232,19 +281,22 @@ export function ProfilesView({
             <div className="form-grid">
               <div>
                 <label htmlFor="profileProvider">Provider</label>
-                <input id="profileProvider" placeholder="inherit" value={form.provider}
-                       onChange={(e) => setForm({ ...form, provider: e.target.value })} />
+                <select id="profileProvider" value={form.provider}
+                       onChange={(e) => { const provider = providers.find((item) => (item.name || item.id) === e.target.value); setForm({ ...form, provider: e.target.value, model: provider?.default_model || form.model }); }}>
+                  <option value="">Inherit workspace provider</option>{providers.map((item) => { const id = item.name || item.id || ""; return <option value={id} key={id}>{item.display_name || id}</option>; })}
+                </select>
               </div>
               <div>
                 <label htmlFor="profileModel">Model</label>
-                <input id="profileModel" placeholder="inherit" value={form.model}
+                <input id="profileModel" list="profileModels" placeholder="inherit" value={form.model}
                        onChange={(e) => setForm({ ...form, model: e.target.value })} />
+                <datalist id="profileModels">{providers.filter((item) => !form.provider || (item.name || item.id) === form.provider).map((item) => <option key={`${item.name}-model`} value={item.default_model || ""} />)}</datalist>
               </div>
             </div>
             <p className="context-note">
               Leave both blank to inherit the workspace route. A profile can narrow authority, never widen it.
             </p>
-            <button className="primary-button" type="submit">Create profile</button>
+            <button className="primary-button" type="submit">{editing ? "Save changes" : "Create profile"}</button>
           </form>
         </div>
       )}

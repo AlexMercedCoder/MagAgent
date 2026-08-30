@@ -73,14 +73,31 @@ class ConversationStore:
         )
 
     def update(self, conversation_id: str, **updates: Any) -> dict[str, Any]:
-        allowed = {"title", "archived"}
+        allowed = {"title", "archived", "project", "profiles", "coordinator", "kind"}
         safe = {key: value for key, value in updates.items() if key in allowed}
         if "title" in safe:
             safe["title"] = str(safe["title"]).strip()[:100] or "New conversation"
+        if "project" in safe:
+            safe["project"] = str(safe["project"]).strip()
+        if "profiles" in safe:
+            safe["profiles"] = list(
+                dict.fromkeys(str(item).strip() for item in (safe["profiles"] or []) if str(item).strip())
+            )
         record = self.store.update_item(self.collection, conversation_id, **safe)
         if record is None:
             raise KeyError("conversation not found")
         return record
+
+    def delete(self, conversation_id: str) -> bool:
+        """Permanently remove one conversation and its transcript."""
+
+        def change(
+            records: builtins.list[dict[str, Any]],
+        ) -> tuple[builtins.list[dict[str, Any]], bool]:
+            kept = [item for item in records if item.get("id") != conversation_id]
+            return kept, len(kept) != len(records)
+
+        return bool(self.store.mutate(self.collection, [], change))
 
     def append_message(
         self,

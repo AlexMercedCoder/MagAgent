@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { post } from "../api";
-import type { SettingField } from "../types";
+import { useEffect, useState } from "react";
+import { post, request } from "../api";
+import type { Profile, SettingField } from "../types";
 
 /**
  * Guided, non-secret configuration. The server rejects any path outside its
@@ -8,18 +8,27 @@ import type { SettingField } from "../types";
  */
 export function SettingsView({
   fields,
+  profiles,
   refresh,
   setError,
   notify,
 }: {
   fields: SettingField[];
+  profiles: Profile[];
   refresh: () => Promise<void>;
   setError: (message: string) => void;
   notify: (message: string) => void;
 }) {
   const [saving, setSaving] = useState("");
+  const [providers, setProviders] = useState<{ name: string; display_name?: string; default_model?: string }[]>([]);
 
-  async function save(field: SettingField, value: string | boolean) {
+  useEffect(() => {
+    request<{ providers?: { name: string; display_name?: string; default_model?: string }[] }>("/api/onboarding/providers")
+      .then((data) => setProviders(data.providers || []))
+      .catch(() => setProviders([]));
+  }, []);
+
+  async function save(field: SettingField, value: string | number | boolean) {
     setSaving(field.path);
     try {
       await post("/api/settings", { path: field.path, value });
@@ -49,7 +58,21 @@ export function SettingsView({
                 <b>{field.label}</b>
                 {field.description && <small>{field.description}</small>}
               </label>
-              {field.choices?.length ? (
+              {field.path === "defaults.provider" ? (
+                <select id={`setting-${field.path}`} defaultValue={String(field.value ?? "")} disabled={saving === field.path} onChange={(event) => void save(field, event.target.value)}>
+                  {field.value && !providers.some((item) => item.name === field.value) && <option value={String(field.value)}>{String(field.value)}</option>}
+                  <option value="">Choose a provider…</option>{providers.map((provider) => <option value={provider.name} key={provider.name}>{provider.display_name || provider.name}</option>)}
+                </select>
+              ) : field.path === "defaults.model" ? (
+                <select id={`setting-${field.path}`} defaultValue={String(field.value ?? "")} disabled={saving === field.path} onChange={(event) => void save(field, event.target.value)}>
+                  {field.value && !providers.some((item) => item.default_model === field.value) && <option value={String(field.value)}>{String(field.value)}</option>}
+                  <option value="">Use provider default</option>{Array.from(new Set(providers.map((item) => item.default_model).filter(Boolean))).map((model) => <option value={model} key={model}>{model}</option>)}
+                </select>
+              ) : field.path === "agent_profiles.default_profile" ? (
+                <select id={`setting-${field.path}`} defaultValue={String(field.value ?? "")} disabled={saving === field.path} onChange={(event) => void save(field, event.target.value)}>
+                  <option value="">No default profile</option>{profiles.map((profile) => <option value={profile.name} key={profile.name}>@{profile.name}</option>)}
+                </select>
+              ) : field.choices?.length ? (
                 <select
                   id={`setting-${field.path}`}
                   defaultValue={String(field.value ?? "")}
@@ -71,10 +94,13 @@ export function SettingsView({
               ) : (
                 <input
                   id={`setting-${field.path}`}
+                  type={field.type === "integer" ? "number" : "text"}
                   defaultValue={String(field.value ?? "")}
                   disabled={saving === field.path}
                   onBlur={(event) => {
-                    if (event.target.value !== String(field.value ?? "")) void save(field, event.target.value);
+                    if (event.target.value !== String(field.value ?? "")) {
+                      void save(field, field.type === "integer" ? Number(event.target.value) : event.target.value);
+                    }
                   }}
                 />
               )}

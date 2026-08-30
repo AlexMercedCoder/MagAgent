@@ -184,11 +184,18 @@ export default function App() {
   useEffect(() => registerShortcuts(shortcuts), [shortcuts]);
 
   const createConversation = useCallback(
-    async (kind: "chat" | "bot" | "group", chosen: string[] = []) => {
+    async (
+      kind: "chat" | "bot" | "group",
+      chosen: string[] = [],
+      project = boot?.project || ".",
+      coordinator = "",
+    ) => {
       try {
         const created = await post<{ conversation: Conversation }>("/api/conversations", {
           kind,
           profiles: chosen,
+          project,
+          coordinator,
           title: kind === "bot" && chosen[0] ? `Chat with ${chosen[0]}` : "New conversation",
         });
         await refreshConversations();
@@ -199,14 +206,28 @@ export default function App() {
         setError((problem as Error).message);
       }
     },
-    [refreshConversations],
+    [boot?.project, refreshConversations],
   );
 
-  useEffect(() => {
-    const open = () => void createConversation("chat");
-    window.addEventListener("magent:new-conversation", open);
-    return () => window.removeEventListener("magent:new-conversation", open);
-  }, [createConversation]);
+  const deleteConversation = useCallback(async (conversation: Conversation) => {
+    try {
+      await post("/api/conversations/delete", { conversation_id: conversation.id });
+      await refreshConversations();
+      notify("Conversation deleted.");
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+  }, [notify, refreshConversations]);
+
+  const changeConversationProject = useCallback(async (conversation: Conversation, project: string) => {
+    try {
+      await post("/api/conversations/update", { conversation_id: conversation.id, project });
+      await refreshConversations();
+      notify("Conversation project updated.");
+    } catch (problem) {
+      setError((problem as Error).message);
+    }
+  }, [notify, refreshConversations]);
 
   const active = conversations.find((item) => item.id === activeId) || null;
 
@@ -278,6 +299,8 @@ export default function App() {
         profiles={profiles}
         boot={boot}
         onCreate={createConversation}
+        onDelete={deleteConversation}
+        onProjectChange={changeConversationProject}
         open={sidebarOpen}
         setOpen={setSidebarOpen}
       />
@@ -326,11 +349,11 @@ export default function App() {
         )}
         {view === "graphs" && <GraphsView profiles={profiles} setError={setError} notify={notify} />}
         {view === "profiles" && <ProfilesView profiles={profiles} refresh={load} setError={setError} notify={notify} />}
-        {view === "memory" && <MemoryView setError={setError} />}
+        {view === "memory" && <MemoryView setError={setError} notify={notify} />}
         {view === "workspace" && <WorkspaceView selected={contextPaths} setSelected={setContextPaths} activeConversation={activeId} setError={setError} notify={notify} />}
         {view === "runs" && <RunCenterView setError={setError} notify={notify} />}
         {view === "extensions" && <ExtensionsView setError={setError} notify={notify} />}
-        {view === "settings" && <SettingsView fields={settings} refresh={load} setError={setError} notify={notify} />}
+        {view === "settings" && <SettingsView fields={settings} profiles={profiles} refresh={load} setError={setError} notify={notify} />}
         {view === "operations" && <OperationsView setError={setError} />}
       </main>
 

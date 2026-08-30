@@ -156,6 +156,21 @@ def set_plugin_enabled(name: str, enabled: bool) -> dict[str, Any]:
     return {"ok": True, "plugin": name, "name": name, "enabled": enabled}
 
 
+def uninstall_plugin(name: str) -> dict[str, Any]:
+    """Remove one installed plugin after the caller has confirmed deletion."""
+    target_result = _plugin_target(name)
+    if not target_result.get("ok"):
+        return target_result
+    target = target_result["path"]
+    if not target.is_dir():
+        return {"ok": False, "error": f"Plugin not installed: {name}"}
+    state = _state()
+    state.pop(target_result["name"], None)
+    _write_state(state)
+    shutil.rmtree(target)
+    return {"ok": True, "plugin": target_result["name"], "removed": True}
+
+
 def set_plugin_grant(
     name: str,
     *,

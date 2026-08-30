@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { request } from "../api";
+import { post, request } from "../api";
 
 /**
  * Memory browser.
@@ -49,13 +49,15 @@ function bytes(value: unknown): string {
   return `${(size / 1024 ** index).toFixed(index ? 1 : 0)} ${units[index]}`;
 }
 
-export function MemoryView({ setError }: { setError: (message: string) => void }) {
+export function MemoryView({ setError, notify }: { setError: (message: string) => void; notify: (message: string) => void }) {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<(typeof MODES)[number]>("keyword");
   const [results, setResults] = useState<Row[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<Node | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ id: "", type: "fact", body: "", links: "" });
 
   const load = useCallback(async () => {
     try {
@@ -100,6 +102,45 @@ export function MemoryView({ setError }: { setError: (message: string) => void }
     }
   }
 
+  function beginCreate() {
+    setForm({ id: "", type: "fact", body: "", links: "" });
+    setEditing(true);
+  }
+
+  function beginEdit() {
+    if (!selected) return;
+    setForm({ id: selected.id || "", type: selected.type || "fact", body: selected.body || "", links: (selected.links || []).join(", ") });
+    setEditing(true);
+  }
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault();
+    const exists = Boolean(selected && selected.id === form.id);
+    try {
+      const result = await post<Node>("/api/memory/nodes", {
+        action: exists ? "update" : "create",
+        id: form.id,
+        type: form.type,
+        body: form.body,
+        links: form.links.split(",").map((item) => item.trim()).filter(Boolean),
+      });
+      setEditing(false);
+      setSelected(result);
+      await load();
+      notify(`Memory ${exists ? "updated" : "created"}.`);
+    } catch (problem) { setError((problem as Error).message); }
+  }
+
+  async function remove() {
+    if (!selected?.id || !window.confirm(`Delete memory “${selected.id}”? This cannot be undone.`)) return;
+    try {
+      await post("/api/memory/nodes", { action: "delete", id: selected.id });
+      setSelected(null);
+      await load();
+      notify("Memory deleted.");
+    } catch (problem) { setError((problem as Error).message); }
+  }
+
   const rows = results ?? overview?.nodes ?? [];
   const stats = overview?.stats || {};
 
@@ -109,11 +150,9 @@ export function MemoryView({ setError }: { setError: (message: string) => void }
         <div>
           <span className="eyebrow">KNOWLEDGE</span>
           <h1>Memory</h1>
-          <p>What the agent has kept, and what links to it. Nothing here is editable.</p>
+          <p>Create, review, and maintain the durable facts that shape agent replies.</p>
         </div>
-        <button className="secondary-button" type="button" onClick={() => void load()}>
-          Refresh
-        </button>
+        <div className="header-actions"><button className="secondary-button" type="button" onClick={() => void load()}>Refresh</button><button className="primary-button" type="button" onClick={beginCreate}>＋ New memory</button></div>
       </div>
 
       {overview?.error && <div className="graph-error" role="alert">{overview.error}</div>}
@@ -216,6 +255,7 @@ export function MemoryView({ setError }: { setError: (message: string) => void }
                   <h3>{selected.id}</h3>
                   <p className="memory-path">{selected.path}</p>
                   <pre>{selected.body}</pre>
+                  <div className="detail-actions"><button className="ghost-button" type="button" onClick={beginEdit}>Edit</button><button className="danger-button" type="button" onClick={() => void remove()}>Delete</button></div>
                   {selected.truncated && (
                     <p className="memory-empty">
                       This note is longer than the browser shows. Read the file for the rest.
@@ -257,6 +297,7 @@ export function MemoryView({ setError }: { setError: (message: string) => void }
           </div>
         </>
       )}
+      {editing && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Memory editor" onClick={(event) => { if (event.target === event.currentTarget) setEditing(false); }}><form className="modal" onSubmit={save}><div className="dialog-head"><div><div className="eyebrow">DURABLE MEMORY</div><h2>{selected?.id === form.id && form.id ? "Edit memory" : "Create memory"}</h2></div><button className="icon-button" type="button" onClick={() => setEditing(false)}>×</button></div><div className="form-grid"><div><label htmlFor="memoryId">ID</label><input id="memoryId" required disabled={selected?.id === form.id && Boolean(form.id)} value={form.id} onChange={(event) => setForm({ ...form, id: event.target.value })} /></div><div><label htmlFor="memoryType">Type</label><select id="memoryType" value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option value="fact">Fact</option><option value="preference">Preference</option><option value="project">Project</option><option value="decision">Decision</option><option value="bookmark">Bookmark</option></select></div></div><label htmlFor="memoryBody">Body</label><textarea id="memoryBody" rows={9} required value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} /><label htmlFor="memoryLinks">Links <small>comma-separated memory IDs</small></label><input id="memoryLinks" value={form.links} onChange={(event) => setForm({ ...form, links: event.target.value })} /><button className="primary-button" type="submit">Save memory</button></form></div>}
     </div>
   );
 }

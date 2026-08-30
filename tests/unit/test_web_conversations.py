@@ -30,6 +30,9 @@ def test_conversation_crud_is_durable(conversations: ConversationStore) -> None:
     conversations.update(created["id"], title="Reviewed API", archived=True)
     assert conversations.list() == []
     assert conversations.list(include_archived=True)[0]["title"] == "Reviewed API"
+    assert conversations.delete(created["id"]) is True
+    assert conversations.delete(created["id"]) is False
+    assert conversations.list(include_archived=True) == []
 
 
 def test_bot_conversation_requires_one_profile(conversations: ConversationStore) -> None:

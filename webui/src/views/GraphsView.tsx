@@ -106,6 +106,19 @@ function cardsFrom(document: GraphDoc): GraphNode[] {
   }));
 }
 
+function cardsFromPlan(rows: Record<string, unknown>[]): GraphNode[] {
+  return rows.map((node) => ({
+    id: String(node.id ?? node.node_id ?? ""),
+    title: String(node.title ?? node.id ?? node.node_id ?? "Untitled card"),
+    type: String(node.type ?? "task"),
+    depends_on: (node.depends_on ?? node.dependencies ?? []) as string[],
+    profile: String(node.profile ?? node.agent_profile ?? ""),
+    state: String(node.state ?? "pending"),
+    summary: String(node.summary ?? node.error ?? ""),
+    files_changed: Array.isArray(node.files_changed) ? node.files_changed.length : Number(node.files_changed ?? 0),
+  }));
+}
+
 function Card({ node }: { node: GraphNode }) {
   const state = (node.state || "pending").toLowerCase();
   return (
@@ -174,11 +187,12 @@ export function GraphsView({
         return;
       }
       try {
-        const preview = await request<{ nodes?: GraphNode[] } & Record<string, unknown>>(
+        const preview = await request<{ plan?: Record<string, unknown> } & Record<string, unknown>>(
           `/api/graphs/preview?path=${encodeURIComponent(target)}`,
         );
-        setPlan(preview);
-        setNodes((preview.nodes as GraphNode[]) || []);
+        const resolved = (preview.plan ?? preview) as Record<string, unknown>;
+        setPlan(resolved);
+        setNodes(cardsFromPlan((resolved.nodes as Record<string, unknown>[]) || []));
         setStatus("Ready");
       } catch (problem) {
         setPlan(null);
@@ -264,11 +278,13 @@ export function GraphsView({
     if (!draft || !draftPath.trim()) return;
     setBusy("save");
     try {
-      await post("/api/graphs/save", { document: draft, path: draftPath.trim() });
+      const savedResult = await post<{ path?: string }>("/api/graphs/save", { document: draft, path: draftPath.trim() });
       const found = await refreshCatalog();
       setDraft(null);
-      const saved = found.find((item) => item.path.endsWith(draftPath.trim()));
-      setPath(saved?.path ?? "");
+      const saved = found.find((item) => item.path === savedResult.path || item.path.endsWith(draftPath.trim()));
+      const savedPath = saved?.path ?? savedResult.path ?? "";
+      setPath(savedPath);
+      if (savedPath) await loadSaved(savedPath);
       setStatus("Saved");
       notify("Graph saved.");
     } catch (problem) {
@@ -307,17 +323,21 @@ export function GraphsView({
     if (!path) return;
     setBusy("run");
     try {
-      await post("/api/graphs/run", { path });
+      const started = await post<{ job_id?: string }>("/api/graphs/run", { path });
+      if (!started.job_id) throw new Error("The graph runner did not return a job id.");
       setStatus("Running");
       notify("Run started.");
       if (poll.current) window.clearInterval(poll.current);
       poll.current = window.setInterval(async () => {
         try {
-          const state = await request<{ status?: string; nodes?: GraphNode[] }>("/api/graphs/status");
-          if (state.nodes?.length) setNodes(state.nodes);
-          if (state.status) setStatus(state.status);
+          const state = await request<{ state?: string; status?: string; nodes?: Record<string, unknown>[] }>(
+            `/api/graphs/status?job_id=${encodeURIComponent(started.job_id!)}`,
+          );
+          if (state.nodes?.length) setNodes(cardsFromPlan(state.nodes));
+          const runState = state.state || state.status || "";
+          if (runState) setStatus(runState);
           const finished = ["succeeded", "failed", "cancelled", "complete"].includes(
-            String(state.status || "").toLowerCase(),
+            String(runState).toLowerCase(),
           );
           if (finished && poll.current) {
             window.clearInterval(poll.current);
@@ -413,6 +433,9 @@ export function GraphsView({
             <option key={item.path} value={item.path}>{item.name || item.path}</option>
           ))}
         </select>
+        <button className="ghost-button" type="button" disabled={!path || Boolean(busy)} onClick={() => void loadSaved(path)}>
+          Load graph
+        </button>
       </section>
 
       {plan && !draft && (
