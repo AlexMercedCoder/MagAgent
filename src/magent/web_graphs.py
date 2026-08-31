@@ -618,15 +618,15 @@ class GraphRunManager:
         answered = waiter.resolved.wait(GRAPH_APPROVAL_TIMEOUT_SECONDS)
         with self._lock:
             current = self._approvals.get(job_id, {}).pop(request_id, None)
-            job = self._jobs.get(job_id)
-            if job is not None:
-                job["awaiting_approvals"] = [
+            current_job = self._jobs.get(job_id)
+            if current_job is not None:
+                current_job["awaiting_approvals"] = [
                     item.payload
                     for item in self._approvals.get(job_id, {}).values()
                     if not item.resolved.is_set()
                 ]
                 if not answered:
-                    job["events"].append(
+                    current_job["events"].append(
                         {
                             "type": "approval.resolved",
                             "request_id": request_id,
@@ -635,7 +635,7 @@ class GraphRunManager:
                             "at": time.time(),
                         }
                     )
-                    job["activity"] = "Permission request timed out and was safely denied."
+                    current_job["activity"] = "Permission request timed out and was safely denied."
         return current.decision if answered and current is not None else "deny"
 
     def status(self, job_id: str) -> dict[str, Any] | None:

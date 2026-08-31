@@ -531,14 +531,15 @@ def test_a_tool_approval_can_be_answered_from_the_browser(tmp_path: Path, monkey
         # The prompt must reach the browser, and the turn must wait for it.
         asking = json.loads(stream.fp.readline())
         assert asking["type"] == "approval.requested"
-        assert asking["description"] == "run `rm -rf build`"
+        request = asking["request"]
+        assert request["action"]["summary"] == "run `rm -rf build`"
         assert "allowed" not in decided
 
         answerer = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
         answerer.request(
             "POST",
             f"/api/runs/approve?token={token}",
-            body=json.dumps({"id": run_id, "request_id": asking["request_id"], "approved": True}),
+            body=json.dumps({"id": run_id, "request_id": request["id"], "approved": True}),
             headers=write_headers,
         )
         assert json.loads(answerer.getresponse().read())["ok"] is True
@@ -548,16 +549,16 @@ def test_a_tool_approval_can_be_answered_from_the_browser(tmp_path: Path, monkey
             time.sleep(0.05)
         assert decided["allowed"] is True
 
-        # Answering the same request twice is a race, not a fault.
+        # AAIS replays of the same decision are idempotent; a client retry is
+        # acknowledged without authorizing anything new.
         answerer.request(
             "POST",
             f"/api/runs/approve?token={token}",
-            body=json.dumps({"id": run_id, "request_id": asking["request_id"], "approved": True}),
+            body=json.dumps({"id": run_id, "request_id": request["id"], "approved": True}),
             headers=write_headers,
         )
         stale = json.loads(answerer.getresponse().read())
-        assert stale["ok"] is False
-        assert "no longer waiting" in stale["error"]
+        assert stale["ok"] is True
         talker.close()
     finally:
         server.shutdown()
