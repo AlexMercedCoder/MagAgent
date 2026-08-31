@@ -76,6 +76,10 @@ describe("GraphsView", () => {
     expect(screen.getByText("Events").parentElement).toHaveTextContent("Events1");
     expect(screen.getByText("job-7")).toBeInTheDocument();
     expect(screen.getByText("Most recent activity").parentElement).toHaveTextContent("web_fetch");
+    expect(screen.getByText("Run audit log · 1 event")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Run audit log · 1 event"));
+    expect(screen.getByText("node.started")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download JSON" })).toBeInTheDocument();
   });
 
   it("shows the runtime error and failed criterion instead of only the agent summary", async () => {

@@ -10,7 +10,14 @@ TIER_TO_MODEL_ROLE = {
 }
 
 TOOL_NAME_MAP = {
-    "file_read": ("read_file", "list_dir", "outline_file"),
+    "file_read": (
+        "read_file",
+        "read_file_range",
+        "list_dir",
+        "outline_file",
+        "diff_files",
+        "read_image",
+    ),
     "file_search": ("search_codebase",),
     "file_write": ("write_file", "edit_file", "apply_patch"),
     "shell_exec": ("run_shell",),

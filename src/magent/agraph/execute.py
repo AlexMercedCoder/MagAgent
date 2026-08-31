@@ -557,6 +557,16 @@ class GraphExecutor:
                             mode=str(success.get("mode", "all")),
                             count=int(success.get("count", 1) or 1),
                         )
+                        if _recover_verified_text_output(
+                            node, outputs, response_summary, criteria_results
+                        ):
+                            passed, criteria_results = await self._criteria(
+                                success.get("criteria") or [],
+                                outputs,
+                                scope,
+                                mode=str(success.get("mode", "all")),
+                                count=int(success.get("count", 1) or 1),
+                            )
                         required_outputs = {
                             name
                             for name, spec in (node.get("outputs") or {}).items()
@@ -1344,6 +1354,24 @@ class GraphExecutor:
                 return "RT030 node tool-call budget exceeded"
             return None
 
+        def observe_decision(_tool: str, allowed: bool, error: str) -> None:
+            if not full_id:
+                return
+            self._emit_node(
+                "node.tool.authorized" if allowed else "node.tool.denied",
+                full_id,
+                node,
+                "running",
+                tool=_tool,
+                summary=(
+                    f"Authorized declared tool {_tool}."
+                    if allowed
+                    else f"Denied tool {_tool}: {error}"
+                ),
+                error_code=_error_code(error),
+                error=error,
+            )
+
         return GraphToolPolicy(
             allowed_tools=allowed,
             permissions=tuple(str(item) for item in requirements.get("permissions") or []),
@@ -1354,6 +1382,7 @@ class GraphExecutor:
                 )
             ),
             observer=observe,
+            decision_observer=observe_decision,
         )
 
     async def _checkpoint(
@@ -1943,6 +1972,49 @@ def _response_summary(response: Any) -> str:
             if isinstance(value, str) and value.strip():
                 return value.strip()[:2000]
     return ""
+
+
+def _recover_verified_text_output(
+    node: dict[str, Any],
+    outputs: dict[str, Any],
+    response_summary: str,
+    criteria_results: list[CriterionResult],
+) -> bool:
+    """Promote final text only when independent criteria prove the work exists.
+
+    Models occasionally finish file-backed work and return a normal final message
+    without calling ``graph_emit_output`` for the node's single summary/report.
+    Treating that as a failed implementation is misleading, but accepting arbitrary
+    prose would weaken AGS output contracts. Recovery is therefore limited to one
+    missing textual output whose other required criteria have already passed.
+    """
+    if not response_summary:
+        return False
+    declared = node.get("outputs") or {}
+    missing = [
+        name
+        for name, spec in declared.items()
+        if spec.get("required", True)
+        and name not in outputs
+        and str(spec.get("type", "")).lower() in {"string", "markdown"}
+    ]
+    if len(missing) != 1:
+        return False
+    name = missing[0]
+    output_criteria = {
+        str(item.get("id", "criterion"))
+        for item in (node.get("success") or {}).get("criteria") or []
+        if item.get("kind") == "artifact_present" and str(item.get("output", "")) == name
+    }
+    independent = [
+        item
+        for item in criteria_results
+        if item.severity == "required" and item.id not in output_criteria
+    ]
+    if not independent or not all(item.passed for item in independent):
+        return False
+    outputs[name] = response_summary
+    return True
 
 
 def _error_code(error: str) -> str:

@@ -461,6 +461,78 @@ def test_failed_status_exposes_missing_output_and_attempt_evidence(tmp_path: Pat
     ]
 
 
+def test_verified_file_work_recovers_single_text_summary(tmp_path: Path) -> None:
+    document = graph()
+    document["nodes"]["work"]["outputs"] = {
+        "summary": {"type": "markdown", "description": "Implementation summary."}
+    }
+    document["nodes"]["work"]["success"]["criteria"] = [
+        {
+            "id": "page_exists",
+            "kind": "file_exists",
+            "description": "The completed page exists.",
+            "path": "index.html",
+            "min_bytes": 10,
+        },
+        {
+            "id": "summary_present",
+            "kind": "artifact_present",
+            "description": "A summary was emitted.",
+            "output": "summary",
+        },
+    ]
+    document["outputs"] = {
+        "summary": {
+            "type": "markdown",
+            "description": "Final summary.",
+            "from": "nodes.work.outputs.summary",
+        }
+    }
+
+    async def runner(_node, _prompt, _route, _task):
+        (tmp_path / "index.html").write_text("<h1>Completed page</h1>", encoding="utf-8")
+        return {"response": "Created and checked the completed page."}
+
+    result = asyncio.run(executor(tmp_path, runner).run(document))
+
+    assert result["ok"] is True
+    assert result["run"]["outputs"]["summary"] == "Created and checked the completed page."
+
+
+def test_file_read_logical_capability_allows_range_reads_and_audits_denials(
+    tmp_path: Path,
+) -> None:
+    document = graph()
+    document["nodes"]["work"]["requirements"] = {
+        "tools": ["file_read"],
+        "permissions": ["fs:read:**"],
+    }
+    events: list[dict] = []
+
+    async def runner(_node, _prompt, _route, _task):
+        allowed = await authorize_graph_tool(
+            "read_file_range", {"path": "README.md", "start_line": 1}, str(tmp_path)
+        )
+        denied = await authorize_graph_tool(
+            "write_file", {"path": "unexpected.txt", "content": "no"}, str(tmp_path)
+        )
+        assert allowed == {"ok": True}
+        assert "RT012" in denied["error"]
+        emit_output("result", "done")
+        return ""
+
+    result = asyncio.run(executor(tmp_path, runner, event_sink=events.append).run(document))
+
+    assert result["ok"] is True
+    assert any(
+        event["type"] == "node.tool.authorized" and event["tool"] == "read_file_range"
+        for event in events
+    )
+    denied = next(event for event in events if event["type"] == "node.tool.denied")
+    assert denied["tool"] == "write_file"
+    assert denied["error_code"] == "RT012"
+
+
 def test_selective_retry_invalidates_selected_job_and_dependents() -> None:
     document = graph(
         nodes={

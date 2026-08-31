@@ -103,11 +103,92 @@ def _prefer_platform_python_command(command: str, *, platform: str | None = None
     return re.sub(r"(^|[;&|\n]\s*)python(?=\s)", r"\1python3", rewritten)
 
 
+def _has_unquoted_file_redirection(command: str) -> bool:
+    """Return true for output redirection or heredocs outside quoted text."""
+
+    def scan(start: int, terminator: str = "") -> tuple[bool, int]:
+        single_quoted = False
+        double_quoted = False
+        escaped = False
+        paren_depth = 0
+        index = start
+
+        while index < len(command):
+            char = command[index]
+            if escaped:
+                escaped = False
+                index += 1
+                continue
+            if char == "\\" and not single_quoted:
+                escaped = True
+                index += 1
+                continue
+            if single_quoted:
+                if char == "'":
+                    single_quoted = False
+                index += 1
+                continue
+            if double_quoted:
+                if char == '"':
+                    double_quoted = False
+                    index += 1
+                    continue
+                if command[index : index + 2] == "$(":
+                    found, index = scan(index + 2, ")")
+                    if found:
+                        return True, index
+                    continue
+                if char == "`":
+                    found, index = scan(index + 1, "`")
+                    if found:
+                        return True, index
+                    continue
+                index += 1
+                continue
+            if char == "'":
+                single_quoted = True
+                index += 1
+                continue
+            if char == '"':
+                double_quoted = True
+                index += 1
+                continue
+            if command[index : index + 2] == "$(":
+                found, index = scan(index + 2, ")")
+                if found:
+                    return True, index
+                continue
+            if char == "`" and terminator != "`":
+                found, index = scan(index + 1, "`")
+                if found:
+                    return True, index
+                continue
+            if terminator == "`" and char == "`":
+                return False, index + 1
+            if terminator == ")":
+                if char == "(":
+                    paren_depth += 1
+                    index += 1
+                    continue
+                if char == ")":
+                    if paren_depth:
+                        paren_depth -= 1
+                        index += 1
+                        continue
+                    return False, index + 1
+            if char == ">" or command[index : index + 2] == "<<":
+                return True, index
+            index += 1
+        return False, index
+
+    return scan(0)[0]
+
+
 def _shell_native_file_tool_guidance(command: str) -> str:
     """Return guidance when shell is used for work native file tools should do."""
     scrubbed = re.sub(r"\b[12]?>&[12]\b", "", command)
     scrubbed = re.sub(r"\b[12]?>\s*/dev/null\b", "", scrubbed)
-    if "<<" in scrubbed or re.search(r"(?<![<>&])>>?(?![>&])", scrubbed):
+    if _has_unquoted_file_redirection(scrubbed):
         return "Shell redirection/heredocs are not used for file writes. Use write_file or edit_file instead."
 
     try:
@@ -120,10 +201,7 @@ def _shell_native_file_tool_guidance(command: str) -> str:
 
     lower = command.lower()
     if head in {"python", "python3"} and (
-        "open(" in lower
-        or ".write_text(" in lower
-        or ".write_bytes(" in lower
-        or "path(" in lower
+        "open(" in lower or ".write_text(" in lower or ".write_bytes(" in lower or "path(" in lower
     ):
         return "Python shell snippets that write files are disabled. Use write_file or edit_file instead."
     return ""
@@ -250,7 +328,9 @@ class ShellToolsMixin:
                 network=bool(getattr(self, "shell_sandbox_network", False)),
             )
         except (ValueError, RuntimeError) as error:
-            console.print(f"[yellow]Shell sandbox unavailable ({error}); running unsandboxed.[/yellow]")
+            console.print(
+                f"[yellow]Shell sandbox unavailable ({error}); running unsandboxed.[/yellow]"
+            )
             return None
 
     async def run_shell(self, command: str, timeout: int = 60) -> ToolResult:
@@ -406,7 +486,11 @@ class ShellToolsMixin:
                     proc.kill()
                 with suppress(Exception):
                     await proc.wait()
-                return {"ok": False, "error": "pip install timed out after 120s", "package": pkg_spec}
+                return {
+                    "ok": False,
+                    "error": "pip install timed out after 120s",
+                    "package": pkg_spec,
+                }
             finally:
                 self._active_processes.discard(proc)
         except Exception as e:

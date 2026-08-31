@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 1.1.2 (2026-08-31)
+
+- Fixed shell validation so quoted HTML/XML comparison text such as `grep '<section'` is not
+  mistaken for a file-writing redirect, while real redirects and redirects inside command
+  substitutions remain blocked in favor of native file tools.
+- Fixed Agentic Graph capability routing so the logical `file_read` declaration authorizes all
+  bounded read variants, including `read_file_range`, file diffs, and image inspection.
+- Prevented completed, independently verified file-backed work from being marked failed solely
+  because a model returned its single textual summary normally instead of calling
+  `graph_emit_output`; unverified prose still fails the declared output contract.
+- Added a safe, downloadable graph-run audit log to the web UI with lifecycle activity, tool
+  authorization decisions, retries, criteria evidence, and final status without raw tool
+  arguments or secrets.
+
 ## 1.1.1 (2026-08-31)
 
 - Adopted AAIS 1.0 as the durable authority/presenter boundary for chats, bot conversations,

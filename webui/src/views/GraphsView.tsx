@@ -43,6 +43,16 @@ function laneFor(node: GraphNode): string {
 
 type GraphDoc = Record<string, unknown> & { nodes?: Record<string, Record<string, unknown>> };
 type DraftActivity = { stage?: string; message?: string; attempt?: number; finding_count?: number; details?: string[]; at?: number };
+type GraphAuditEvent = {
+  type?: string;
+  timestamp?: string;
+  node_id?: string;
+  tool?: string;
+  state?: string;
+  summary?: string;
+  error_code?: string;
+  error?: string;
+};
 type GraphApproval = {
   request_id: string;
   description: string;
@@ -64,6 +74,12 @@ type CardEditor = {
   permissions: string;
   workspace: "none" | "read_only" | "read_write";
 };
+
+function auditEventText(event: GraphAuditEvent): string {
+  const subject = [event.node_id, event.tool].filter(Boolean).join(" · ");
+  const detail = event.error || event.summary || event.state || "Lifecycle event recorded.";
+  return `${subject ? `${subject}: ` : ""}${humanizeError(detail)}`;
+}
 
 /**
  * Wire a hand-edited board back into a valid AGS document.
@@ -238,6 +254,8 @@ export function GraphsView({
   const [runActivity, setRunActivity] = useState("");
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [eventCount, setEventCount] = useState(0);
+  const [runId, setRunId] = useState("");
+  const [auditEvents, setAuditEvents] = useState<GraphAuditEvent[]>([]);
   const [cardEditor, setCardEditor] = useState<CardEditor | null>(null);
   const [graphChoices, setGraphChoices] = useState<{ skills: string[]; mcp: string[] }>({ skills: [], mcp: [] });
   const [operationStarted, setOperationStarted] = useState<number | null>(null);
@@ -261,7 +279,7 @@ export function GraphsView({
             summary?: string | Record<string, unknown>;
             activity?: string;
             nodes?: Record<string, unknown>[];
-            events?: unknown[];
+            events?: GraphAuditEvent[];
             run_id?: string;
             awaiting_approvals?: GraphApproval[];
           }>(`/api/graphs/status?job_id=${encodeURIComponent(id)}`);
@@ -275,6 +293,8 @@ export function GraphsView({
           );
           setRunActivity(state.activity || "");
           setEventCount(state.events?.length || 0);
+          setRunId(state.run_id || "");
+          setAuditEvents(state.events || []);
           setApprovals((state.awaiting_approvals || []).filter((item) => Boolean(item.request_id)));
           setLastUpdate(Date.now());
           sessionStorage.setItem(
@@ -547,6 +567,29 @@ export function GraphsView({
     }
   }
 
+  function exportAuditLog() {
+    const payload = {
+      schema_version: "magent.graph-audit.v1",
+      exported_at: new Date().toISOString(),
+      job_id: jobId,
+      run_id: runId,
+      graph_path: path,
+      status,
+      activity: runActivity,
+      summary: runSummary,
+      nodes,
+      events: auditEvents,
+    };
+    const url = URL.createObjectURL(
+      new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+    );
+    const anchor = window.document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${runId || jobId || "graph-run"}-audit.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function run() {
     if (!path) return;
     setBusy("run");
@@ -557,6 +600,8 @@ export function GraphsView({
       setRunSummary("Runner accepted the graph and is preparing the first ready card.");
       setLastUpdate(Date.now());
       setEventCount(0);
+      setRunId("");
+      setAuditEvents([]);
       notify("Run started.");
       sessionStorage.setItem(GRAPH_RUN_KEY, JSON.stringify({ job_id: started.job_id, path }));
       watchJob(started.job_id, path);
@@ -800,6 +845,27 @@ export function GraphsView({
             <div><dt>Last check</dt><dd>{lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : "—"}</dd></div>
           </dl>
         </section>
+      )}
+
+      {jobId && !draft && (
+        <details className="graph-audit-log">
+          <summary>Run audit log · {auditEvents.length} event{auditEvents.length === 1 ? "" : "s"}</summary>
+          <div className="graph-audit-head">
+            <p>Safe lifecycle evidence for debugging. Tool arguments and secrets are not included.</p>
+            <button className="ghost-button" type="button" onClick={exportAuditLog}>Download JSON</button>
+          </div>
+          {auditEvents.length ? (
+            <ol>
+              {auditEvents.slice(-100).map((event, index) => (
+                <li key={`${event.timestamp || "event"}-${index}`}>
+                  <div><b>{event.type || "graph.event"}</b>{event.error_code && <span>{event.error_code}</span>}</div>
+                  <p>{auditEventText(event)}</p>
+                  {event.timestamp && <time>{new Date(event.timestamp).toLocaleString()}</time>}
+                </li>
+              ))}
+            </ol>
+          ) : <p>No lifecycle events have arrived yet.</p>}
+        </details>
       )}
 
       {approvals.length > 0 && createPortal(

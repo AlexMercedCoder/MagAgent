@@ -463,6 +463,32 @@ async def test_run_shell_declines_native_file_writes_without_prompt(tmp_path: Pa
 
 
 @pytest.mark.asyncio
+async def test_run_shell_allows_quoted_html_in_read_only_validation(tmp_path: Path) -> None:
+    (tmp_path / "index.html").write_text(
+        "<main><section>Calamari</section></main>\n",
+        encoding="utf-8",
+    )
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent", interactive_permissions=False)
+
+    result = await tools.run_shell(
+        "grep -c '<section' index.html && grep -c \"</section>\" index.html"
+    )
+
+    assert result["ok"] is True
+    assert result["stdout"] == "1\n1\n"
+
+
+def test_native_file_policy_ignores_quoted_and_escaped_angle_brackets() -> None:
+    assert shell_module._shell_native_file_tool_guidance("grep -c '<section>' index.html") == ""
+    assert shell_module._shell_native_file_tool_guidance('grep -c "</section>" index.html') == ""
+    assert shell_module._shell_native_file_tool_guidance("grep -F '<<article>>' index.html") == ""
+    assert shell_module._shell_native_file_tool_guidance(r"printf \>") == ""
+    assert shell_module._shell_native_file_tool_guidance("printf ok > output.txt")
+    assert shell_module._shell_native_file_tool_guidance('printf "%s" "$(printf ok > output.txt)"')
+    assert shell_module._shell_native_file_tool_guidance("printf '%s' '`literal > text`'") == ""
+
+
+@pytest.mark.asyncio
 async def test_deep_research_collects_sources(monkeypatch, tmp_path: Path) -> None:
     tools = ToolExecutor(str(tmp_path), permission_mode="silent")
 
