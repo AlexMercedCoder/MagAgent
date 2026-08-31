@@ -41,6 +41,7 @@ from magent.workbench_store import WorkbenchStore
 
 AgentRunner = Callable[[str, str, Route, str], Awaitable[Any]]
 ApprovalCallback = Callable[[str, dict[str, Any]], Awaitable[bool]]
+PermissionPrompt = Callable[[str, int], Any]
 EventSink = Callable[[dict[str, Any]], None]
 
 
@@ -62,6 +63,7 @@ class GraphExecutor:
         store: WorkbenchStore | None = None,
         agent_runner: AgentRunner | None = None,
         approval: ApprovalCallback | None = None,
+        permission_prompt: PermissionPrompt | None = None,
         assume_yes: bool = False,
         root_task_id: str = "",
         compatibility_completed_state: bool = False,
@@ -75,6 +77,7 @@ class GraphExecutor:
         self.runtime = TaskRuntime(self.store)
         self.agent_runner = agent_runner or self._default_agent_runner
         self.approval = approval
+        self.permission_prompt = permission_prompt
         self.assume_yes = assume_yes
         self._root_task_id = root_task_id
         self.compatibility_completed_state = compatibility_completed_state
@@ -1144,7 +1147,8 @@ class GraphExecutor:
             permission_mode=str(getattr(self.config, "permission_mode", "balanced")),
             username=self.username,
             config=self.config,
-            interactive_permissions=not self.assume_yes,
+            interactive_permissions=self.permission_prompt is None and not self.assume_yes,
+            permission_prompt=self.permission_prompt,
         )
         result = await executor.dispatch("run_shell", {"command": command, "timeout": timeout})
         return {**result, "returncode": result.get("returncode", 0 if result.get("ok") else -1)}
@@ -1183,6 +1187,8 @@ class GraphExecutor:
             extraction_provider=extraction,
             cwd=str(self._workspace.get()),
             project_slug=None,
+            interactive_permissions=self.permission_prompt is None,
+            permission_prompt=self.permission_prompt,
             profile=profile,
         )
         session.execution_task_id = task_id

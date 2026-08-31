@@ -455,6 +455,11 @@ def ask_cmd(
         hidden=True,
         help="Attach this run to a pre-created durable execution task.",
     ),
+    approval_stdio: bool = typer.Option(
+        False,
+        "--approval-stdio",
+        help="Exchange AAIS 1.0 approval envelopes as NDJSON on stdout/stdin.",
+    ),
 ):
     """Run a one-shot MagAgent task."""
     username = _require_user()
@@ -484,6 +489,7 @@ def ask_cmd(
         events_output=events,
         execution_task_id=execution_task_id,
         profile=effective_profile,
+        approval_stdio=approval_stdio,
     )
 
 
@@ -501,11 +507,34 @@ def _run_one_shot(
     events_output: bool = False,
     execution_task_id: str = "",
     profile=None,
+    approval_stdio: bool = False,
 ):
     """Run a single non-interactive agent task."""
     from magent.agent import AgentSession
     from magent.execution_bridge import SessionTaskBridge
     from magent.tui import print_response
+
+    permission_prompt = None
+    if approval_stdio:
+        from magent.approval_broker import start_stdio_broker
+
+        approval_broker, publish = start_stdio_broker(
+            _store(), project=cwd, stream="magent.stdio.approvals"
+        )
+
+        def permission_prompt(
+            description: str, tier: int, action: dict[str, Any] | None = None
+        ) -> str:
+            return approval_broker.request_prompt(
+                description,
+                tier,
+                action,
+                origin={"session_id": "stdio-session"},
+                publish=publish,
+                timeout=1800,
+                allow_session=True,
+                allow_persistent=str(description).lstrip().startswith("Run:"),
+            )
 
     session = AgentSession(
         username=username,
@@ -514,6 +543,7 @@ def _run_one_shot(
         extraction_provider=extract_provider,
         cwd=cwd,
         interactive_permissions=False,
+        permission_prompt=permission_prompt,
         permission_mode_override=permission_mode_override,
         profile=profile,
     )

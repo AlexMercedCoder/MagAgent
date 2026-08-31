@@ -564,10 +564,14 @@ event log from a cursor, so reloading mid-turn picks it back up rather than losi
 and **Stop** cancels the run itself instead of just the connection, keeping whatever had already
 been written.
 
-Tool approvals reach the browser. The Web UI has a user but no console, so without somewhere to ask
-it could only refuse every tool above the permission mode's auto-approve threshold. A tool needing a
-decision now pauses the turn and asks in the transcript. Unanswered is a denial: a closed tab must
-not leave a tool authorised.
+Tool approvals reach the browser for both conversations and graph cards. The Web UI has a user but
+no console, so without somewhere to ask it could only refuse every tool above the permission mode's
+auto-approve threshold. A tool needing a decision now pauses its work and presents an approval in
+the browser. Graph approvals overlay whichever UI section is open and are restored after a reload;
+shell actions offer deny, once, session, and exact-command persistent choices. Unanswered is a
+denial: a closed tab must not leave a tool authorised.
+Delegated subagents inherit that same browser approval channel, so a bot, group participant, or
+graph card cannot strand a permission question on the UI process's terminal.
 
 A Memory view browses what the agent has kept — the graph's size and health, full note text, and the
 notes linking to and from each one, searchable in the same modes the agent's own recall uses. Notes

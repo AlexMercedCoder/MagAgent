@@ -159,6 +159,10 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
         self.project_slug = project_slug or self._detect_project_slug(cwd)
         self.profile = profile
         self._session_profile = profile
+        # Child agents must preserve the parent's interaction channel. A Web
+        # UI session cannot safely let a delegated worker fall back to stdin.
+        self._interactive_permissions = interactive_permissions
+        self._permission_prompt = permission_prompt
         self._turn_profile_restore: tuple[Any, Any, Any] | None = None
         permission_mode = (
             profile.permission_mode

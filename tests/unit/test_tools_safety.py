@@ -68,6 +68,39 @@ def test_network_fetch_mutation_or_download_still_requires_confirmation() -> Non
     assert classify_shell_command("wget https://example.com -O page.html") == RiskTier.CONFIRM
 
 
+@pytest.mark.asyncio
+async def test_frontend_approval_receives_exact_normalized_tool_action(tmp_path: Path) -> None:
+    observed: dict[str, object] = {}
+
+    def approve(_description: str, _tier: int, action: dict[str, object]) -> bool:
+        observed.update(action)
+        return False
+
+    executor = ToolExecutor(
+        str(tmp_path),
+        interactive_permissions=False,
+        permission_prompt=approve,
+    )
+    result = await executor.dispatch(
+        "http_request",
+        {
+            "method": "POST",
+            "url": "https://example.invalid/items",
+            "headers": {"content-type": "application/json"},
+            "body": '{"name":"demo"}',
+        },
+    )
+
+    assert result["ok"] is False
+    assert observed["name"] == "http_request"
+    assert observed["arguments"] == {
+        "method": "POST",
+        "url": "https://example.invalid/items",
+        "headers": {"content-type": "application/json"},
+        "body": '{"name":"demo"}',
+    }
+
+
 def test_macos_shell_rewrites_prefer_python3() -> None:
     assert (
         shell_module._prefer_platform_python_command("pip install python-pptx", platform="darwin")

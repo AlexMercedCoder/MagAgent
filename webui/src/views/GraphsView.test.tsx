@@ -1,5 +1,6 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { post } from "../api";
 import { GraphsView } from "./GraphsView";
 
 vi.mock("../api", () => ({
@@ -29,6 +30,20 @@ vi.mock("../api", () => ({
         }],
       }],
     };
+    if (path.includes("job_id=job-approval")) return {
+      state: "running",
+      run_id: "run-approval",
+      activity: "Waiting for permission: Run npm test",
+      events: [{ type: "approval.requested" }],
+      nodes: [{ id: "build", title: "Build it", state: "running", dependencies: [] }],
+      awaiting_approvals: [{
+        request_id: "ask-1",
+        description: "Run: `npm test`",
+        tier: 2,
+        choices: ["once", "session", "always", "deny"],
+        node_id: "build",
+      }],
+    };
     if (path.startsWith("/api/graphs/status")) return {
       state: "running",
       run_id: "run-7",
@@ -50,6 +65,7 @@ describe("GraphsView", () => {
   afterEach(() => {
     cleanup();
     sessionStorage.clear();
+    vi.mocked(post).mockReset();
   });
 
   it("reattaches to the active graph after navigating back", async () => {
@@ -75,5 +91,25 @@ describe("GraphsView", () => {
     );
     expect(screen.getByText("1 attempt")).toBeInTheDocument();
     expect(screen.getByText(/I have the facts/)).toBeInTheDocument();
+  });
+
+  it("answers a graph tool permission without returning to the terminal", async () => {
+    sessionStorage.setItem(
+      "magent:last-graph-run",
+      JSON.stringify({ job_id: "job-approval", run_id: "run-approval", path: "work.agraph.yaml" }),
+    );
+    vi.mocked(post).mockResolvedValue({ ok: true });
+
+    render(<GraphsView profiles={[]} setError={vi.fn()} notify={vi.fn()} />);
+
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("Graph card needs your approval");
+    expect(screen.getByText("Run: `npm test`")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "For this session" }));
+
+    await waitFor(() => expect(post).toHaveBeenCalledWith("/api/graphs/approve", {
+      job_id: "job-approval",
+      request_id: "ask-1",
+      decision: "session",
+    }));
   });
 });

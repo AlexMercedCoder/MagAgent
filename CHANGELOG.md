@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.1.1 (2026-08-31)
+
+- Adopted AAIS 1.0 as the durable authority/presenter boundary for chats, bot conversations,
+  delegated subagents, graph tools, and graph gates.
+- Added authenticated Web API snapshots/events/decisions, a global reconnect-safe approval modal,
+  and bidirectional NDJSON approval transport for desktop clients.
+- Bound remembered session grants to their originating session, revalidated exact action digests,
+  and propagated cancellation and timeout resolutions without terminal fallback.
+
 ## 1.1.0 (2026-08-30)
 
 - Completed local Web UI lifecycle controls for conversations, project folders, Open Agent

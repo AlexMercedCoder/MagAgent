@@ -189,7 +189,14 @@ class ShellToolsMixin:
         if self._trusted_shell_match(command):
             return PermissionResult(True, RiskTier.AUTO, "trusted-shell")
         if not self.interactive_permissions or self.permission_mode == "yolo":
-            return self._check_permission(f"Run: `{command}`", tier)
+            result = self._check_permission(f"Run: `{command}`", tier)
+            if result.approved and result.reason == "user-session-allow":
+                pattern = self._shell_trust_pattern(command, tier)
+                if pattern not in self.session_shell_patterns:
+                    self.session_shell_patterns.append(pattern)
+            elif result.approved and result.reason == "user-persistent-allow":
+                self._remember_trusted_shell_pattern(self._shell_trust_pattern(command, tier))
+            return result
         if tier < RiskTier.CONFIRM:
             return PermissionResult(True, tier, "auto")
         title = (

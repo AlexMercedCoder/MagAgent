@@ -114,15 +114,19 @@ export type RunSnapshot = {
 };
 
 export type ApprovalRequest = {
-  request_id: string;
-  description: string;
-  tier: number;
+  id: string;
+  action: {
+    name: string;
+    summary: string;
+    arguments: Record<string, unknown>;
+  };
+  choices: Array<{ decision: "approve" | "deny" | "cancel"; scope: "once" | "session" | "persistent"; label: string }>;
 };
 
 export type ChatEvent =
   | ({ type: "run" } & RunSnapshot)
-  | ({ type: "approval.requested" } & ApprovalRequest)
-  | { type: "approval.resolved"; request_id: string; approved: boolean; reason?: string }
+  | { type: "approval.requested"; aais: "1.0"; request: ApprovalRequest; sequence: number }
+  | { type: "approval.resolved"; aais: "1.0"; resolution: { request_id: string; outcome: string; message: string }; sequence: number }
   | { type: "chunk"; speaker: string; content: string }
   | { type: "done"; conversation: Conversation }
   | { type: "conversation"; conversation: Conversation }

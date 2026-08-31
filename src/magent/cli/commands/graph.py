@@ -32,7 +32,9 @@ def register_graph_commands(
     console: Console,
 ) -> None:
     def input_document(path: str) -> dict[str, Any]:
-        text = sys.stdin.read() if path == "-" else Path(path).expanduser().read_text(encoding="utf-8")
+        text = (
+            sys.stdin.read() if path == "-" else Path(path).expanduser().read_text(encoding="utf-8")
+        )
         value = json.loads(text)
         if not isinstance(value, dict):
             raise ValueError("Graph input must be a JSON object")
@@ -68,7 +70,9 @@ def register_graph_commands(
         from magent.agraph.authoring import preview_graph
 
         try:
-            result = preview_graph(input_document(input_path), project=project, config=registry_config(project))
+            result = preview_graph(
+                input_document(input_path), project=project, config=registry_config(project)
+            )
         except Exception as exc:
             result = {"ok": False, "error": str(exc)}
         console.print_json(data=result)
@@ -86,7 +90,13 @@ def register_graph_commands(
         from magent.agraph.authoring import save_graph
 
         try:
-            result = save_graph(input_document(input_path), path, project=project, config=registry_config(project), expected_digest=expected_digest)
+            result = save_graph(
+                input_document(input_path),
+                path,
+                project=project,
+                config=registry_config(project),
+                expected_digest=expected_digest,
+            )
         except Exception as exc:
             result = {"ok": False, "error": str(exc)}
         console.print_json(data=result)
@@ -146,7 +156,11 @@ def register_graph_commands(
             _fail("No active user. Run `magent configure` first.", console)
         current = input_document(input_path) if input_path else None
         try:
-            result = asyncio.run(model_graph_draft(goal, project=project, config=config, document=current, instruction=instruction))
+            result = asyncio.run(
+                model_graph_draft(
+                    goal, project=project, config=config, document=current, instruction=instruction
+                )
+            )
         except Exception as exc:
             result = {"ok": False, "error": str(exc)}
         console.print_json(data=result)
@@ -165,10 +179,14 @@ def register_graph_commands(
             console.print_json(data=report.as_dict())
         else:
             if not report.findings:
-                console.print(f"[green]Valid[/green] {report.document.graph_id} ({report.document.digest})")
+                console.print(
+                    f"[green]Valid[/green] {report.document.graph_id} ({report.document.digest})"
+                )
             for item in report.findings:
                 style = "red" if item.severity == "error" else "yellow"
-                console.print(f"[{style}]{item.code} {item.severity}[/{style}] {item.message} [dim]{item.pointer}[/dim]")
+                console.print(
+                    f"[{style}]{item.code} {item.severity}[/{style}] {item.message} [dim]{item.pointer}[/dim]"
+                )
         if not report.ok:
             raise typer.Exit(1)
 
@@ -185,7 +203,14 @@ def register_graph_commands(
         except ValueError as exc:
             _fail(str(exc), console)
         if json_output:
-            console.print_json(data=resolved_plan(path, project=str(project), config=registry_config(project), default_profile=agent))
+            console.print_json(
+                data=resolved_plan(
+                    path,
+                    project=str(project),
+                    config=registry_config(project),
+                    default_profile=agent,
+                )
+            )
             return
         table = Table(title=f"Agentic Graph: {plan.graph_id}")
         table.add_column("#", justify="right")
@@ -194,9 +219,17 @@ def register_graph_commands(
         table.add_column("Tier")
         table.add_column("Parallel group")
         for index, node in enumerate(plan.nodes, 1):
-            table.add_row(str(index), str(node["id"]), str(node["type"]), str(node["tier"]), str(node["level"] + 1))
+            table.add_row(
+                str(index),
+                str(node["id"]),
+                str(node["type"]),
+                str(node["tier"]),
+                str(node["level"] + 1),
+            )
         console.print(table)
-        console.print(f"Projected cost: ${plan.projected_cost_usd:.2f} | Worst-case executions: {plan.worst_case_node_executions} | Max parallel: {plan.max_parallel_nodes}")
+        console.print(
+            f"Projected cost: ${plan.projected_cost_usd:.2f} | Worst-case executions: {plan.worst_case_node_executions} | Max parallel: {plan.max_parallel_nodes}"
+        )
         if plan.gates:
             console.print("Gates: " + ", ".join(plan.gates))
 
@@ -206,8 +239,17 @@ def register_graph_commands(
         report = validate_graph(path)
         if not report.ok or not report.document:
             _fail("Graph is invalid; run `magent graph validate` for details.", console)
-        catalogue = [item for item in store().read("graphs", []) if item.get("graph_id") != report.document.graph_id]
-        item = {"graph_id": report.document.graph_id, "graph_digest": report.document.digest, "path": str(path.resolve()), "document": report.document.data}
+        catalogue = [
+            item
+            for item in store().read("graphs", [])
+            if item.get("graph_id") != report.document.graph_id
+        ]
+        item = {
+            "graph_id": report.document.graph_id,
+            "graph_digest": report.document.digest,
+            "path": str(path.resolve()),
+            "document": report.document.data,
+        }
         catalogue.append(item)
         store().write("graphs", catalogue)
         console.print_json(data={"ok": True, "graph": item})
@@ -220,7 +262,14 @@ def register_graph_commands(
     @graph_app.command("show")
     def show_cmd(graph_id: str = typer.Argument(...)) -> None:
         """Show a saved graph document."""
-        item = next((item for item in store().read("graphs", []) if item.get("graph_id") == graph_id or item.get("graph_digest") == graph_id), None)
+        item = next(
+            (
+                item
+                for item in store().read("graphs", [])
+                if item.get("graph_id") == graph_id or item.get("graph_digest") == graph_id
+            ),
+            None,
+        )
         if not item:
             _fail(f"Graph not found: {graph_id}", console)
         console.print_json(data={"ok": True, "graph": item})
@@ -234,7 +283,11 @@ def register_graph_commands(
         """Generate a conservative, strictly valid graph from a goal."""
         path, report = generate_to_file(goal, output, project=project)
         if not report.ok:
-            _fail("Generated graph did not pass strict validation: " + "; ".join(f"{item.code} {item.message}" for item in report.errors), console)
+            _fail(
+                "Generated graph did not pass strict validation: "
+                + "; ".join(f"{item.code} {item.message}" for item in report.errors),
+                console,
+            )
         console.print_json(data={"ok": True, "path": str(path), "validation": report.as_dict()})
 
     @graph_app.command("export-plan")
@@ -249,8 +302,18 @@ def register_graph_commands(
         graph = plan_record_to_graph(plan)
         report = validate_graph(graph, strict=True)
         if not report.ok:
-            _fail("Exported graph is invalid: " + "; ".join(f"{item.code} {item.message}" for item in report.errors), console)
-        console.print_json(data={"ok": True, "path": str(write_graph(graph, output)), "validation": report.as_dict()})
+            _fail(
+                "Exported graph is invalid: "
+                + "; ".join(f"{item.code} {item.message}" for item in report.errors),
+                console,
+            )
+        console.print_json(
+            data={
+                "ok": True,
+                "path": str(write_graph(graph, output)),
+                "validation": report.as_dict(),
+            }
+        )
 
     @graph_app.command("export-recipe")
     def export_recipe_cmd(
@@ -280,12 +343,27 @@ def register_graph_commands(
         project: Path = typer.Option(Path("."), "--project", "-p"),
         params_json: str = typer.Option("{}", "--params", help="Graph parameters as JSON."),
         dry_run: bool = typer.Option(False, "--dry-run"),
-        yes: bool = typer.Option(False, "--yes", help="Approve interactive graph gates non-interactively."),
+        yes: bool = typer.Option(
+            False, "--yes", help="Approve interactive graph gates non-interactively."
+        ),
         json_output: bool = typer.Option(False, "--json"),
-        jsonl: bool = typer.Option(False, "--jsonl", help="Stream magent.graph-event.v1 JSON lines."),
-        agent: str = typer.Option("", "--agent", help="Run graph agent nodes under an OAP profile."),
-        execution_task_id: str = typer.Option("", "--execution-task-id", help="Attach the run to an existing durable task."),
-        approve_gates: str = typer.Option("", "--approve-gates", help="Comma-separated reviewed gate node ids."),
+        jsonl: bool = typer.Option(
+            False, "--jsonl", help="Stream magent.graph-event.v1 JSON lines."
+        ),
+        agent: str = typer.Option(
+            "", "--agent", help="Run graph agent nodes under an OAP profile."
+        ),
+        execution_task_id: str = typer.Option(
+            "", "--execution-task-id", help="Attach the run to an existing durable task."
+        ),
+        approve_gates: str = typer.Option(
+            "", "--approve-gates", help="Comma-separated reviewed gate node ids."
+        ),
+        approval_stdio: bool = typer.Option(
+            False,
+            "--approval-stdio",
+            help="Exchange AAIS approval envelopes over NDJSON stdio.",
+        ),
     ) -> None:
         """Run a validated graph with durable node and run records."""
         username = get_current_user()
@@ -299,9 +377,57 @@ def register_graph_commands(
             _fail(f"Invalid --params: {exc}", console)
 
         reviewed_gates = {item.strip() for item in approve_gates.split(",") if item.strip()}
+        permission_prompt = None
+        approval_broker = None
+        publish = None
+        if approval_stdio:
+            from magent.approval_broker import start_stdio_broker
+
+            approval_broker, publish = start_stdio_broker(
+                store(), project=project, stream="magent.graph.stdio.approvals"
+            )
+
+            def permission_prompt(
+                description: str, tier: int, action: dict[str, Any] | None = None
+            ) -> str:
+                return approval_broker.request_prompt(
+                    description,
+                    tier,
+                    action,
+                    origin={"session_id": execution_task_id or "graph-stdio"},
+                    publish=publish,
+                    timeout=1800,
+                    allow_session=True,
+                    allow_persistent=str(description).lstrip().startswith("Run:"),
+                )
 
         async def approve(prompt: str, detail: dict[str, Any]) -> bool:
-            return yes or str(detail.get("node_id") or "") in reviewed_gates or Confirm.ask(prompt, default=False)
+            if yes or str(detail.get("node_id") or "") in reviewed_gates:
+                return True
+            if approval_broker and publish:
+                outcome = approval_broker.request(
+                    {
+                        "kind": "human.gate",
+                        "name": "graph.gate",
+                        "summary": prompt,
+                        "arguments": detail,
+                        "working_directory": str(project.resolve()),
+                        "effects": ["Allows the graph to continue past a declared human gate."],
+                    },
+                    origin={
+                        "session_id": execution_task_id or "graph-stdio",
+                        "run_id": execution_task_id or "",
+                        "node_id": str(detail.get("node_id") or ""),
+                    },
+                    risk_level="medium",
+                    risk_reasons=["The graph explicitly requires human confirmation."],
+                    publish=publish,
+                    timeout=1800,
+                    allow_session=False,
+                    allow_persistent=False,
+                )
+                return outcome != "deny"
+            return Confirm.ask(prompt, default=False)
 
         config = load_config(username)
         effective_profile = _effective_profile(agent, project, config) if agent else None
@@ -311,28 +437,62 @@ def register_graph_commands(
                 console.print(json.dumps(event, separators=(",", ":"), default=str), markup=False)
 
         async def execute() -> dict[str, Any]:
-            executor = GraphExecutor(username=username, config=config, project=project, store=store(), approval=approve, assume_yes=yes, profile=effective_profile, root_task_id=execution_task_id, event_sink=emit if jsonl else None)
+            executor = GraphExecutor(
+                username=username,
+                config=config,
+                project=project,
+                store=store(),
+                approval=approve,
+                permission_prompt=permission_prompt,
+                assume_yes=yes,
+                profile=effective_profile,
+                root_task_id=execution_task_id,
+                event_sink=emit if jsonl else None,
+            )
             return await executor.run(path, params=params, dry_run=dry_run)
 
         try:
             result = asyncio.run(execute())
         except GraphRunError as exc:
             if jsonl:
-                console.print(json.dumps({"schema_version": "magent.graph-event.v1", "type": "graph.error", "state": "failed", "error_code": exc.code, "error": str(exc)}, separators=(",", ":")), markup=False)
+                console.print(
+                    json.dumps(
+                        {
+                            "schema_version": "magent.graph-event.v1",
+                            "type": "graph.error",
+                            "state": "failed",
+                            "error_code": exc.code,
+                            "error": str(exc),
+                        },
+                        separators=(",", ":"),
+                    ),
+                    markup=False,
+                )
                 raise typer.Exit(1) from exc
             _fail(str(exc), console)
         if jsonl:
-            console.print(json.dumps({"schema_version": "magent.graph-result.v1", **result}, separators=(",", ":"), default=str), markup=False)
+            console.print(
+                json.dumps(
+                    {"schema_version": "magent.graph-result.v1", **result},
+                    separators=(",", ":"),
+                    default=str,
+                ),
+                markup=False,
+            )
         elif json_output or dry_run:
             console.print_json(data=result)
         else:
             run = result["run"]
             style = "green" if result["ok"] else "red"
-            console.print(f"[{style}]{run['status']}[/{style}] {run['run_id']} ({len(run['nodes'])} node records)")
+            console.print(
+                f"[{style}]{run['status']}[/{style}] {run['run_id']} ({len(run['nodes'])} node records)"
+            )
             for item in run.get("diagnostics") or []:
                 console.print(f"[yellow]{item['code']}[/yellow] {item['message']}")
             summary = run.get("summary") or {}
-            console.print(f"Succeeded: {len(summary.get('succeeded') or [])} | Failed/blocked: {len(summary.get('failed') or [])} | Skipped: {len(summary.get('skipped') or [])}")
+            console.print(
+                f"Succeeded: {len(summary.get('succeeded') or [])} | Failed/blocked: {len(summary.get('failed') or [])} | Skipped: {len(summary.get('skipped') or [])}"
+            )
         if not result.get("ok"):
             raise typer.Exit(1)
 
@@ -353,7 +513,9 @@ def register_graph_commands(
             for event in result.get("events") or []:
                 detail = event.get("detail") or {}
                 if detail.get("schema_version") == "magent.graph-event.v1":
-                    console.print(json.dumps(detail, separators=(",", ":"), default=str), markup=False)
+                    console.print(
+                        json.dumps(detail, separators=(",", ":"), default=str), markup=False
+                    )
             return
         if json_output:
             console.print_json(data=result)
@@ -365,7 +527,12 @@ def register_graph_commands(
         table.add_column("Summary / blocker")
         for node in result["nodes"]:
             blocker = "; ".join(item["message"] for item in node.get("blocked_by") or [])
-            table.add_row(node["node_id"], node["state"], node["profile"] or "run-default", node["summary"] or blocker)
+            table.add_row(
+                node["node_id"],
+                node["state"],
+                node["profile"] or "run-default",
+                node["summary"] or blocker,
+            )
         console.print(table)
 
     @graph_app.command("resume")
@@ -377,9 +544,18 @@ def register_graph_commands(
         yes: bool = typer.Option(False, "--yes"),
         execution_task_id: str = typer.Option("", "--execution-task-id"),
         approve_gates: str = typer.Option("", "--approve-gates"),
-        retry_nodes: str = typer.Option("", "--retry-nodes", help="Comma-separated failed job ids to retry with their dependents."),
+        retry_nodes: str = typer.Option(
+            "",
+            "--retry-nodes",
+            help="Comma-separated failed job ids to retry with their dependents.",
+        ),
         json_output: bool = typer.Option(False, "--json"),
         jsonl: bool = typer.Option(False, "--jsonl"),
+        approval_stdio: bool = typer.Option(
+            False,
+            "--approval-stdio",
+            help="Exchange AAIS approval envelopes over NDJSON stdio.",
+        ),
     ) -> None:
         """Resume a graph run, guarded by the original graph digest."""
         username = get_current_user()
@@ -392,19 +568,98 @@ def register_graph_commands(
         graph_path = path or Path(source_path)
 
         reviewed_gates = {item.strip() for item in approve_gates.split(",") if item.strip()}
+        permission_prompt = None
+        approval_broker = None
+        publish = None
+        if approval_stdio:
+            from magent.approval_broker import start_stdio_broker
+
+            approval_broker, publish = start_stdio_broker(
+                store(), project=project, stream="magent.graph.stdio.approvals"
+            )
+
+            def permission_prompt(
+                description: str, tier: int, action: dict[str, Any] | None = None
+            ) -> str:
+                return approval_broker.request_prompt(
+                    description,
+                    tier,
+                    action,
+                    origin={"session_id": execution_task_id or run_id},
+                    publish=publish,
+                    timeout=1800,
+                    allow_session=True,
+                    allow_persistent=str(description).lstrip().startswith("Run:"),
+                )
 
         async def approve(prompt: str, detail: dict[str, Any]) -> bool:
-            return yes or str(detail.get("node_id") or "") in reviewed_gates or Confirm.ask(prompt, default=False)
+            if yes or str(detail.get("node_id") or "") in reviewed_gates:
+                return True
+            if approval_broker and publish:
+                outcome = approval_broker.request(
+                    {
+                        "kind": "human.gate",
+                        "name": "graph.gate",
+                        "summary": prompt,
+                        "arguments": detail,
+                        "working_directory": str(project.resolve()),
+                        "effects": ["Allows the graph to continue past a declared human gate."],
+                    },
+                    origin={
+                        "session_id": execution_task_id or run_id,
+                        "run_id": run_id,
+                        "node_id": str(detail.get("node_id") or ""),
+                    },
+                    risk_level="medium",
+                    risk_reasons=["The graph explicitly requires human confirmation."],
+                    publish=publish,
+                    timeout=1800,
+                    allow_session=False,
+                    allow_persistent=False,
+                )
+                return outcome != "deny"
+            return Confirm.ask(prompt, default=False)
 
         async def execute() -> dict[str, Any]:
-            sink = (lambda event: console.print(json.dumps(event, separators=(",", ":"), default=str), markup=False)) if jsonl else None
-            executor = GraphExecutor(username=username, config=load_config(username), project=project, store=store(), approval=approve, assume_yes=yes, root_task_id=execution_task_id, event_sink=sink)
+            sink = (
+                (
+                    lambda event: console.print(
+                        json.dumps(event, separators=(",", ":"), default=str), markup=False
+                    )
+                )
+                if jsonl
+                else None
+            )
+            executor = GraphExecutor(
+                username=username,
+                config=load_config(username),
+                project=project,
+                store=store(),
+                approval=approve,
+                permission_prompt=permission_prompt,
+                assume_yes=yes,
+                root_task_id=execution_task_id,
+                event_sink=sink,
+            )
             selected = {item.strip() for item in retry_nodes.split(",") if item.strip()}
-            return await executor.run(graph_path, params=record.get("params") or {}, resume_record=record, force=force, retry_nodes=selected or None)
+            return await executor.run(
+                graph_path,
+                params=record.get("params") or {},
+                resume_record=record,
+                force=force,
+                retry_nodes=selected or None,
+            )
 
         result = asyncio.run(execute())
         if jsonl:
-            console.print(json.dumps({"schema_version": "magent.graph-result.v1", **result}, separators=(",", ":"), default=str), markup=False)
+            console.print(
+                json.dumps(
+                    {"schema_version": "magent.graph-result.v1", **result},
+                    separators=(",", ":"),
+                    default=str,
+                ),
+                markup=False,
+            )
         elif json_output:
             console.print_json(data=result)
         else:
@@ -415,7 +670,10 @@ def register_graph_commands(
 
 
 def _find_run(store: WorkbenchStore, run_id: str) -> dict[str, Any] | None:
-    return next((item for item in reversed(store.read("graph_runs", [])) if item.get("run_id") == run_id), None)
+    return next(
+        (item for item in reversed(store.read("graph_runs", [])) if item.get("run_id") == run_id),
+        None,
+    )
 
 
 def _effective_profile(name: str, project: str | Path, config: Any) -> Any:
@@ -427,8 +685,7 @@ def _effective_profile(name: str, project: str | Path, config: Any) -> Any:
     if resolved is None:
         raise GraphRunError(f"Agent profile not found: {name}", "RT012")
     granted = {
-        str(item.get("function", {}).get("name", ""))
-        for item in built_in_tool_definitions()
+        str(item.get("function", {}).get("name", "")) for item in built_in_tool_definitions()
     }
     return resolve_effective_profile(resolved, config, granted)
 

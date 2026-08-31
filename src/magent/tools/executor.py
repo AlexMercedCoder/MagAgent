@@ -14,6 +14,7 @@ import json
 import shutil as shutil
 from collections.abc import Callable
 from contextlib import suppress
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -37,6 +38,10 @@ from magent.tools.types import DEFAULT_TOOL_BUDGETS, OPAQUE_RESULT_KEYS, ToolRes
 from magent.tools.web import WebToolsMixin
 
 console = Console()
+
+_approval_action: ContextVar[dict[str, Any] | None] = ContextVar(
+    "magent_approval_action", default=None
+)
 
 
 def _running_tool_status(tool_name: str, args: dict[str, Any], elapsed: float) -> str:
@@ -221,6 +226,7 @@ class ToolExecutor(
             self.permission_mode,
             interactive=self.interactive_permissions,
             ask=self.permission_prompt,
+            action=_approval_action.get(),
         )
 
     def _permission_denied(self, perm: PermissionResult) -> ToolResult:
@@ -464,7 +470,22 @@ class ToolExecutor(
         if fn is None:
             return {"ok": False, "error": f"Unknown tool: {tool_name}"}
         try:
-            task = asyncio.create_task(fn())
+            approval_token = _approval_action.set(
+                {
+                    "kind": "tool.call",
+                    "name": tool_name,
+                    "summary": f"Run MagAgent tool {tool_name}",
+                    "arguments": dict(a),
+                    "working_directory": str(Path(self.cwd).resolve()),
+                    "effects": ["Executes the requested MagAgent tool with these exact arguments."],
+                }
+            )
+            try:
+                # Context is copied into the task, keeping concurrent calls
+                # bound to their own exact tool invocation.
+                task = asyncio.create_task(fn())
+            finally:
+                _approval_action.reset(approval_token)
             self._active_tasks.add(task)
             started = asyncio.get_running_loop().time()
             wait_seconds = 6.0

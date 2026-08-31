@@ -234,8 +234,15 @@ def serve_ui(
     token = secrets.token_urlsafe(32)
     conversations = ConversationStore(store)
     conversation_locks: dict[str, threading.Lock] = {}
-    runs = RunStore()
-    graph_runs = GraphRunManager(store, username, root) if username else None
+    from magent.approval_broker import ApprovalBroker
+
+    approval_broker = ApprovalBroker(store, project=root)
+    runs = RunStore(approval_broker)
+    graph_runs = (
+        GraphRunManager(store, username, root, approval_broker=approval_broker)
+        if username
+        else None
+    )
     graph_drafts = GraphDraftManager(root, username) if username else None
     workspace = WorkspaceService(root)
     schedules = ScheduleStore(store, graph_runs, root) if graph_runs else None
@@ -259,6 +266,7 @@ def serve_ui(
         "/api/profiles/clone",
         "/api/profiles/generate",
         "/api/graphs/run",
+        "/api/graphs/approve",
         "/api/graphs/draft",
         "/api/graphs/draft/start",
         "/api/graphs/draft/cancel",
@@ -268,6 +276,7 @@ def serve_ui(
         "/api/onboarding/configure",
         "/api/runs/cancel",
         "/api/runs/approve",
+        "/api/approvals/decide",
         "/api/workspace/upload",
         "/api/workspace/git",
         "/api/workspace/worktrees",
@@ -707,6 +716,29 @@ def serve_ui(
                             approved_gates=list(body.get("approved_gates") or []),
                         )
                         self._json(result, status=202)
+                elif parsed.path == "/api/graphs/approve":
+                    if graph_runs is None:
+                        self._json({"ok": False, "error": "username unavailable"}, status=400)
+                    else:
+                        body = self._body()
+                        try:
+                            decided = graph_runs.decide_approval(
+                                str(body.get("job_id", "")),
+                                str(body.get("request_id", "")),
+                                str(body.get("decision", "deny")),
+                            )
+                        except ValueError as error:
+                            self._json({"ok": False, "error": str(error)}, status=400)
+                            return
+                        self._json(
+                            {
+                                "ok": decided,
+                                "error": "That permission request is no longer waiting for an answer."
+                                if not decided
+                                else "",
+                            },
+                            status=200 if decided else 409,
+                        )
                 elif parsed.path == "/api/conversations" and method == "POST":
                     body = self._body()
                     selected_root = Path(str(body.get("project") or root)).expanduser().resolve()
@@ -1123,7 +1155,10 @@ def serve_ui(
                         self._json({"ok": False, "error": "run not found"}, status=404)
                         return
                     decided = found.decide_approval(
-                        str(body.get("request_id", "")), bool(body.get("approved"))
+                        str(body.get("request_id", "")),
+                        bool(body.get("approved")),
+                        str(body.get("scope", "once")),
+                        actor_id=username or "local-user",
                     )
                     self._json(
                         {"ok": decided}
@@ -1135,6 +1170,29 @@ def serve_ui(
                             "error": "That approval is no longer waiting for an answer.",
                         }
                     )
+                elif parsed.path == "/api/approvals/snapshot":
+                    self._json(approval_broker.snapshot())
+                elif parsed.path == "/api/approvals/events":
+                    after = _int_or(query.get("after", ["0"])[0], 0)
+                    self._json({"events": approval_broker.events_after(after)})
+                elif parsed.path == "/api/approvals/decide":
+                    body = self._body()
+                    try:
+                        resolution = approval_broker.decide(
+                            str(body.get("request_id", "")),
+                            decision=str(body.get("decision", "deny")),
+                            scope=str(body.get("scope", "once")),
+                            actor={
+                                "id": username or "local-user",
+                                "type": "human",
+                                "authenticated_by": "magent-loopback-token",
+                            },
+                            decision_id=str(body.get("decision_id") or "") or None,
+                        )
+                    except Exception as error:  # AAIS conflicts are safe client races.
+                        self._json({"ok": False, "error": str(error)}, status=409)
+                    else:
+                        self._json({"ok": True, "resolution": resolution})
                 elif parsed.path == "/api/memory/overview":
                     from magent.web_memory import overview
 

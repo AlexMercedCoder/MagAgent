@@ -26,6 +26,7 @@ import { WorkspaceView } from "./views/WorkspaceView";
 import { RunCenterView } from "./views/RunCenterView";
 import { ExtensionsView } from "./views/ExtensionsView";
 import { ShortcutsSheet } from "./views/ShortcutsSheet";
+import { ApprovalCenter } from "./views/ApprovalCenter";
 
 export type View =
   | "chat"
@@ -388,6 +389,8 @@ export default function App() {
           onClose={() => setShowShortcuts(false)}
         />
       )}
+
+      <ApprovalCenter setError={setError} notify={notify} />
 
       {toast && (
         <div className="toast" role="status">

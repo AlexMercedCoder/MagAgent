@@ -42,6 +42,8 @@ class SubAgentRunner:
         quiet: bool = False,
         parent_task_id: str = "",
         parent_profile: Any | None = None,
+        interactive_permissions: bool = True,
+        permission_prompt: Any = None,
     ):
         self.username = username
         self.provider = provider
@@ -51,6 +53,8 @@ class SubAgentRunner:
         self.quiet = quiet
         self.parent_task_id = parent_task_id
         self.parent_profile = parent_profile
+        self.interactive_permissions = interactive_permissions
+        self.permission_prompt = permission_prompt
         self._execution_task_id = ""
         self._tasks: dict[str, SubAgentTask] = {}
 
@@ -172,6 +176,8 @@ class SubAgentRunner:
                 extraction_provider=self.extraction_provider,
                 cwd=self.cwd,
                 project_slug=None,
+                interactive_permissions=self.interactive_permissions,
+                permission_prompt=self.permission_prompt,
                 profile=child_profile,
             )
             bridge = SessionTaskBridge(

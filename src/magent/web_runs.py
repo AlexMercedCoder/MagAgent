@@ -19,6 +19,10 @@ import uuid
 from collections.abc import Callable
 from typing import Any
 
+from aais import ConflictError
+
+from magent.approval_broker import ApprovalBroker
+
 # Runs are held in memory for reattachment after a reload, not as history: the
 # conversation store is what persists. Keeping every run of a long session would
 # grow without bound, so finished ones are evicted oldest-first.
@@ -63,7 +67,7 @@ class ApprovalRequest:
 class Run:
     """One turn, its event log, and its cancellation flag."""
 
-    def __init__(self, conversation_id: str) -> None:
+    def __init__(self, conversation_id: str, broker: ApprovalBroker | None = None) -> None:
         self.id = f"run_{uuid.uuid4().hex[:16]}"
         self.conversation_id = conversation_id
         self.state = "running"
@@ -77,6 +81,7 @@ class Run:
         self._changed = threading.Condition(self._lock)
         self._cancel = threading.Event()
         self.approval: ApprovalRequest | None = None
+        self.broker = broker
 
     # -- writing (run thread) ------------------------------------------------
 
@@ -103,6 +108,8 @@ class Run:
         if waiting is not None:
             waiting.approved = False
             waiting.decided.set()
+        if self.broker is not None:
+            self.broker.cancel_owner(run_id=self.id)
         with self._changed:
             self._changed.notify_all()
 
@@ -117,7 +124,9 @@ class Run:
 
     # -- approvals -----------------------------------------------------------
 
-    def request_approval(self, description: str, tier: int) -> bool:
+    def request_approval(
+        self, description: str, tier: int, action: dict[str, Any] | None = None
+    ) -> bool:
         """Ask whoever is watching, and block this run until they answer.
 
         The Web UI ran with permissions non-interactive, so every tool above
@@ -125,6 +134,19 @@ class Run:
         do real work. The decision now goes to the browser through the same
         event log everything else travels on.
         """
+        if self.broker is not None:
+            common = dict(
+                origin={
+                    "session_id": self.conversation_id,
+                    "run_id": self.id,
+                },
+                publish=self.append,
+                timeout=APPROVAL_TIMEOUT_SECONDS,
+                allow_session=True,
+                allow_persistent=str(description).lstrip().startswith("Run:"),
+            )
+            decision = self.broker.request_prompt(description, tier, action, **common)
+            return decision != "deny"
         request = ApprovalRequest(f"ask_{uuid.uuid4().hex[:12]}", description, int(tier))
         self.approval = request
         self.append(request.as_event())
@@ -147,7 +169,29 @@ class Run:
         finally:
             self.approval = None
 
-    def decide_approval(self, request_id: str, approved: bool) -> bool:
+    def decide_approval(
+        self,
+        request_id: str,
+        approved: bool,
+        scope: str = "once",
+        *,
+        actor_id: str = "local-user",
+    ) -> bool:
+        if self.broker is not None:
+            try:
+                self.broker.decide(
+                    request_id,
+                    decision="approve" if approved else "deny",
+                    scope=scope if approved else "once",
+                    actor={
+                        "id": actor_id,
+                        "type": "human",
+                        "authenticated_by": "magent-loopback-token",
+                    },
+                )
+                return True
+            except (ValueError, ConflictError):
+                return False
         request = self.approval
         if request is None or request.request_id != request_id or request.decided.is_set():
             return False
@@ -200,9 +244,10 @@ class Run:
 class RunStore:
     """Every run this server has started, newest last."""
 
-    def __init__(self) -> None:
+    def __init__(self, broker: ApprovalBroker | None = None) -> None:
         self._runs: dict[str, Run] = {}
         self._lock = threading.Lock()
+        self.broker = broker
 
     def get(self, run_id: str) -> Run | None:
         with self._lock:
@@ -234,7 +279,7 @@ class RunStore:
         to completion even if every reader disconnects, which is the point: the
         reply is recorded whether or not a tab is open to see it.
         """
-        run = Run(conversation_id)
+        run = Run(conversation_id, self.broker)
         with self._lock:
             self._runs[run.id] = run
             self._evict()

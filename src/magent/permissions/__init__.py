@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import ast
 import fnmatch
-from collections.abc import Callable
+import inspect
+from collections.abc import Callable, Mapping
 from enum import IntEnum
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from rich.console import Console
 from rich.panel import Panel
@@ -732,7 +733,8 @@ def check_permission(
     tier: RiskTier,
     mode: str = "balanced",
     interactive: bool = True,
-    ask: Callable[[str, RiskTier], bool] | None = None,
+    ask: Callable[..., bool | str] | None = None,
+    action: Mapping[str, Any] | None = None,
 ) -> PermissionResult:
     """
     Evaluate whether an action should proceed based on its tier and the active mode.
@@ -766,7 +768,8 @@ def check_permission(
                 )
             )
             if ask is not None:
-                return PermissionResult(bool(ask(action_description, tier)), tier, "yolo-prompt")
+                answer = _invoke_approval_prompt(ask, action_description, tier, action)
+                return PermissionResult(bool(answer), tier, "yolo-prompt")
             ans = Prompt.ask("[red]YOLO mode — proceed?[/red] [y/N]", default="y")
             return PermissionResult(ans.lower() in ("y", "yes"), tier, "yolo-prompt")
         return PermissionResult(True, tier, "yolo-auto")
@@ -781,7 +784,17 @@ def check_permission(
     if ask is not None:
         # One decision path for every non-terminal front end: it is shown the
         # same description and tier the console prompt would have shown.
-        return PermissionResult(bool(ask(action_description, tier)), tier, "asked")
+        answer = _invoke_approval_prompt(ask, action_description, tier, action)
+        if isinstance(answer, str):
+            scope = answer.strip().lower()
+            if scope in {"deny", "denied", "no", "n", "false"}:
+                return PermissionResult(False, tier, "user-denied")
+            reason = {
+                "session": "user-session-allow",
+                "always": "user-persistent-allow",
+            }.get(scope, "user-confirmed")
+            return PermissionResult(scope in {"once", "session", "always", "approve", "yes", "y"}, tier, reason)
+        return PermissionResult(bool(answer), tier, "asked")
 
     # CONFIRM tier — show action, press Enter
     if tier == RiskTier.CONFIRM:
@@ -814,3 +827,27 @@ def check_permission(
         return PermissionResult(approved, tier, "user-confirmed" if approved else "user-denied")
 
     return PermissionResult(True, tier, "auto")
+
+
+def _invoke_approval_prompt(
+    ask: Callable[..., bool | str],
+    description: str,
+    tier: RiskTier,
+    action: Mapping[str, Any] | None,
+) -> bool | str:
+    """Pass exact action data when supported without breaking legacy callbacks."""
+
+    try:
+        parameters = inspect.signature(ask).parameters.values()
+        accepts_action = any(item.kind is inspect.Parameter.VAR_POSITIONAL for item in parameters)
+        if not accepts_action:
+            positional = {
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            }
+            accepts_action = sum(item.kind in positional for item in parameters) >= 3
+    except (TypeError, ValueError):
+        accepts_action = False
+    if accepts_action:
+        return ask(description, tier, dict(action) if action is not None else None)
+    return ask(description, tier)

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { humanizeError, post, request } from "../api";
 import type { GraphNode, Profile } from "../types";
 
@@ -42,6 +43,13 @@ function laneFor(node: GraphNode): string {
 
 type GraphDoc = Record<string, unknown> & { nodes?: Record<string, Record<string, unknown>> };
 type DraftActivity = { stage?: string; message?: string; attempt?: number; finding_count?: number; details?: string[]; at?: number };
+type GraphApproval = {
+  request_id: string;
+  description: string;
+  tier: number;
+  choices: Array<"once" | "session" | "always" | "deny">;
+  node_id?: string;
+};
 
 type NodeMap = Record<string, Record<string, unknown>>;
 type CardEditor = {
@@ -237,6 +245,8 @@ export function GraphsView({
   const [draftActivity, setDraftActivity] = useState<DraftActivity[]>([]);
   const [draftStage, setDraftStage] = useState("Preparing graph generation…");
   const [draftJobId, setDraftJobId] = useState("");
+  const [approvals, setApprovals] = useState<GraphApproval[]>([]);
+  const [approvalBusy, setApprovalBusy] = useState(false);
   const poll = useRef<number | null>(null);
 
   const watchJob = useCallback(
@@ -253,6 +263,7 @@ export function GraphsView({
             nodes?: Record<string, unknown>[];
             events?: unknown[];
             run_id?: string;
+            awaiting_approvals?: GraphApproval[];
           }>(`/api/graphs/status?job_id=${encodeURIComponent(id)}`);
           if (state.nodes?.length) setNodes(cardsFromPlan(state.nodes));
           const runState = String(state.state || state.status || "");
@@ -264,6 +275,7 @@ export function GraphsView({
           );
           setRunActivity(state.activity || "");
           setEventCount(state.events?.length || 0);
+          setApprovals((state.awaiting_approvals || []).filter((item) => Boolean(item.request_id)));
           setLastUpdate(Date.now());
           sessionStorage.setItem(
             GRAPH_RUN_KEY,
@@ -273,6 +285,7 @@ export function GraphsView({
             if (poll.current) window.clearInterval(poll.current);
             poll.current = null;
             setBusy("");
+            setApprovals([]);
           }
         } catch (problem) {
           setRunSummary(`Status refresh failed: ${(problem as Error).message}. Retrying automatically…`);
@@ -553,6 +566,32 @@ export function GraphsView({
     }
   }
 
+  async function decideGraphApproval(
+    approval: GraphApproval,
+    decision: "once" | "session" | "always" | "deny",
+  ) {
+    if (!jobId || approvalBusy) return;
+    setApprovalBusy(true);
+    try {
+      await post("/api/graphs/approve", {
+        job_id: jobId,
+        request_id: approval.request_id,
+        decision,
+      });
+      setApprovals((current) => current.filter((item) => item.request_id !== approval.request_id));
+      setRunActivity(
+        decision === "deny"
+          ? "Permission denied; the card is handling that decision."
+          : "Permission approved; the card is resuming.",
+      );
+      notify(decision === "deny" ? "Permission denied." : "Permission approved.");
+    } catch (problem) {
+      setError((problem as Error).message);
+    } finally {
+      setApprovalBusy(false);
+    }
+  }
+
   async function openCard(nodeId: string) {
     if (busy === "run") return;
     try {
@@ -761,6 +800,73 @@ export function GraphsView({
             <div><dt>Last check</dt><dd>{lastUpdate ? new Date(lastUpdate).toLocaleTimeString() : "—"}</dd></div>
           </dl>
         </section>
+      )}
+
+      {approvals.length > 0 && createPortal(
+        <div className="modal-backdrop graph-approval-backdrop" role="presentation">
+          <section
+            className="modal graph-approval-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="graphApprovalTitle"
+            aria-describedby="graphApprovalDescription"
+          >
+            <div className="dialog-head">
+              <div>
+                <div className="eyebrow">PERMISSION REQUIRED</div>
+                <h2 id="graphApprovalTitle">Graph card needs your approval</h2>
+              </div>
+              {approvals.length > 1 && <span className="tag">{approvals.length} waiting</span>}
+            </div>
+            <p id="graphApprovalDescription">
+              {approvals[0].node_id ? `Card ${approvals[0].node_id} is waiting before it can continue.` : "The active graph card is waiting before it can continue."}
+            </p>
+            <code className="graph-approval-command">{approvals[0].description}</code>
+            <p className="context-note">
+              Review the exact action. Closing or navigating in the UI does not approve it automatically.
+            </p>
+            <div className="graph-approval-actions">
+              <button
+                className="danger-button"
+                type="button"
+                disabled={approvalBusy}
+                onClick={() => void decideGraphApproval(approvals[0], "deny")}
+              >
+                Deny
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                disabled={approvalBusy}
+                onClick={() => void decideGraphApproval(approvals[0], "once")}
+              >
+                Approve once
+              </button>
+              {approvals[0].choices.includes("session") && (
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={approvalBusy}
+                  onClick={() => void decideGraphApproval(approvals[0], "session")}
+                >
+                  For this session
+                </button>
+              )}
+              {approvals[0].choices.includes("always") && (
+                <button
+                  className="ghost-button"
+                  type="button"
+                  disabled={approvalBusy}
+                  title="Save this exact shell command as a trusted approval for future sessions."
+                  onClick={() => void decideGraphApproval(approvals[0], "always")}
+                >
+                  Always allow exact command
+                </button>
+              )}
+            </div>
+          </section>
+        </div>,
+        document.body,
       )}
 
       <div className="kanban">

@@ -18,7 +18,7 @@ from magent.tools.catalog import built_in_tool_definitions
 ChunkCallback = Callable[[str, str], None]
 # Asks whoever is watching the run to approve one tool. Without it the session
 # runs non-interactive, which can only refuse.
-ApprovalCallback = Callable[[str, int], bool]
+ApprovalCallback = Callable[..., bool]
 # Called between units of work; it raises to abandon the turn. A turn that only
 # checked at the start could not be stopped once a long reply began streaming.
 CancelCheck = Callable[[], None]

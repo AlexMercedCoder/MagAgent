@@ -432,3 +432,42 @@ def test_background_run_moves_cards_to_done_with_summaries(graph_project, monkey
     assert all(node["summary"].endswith("completed.") for node in job["nodes"])
     assert job["activity"] == "Graph execution finished with status succeeded."
     assert any(event["type"] == "node.tool.requested" for event in job["events"])
+
+
+def test_background_graph_permission_is_answered_from_browser(graph_project, monkeypatch) -> None:
+    project, graph, store = graph_project
+    monkeypatch.setattr(web_graphs, "load_config", lambda _username: Config(DEFAULT_GLOBAL_CONFIG))
+    outcome: dict[str, str] = {}
+
+    class FakeExecutor:
+        def __init__(self, **kwargs):
+            self.permission_prompt = kwargs["permission_prompt"]
+
+        async def run(self, _path, *, params):
+            outcome["decision"] = self.permission_prompt("Run: `npm test`", 2)
+            outcome["repeated_decision"] = self.permission_prompt("Run: `npm test`", 2)
+            return {
+                "ok": True,
+                "run": {"run_id": "run_approval", "status": "succeeded", "summary": {}},
+            }
+
+    monkeypatch.setattr(web_graphs, "GraphExecutor", FakeExecutor)
+    manager = GraphRunManager(store, "alex", project)
+    job = manager.start(str(graph), approved_gates=["maintainer_approval"])
+    deadline = time.monotonic() + 2
+    while not job.get("awaiting_approvals") and time.monotonic() < deadline:
+        time.sleep(0.01)
+        job = manager.status(job["job_id"])
+
+    request = job["awaiting_approvals"][0]
+    assert request["choices"] == ["once", "session", "always", "deny"]
+    assert manager.decide_approval(job["job_id"], request["request_id"], "session") is True
+
+    while job["state"] not in {"succeeded", "failed"} and time.monotonic() < deadline:
+        time.sleep(0.01)
+        job = manager.status(job["job_id"])
+    assert job["state"] == "succeeded"
+    assert outcome["decision"] == "session"
+    assert outcome["repeated_decision"] == "session"
+    assert job["awaiting_approvals"] == []
+    assert sum(event["type"] == "approval.requested" for event in job["events"]) == 1

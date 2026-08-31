@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { activeRun, cancelRun, decideApproval, reattachRun, streamMessage } from "../api";
+import { activeRun, cancelRun, reattachRun, streamMessage } from "../api";
 import { Markdown } from "../Markdown";
-import type { ApprovalRequest, ChatEvent, Conversation, Message } from "../types";
+import type { ChatEvent, Conversation, Message } from "../types";
 
 function initials(name = "M"): string {
   return name.split(/\s+|[-_]/).map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "M";
@@ -34,7 +34,6 @@ export function ChatView({
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState<Message[]>([]);
   const [resumed, setResumed] = useState(false);
-  const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const transcript = useRef<HTMLDivElement>(null);
   const abort = useRef<AbortController | null>(null);
   const runId = useRef("");
@@ -94,15 +93,9 @@ export function ChatView({
             };
             setLive([...settled, streaming]);
           } else if (event.type === "approval.requested") {
-            // The run is parked until this is answered, so it is shown in the
-            // transcript rather than as a toast that can be missed.
-            setApproval({
-              request_id: event.request_id,
-              description: event.description,
-              tier: event.tier,
-            });
+            // The app-level AAIS presenter renders this independently of the
+            // selected route, so navigating cannot hide a blocked action.
           } else if (event.type === "approval.resolved") {
-            setApproval(null);
           } else if (event.type === "cancelled") {
             streaming = { ...streaming, status: "complete" };
             setLive([...settled, streaming]);
@@ -121,7 +114,6 @@ export function ChatView({
       } finally {
         abort.current = null;
         runId.current = "";
-        setApproval(null);
         setBusy(false);
       }
     },
@@ -140,23 +132,6 @@ export function ChatView({
     );
     clearContext();
   }, [draft, active, busy, consume, context, clearContext]);
-
-  const decide = useCallback(
-    async (approved: boolean) => {
-      if (!approval || !runId.current) return;
-      const pending = approval;
-      // Cleared straight away: the run is blocked on this, and leaving the
-      // buttons live invites a second click that answers nothing.
-      setApproval(null);
-      try {
-        const result = await decideApproval(runId.current, pending.request_id, approved);
-        if (!result.ok && result.error) notify(result.error);
-      } catch (problem) {
-        setError((problem as Error).message);
-      }
-    },
-    [approval, notify, setError],
-  );
 
   const stop = useCallback(async () => {
     // Cancel the run itself. Aborting only this socket used to leave the turn
@@ -261,21 +236,6 @@ export function ChatView({
             </div>
           </article>
         ))}
-        {approval && (
-          <div className="approval-card" role="alertdialog" aria-label="Tool approval">
-            <b>This turn wants to do something that needs your say-so</b>
-            <p>{approval.description}</p>
-            <div className="approval-actions">
-              <button className="primary-button" type="button" onClick={() => void decide(true)}>
-                Allow once
-              </button>
-              <button className="secondary-button" type="button" onClick={() => void decide(false)}>
-                Deny
-              </button>
-            </div>
-            <small>Nothing runs until you answer. Leaving it unanswered denies it.</small>
-          </div>
-        )}
       </div>
 
       <div className="composer-wrap">

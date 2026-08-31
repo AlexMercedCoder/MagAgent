@@ -198,6 +198,10 @@ class LifecycleRuntimeMixin:
                 config=self.config,
                 parent_task_id=str(getattr(self, "execution_task_id", "")),
                 parent_profile=getattr(self, "profile", None),
+                interactive_permissions=bool(
+                    getattr(self, "_interactive_permissions", True)
+                ),
+                permission_prompt=getattr(self, "_permission_prompt", None),
             )
         if profile_name:
             task = await self._subagent_runner.spawn(

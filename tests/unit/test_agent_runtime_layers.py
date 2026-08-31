@@ -275,12 +275,19 @@ def test_lifecycle_usage_memory_and_shutdown(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_lifecycle_reuses_subagent_runner(monkeypatch) -> None:
     value = runtime()
+    def approval(_description, _tier):
+        return True
+
+    value._interactive_permissions = False
+    value._permission_prompt = approval
 
     class Runner:
         created = 0
+        kwargs = {}
 
-        def __init__(self, **_kwargs):
+        def __init__(self, **kwargs):
             Runner.created += 1
+            Runner.kwargs = kwargs
 
         async def spawn(self, task_id, description):
             return SimpleNamespace(done=True, error="", result=f"{task_id}:{description}")
@@ -289,6 +296,62 @@ async def test_lifecycle_reuses_subagent_runner(monkeypatch) -> None:
     assert await value.spawn_subagent("review", "inspect") == "review:inspect"
     assert await value.spawn_subagent("verify", "test") == "verify:test"
     assert Runner.created == 1
+    assert Runner.kwargs["interactive_permissions"] is False
+    assert Runner.kwargs["permission_prompt"] is approval
+
+
+@pytest.mark.asyncio
+async def test_subagent_session_inherits_non_terminal_approval_channel(
+    monkeypatch, tmp_path
+) -> None:
+    from magent.subagents import SubAgentRunner
+
+    captured = {}
+    def approval(_description, _tier):
+        return "once"
+
+    class Session:
+        session_id = "child-session"
+
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        async def chat(self, _description):
+            return "done"
+
+        async def end_session(self):
+            return None
+
+    class Bridge:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def complete(self, _result):
+            pass
+
+        def fail(self, _error):
+            pass
+
+    monkeypatch.setattr("magent.agent.AgentSession", Session)
+    monkeypatch.setattr("magent.execution_bridge.SessionTaskBridge", Bridge)
+    monkeypatch.setattr("magent.workbench_store.WorkbenchStore", lambda _username: object())
+    runner = SubAgentRunner(
+        username="test",
+        provider=None,
+        extraction_provider=None,
+        cwd=str(tmp_path),
+        config=SimpleNamespace(max_subagents=1, max_parallel_subagents=1),
+        quiet=True,
+        interactive_permissions=False,
+        permission_prompt=approval,
+    )
+
+    result = await runner.spawn("child", "inspect")
+
+    assert result.error == ""
+    assert result.result == "done"
+    assert captured["interactive_permissions"] is False
+    assert captured["permission_prompt"] is approval
 
 
 def test_runtime_support_helpers_cover_diagnostics_and_recovery() -> None:

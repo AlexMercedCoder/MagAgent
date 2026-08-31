@@ -2,6 +2,20 @@
 
 `magent ui` starts a local-only chat workspace for the current MagAgent user and project. It packages a lightweight conversational alternative to Mag Command Center directly with the CLI while retaining the local operations dashboard as a secondary view. It is not a hosted service.
 
+## Runtime Approvals (AAIS)
+
+The Web UI is a complete permission presenter for chats, bot conversations, subagents, and graph
+runs. A global modal displays the exact action, arguments, working directory, risk reasons, digest,
+and scopes while the job waits in the background; terminal interaction is not required. MagAgent
+remains the authority: it persists the request, validates the decision against the current action,
+records the resolution, and only then resumes execution.
+
+Third-party clients can launch `magent ask --approval-stdio`, `magent graph run
+--approval-stdio`, or `magent graph resume --approval-stdio`. Standard output carries one
+[AAIS 1.0](https://github.com/alexmerced-oss/agent-approval-interchange-spec) JSON envelope per line,
+decisions return on standard input, and logs remain on standard error. The Web API exposes snapshot,
+event-cursor, and decision routes under `/api/approvals` using the existing auth and CSRF boundary.
+
 ## Workspace Files And Artifacts
 
 The **Files** view is the project-context boundary for the browser. It lists at most 1,000 files at
@@ -160,6 +174,15 @@ default or a worker thread parked forever. Cancelling a run also releases a turn
 approval, because otherwise cancel appears broken for exactly the turns most likely to need it. The
 run snapshot reports any approval still outstanding, so a reattaching browser re-renders the prompt
 instead of leaving the run stuck behind a question nobody can see.
+
+Graph-card tool approvals use the same browser-first rule. A graph worker publishes its pending
+request in `/api/graphs/status`, and `/api/graphs/approve` returns deny, once, session, or—only for
+an exact shell command—persistent approval. The dialog is rendered at application level, so it
+remains visible after navigating to Runs, Files, or Settings, and a refreshed tab reconstructs it
+from the live graph job. Graph approvals time out after thirty minutes and deny safely; running the
+Web UI never requires answering a hidden terminal prompt.
+The callback is inherited recursively by subagents, preserving the parent session's browser or
+non-interactive channel instead of allowing delegated work to reopen stdin.
 
 Runs are held in memory for reattachment after a reload, not as history: the conversation store is
 what persists. Finished runs are evicted oldest-first past a cap, and a run still in flight is never
@@ -365,6 +388,7 @@ The dashboard exposes local JSON endpoints for tooling:
 - `/api/graphs/save`
 - `/api/graphs/run`
 - `/api/graphs/status?job_id=<web-run-id>`
+- `/api/graphs/approve`
 - `/api/settings`
 - `/api/onboarding/readiness`
 - `/api/onboarding/providers`

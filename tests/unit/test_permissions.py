@@ -2,10 +2,23 @@
 
 from magent.permissions import (
     RiskTier,
+    check_permission,
     classify_file_op,
     classify_shell_command,
     shell_pattern_matches,
 )
+
+
+def test_frontend_permission_prompt_preserves_scoped_decision():
+    result = check_permission(
+        "Run: `npm test`",
+        RiskTier.CONFIRM,
+        mode="balanced",
+        interactive=False,
+        ask=lambda _description, _tier: "session",
+    )
+    assert result.approved is True
+    assert result.reason == "user-session-allow"
 
 
 class TestClassifyShellCommand:

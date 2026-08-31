@@ -10,15 +10,28 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from aais import ConflictError
+
 from magent.agraph.authoring import model_graph_draft, node_template, preview_graph, save_graph
 from magent.agraph.document import load_graph
 from magent.agraph.execute import GraphExecutor
 from magent.agraph.plan import resolved_plan
 from magent.agraph.status import graph_status
+from magent.approval_broker import ApprovalBroker
 from magent.config import load_config
 from magent.workbench_store import WorkbenchStore
 
 GRAPH_SUFFIXES = (".agraph.yaml", ".agraph.yml", ".agraph.json")
+GRAPH_APPROVAL_TIMEOUT_SECONDS = 1800
+
+
+class _GraphApprovalWaiter:
+    """Thread-safe bridge between a graph worker and the loopback Web UI."""
+
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self.payload = payload
+        self.decision = "deny"
+        self.resolved = threading.Event()
 
 
 def confined_graph_target(project: str | Path, raw_path: str) -> Path:
@@ -371,11 +384,20 @@ def graph_catalog(store: WorkbenchStore, project: str | Path) -> dict[str, Any]:
 class GraphRunManager:
     """Own background graph runs and expose polling-friendly Kanban snapshots."""
 
-    def __init__(self, store: WorkbenchStore, username: str, project: str | Path):
+    def __init__(
+        self,
+        store: WorkbenchStore,
+        username: str,
+        project: str | Path,
+        approval_broker: ApprovalBroker | None = None,
+    ):
         self.store = store
         self.username = username
         self.project = Path(project).resolve()
+        self.approval_broker = approval_broker
         self._jobs: dict[str, dict[str, Any]] = {}
+        self._approvals: dict[str, dict[str, _GraphApprovalWaiter]] = {}
+        self._approval_grants: dict[str, dict[str, str]] = {}
         self._lock = threading.Lock()
 
     def preview(self, raw_path: str) -> dict[str, Any]:
@@ -417,6 +439,7 @@ class GraphRunManager:
             "activity": "Queued for the graph runner.",
             "plan": plan,
             "events": [],
+            "awaiting_approvals": [],
             "nodes": [
                 {
                     "node_id": item["id"],
@@ -435,6 +458,8 @@ class GraphRunManager:
         }
         with self._lock:
             self._jobs[job_id] = job
+            self._approvals[job_id] = {}
+            self._approval_grants[job_id] = {}
         thread = threading.Thread(
             target=self._execute,
             args=(job_id, path, dict(params or {}), approved),
@@ -442,6 +467,176 @@ class GraphRunManager:
         )
         thread.start()
         return self.status(job_id) or job
+
+    def decide_approval(self, job_id: str, request_id: str, decision: str) -> bool:
+        """Resolve a permission request currently blocking a graph tool."""
+        normalized = str(decision or "deny").strip().lower()
+        if self.approval_broker is not None:
+            mapped = (
+                "approve" if normalized in {"once", "session", "always", "persistent"} else "deny"
+            )
+            scope = (
+                "persistent"
+                if normalized in {"always", "persistent"}
+                else (normalized if normalized in {"once", "session"} else "once")
+            )
+            try:
+                self.approval_broker.decide(
+                    request_id,
+                    decision=mapped,
+                    scope=scope,
+                    actor={
+                        "id": "local-user",
+                        "type": "human",
+                        "authenticated_by": "magent-loopback-token",
+                    },
+                )
+                return True
+            except (ValueError, ConflictError):
+                return False
+        if normalized not in {"once", "session", "always", "deny"}:
+            raise ValueError("decision must be once, session, always, or deny")
+        with self._lock:
+            waiter = self._approvals.get(job_id, {}).get(request_id)
+            if waiter is None or waiter.resolved.is_set():
+                return False
+            if normalized not in waiter.payload["choices"]:
+                raise ValueError(f"{normalized} is not available for this permission request")
+            waiter.decision = normalized
+            if normalized in {"session", "always"}:
+                self._approval_grants.setdefault(job_id, {})[str(waiter.payload["description"])] = (
+                    normalized
+                )
+            job = self._jobs.get(job_id)
+            if job is not None:
+                job["events"].append(
+                    {
+                        "type": "approval.resolved",
+                        "request_id": request_id,
+                        "decision": normalized,
+                        "at": time.time(),
+                    }
+                )
+                job["activity"] = (
+                    "Permission denied; returning the decision to the active card."
+                    if normalized == "deny"
+                    else "Permission approved; resuming the active card."
+                )
+        waiter.resolved.set()
+        return True
+
+    def _request_approval(
+        self,
+        job_id: str,
+        description: str,
+        tier: int,
+        detail: dict[str, Any] | None = None,
+        action: dict[str, Any] | None = None,
+    ) -> str:
+        """Publish an approval to the browser and wait for its scoped decision."""
+        if self.approval_broker is not None:
+
+            def publish(envelope: dict[str, Any]) -> None:
+                with self._lock:
+                    job = self._jobs.get(job_id)
+                    if job is None:
+                        return
+                    job["events"].append(envelope)
+                    if envelope.get("type") == "approval.requested":
+                        request = dict(envelope["request"])
+                        job["awaiting_approvals"] = [
+                            *[
+                                item
+                                for item in job.get("awaiting_approvals", [])
+                                if item.get("id") != request.get("id")
+                            ],
+                            request,
+                        ]
+                        job["activity"] = f"Waiting for permission: {description[:180]}"
+                    elif envelope.get("type") == "approval.resolved":
+                        resolved_id = envelope["resolution"]["request_id"]
+                        job["awaiting_approvals"] = [
+                            item
+                            for item in job.get("awaiting_approvals", [])
+                            if item.get("id") != resolved_id
+                        ]
+                        job["activity"] = str(
+                            envelope["resolution"].get("message") or "Approval resolved."
+                        )
+
+            node_id = str((detail or {}).get("node_id") or "")
+            common = dict(
+                origin={
+                    "session_id": f"graph-{job_id}",
+                    "run_id": job_id,
+                    **({"node_id": node_id} if node_id else {}),
+                },
+                publish=publish,
+                timeout=GRAPH_APPROVAL_TIMEOUT_SECONDS,
+                allow_session=True,
+                allow_persistent=str(description).lstrip().startswith("Run:"),
+            )
+            return self.approval_broker.request_prompt(description, tier, action, **common)
+        with self._lock:
+            remembered = self._approval_grants.get(job_id, {}).get(str(description))
+        if remembered in {"session", "always"}:
+            return remembered
+        request_id = f"ask_{uuid.uuid4().hex[:12]}"
+        is_shell = str(description).lstrip().startswith("Run:")
+        choices = ["once", "session", "always", "deny"] if is_shell else ["once", "deny"]
+        node_id = str((detail or {}).get("node_id") or "")
+        if not node_id:
+            with self._lock:
+                running = next(
+                    (
+                        item
+                        for item in self._jobs.get(job_id, {}).get("nodes", [])
+                        if str(item.get("state") or "").lower() in {"running", "active"}
+                    ),
+                    None,
+                )
+                node_id = str((running or {}).get("node_id") or "")
+        payload = {
+            "request_id": request_id,
+            "description": str(description),
+            "tier": int(tier),
+            "choices": choices,
+            "node_id": node_id,
+            "created_at": time.time(),
+        }
+        waiter = _GraphApprovalWaiter(payload)
+        with self._lock:
+            job = self._jobs[job_id]
+            self._approvals.setdefault(job_id, {})[request_id] = waiter
+            job["awaiting_approvals"] = [
+                item.payload
+                for item in self._approvals[job_id].values()
+                if not item.resolved.is_set()
+            ]
+            job["events"].append({"type": "approval.requested", **payload})
+            job["activity"] = f"Waiting for permission: {str(description)[:180]}"
+        answered = waiter.resolved.wait(GRAPH_APPROVAL_TIMEOUT_SECONDS)
+        with self._lock:
+            current = self._approvals.get(job_id, {}).pop(request_id, None)
+            job = self._jobs.get(job_id)
+            if job is not None:
+                job["awaiting_approvals"] = [
+                    item.payload
+                    for item in self._approvals.get(job_id, {}).values()
+                    if not item.resolved.is_set()
+                ]
+                if not answered:
+                    job["events"].append(
+                        {
+                            "type": "approval.resolved",
+                            "request_id": request_id,
+                            "decision": "deny",
+                            "reason": "timeout",
+                            "at": time.time(),
+                        }
+                    )
+                    job["activity"] = "Permission request timed out and was safely denied."
+        return current.decision if answered and current is not None else "deny"
 
     def status(self, job_id: str) -> dict[str, Any] | None:
         with self._lock:
@@ -491,8 +686,21 @@ class GraphRunManager:
                     job["state"] = str(event.get("state") or "completed")
                     job["summary"] = str(event.get("summary") or "Graph execution completed.")
 
-        async def approve(_prompt: str, detail: dict[str, Any]) -> bool:
-            return str(detail.get("node_id") or "") in approved
+        async def approve(prompt: str, detail: dict[str, Any]) -> bool:
+            preapproved = {
+                str(detail.get("id") or ""),
+                str(detail.get("checkpoint_id") or ""),
+                str(detail.get("node_id") or ""),
+            }
+            if approved.intersection(preapproved):
+                return True
+            decision = await asyncio.to_thread(self._request_approval, job_id, prompt, 2, detail)
+            return decision != "deny"
+
+        def permission_prompt(
+            description: str, tier: int, action: dict[str, Any] | None = None
+        ) -> str:
+            return self._request_approval(job_id, description, int(tier), action=action)
 
         async def run() -> dict[str, Any]:
             executor = GraphExecutor(
@@ -501,6 +709,7 @@ class GraphRunManager:
                 project=self.project,
                 store=self.store,
                 approval=approve,
+                permission_prompt=permission_prompt,
                 event_sink=emit,
             )
             return await executor.run(path, params=params)
