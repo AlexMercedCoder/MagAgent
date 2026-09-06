@@ -188,6 +188,7 @@ Generated from the active Typer command tree.
 - `magent ui`
 - `magent update`
 - `magent user`
+- `magent webmcp`
 - `magent workbench`
 - `magent workspace`
 
@@ -563,6 +564,15 @@ Generated from the active Typer command tree.
 - `magent user delete`
 - `magent user list`
 - `magent user switch`
+
+## webmcp
+
+- `magent webmcp call`
+- `magent webmcp open`
+- `magent webmcp origin-add`
+- `magent webmcp origin-remove`
+- `magent webmcp origins`
+- `magent webmcp status`
 
 ## workbench
 

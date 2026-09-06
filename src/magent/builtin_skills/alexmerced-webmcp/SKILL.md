@@ -2,7 +2,7 @@
 name: alexmerced-webmcp
 description: Use alexmerced.app browser-local WebMCP tools for PDFs, data, charts, media, notes, planning, calculation, and other utility work.
 version: 1.0.0
-tools-required: webmcp_open webmcp_list_tools webmcp_call_tool
+tools-required: webmcp_open webmcp_list_tools webmcp_call_tool webmcp_status webmcp_close
 trigger-keywords: ["alexmerced.app", "WebMCP", "PDF", "chart", "QR", "kanban", "flashcards", "browser tool"]
 ---
 

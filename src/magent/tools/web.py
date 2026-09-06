@@ -439,14 +439,30 @@ class WebToolsMixin:
             return {"ok": False, "error": str(e), "blocked_by": "network-policy"}
         return await browser_screenshot(url, str(abs_path), wait_ms=wait_ms)
 
+    def _webmcp_origins(self) -> tuple[str, ...]:
+        from magent.browser import normalize_webmcp_origins
+
+        configured = self.config.get("webmcp", "origins", default=None) if self.config else None
+        return normalize_webmcp_origins(configured)
+
+    def _webmcp_headless_setting(self) -> bool | None:
+        if not self.config:
+            return None
+        return bool(self.config.get("webmcp", "headless", default=False))
+
     def _alexmerced_webmcp_url(self, path: str = "") -> str:
         requested = str(path or "").strip()
         if not requested:
-            return str(getattr(self, "_webmcp_url", WEBMCP_ORIGIN + "/"))
-        url = urljoin(WEBMCP_ORIGIN + "/", requested.lstrip("/"))
+            return str(getattr(self, "_webmcp_url", "") or WEBMCP_ORIGIN + "/")
+        current = str(getattr(self, "_webmcp_url", "") or WEBMCP_ORIGIN + "/")
+        url = requested if requested.startswith("https://") else urljoin(current, requested)
         parsed = urlparse(url)
-        if parsed.scheme != "https" or parsed.netloc.lower() != "alexmerced.app":
-            raise ValueError("The built-in WebMCP bridge only opens https://alexmerced.app.")
+        origin = f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+        if parsed.scheme != "https" or origin not in self._webmcp_origins():
+            raise ValueError(
+                "WebMCP navigation is restricted to configured HTTPS origins: "
+                + ", ".join(self._webmcp_origins())
+            )
         return url
 
     async def webmcp_open(self, path: str = "/", wait_ms: int = 750) -> ToolResult:
@@ -461,10 +477,22 @@ class WebToolsMixin:
         if not perm.approved:
             return self._permission_denied(perm)
         self._webmcp_url = url
-        return await webmcp_inspect(url, wait_ms=wait_ms)
+        if self.config:
+            result = await webmcp_inspect(
+                url,
+                wait_ms=wait_ms,
+                allowed_origins=self._webmcp_origins(),
+                headless=self._webmcp_headless_setting(),
+            )
+        else:
+            result = await webmcp_inspect(url, wait_ms=wait_ms)
+        if result.get("ok"):
+            self._webmcp_registry_revision = result.get("registry_revision", "")
+            self._webmcp_tools = result.get("tools", [])
+        return result
 
     async def webmcp_list_tools(self, path: str = "", wait_ms: int = 750) -> ToolResult:
-        """List live tools on the current or requested alexmerced.app page."""
+        """List live tools on the current or requested allowlisted page."""
         return await self.webmcp_open(path or self._alexmerced_webmcp_url(), wait_ms=wait_ms)
 
     async def webmcp_call_tool(
@@ -473,8 +501,9 @@ class WebToolsMixin:
         arguments: dict[str, Any] | None = None,
         path: str = "",
         wait_ms: int = 750,
+        registry_revision: str = "",
     ) -> ToolResult:
-        """Invoke one live alexmerced.app WebMCP tool with explicit mutation approval."""
+        """Invoke one live WebMCP tool with explicit mutation approval."""
         try:
             url = self._alexmerced_webmcp_url(path)
         except ValueError as error:
@@ -496,17 +525,62 @@ class WebToolsMixin:
             "compute_",
         )
         operation = name.split("_", 1)[-1]
-        tier = (
-            RiskTier.AUTO
-            if name.startswith(read_prefixes) or operation.startswith(read_prefixes)
-            else RiskTier.CONFIRM
+        discovered = next(
+            (
+                item
+                for item in getattr(self, "_webmcp_tools", [])
+                if isinstance(item, dict) and item.get("name") == name
+            ),
+            {},
         )
+        annotations = discovered.get("annotations") or {}
+        destructive = bool(annotations.get("destructiveHint"))
+        conservatively_read_named = name.startswith(read_prefixes) or operation.startswith(
+            read_prefixes
+        )
+        tier = RiskTier.AUTO if conservatively_read_named and not destructive else RiskTier.CONFIRM
         self._log_tool("webmcp_call_tool", f"{name} on {url}", tier)
         perm = self._check_permission(f"Call alexmerced.app WebMCP tool {name} on {url}", tier)
         if not perm.approved:
             return self._permission_denied(perm)
         self._webmcp_url = url
+        expected = registry_revision or str(getattr(self, "_webmcp_registry_revision", "") or "")
+        if self.config:
+            return await webmcp_invoke(
+                url,
+                name,
+                arguments or {},
+                wait_ms=wait_ms,
+                allowed_origins=self._webmcp_origins(),
+                expected_revision=expected,
+                headless=self._webmcp_headless_setting(),
+            )
         return await webmcp_invoke(url, name, arguments or {}, wait_ms=wait_ms)
+
+    def webmcp_status(self) -> ToolResult:
+        """Report configuration and the last authoritative registry without opening a page."""
+        tools = getattr(self, "_webmcp_tools", [])
+        return {
+            "ok": True,
+            "schema_version": "webmcp.runtime.v1",
+            "available": True,
+            "origins": [
+                {"origin": origin, "enabled": True, "policy": "allowlisted"}
+                for origin in self._webmcp_origins()
+            ],
+            "active_page": {
+                "url": str(getattr(self, "_webmcp_url", "")),
+                "registry_revision": str(getattr(self, "_webmcp_registry_revision", "")),
+                "tool_count": len(tools),
+            },
+        }
+
+    def webmcp_close(self) -> ToolResult:
+        """Forget the page-scoped registry for this agent session."""
+        self._webmcp_url = ""
+        self._webmcp_registry_revision = ""
+        self._webmcp_tools = []
+        return {"ok": True, "schema_version": "webmcp.runtime.v1", "closed": True}
 
 
 __all__ = [

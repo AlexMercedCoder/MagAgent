@@ -309,10 +309,10 @@ magent browser snapshot https://example.com
 magent browser screenshot https://example.com --out example.png
 ```
 
-The same extra enables the built-in, origin-restricted alexmerced.app WebMCP gateway. In a normal
-session the agent can discover the bundled `alexmerced-webmcp` skill, open an app page, inspect its
+The same extra enables the built-in, exact-origin WebMCP gateway. In a normal
+session the agent can discover the bundled `alexmerced-webmcp` skill, open an allowed app page, inspect its
 live tools, and invoke one under the regular network and mutation permission policy. The dedicated
-browser profile is stored beneath `~/.local/share/magent/webmcp/` so browser-local app data persists.
+browser profile is stored beneath `~/.local/share/magent/webmcp/` and isolated per origin so browser-local app data persists. See the [WebMCP guide](docs/WEBMCP.md).
 
 ### File & Code Tools
 
@@ -349,9 +349,11 @@ tool handlers. This metadata is not chain-of-thought.
 | `http_request` | Full HTTP client: GET/POST/PUT/PATCH/DELETE | Auto |
 | `browser_snapshot` | Capture title and visible text with Playwright | Auto |
 | `browser_screenshot` | Capture a page screenshot with Playwright | Auto |
-| `webmcp_open` | Open an alexmerced.app page and discover its live page-scoped tools | Auto |
+| `webmcp_open` | Open an allowlisted HTTPS page and discover its live page-scoped tools | Auto |
 | `webmcp_list_tools` | Inspect exact WebMCP names and input schemas on the current page | Auto |
-| `webmcp_call_tool` | Invoke one discovered alexmerced.app tool | Read calls auto; mutations confirm |
+| `webmcp_call_tool` | Invoke one revision-bound discovered page tool | Read calls auto; mutations confirm |
+| `webmcp_status` | Inspect configured origins and current page registry | Auto |
+| `webmcp_close` | Close the current browser-backed WebMCP session | Auto |
 
 ### Data Tools
 

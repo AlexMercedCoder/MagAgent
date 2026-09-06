@@ -19,8 +19,13 @@ _NETWORK_READ_TOOLS = {
     "browser_screenshot",
     "webmcp_open",
     "webmcp_list_tools",
+    "webmcp_status",
 }
-_NETWORK_TOOLS = _NETWORK_READ_TOOLS | {"http_request", "webmcp_call_tool"}
+_NETWORK_TOOLS = _NETWORK_READ_TOOLS | {
+    "http_request",
+    "webmcp_call_tool",
+    "webmcp_close",
+}
 _TOOL_ALIASES = {
     "read": {"read_file", "read_file_range", "outline_file", "list_dir", "diff_files"},
     "write": {
@@ -46,6 +51,8 @@ _TOOL_ALIASES = {
         "webmcp_open",
         "webmcp_list_tools",
         "webmcp_call_tool",
+        "webmcp_status",
+        "webmcp_close",
     },
 }
 

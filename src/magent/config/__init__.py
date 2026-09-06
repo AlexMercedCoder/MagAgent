@@ -132,6 +132,10 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "allow_command_criteria": True,
         "max_parallel_nodes": 2,
     },
+    "webmcp": {
+        "origins": ["https://alexmerced.app"],
+        "headless": False,
+    },
     "mcp": {},
     "session_messaging": {
         "enabled": True,

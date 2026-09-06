@@ -270,7 +270,16 @@ def built_in_tool_definitions() -> list[dict[str, Any]]:
                 "arguments": ("object", "Arguments matching the discovered input schema"),
                 "path": ("string", "Optional alexmerced.app path to open before calling"),
                 "wait_ms": ("integer", "Milliseconds to wait for tool registration (default: 750)"),
+                "registry_revision": ("string", "Optional revision returned by webmcp_list_tools"),
             },
+        ),
+        tool_def(
+            "webmcp_status",
+            "Report configured origins and current page-scoped WebMCP registry state.",
+            {},
+        ),
+        tool_def(
+            "webmcp_close", "Close the logical WebMCP page session and invalidate its registry.", {}
         ),
         tool_def(
             "json_query",

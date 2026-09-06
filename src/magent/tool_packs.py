@@ -53,6 +53,8 @@ PACKS: dict[str, dict[str, Any]] = {
             "webmcp_open",
             "webmcp_list_tools",
             "webmcp_call_tool",
+            "webmcp_status",
+            "webmcp_close",
         ],
     },
     "data": {

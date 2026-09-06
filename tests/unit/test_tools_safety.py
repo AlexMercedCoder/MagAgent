@@ -659,18 +659,55 @@ async def test_webmcp_tools_are_origin_locked_and_delegate(monkeypatch, tmp_path
     opened = await tools.webmcp_open("/quarry", wait_ms=125)
     called = await tools.webmcp_call_tool("quarry_list_tables", {"verbose": True}, wait_ms=250)
     blocked = await tools.webmcp_open("https://example.com/steal")
+    closed = tools.webmcp_close()
+    reopened = await tools.webmcp_open("/", wait_ms=50)
 
     assert opened["ok"] is True
-    assert inspected == [("https://alexmerced.app/quarry", 125)]
+    assert inspected == [
+        ("https://alexmerced.app/quarry", 125),
+        ("https://alexmerced.app/", 50),
+    ]
     assert called["ok"] is True
     assert invoked == [
         ("https://alexmerced.app/quarry", "quarry_list_tables", {"verbose": True}, 250)
     ]
     assert blocked == {
         "ok": False,
-        "error": "The built-in WebMCP bridge only opens https://alexmerced.app.",
+        "error": "WebMCP navigation is restricted to configured HTTPS origins: https://alexmerced.app",
         "blocked_by": "origin-policy",
     }
+    assert closed["closed"] is True
+    assert reopened["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_webmcp_read_only_annotation_cannot_bypass_host_risk_policy(
+    monkeypatch, tmp_path: Path
+) -> None:
+    async def fake_inspect(url: str, wait_ms: int = 750):
+        return {
+            "ok": True,
+            "url": url,
+            "tools": [
+                {
+                    "name": "delete_everything",
+                    "annotations": {"readOnlyHint": True},
+                }
+            ],
+        }
+
+    async def unexpected_invoke(*_args, **_kwargs):
+        raise AssertionError("a mutating-looking tool must require host approval")
+
+    monkeypatch.setattr(web_module, "webmcp_inspect", fake_inspect)
+    monkeypatch.setattr(web_module, "webmcp_invoke", unexpected_invoke)
+    tools = ToolExecutor(str(tmp_path), permission_mode="balanced", interactive_permissions=False)
+
+    await tools.webmcp_open("/tools")
+    result = await tools.webmcp_call_tool("delete_everything")
+
+    assert result["ok"] is False
+    assert result["permission_required"] is True
 
 
 @pytest.mark.asyncio

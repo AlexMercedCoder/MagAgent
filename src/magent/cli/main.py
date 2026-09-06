@@ -69,6 +69,7 @@ from magent.cli.app import (
     test_app,
     tools_app,
     user_app,
+    webmcp_app,
     workbench_app,
     workspace_app,
 )
@@ -125,7 +126,7 @@ from magent.prompt_input import read_multiline_prompt, read_user_prompt
 
 console = Console()
 register_agent_commands(agent_app)
-register_browser_commands(browser_app)
+register_browser_commands(browser_app, webmcp_app)
 register_provider_ux_commands(provider_app)
 register_profile_commands(profile_app, store=store, console=console)
 register_config_commands(config_app)

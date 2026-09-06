@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 1.2.0 (2026-09-06)
+
+- Generalized the bundled WebMCP bridge from one site to an explicit exact-HTTPS-origin allowlist,
+  while retaining `https://alexmerced.app` as the safe first-run default.
+- Added per-origin persistent browser profiles, redirect validation, deterministic live-registry
+  revisions, stale-registry rejection, and bounded structured results.
+- Added `magent webmcp` status, origin-management, discovery, and direct-call commands plus governed
+  agent tools for open, list, invoke, status, and close lifecycles.
+- Classified calls from live WebMCP annotations and kept mutating or destructive operations behind
+  MagAgent's normal approval and audit boundary.
+- Documented configuration, CLI/UI integration, threat boundaries, and recovery behavior, with
+  focused origin, registry, tool-surface, and architecture regression coverage.
+
 ## 1.1.2 (2026-08-31)
 
 - Fixed shell validation so quoted HTML/XML comparison text such as `grep '<section'` is not

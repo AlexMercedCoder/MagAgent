@@ -185,6 +185,8 @@ def test_no_tool_marks_a_defaulted_parameter_as_required(tmp_path) -> None:
         "webmcp_open": set(),
         "webmcp_list_tools": set(),
         "webmcp_call_tool": {"name"},
+        "webmcp_status": set(),
+        "webmcp_close": set(),
     }
     for name, expected in expectations.items():
         if name in definitions:

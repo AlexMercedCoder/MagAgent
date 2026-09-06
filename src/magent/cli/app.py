@@ -9,7 +9,7 @@ app = typer.Typer(
     help=(
         "MagAgent — CLI AI coding agent powered by MagGraph persistent memory.\n\n"
         "[bold]Start here:[/bold] `magent configure`, `magent tutorial`, `magent doctor`, "
-        "`magent get-started`, `magent ask \"task\"`, or just run `magent` for an interactive session."
+        '`magent get-started`, `magent ask "task"`, or just run `magent` for an interactive session.'
     ),
     epilog=(
         "Common first moves:\n"
@@ -17,8 +17,8 @@ app = typer.Typer(
         "  magent get-started                Read a clear first-use guide\n"
         "  magent tutorial                   Learn the workflow\n"
         "  magent doctor                     Check setup health\n"
-        "  magent ask \"fix the failing test\"  Run one task\n"
-        "  magent plan --save \"ship fix\"     Save a reusable plan\n"
+        '  magent ask "fix the failing test"  Run one task\n'
+        '  magent plan --save "ship fix"     Save a reusable plan\n'
         "  magent next                       Get context-aware next actions"
     ),
     no_args_is_help=False,
@@ -45,7 +45,9 @@ data_app = typer.Typer(help="Data workspace helpers", name="data")
 policy_app = typer.Typer(help="Policy profiles", name="policy")
 docs_app = typer.Typer(help="Built-in MagAgent documentation", name="docs")
 events_app = typer.Typer(help="Workbench event log", name="events")
-execution_app = typer.Typer(help="Durable agent execution tasks and event streams", name="execution")
+execution_app = typer.Typer(
+    help="Durable agent execution tasks and event streams", name="execution"
+)
 checkpoint_app = typer.Typer(help="File write checkpoints", name="checkpoint")
 code_app = typer.Typer(help="Code intelligence index", name="code")
 test_app = typer.Typer(help="Test intelligence helpers", name="test")
@@ -58,6 +60,7 @@ tools_app = typer.Typer(help="Tool capability packs", name="tools")
 eval_app = typer.Typer(help="Local benchmark/eval suites", name="eval")
 github_app = typer.Typer(help="GitHub PR and issue workflows", name="github")
 browser_app = typer.Typer(help="Browser automation helpers", name="browser")
+webmcp_app = typer.Typer(help="Configure and inspect WebMCP browser tools", name="webmcp")
 cache_app = typer.Typer(help="Prompt cache diagnostics", name="cache")
 hook_app = typer.Typer(help="Project workflow hooks", name="hook")
 lsp_app = typer.Typer(help="LSP-backed code intelligence", name="lsp")
@@ -76,7 +79,9 @@ permission_app = typer.Typer(help="Permission profile UX", name="permission")
 performance_app = typer.Typer(help="Local performance diagnostics", name="performance")
 workbench_app = typer.Typer(help="Workbench storage maintenance", name="workbench")
 system_app = typer.Typer(help="Machine-readable system and desktop integration info", name="system")
-graph_app = typer.Typer(help="Portable Agentic Graph validation, planning, generation, and execution", name="graph")
+graph_app = typer.Typer(
+    help="Portable Agentic Graph validation, planning, generation, and execution", name="graph"
+)
 
 app.add_typer(user_app, name="user", rich_help_panel="Setup & Configuration")
 app.add_typer(memory_app, name="memory", rich_help_panel="Memory & Context")
@@ -113,6 +118,7 @@ _HELP_PANELS = {
     "eval": "Code Intelligence & Testing",
     "github": "Integrations",
     "browser": "Integrations",
+    "webmcp": "Integrations",
     "cache": "Performance & Diagnostics",
     "hook": "Agents & Automation",
     "lsp": "Code Intelligence & Testing",
@@ -160,6 +166,7 @@ for _name, _typer in [
     ("eval", eval_app),
     ("github", github_app),
     ("browser", browser_app),
+    ("webmcp", webmcp_app),
     ("cache", cache_app),
     ("hook", hook_app),
     ("lsp", lsp_app),
@@ -187,6 +194,7 @@ __all__ = [
     "artifact_app",
     "checkpoint_app",
     "browser_app",
+    "webmcp_app",
     "cache_app",
     "code_app",
     "context_app",

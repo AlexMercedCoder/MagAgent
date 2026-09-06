@@ -434,8 +434,14 @@ class ToolExecutor(
                 a.get("path", ""), a.get("wait_ms", 750)
             ),
             "webmcp_call_tool": lambda: self.webmcp_call_tool(
-                a["name"], a.get("arguments"), a.get("path", ""), a.get("wait_ms", 750)
+                a["name"],
+                a.get("arguments"),
+                a.get("path", ""),
+                a.get("wait_ms", 750),
+                a.get("registry_revision", ""),
             ),
+            "webmcp_status": lambda: self.webmcp_status(),
+            "webmcp_close": lambda: self.webmcp_close(),
             "json_query": lambda: self.json_query(a["path_or_json"], a["query"]),
             "system_info": lambda: self.system_info(),
             "notify": lambda: self.notify(a["title"], a["message"], a.get("urgency", "normal")),

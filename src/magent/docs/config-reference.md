@@ -9,7 +9,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'0.99.0'`
+- `agent.version` default: `'1.2.0'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 - `agent.max_model_rounds_per_turn` default: `16`
@@ -109,6 +109,10 @@ Stored at `~/.config/magent/config.toml`.
 - `agraph.tier_roles.frontier` default: `'frontier'`
 - `agraph.allow_command_criteria` default: `True`
 - `agraph.max_parallel_nodes` default: `2`
+### `webmcp`
+
+- `webmcp.origins` default: `['https://alexmerced.app']`
+- `webmcp.headless` default: `False`
 ### `mcp`
 
 ### `session_messaging`
