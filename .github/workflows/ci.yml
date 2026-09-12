@@ -213,4 +213,4 @@ jobs:
           magent tools doctor
           magent system security-report
       - name: Cross-platform contract tests
-        run: python -m pytest -q tests/unit/test_permissions_bypass.py tests/unit/test_safe_names.py tests/unit/test_durability_and_state.py tests/unit/test_auth_store.py tests/unit/test_tools_safety.py tests/unit/test_provider_support.py tests/unit/test_security_assurance.py -k "not document_tools_create_docx_and_pptx and not visual_artifact_tools_create_svg_diagram_and_image"
+        run: python -m pytest -q tests/unit/test_process_liveness.py tests/unit/test_permissions_bypass.py tests/unit/test_safe_names.py tests/unit/test_durability_and_state.py tests/unit/test_auth_store.py tests/unit/test_tools_safety.py tests/unit/test_provider_support.py tests/unit/test_security_assurance.py -k "not document_tools_create_docx_and_pptx and not visual_artifact_tools_create_svg_diagram_and_image"

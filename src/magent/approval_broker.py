@@ -413,12 +413,10 @@ class ApprovalBroker:
         return len(request_ids)
 
     @staticmethod
-    def _owner_alive(pid: int) -> bool:
-        try:
-            os.kill(pid, 0)
-            return True
-        except (OSError, TypeError, ValueError):
-            return False
+    def _owner_alive(pid: int | None) -> bool:
+        from magent.process_liveness import process_alive
+
+        return process_alive(pid)
 
     def recovery(self) -> Envelope:
         with self._lock, self.store.lock(self.STORE_NAME):

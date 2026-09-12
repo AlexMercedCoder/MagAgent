@@ -11,3 +11,5 @@ Release notes — September 12, 2026.
 Approval and task records remain local to their existing authority. Inspect uncertain external effects before retrying; changing a task status is not a guarantee of execution resumption.
 
 AGS, OAP and AAIS document/wire formats remain unchanged. Local validation evidence and remaining platform gates are recorded in the ecosystem release report.
+
+Recovery ownership checks use a non-destructive Windows process query, with a regression test that verifies live child processes survive inspection.
