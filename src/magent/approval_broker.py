@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import signal
 import sys
 import threading
+import time
 from collections.abc import Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
@@ -29,7 +31,7 @@ from aais import (
     validate,
 )
 
-from magent.workbench_store import WorkbenchStore
+from magent.workbench_store import WorkbenchStore, WorkbenchStoreError
 
 Envelope = dict[str, Any]
 Publisher = Callable[[Envelope], None]
@@ -109,8 +111,17 @@ class ApprovalBroker:
         }
 
     def _state(self) -> Envelope:
-        state = self.store.read(self.STORE_NAME, self._empty())
-        return state if isinstance(state, dict) else self._empty()
+        state = self.store.read(self.STORE_NAME, self._empty(), strict=True)
+        if (
+            not isinstance(state, dict)
+            or state.get("schema") != self._empty()["schema"]
+            or any(
+                key not in state or not isinstance(state[key], type(default))
+                for key, default in self._empty().items()
+            )
+        ):
+            raise WorkbenchStoreError("Invalid approval state; explicit recovery is required")
+        return state
 
     def _next_sequence(self, state: Envelope, key: str = "sequence") -> int:
         value = int(state.get(key, 0)) + 1
@@ -173,7 +184,7 @@ class ApprovalBroker:
     ) -> str:
         exact_action = copy.deepcopy(dict(action))
         digest = action_digest(exact_action)
-        with self._lock:
+        with self._lock, self.store.lock(self.STORE_NAME):
             state = self._state()
             remembered = next(
                 (
@@ -229,6 +240,7 @@ class ApprovalBroker:
             )
             request_id = str(envelope["request"]["id"])
             state.setdefault("pending", {})[request_id] = envelope
+            state.setdefault("owners", {})[request_id] = os.getpid()
             state.setdefault("events", []).append(envelope)
             state["events"] = state["events"][-1000:]
             self.store.write(self.STORE_NAME, state)
@@ -240,18 +252,29 @@ class ApprovalBroker:
             self._waiters[request_id] = waiter
             self._publishers[request_id] = publish
         publish(copy.deepcopy(envelope))
-        if not waiter.resolved.wait(timeout):
-            with suppress(ConflictError, ValueError):
-                self.decide(
-                    request_id,
-                    decision="deny",
-                    scope="once",
-                    actor={
-                        "id": "magent.timeout",
-                        "type": "policy",
-                        "authenticated_by": "authority",
-                    },
-                )
+        deadline = time.monotonic() + timeout
+        while not waiter.resolved.wait(min(0.1, max(0, deadline - time.monotonic()))):
+            with self._lock, self.store.lock(self.STORE_NAME):
+                durable = self._state().get("resolutions", {}).get(request_id)
+            if durable:
+                waiter.resolution = durable
+                publish(copy.deepcopy(durable))
+                break
+            if time.monotonic() >= deadline:
+                with suppress(ConflictError, ValueError):
+                    self.decide(
+                        request_id,
+                        decision="deny",
+                        scope="once",
+                        actor={
+                            "id": "magent.timeout",
+                            "type": "policy",
+                            "authenticated_by": "authority",
+                        },
+                    )
+                with self._lock, self.store.lock(self.STORE_NAME):
+                    waiter.resolution = self._state().get("resolutions", {}).get(request_id)
+                break
         with self._lock:
             resolution = waiter.resolution
             self._waiters.pop(request_id, None)
@@ -259,6 +282,8 @@ class ApprovalBroker:
         if not resolution:
             return "deny"
         body = resolution["resolution"]
+        if body["outcome"] == "approved" and action_digest(waiter.current_action()) != digest:
+            return "deny"
         return str(body.get("effective_scope", "deny")) if body["outcome"] == "approved" else "deny"
 
     def decide(
@@ -269,6 +294,7 @@ class ApprovalBroker:
         scope: str,
         actor: Mapping[str, Any],
         decision_id: str | None = None,
+        reviewed_digest: str | None = None,
     ) -> Envelope:
         publisher: Publisher | None = None
         waiter: _Waiter | None = None
@@ -286,6 +312,16 @@ class ApprovalBroker:
                 raise ConflictError(f"request {request_id} was already resolved")
             if pending is None:
                 raise ValueError(f"unknown pending approval: {request_id}")
+            if (
+                reviewed_digest is not None
+                and reviewed_digest != pending["request"]["action_digest"]
+            ):
+                raise ConflictError("Decision digest does not match the reviewed action")
+            owner = state.get("owners", {}).get(request_id)
+            if decision == "approve" and owner is not None and not self._owner_alive(owner):
+                raise ConflictError(
+                    "The issuing process stopped; inspect recovery before starting new work"
+                )
             decided = create_decision(
                 pending,
                 decision=decision,
@@ -308,6 +344,7 @@ class ApprovalBroker:
             state.setdefault("decisions", {})[request_id] = decided
             state.setdefault("resolutions", {})[request_id] = resolution
             state.setdefault("events", []).append(resolution)
+            state["events"] = state["events"][-1000:]
             if resolution["resolution"]["outcome"] == "approved" and scope in {
                 "session",
                 "persistent",
@@ -375,12 +412,35 @@ class ApprovalBroker:
                 )
         return len(request_ids)
 
+    @staticmethod
+    def _owner_alive(pid: int | None) -> bool:
+        from magent.process_liveness import process_alive
+
+        return process_alive(pid)
+
+    def recovery(self) -> Envelope:
+        with self._lock, self.store.lock(self.STORE_NAME):
+            state = self._state()
+            owners = state.get("owners", {})
+            return {
+                "orphaned": [
+                    key
+                    for key in state["pending"]
+                    if key in owners and not self._owner_alive(owners[key])
+                ],
+                "unknown_owner": [key for key in state["pending"] if key not in owners],
+                "receipts": list(state["resolutions"].values())[-100:],
+                "guidance": "Stopped owners are not restarted. Inspect completed effects before creating a new run.",
+            }
+
     def snapshot(self) -> Envelope:
         with self._lock:
             state = self._state()
             machine = ApprovalStore(last_sequence=int(state.get("sequence", 0)))
-            for envelope in state.get("pending", {}).values():
-                machine.add(validate(envelope))
+            for key, envelope in state.get("pending", {}).items():
+                owner = state.get("owners", {}).get(key)
+                if owner is None or self._owner_alive(owner):
+                    machine.add(validate(envelope))
             return machine.snapshot(stream=self.stream)
 
     def events_after(self, sequence: int) -> list[Envelope]:
@@ -409,7 +469,7 @@ def start_stdio_broker(
         try:
             for line in sys.stdin:
                 try:
-                    envelope = json.loads(line)
+                    envelope = validate(json.loads(line))
                     if envelope.get("type") != "approval.decided":
                         continue
                     decision = envelope["decision"]
@@ -423,6 +483,7 @@ def start_stdio_broker(
                             "authenticated_by": "aais-ndjson-stdio",
                         },
                         decision_id=str(decision.get("id") or "") or None,
+                        reviewed_digest=str(decision["action_digest"]),
                     )
                 except Exception as error:  # malformed input never grants authority
                     print(

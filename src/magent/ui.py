@@ -1172,6 +1172,8 @@ def serve_ui(
                     )
                 elif parsed.path == "/api/approvals/snapshot":
                     self._json(approval_broker.snapshot())
+                elif parsed.path == "/api/approvals/recovery":
+                    self._json(approval_broker.recovery())
                 elif parsed.path == "/api/approvals/events":
                     after = _int_or(query.get("after", ["0"])[0], 0)
                     self._json({"events": approval_broker.events_after(after)})
@@ -1188,6 +1190,7 @@ def serve_ui(
                                 "authenticated_by": "magent-loopback-token",
                             },
                             decision_id=str(body.get("decision_id") or "") or None,
+                            reviewed_digest=body.get("action_digest"),
                         )
                     except Exception as error:  # AAIS conflicts are safe client races.
                         self._json({"ok": False, "error": str(error)}, status=409)

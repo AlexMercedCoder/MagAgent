@@ -410,6 +410,18 @@ def main(
         _run_repl(username, config, main_provider, extract_provider, cwd, profile=effective_profile)
 
 
+@app.command("capabilities")
+def capabilities_cmd(json_output: bool = typer.Option(True, "--json/--no-json")) -> None:
+    """Inspect installed runtime capabilities without running a model or opening a site."""
+    from magent.capability_readiness import capability_report
+
+    report = capability_report()
+    if json_output:
+        console.print_json(data=report)
+    else:
+        console.print(report)
+
+
 @app.command("ask", rich_help_panel="Everyday Agent Work")
 def ask_cmd(
     task: str = typer.Argument(..., help="One-shot task to run non-interactively"),

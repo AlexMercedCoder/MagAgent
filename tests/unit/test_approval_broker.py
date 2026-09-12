@@ -11,6 +11,45 @@ from magent.approval_broker import ApprovalBroker
 from magent.workbench_store import WorkbenchStore
 
 
+def test_external_decision_wakes_original_broker(tmp_path: Path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    owner, presenter = broker(tmp_path), broker(tmp_path)
+    with ThreadPoolExecutor() as pool:
+        run = pool.submit(
+            owner.request_legacy,
+            "Run: node --check app.js",
+            2,
+            origin={"session_id": "session-1"},
+            publish=lambda _: None,
+            timeout=5,
+        )
+        request = wait_for_request(presenter)
+        with pytest.raises(ConflictError):
+            presenter.decide(
+                request["id"],
+                decision="approve",
+                scope="once",
+                actor={"id": "tester", "type": "human"},
+                reviewed_digest="sha256:" + "0" * 64,
+            )
+        presenter.decide(
+            request["id"], decision="approve", scope="once", actor={"id": "tester", "type": "human"}
+        )
+        assert run.result(timeout=3) == "once"
+
+
+def test_corrupt_authority_state_requires_recovery(tmp_path: Path):
+    from magent.workbench_store import WorkbenchStoreError
+
+    instance = broker(tmp_path)
+    path = tmp_path / "aais_approvals.json"
+    path.write_text('{"pending":')
+    with pytest.raises(WorkbenchStoreError, match="recovery"):
+        instance.snapshot()
+    assert path.read_text() == '{"pending":'
+
+
 def broker(tmp_path: Path) -> ApprovalBroker:
     store = WorkbenchStore.__new__(WorkbenchStore)
     store.username = "test"
@@ -207,3 +246,37 @@ def test_session_grant_is_exact_and_does_not_cross_sessions(tmp_path: Path):
         actor={"id": "tester", "type": "human", "authenticated_by": "test"},
     )
     other.join(20)
+
+
+def test_dead_owner_is_recovered_without_new_approval(tmp_path, monkeypatch):
+    from aais import create_request
+
+    instance = broker(tmp_path)
+    envelope = create_request(
+        action={
+            "kind": "tool.call",
+            "name": "shell.exec",
+            "summary": "Check syntax",
+            "arguments": {},
+        },
+        origin={"harness": "magagent", "session_id": "fixture"},
+        risk={"level": "low", "reasons": ["Protected action"]},
+        choices=[
+            {"decision": "approve", "scope": "once", "label": "Allow once"},
+            {"decision": "deny", "scope": "once", "label": "Deny"},
+        ],
+        sequence=1,
+        stream="test",
+    )
+    state = instance._empty()
+    key = envelope["request"]["id"]
+    state["pending"][key] = envelope
+    state["owners"] = {key: 12345}
+    instance.store.write(instance.STORE_NAME, state)
+    monkeypatch.setattr(instance, "_owner_alive", lambda pid: False)
+    assert instance.recovery()["orphaned"] == [key]
+    assert instance.snapshot()["snapshot"]["pending"] == []
+    with pytest.raises(ConflictError, match="issuing process stopped"):
+        instance.decide(
+            key, decision="approve", scope="once", actor={"id": "test", "type": "human"}
+        )
