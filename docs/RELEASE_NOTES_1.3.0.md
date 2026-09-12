@@ -1,6 +1,6 @@
 # MagAgent 1.3.0
 
-Release candidate preparation — September 12, 2026. Not published.
+Release notes — September 12, 2026.
 
 - External approval decisions now wake the issuing broker; request creation and decisions share full storage transactions. Corruption and lock timeout fail closed. Windows locking uses an actual byte lock.
 - Stdio decisions validate their AAIS envelope and reviewed digest. The Web UI reports the authority outcome, retains dialog focus, and shows origin and expiry.
