@@ -7,7 +7,7 @@ type RunCenter = {
   graph_runs?: Record<string, unknown>[];
   schedules?: Schedule[];
 };
-type DurableTask = { id?: string; task_id?: string; title?: string; state?: string; status?: string; summary?: string };
+type DurableTask = { id?: string; task_id?: string; title?: string; state?: string; status?: string; summary?: string; files_changed?: unknown[]; checkpoints?: unknown[]; final_audit?: Record<string, unknown>; metadata?: Record<string, unknown> };
 
 export function RunCenterView({ setError, notify }: { setError: (message: string) => void; notify: (message: string) => void }) {
   const [data, setData] = useState<RunCenter>({});
@@ -107,10 +107,14 @@ export function RunCenterView({ setError, notify }: { setError: (message: string
             const id = task.id || task.task_id || "";
             const state = task.state || task.status || "unknown";
             return <div className="schedule-row" key={id}>
-              <div><b>{task.title || id}</b><small>{state}{task.summary ? ` · ${task.summary}` : ""}</small></div>
+              <div><b>{task.title || id}</b><small>{state}{task.summary ? ` · ${task.summary}` : ""}</small>
+                <details><summary>Review recovery evidence</summary>
+                  <p>Inspect completed effects before retrying. Changing task status alone does not restart a stopped harness.</p>
+                  <pre>{JSON.stringify({ files_changed: task.files_changed || [], checkpoints: task.checkpoints || [], final_audit: task.final_audit || {}, metadata: task.metadata || {} }, null, 2)}</pre>
+                </details></div>
               <div className="toolbar-row">
                 {state === "running" && <button type="button" onClick={() => void taskAction(task, "pause")}>Pause</button>}
-                {state === "paused" && <button type="button" onClick={() => void taskAction(task, "resume")}>Resume</button>}
+                {["paused", "waiting"].includes(state) && <button type="button" onClick={() => void taskAction(task, "resume")}>Resume</button>}
                 {!['succeeded', 'cancelled'].includes(state) && <button type="button" onClick={() => void taskAction(task, "cancel")}>Cancel</button>}
                 {['failed', 'cancelled'].includes(state) && <button type="button" onClick={() => void taskAction(task, "retry")}>Retry</button>}
               </div>

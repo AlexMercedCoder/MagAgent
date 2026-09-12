@@ -110,6 +110,7 @@ Generated from the active Typer command tree.
 - `magent auth`
 - `magent browser`
 - `magent cache`
+- `magent capabilities`
 - `magent checkpoint`
 - `magent ci`
 - `magent code`

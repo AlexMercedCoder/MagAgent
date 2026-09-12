@@ -30,7 +30,9 @@ def workbench_stats(store: Any) -> dict[str, Any]:
                 "store": path.stem,
                 "path": str(path),
                 "bytes": size,
-                "records": len(data) if isinstance(data, list) else (len(data) if isinstance(data, dict) else 0),
+                "records": len(data)
+                if isinstance(data, list)
+                else (len(data) if isinstance(data, dict) else 0),
                 "high_volume": path.stem in HIGH_VOLUME_STORES,
             }
         )
@@ -58,20 +60,24 @@ def prune_workbench(
     keep_counts = dict(HIGH_VOLUME_STORES)
     if keep is not None:
         keep_counts = {name: max(0, keep) for name in keep_counts}
-    changes = []
+    changes: list[dict[str, Any]] = []
     for name, keep_count in keep_counts.items():
         path = Path(store.root) / f"{name}.json"
         data = _read_json(path)
         if not isinstance(data, list):
             continue
         original = len(data)
-        recent = [item for item in data if _record_time(item) and _record_time(item) >= cutoff]
+        recent = [
+            item for item in data if (stamp := _record_time(item)) is not None and stamp >= cutoff
+        ]
         kept_by_count = data[-keep_count:] if keep_count else []
         merged = _dedupe_records([*recent, *kept_by_count])
         removed = original - len(merged)
         if removed > 0 and not dry_run:
             store.write(name, merged)
-        changes.append({"store": name, "before": original, "after": len(merged), "removed": removed})
+        changes.append(
+            {"store": name, "before": original, "after": len(merged), "removed": removed}
+        )
     removed_total = sum(int(item["removed"]) for item in changes)
     return {
         "ok": True,
@@ -149,7 +155,10 @@ def _dir_size(path: Path) -> int:
 def _recommendations(files: list[dict[str, Any]], checkpoint_bytes: int) -> list[str]:
     recommendations = []
     for item in files:
-        if item["store"] in HIGH_VOLUME_STORES and item["records"] > HIGH_VOLUME_STORES[item["store"]]:
+        if (
+            item["store"] in HIGH_VOLUME_STORES
+            and item["records"] > HIGH_VOLUME_STORES[item["store"]]
+        ):
             recommendations.append(f"Prune `{item['store']}`; it has {item['records']} records.")
         if item["bytes"] > 2_000_000:
             recommendations.append(f"Compact `{item['store']}`; JSON file is over 2 MB.")

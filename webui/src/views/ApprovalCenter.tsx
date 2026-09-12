@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useModalFocus } from "./use-modal-focus";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { post, request } from "../api";
 
 type Choice = {
@@ -60,14 +61,15 @@ export function ApprovalCenter({
     async (approval: PendingApproval, choice: Choice) => {
       setBusy(true);
       try {
-        const result = await post<{ ok: boolean; error?: string }>("/api/approvals/decide", {
+        const result = await post<{ ok: boolean; error?: string; resolution?: { resolution: { outcome: string; message?: string } } }>("/api/approvals/decide", {
           request_id: approval.id,
+          action_digest: approval.action_digest,
           decision: choice.decision,
           scope: choice.scope,
           decision_id: `dec_web_${crypto.randomUUID().replaceAll("-", "")}`,
         });
         if (!result.ok) throw new Error(result.error || "The approval could not be resolved.");
-        notify(choice.decision === "approve" ? "Permission approved." : "Permission denied.");
+        notify(`Harness outcome: ${result.resolution?.resolution.outcome ?? "unknown"}`);
         await refresh();
       } catch (problem) {
         setError((problem as Error).message);
@@ -80,12 +82,16 @@ export function ApprovalCenter({
   );
 
   const approval = pending[0];
+  const dialog = useRef<HTMLElement>(null);
+  useModalFocus(dialog, approval?.id);
   if (!approval) return null;
   return (
     <div className="modal-backdrop approval-backdrop" role="presentation">
-      <section className="modal approval-modal" role="alertdialog" aria-modal="true" aria-label="Permission required">
+      <section ref={dialog} tabIndex={-1} className="modal approval-modal" role="alertdialog" aria-modal="true" aria-label="Permission required">
         <small>PERMISSION REQUIRED · {pending.length} PENDING</small>
         <h2>{approval.action.summary}</h2>
+        <p>From {Object.values(approval.origin).join(" · ")}</p>
+        {approval.expires_at && <p>Expires {new Date(approval.expires_at).toLocaleString()}</p>}
         <div className={`approval-risk ${approval.risk.level}`}>
           <b>{approval.risk.level} risk</b>
           {approval.risk.reasons.map((reason) => <span key={reason}>{reason}</span>)}
@@ -102,7 +108,7 @@ export function ApprovalCenter({
           {approval.choices.map((choice) => (
             <button
               className={choice.decision === "approve" ? "primary-button" : "secondary-button"}
-              disabled={busy}
+              disabled={busy || Boolean(approval.expires_at && Date.parse(approval.expires_at) <= Date.now())}
               key={`${choice.decision}:${choice.scope}`}
               type="button"
               onClick={() => void decide(approval, choice)}

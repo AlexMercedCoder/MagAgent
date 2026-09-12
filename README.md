@@ -1,5 +1,7 @@
 <div align="center">
 
+Next release: [1.3.0 preparation notes](docs/RELEASE_NOTES_1.3.0.md).
+
 <img src="docs/assets/brand/magagent-logo.png" alt="MagAgent logo" width="220">
 
 # 🐦‍⬛ MagAgent

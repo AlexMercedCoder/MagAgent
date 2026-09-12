@@ -87,7 +87,7 @@ class TestWorkbenchStoreDurability:
         assert not list(store.root.glob("*.tmp"))
 
     @pytest.mark.skipif(os.name != "posix", reason="advisory locks are POSIX here")
-    def test_lock_timeout_warns_and_proceeds(self, store: WorkbenchStore, monkeypatch) -> None:
+    def test_lock_timeout_fails_closed(self, store: WorkbenchStore, monkeypatch) -> None:
         assert store_module.fcntl is not None
 
         def busy_lock(_descriptor: int, operation: int) -> None:
@@ -98,10 +98,11 @@ class TestWorkbenchStoreDurability:
         monkeypatch.setattr(store_module.fcntl, "flock", busy_lock)
         monkeypatch.setattr(store_module.time, "monotonic", lambda: next(times))
 
-        with store.lock("tasks"):
-            pass
-
-        assert "Timed out waiting" in store.warnings[-1]
+        with (
+            pytest.raises(store_module.WorkbenchStoreError, match="Timed out waiting"),
+            store.lock("tasks"),
+        ):
+            pytest.fail("A busy transaction must never proceed without its lock")
 
     def test_singular_uses_removesuffix(self) -> None:
         """`rstrip("s")` ate every trailing s: "progress" became "progre"."""

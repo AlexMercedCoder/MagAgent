@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mag-agent"
-version = "1.2.0"
+version = "1.3.0"
 description = "MagAgent — CLI AI coding agent with persistent MagGraph memory. Like the Magpie: intelligent, tool-using, and never forgets."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -181,7 +181,6 @@ module = [
     "magent.cli.commands.plugins",
     "magent.cli.main",
     "magent.config",
-    "magent.config_safety",
     "magent.gateway.adapters.slack",
     "magent.goal_orchestrator",
     "magent.model_capabilities",
@@ -190,7 +189,6 @@ module = [
     "magent.tools.web",
     "magent.utils",
     "magent.workbench",
-    "magent.workbench_maintenance",
 ]
 ignore_errors = true
 

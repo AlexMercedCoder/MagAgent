@@ -23,6 +23,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import tempfile
 import time
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
@@ -85,13 +86,15 @@ class WorkbenchStore:
 
     # ------------------------------------------------------------------- io
 
-    def read(self, name: str, default: Any) -> Any:
+    def read(self, name: str, default: Any, *, strict: bool = False) -> Any:
         path = self._path(name)
         if not path.exists():
             return default
         try:
             return json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as error:
+            if strict:
+                raise WorkbenchStoreError(f"Stored state requires recovery: {path}") from error
             # Do not hand back `default`: the caller will write it straight
             # back and the real data is gone for good.
             target = _quarantine(path, error)
@@ -108,9 +111,9 @@ class WorkbenchStore:
 
         # temp file → fsync → atomic replace. A reader always sees either the
         # previous file or the complete new one, never a truncated middle.
-        temp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        descriptor, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        temp = Path(name)
         try:
-            descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
                 handle.write(payload)
                 handle.flush()
@@ -134,30 +137,36 @@ class WorkbenchStore:
     @contextlib.contextmanager
     def lock(self, name: str) -> Iterator[None]:
         """Hold an advisory lock across a read-modify-write cycle."""
-        if fcntl is None:  # pragma: no cover - Windows fallback
-            yield
-            return
-
         path = self._lock_path(name)
         path.parent.mkdir(parents=True, exist_ok=True)
         deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
         descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
         try:
+            if fcntl is None:  # pragma: no cover - exercised by Windows CI
+                import msvcrt
+
+                if os.fstat(descriptor).st_size == 0:
+                    os.write(descriptor, b"0")
             while True:
                 try:
-                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    if fcntl is None:  # pragma: no cover
+                        os.lseek(descriptor, 0, os.SEEK_SET)
+                        msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                    else:
+                        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     break
-                except OSError:
+                except OSError as error:
                     if time.monotonic() >= deadline:
-                        # Never deadlock the CLI on a stale lock: proceed
-                        # unlocked rather than hang forever.
-                        self.warnings.append(f"Timed out waiting for {path.name}; proceeding unlocked")
-                        break
+                        raise WorkbenchStoreError(f"Timed out waiting for {path.name}") from error
                     time.sleep(LOCK_RETRY_SECONDS)
             yield
         finally:
             with contextlib.suppress(OSError):
-                fcntl.flock(descriptor, fcntl.LOCK_UN)
+                if fcntl is None:  # pragma: no cover
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
             os.close(descriptor)
 
     def mutate(self, name: str, default: Any, change: Callable[[Any], Any]) -> Any:
@@ -187,7 +196,9 @@ class WorkbenchStore:
         return self.mutate(name, [], change)
 
     def update_item(self, name: str, item_id: str, **updates: Any) -> dict[str, Any] | None:
-        def change(data: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+        def change(
+            data: list[dict[str, Any]],
+        ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
             for record in data:
                 if record.get("id") == item_id:
                     record.update(updates)
