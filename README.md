@@ -193,6 +193,9 @@ magent onboard --profile coding-cloud
 magent next
 ```
 
+A minimal VS Code extension lives in [`editors/vscode`](editors/vscode/README.md) (preview, not on
+the Marketplace): ask, approvals and memory evidence from the editor.
+
 Remote desktop clients can connect to `magent serve --rpc` (experimental, loopback by default,
 bearer token required); see [the gateway docs](src/magent/docs/rpc-gateway.md).
 

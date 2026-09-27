@@ -109,6 +109,11 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   check the archive hash, safe extraction, the pack digest and the signature, and ask before
   trusting a new key. `plugin verify` reports signature status (`--require-signature` enforces
   it). New core dependency: `cryptography>=42` for Ed25519. No hosted registry exists.
+- **VS Code bridge (Phase 6, preview).** `editors/vscode/` is a minimal, unpublished extension:
+  Ask / Ask About Selection / Cancel run `magent ask` over the machine API (prompt via
+  `--prompt-file`, AAIS approvals as VS Code modals that deny when dismissed, streamed status),
+  and Show Memory Used renders `magent memory evidence`. Unit tests use a scripted stand-in; an
+  optional test drives a real MagAgent. CI builds and tests it.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the

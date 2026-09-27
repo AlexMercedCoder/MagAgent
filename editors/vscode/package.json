@@ -1,0 +1,47 @@
+{
+  "name": "magagent-vscode",
+  "displayName": "MagAgent",
+  "description": "Ask MagAgent from VS Code, answer its approvals, and see which memories a run used.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "alexmerced",
+  "license": "Apache-2.0",
+  "engines": { "vscode": "^1.95.0" },
+  "categories": ["AI", "Other"],
+  "main": "./dist/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      { "command": "magagent.ask", "title": "MagAgent: Ask" },
+      { "command": "magagent.askAboutSelection", "title": "MagAgent: Ask About Selection" },
+      { "command": "magagent.cancel", "title": "MagAgent: Cancel Run" },
+      { "command": "magagent.memoryUsed", "title": "MagAgent: Show Memory Used by Last Run" }
+    ],
+    "configuration": {
+      "title": "MagAgent",
+      "properties": {
+        "magagent.executable": {
+          "type": "string",
+          "default": "magent",
+          "description": "The magent command (or full path) to run."
+        },
+        "magagent.permissionMode": {
+          "type": "string",
+          "enum": ["balanced", "paranoid", "silent"],
+          "default": "balanced",
+          "description": "Permission mode for runs started from VS Code. Approvals are asked in VS Code."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@types/vscode": "1.95.0",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
+  }
+}

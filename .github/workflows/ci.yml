@@ -217,6 +217,23 @@ jobs:
       - name: Coverage (whole suite)
         run: python -m pytest tests/unit tests/integration -q -n auto -m "slow or not slow" --cov=magent --cov-report=term-missing:skip-covered
 
+  vscode-extension:
+    name: VS Code extension (preview)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: editors/vscode
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: editors/vscode/package-lock.json
+      - run: npm ci
+      - run: npx vitest run
+      - run: npx tsc -p .
+
   packaged-acceptance:
     name: Packaged acceptance (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
