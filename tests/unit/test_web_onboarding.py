@@ -258,3 +258,18 @@ def test_a_hosted_provider_step_keeps_the_credential_label(isolated: Path) -> No
     state = web_onboarding.configure("openai")
     credential = next(step for step in state["steps"] if step["id"] == "credential")
     assert credential["label"] == "Credential"
+
+
+def test_keyring_storage_without_a_keyring_explains_the_config_option(
+    isolated: Path, monkeypatch
+) -> None:
+    from magent import auth_store
+
+    monkeypatch.setattr(
+        auth_store, "keyring_status", lambda: {"available": False, "backend": "", "hint": "x"}
+    )
+    with pytest.raises(ValueError, match="MagAgent config file"):
+        web_onboarding.configure(
+            "openai", "gpt-4o-mini", credential="k", credential_storage="keyring"
+        )
+    assert web_onboarding.providers()["keyring_available"] is False

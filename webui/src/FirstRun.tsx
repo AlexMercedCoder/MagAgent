@@ -62,10 +62,13 @@ export function FirstRun({
       try {
         const [state, list] = await Promise.all([
           request<Readiness>("/api/onboarding/readiness"),
-          request<{ providers: Provider[]; default_provider?: string; default_model?: string }>("/api/onboarding/providers"),
+          request<{ providers: Provider[]; default_provider?: string; default_model?: string; keyring_available?: boolean }>("/api/onboarding/providers"),
         ]);
         setReadiness(state);
         setProviders(list.providers || []);
+        // Without a usable OS keyring, saving there can only fail; start on the
+        // config option (its warning still shows) instead of a dead end.
+        if (list.keyring_available === false) setCredentialStorage("config");
         setChosen(list.default_provider || "");
         setModel(list.default_model || "");
       } catch (problem) {

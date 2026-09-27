@@ -7,7 +7,11 @@ from magent import auth_store
 
 
 def test_keyring_availability_and_account(monkeypatch) -> None:
-    monkeypatch.setitem(sys.modules, "keyring", SimpleNamespace())
+    class Backend:
+        priority = 1
+
+    Backend.__module__ = "keyring.backends.test"
+    monkeypatch.setitem(sys.modules, "keyring", SimpleNamespace(get_keyring=Backend))
 
     assert auth_store.keyring_available() is True
     assert auth_store.keyring_account("openai") == "provider:openai"

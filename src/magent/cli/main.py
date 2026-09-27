@@ -3353,13 +3353,15 @@ def model_image_wizard_cmd():
 @auth_app.command("list")
 def auth_list_cmd():
     """List configured provider credential sources."""
-    from magent.auth_store import keyring_available, list_auth_entries
+    from magent.auth_store import keyring_status, list_auth_entries
 
     config = load_config(get_current_user())
+    status = keyring_status()
     console.print_json(
         data={
             "ok": True,
-            "keyring_available": keyring_available(),
+            "keyring_available": status["available"],
+            "keyring": status,
             "credentials": list_auth_entries(config.providers),
         }
     )

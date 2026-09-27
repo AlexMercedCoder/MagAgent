@@ -56,7 +56,9 @@ def test_stdin_key_goes_to_keyring_when_available(cli, monkeypatch) -> None:
     stored: dict[str, str] = {}
     import magent.auth_store as auth_store
 
-    monkeypatch.setattr(auth_store, "keyring_available", lambda: True)
+    monkeypatch.setattr(
+        auth_store, "keyring_status", lambda: {"available": True, "backend": "test.Keyring"}
+    )
     monkeypatch.setattr(
         auth_store,
         "save_keyring_secret",
@@ -77,11 +79,18 @@ def test_stdin_key_goes_to_keyring_when_available(cli, monkeypatch) -> None:
 
 def test_missing_keyring_explains_the_config_option(cli, monkeypatch) -> None:
     runner, _config = cli
-    monkeypatch.setattr("magent.auth_store.keyring_available", lambda: False)
+    monkeypatch.setattr(
+        "magent.auth_store.keyring_status",
+        lambda: {
+            "available": False,
+            "backend": "",
+            "hint": "mag-agent[keyring] or --storage config",
+        },
+    )
     result = runner.invoke(cli_main.app, ["auth", "add", "openai", "--api-key-stdin"], input=SECRET)
     assert result.exit_code == 1
     payload = _json(result.output)
-    assert "--storage config" in payload["hint"]
+    assert "--storage config" in payload["hint"] and "mag-agent[keyring]" in payload["hint"]
     assert SECRET not in result.output
 
 
@@ -156,3 +165,41 @@ def test_remove_clears_a_config_stored_key(cli) -> None:
     assert result.exit_code == 0, result.output
     assert _json(result.output)["removed_from_config"] is True
     assert "api_key" not in tomllib.loads(config_path.read_text())["providers"]["openai"]
+
+
+def test_keyring_status_reports_missing_package_and_fail_backend(monkeypatch) -> None:
+    import builtins
+    import sys
+    import types
+
+    from magent import auth_store
+
+    real_import = builtins.__import__
+
+    def no_keyring(name, *args, **kwargs):
+        if name == "keyring":
+            raise ImportError("no keyring")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_keyring)
+    missing = auth_store.keyring_status()
+    assert missing["available"] is False and "mag-agent[keyring]" in missing["hint"]
+    monkeypatch.setattr(builtins, "__import__", real_import)
+
+    class FailKeyring:
+        priority = 0
+
+    FailKeyring.__module__ = "keyring.backends.fail"
+    fake = types.SimpleNamespace(get_keyring=lambda: FailKeyring())
+    monkeypatch.setitem(sys.modules, "keyring", fake)
+    failing = auth_store.keyring_status()
+    assert failing["available"] is False and "--storage config" in failing["hint"]
+
+    class GoodKeyring:
+        priority = 5
+
+    GoodKeyring.__module__ = "keyring.backends.SecretService"
+    monkeypatch.setitem(
+        sys.modules, "keyring", types.SimpleNamespace(get_keyring=lambda: GoodKeyring())
+    )
+    assert auth_store.keyring_status()["available"] is True

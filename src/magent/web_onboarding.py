@@ -193,8 +193,11 @@ def providers() -> dict[str, Any]:
                 "available": bool(provider and by_name.get(provider, {}).get("credential_ready")),
             }
         )
+    from magent.auth_store import keyring_status
+
     return {
         "ok": True,
+        "keyring_available": bool(keyring_status()["available"]),
         "providers": listed,
         "local_providers": list(LOCAL_PROVIDERS),
         "default_provider": default_provider,
@@ -216,7 +219,7 @@ def configure(
     when the caller explicitly chooses it; config permissions are tightened by
     the shared configuration helper.
     """
-    from magent.auth_store import keyring_account, save_keyring_secret
+    from magent.auth_store import keyring_account, keyring_status, save_keyring_secret
     from magent.config_ux import set_default_provider
 
     provider = (provider or "").strip()
@@ -228,6 +231,12 @@ def configure(
     if storage not in {"keyring", "config"}:
         raise ValueError("Credential storage must be keyring or config.")
     if secret and storage == "keyring":
+        status = keyring_status()
+        if not status["available"]:
+            raise ValueError(
+                "No OS keyring is available. Choose \"MagAgent config file\" as the storage instead, or "
+                + str(status.get("hint", ""))
+            )
         stored = save_keyring_secret(provider, secret)
         if not stored.get("ok"):
             raise ValueError(str(stored.get("error") or "The key could not be stored."))
