@@ -83,6 +83,13 @@ executor used by live runs.
 - `before_start`, `before_side_effects`, and `after_outputs` checkpoints are enforced by the harness. A required checkpoint that cannot be displayed fails with `RT015`.
 - `shared`, `worktree`, and copied `sandbox` workspaces are supported. Unsupported or unavailable isolation fails with `RT014`; MagAgent does not silently downgrade it. Container-isolated agent sessions are currently refused.
 - Resume reuses completed node outputs only when the canonical graph digest matches. Use `--force` only after reviewing graph changes.
+- Run records replace the value of every declared graph secret with `[REDACTED]`, parameters
+  included, so resuming needs those values again: `magent graph resume RUN_ID --param
+  token=VALUE`, `--params '{...}'`, or `--param-file params.json` (keeps them out of shell
+  history). In a terminal MagAgent asks for each one with hidden input; with `--json`,
+  `--jsonl` or `--approval-stdio` it stops with exit code 2 and lists them
+  (`redacted_params`, error `RT055`). The executor refuses any parameter holding the marker,
+  whoever starts the run.
 - `magent graph resume RUN_ID --retry-nodes implement,verify` reruns the selected jobs and every downstream dependent while retaining unaffected successful work.
 
 ## Live status and terminal results

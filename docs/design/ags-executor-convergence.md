@@ -66,11 +66,19 @@ them.
    `running`, because its side effects are unknown. MagAgent re-runs any node that did not
    succeed, so a side-effecting node can run twice (at-least-once). Loro's guard is the safer
    default.
-2. **Redacted parameters on resume.** Loro requires them again. MagAgent's resume path
-   (`cli/commands/graph.py`) rebinds the saved parameters, where redacted ones are stored as
-   `[REDACTED]`, so the resumed run receives the marker instead of the secret. It does skip
-   reusing node outputs that contain redactions. This is a MagAgent bug to fix on Loro's rule
-   (found while writing this note; not fixed here, since this note proposes no code).
+2. **Redacted parameters on resume.** Both harnesses write secrets into saved run records as
+   a marker and must not feed the marker back into a resumed run. MagAgent (fixed in G-14)
+   replaces declared-secret values with `[REDACTED]` anywhere in the record; `graph resume`
+   takes the real values again (`--param`, `--params`, `--param-file`, or a hidden prompt),
+   stops naming them otherwise, and the executor refuses any parameter that *contains* the
+   marker (`RT055`). Loro requires `--params` and refuses to resume when a saved parameter
+   *equals* `[redacted]`. Two gaps there, from reading `loro/agraph/execute.py` and
+   `loro/data_protection.py`: the marker is set only for params whose spec has `redact: true`,
+   which the AGS 1.0 `param_spec` schema does not allow (so valid graphs never set it this
+   way); and the run store's data-protection pass can redact part of a value (a token inside a
+   longer string), which an equality check does not catch. The markers also differ in case
+   (`[redacted]` and `[REDACTED]`). A shared rule: one marker, a containment check, and a
+   list of the parameters to re-supply.
 3. **Plan approval.** Loro makes approval of the graph digest a precondition of every real run.
    MagAgent treats the digest pin as optional and relies on per-action approvals. Both are
    defensible; the spec could name the two models so graphs and UIs can say which they need.

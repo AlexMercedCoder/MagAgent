@@ -131,6 +131,15 @@ class GraphExecutor:
         if dry_run:
             return {"ok": True, "dry_run": True, "plan": plan.as_dict()}
         bound_params = _bind_params(document.data, params or {})
+        marked = sorted(name for name, value in bound_params.items() if _contains_marker(value))
+        if marked:
+            # A run record replaces secret values with the marker. Running with
+            # it would hand "[REDACTED]" to the graph in place of the secret.
+            raise GraphRunError(
+                "parameters hold the redaction marker from a saved run record: "
+                f"{', '.join(marked)}; supply their real values again",
+                "RT055",
+            )
         if resume_record and resume_record.get("graph_digest") != document.digest and not force:
             raise GraphRunError("graph digest changed since the saved run", "RT053")
         self._preflight(document, plan)
@@ -1911,6 +1920,18 @@ def _contains_redaction(value: Any) -> bool:
     if isinstance(value, list):
         return any(_contains_redaction(item) for item in value)
     return value == "[REDACTED]"
+
+
+REDACTION_MARKER = "[REDACTED]"
+
+
+def _contains_marker(value: Any) -> bool:
+    """True when the redaction marker appears anywhere in ``value`` (also inside strings)."""
+    if isinstance(value, dict):
+        return any(_contains_marker(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_marker(item) for item in value)
+    return isinstance(value, str) and REDACTION_MARKER in value
 
 
 def _secret_value(name: str) -> str:

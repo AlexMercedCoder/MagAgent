@@ -556,8 +556,29 @@ def register_graph_commands(
             "--approval-stdio",
             help="Exchange AAIS approval envelopes over NDJSON stdio.",
         ),
+        param: list[str] = typer.Option(  # noqa: B008 - typer option list
+            [],
+            "--param",
+            help="NAME=VALUE for a parameter (repeatable); needed again for redacted values.",
+        ),
+        params_json: str = typer.Option(
+            "", "--params", help="Parameters as a JSON object; overrides the saved ones."
+        ),
+        param_file: Path | None = typer.Option(
+            None,
+            "--param-file",
+            exists=True,
+            dir_okay=False,
+            help="JSON file of parameters (keeps secrets out of argv and shell history).",
+        ),
     ) -> None:
-        """Resume a graph run, guarded by the original graph digest."""
+        """Resume a graph run, guarded by the original graph digest.
+
+        A run record stores the value of every declared graph secret as
+        `[REDACTED]`, parameters included, so a resumed run needs those values
+        again: `--param NAME=VALUE`, `--params JSON`, `--param-file FILE`, or a
+        hidden prompt when run in a terminal. Without them it stops and names them.
+        """
         username = get_current_user()
         record = _find_run(store(), run_id)
         if not username or not record:
@@ -566,6 +587,16 @@ def register_graph_commands(
         if path is None and not source_path:
             _fail("Pass --file because this run has no source path.", console)
         graph_path = path or Path(source_path)
+        resume_params = _resume_params(
+            record,
+            graph_path,
+            param=param,
+            params_json=params_json,
+            param_file=param_file,
+            interactive=not (json_output or jsonl or approval_stdio),
+            json_errors=json_output or jsonl,
+            console=console,
+        )
 
         reviewed_gates = {item.strip() for item in approve_gates.split(",") if item.strip()}
         permission_prompt = None
@@ -644,13 +675,16 @@ def register_graph_commands(
             selected = {item.strip() for item in retry_nodes.split(",") if item.strip()}
             return await executor.run(
                 graph_path,
-                params=record.get("params") or {},
+                params=resume_params,
                 resume_record=record,
                 force=force,
                 retry_nodes=selected or None,
             )
 
-        result = asyncio.run(execute())
+        try:
+            result = asyncio.run(execute())
+        except GraphRunError as exc:
+            _fail(str(exc), console)
         if jsonl:
             console.print(
                 json.dumps(
@@ -667,6 +701,94 @@ def register_graph_commands(
             console.print(str(summary.get("text") or result.get("run", {}).get("status")))
         if not result.get("ok"):
             raise typer.Exit(1)
+
+
+_TYPED_PARAMS = {"number", "integer", "boolean", "object", "array", "json"}
+
+
+def _resume_params(
+    record: dict[str, Any],
+    graph_path: Path,
+    *,
+    param: list[str],
+    params_json: str,
+    param_file: Path | None,
+    interactive: bool,
+    json_errors: bool,
+    console: Console,
+) -> dict[str, Any]:
+    """Saved parameters, overridden by any supplied, with no redaction marker left.
+
+    Precedence: saved record < --param-file < --params < --param. A value
+    still holding the marker is asked for with hidden input on a terminal, or
+    the command stops (exit 2) naming every parameter that must be supplied.
+    """
+    from magent.agraph.document import load_graph
+    from magent.agraph.execute import _contains_marker
+
+    try:
+        specs = dict(load_graph(graph_path).data.get("params") or {})
+    except Exception:
+        specs = {}
+
+    def typed(name: str, raw: str) -> Any:
+        if str((specs.get(name) or {}).get("type", "string")) in _TYPED_PARAMS:
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                return raw
+        return raw
+
+    def json_object(text: str, source: str) -> dict[str, Any]:
+        try:
+            value = json.loads(text)
+        except json.JSONDecodeError as exc:
+            _fail(f"Invalid {source}: {exc}", console)
+        if not isinstance(value, dict):
+            _fail(f"Invalid {source}: expected a JSON object", console)
+        return value
+
+    params = dict(record.get("params") or {})
+    if param_file is not None:
+        params.update(json_object(param_file.read_text(encoding="utf-8"), "--param-file"))
+    if params_json:
+        params.update(json_object(params_json, "--params"))
+    for item in param:
+        name, separator, raw = item.partition("=")
+        if not separator or not name.strip():
+            _fail(f"Invalid --param {item.split('=', 1)[0]!r}: use NAME=VALUE", console)
+        params[name.strip()] = typed(name.strip(), raw)
+
+    missing = sorted(name for name, value in params.items() if _contains_marker(value))
+    if missing and interactive and sys.stdin is not None and sys.stdin.isatty():
+        for name in missing:
+            params[name] = typed(
+                name, typer.prompt(f"Value for redacted parameter {name}", hide_input=True)
+            )
+        missing = []
+    if missing:
+        hint = " ".join(f"--param {name}=VALUE" for name in missing)
+        message = (
+            "This run's record redacted the values of: "
+            + ", ".join(missing)
+            + ". Supply them again to resume, for example "
+            + hint
+            + " (or --param-file FILE to keep them out of shell history)."
+        )
+        if json_errors:
+            console.print_json(
+                data={
+                    "ok": False,
+                    "error_code": "RT055",
+                    "error": message,
+                    "redacted_params": missing,
+                    "hint": hint,
+                }
+            )
+        else:
+            console.print(f"[red]{message}[/red]")
+        raise typer.Exit(2)
+    return params
 
 
 def _find_run(store: WorkbenchStore, run_id: str) -> dict[str, Any] | None:

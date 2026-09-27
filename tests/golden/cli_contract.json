@@ -6545,7 +6545,7 @@
       "short_help": ""
      },
      "resume": {
-      "help": "Resume a graph run, guarded by the original graph digest.",
+      "help": "Resume a graph run, guarded by the original graph digest.\n\nA run record stores the value of every declared graph secret as\n`[REDACTED]`, parameters included, so a resumed run needs those values\nagain: `--param NAME=VALUE`, `--params JSON`, `--param-file FILE`, or a\nhidden prompt when run in a terminal. Without them it stops and names them.",
       "hidden": false,
       "panel": null,
       "params": [
@@ -6714,6 +6714,51 @@
         ],
         "required": false,
         "type": "boolean"
+       },
+       {
+        "default": [],
+        "help": "NAME=VALUE for a parameter (repeatable); needed again for redacted values.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": true,
+        "name": "param",
+        "nargs": 1,
+        "opts": [
+         "--param"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": "",
+        "help": "Parameters as a JSON object; overrides the saved ones.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "params_json",
+        "nargs": 1,
+        "opts": [
+         "--params"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": null,
+        "help": "JSON file of parameters (keeps secrets out of argv and shell history).",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "param_file",
+        "nargs": 1,
+        "opts": [
+         "--param-file"
+        ],
+        "required": false,
+        "type": "file"
        }
       ],
       "short_help": ""

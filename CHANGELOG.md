@@ -198,6 +198,11 @@ that failed before the fix. `magent docs show threat-model` has the per-surface 
   file and reads at most the size limit from one handle.
 - `auth add --storage config` wrote the key before making a new `config.toml` private;
   keyring errors could echo the key.
+- Graph resume (G-14): run records replace declared secret values with `[REDACTED]`, and
+  `magent graph resume` passed the saved parameters back in, so a resumed run got the marker
+  instead of the secret. Resume now takes `--param NAME=VALUE`, `--params JSON` and
+  `--param-file FILE`, asks with hidden input in a terminal, and otherwise stops (exit 2) naming
+  the parameters to supply. The executor refuses any parameter containing the marker (`RT055`).
 - VS Code: a workspace's `.vscode/settings.json` could set `magagent.executable` (any program)
   or the permission mode; both are now user-only and the extension needs a trusted workspace.
 
