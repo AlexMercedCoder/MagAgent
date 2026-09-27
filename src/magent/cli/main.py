@@ -2790,13 +2790,18 @@ def context_audit_cmd(
 @recipe_app.command("list")
 def recipe_list_cmd(
     project: str = typer.Option(".", "--project", "-p"),
-    json_output: bool = typer.Option(False, "--json", hidden=True),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON instead of a table."),
 ):
     """List built-in, saved, and playbook-backed workflow recipes."""
     from magent.recipes import list_recipes
 
+    recipes = list_recipes(_store(), project)
+    if json_output:
+        # --json was accepted (hidden) but ignored, so scripts got a table.
+        console.print_json(data={"ok": True, "recipes": recipes})
+        return
     table = Table("Name", "Source", "Commands", "Description")
-    for item in list_recipes(_store(), project):
+    for item in recipes:
         table.add_row(
             item.get("name", ""),
             item.get("source", "builtin"),
