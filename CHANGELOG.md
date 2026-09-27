@@ -60,6 +60,17 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
 
 ### Changed
 
+- **`magent plan <sub>` (S-2).** The nine `plan-*` verbs are subcommands of one group:
+  `plan create` (still the default, so `magent plan "goal" --save` works), `plan list`,
+  `plan apply`, `plan sandbox`, `plan exec`, `plan preview`, `plan run`, `plan show` and
+  `plan discard`. The old spellings keep working as hidden aliases. Hints, docs and the daemon
+  use the new form.
+- **`cli/main.py` split (S-2).** The 5,000-line module is now an entry point plus command modules
+  under `magent.cli.commands` and shared helpers in `magent.cli.shared`. A golden snapshot of the
+  whole command tree and of 22 JSON output shapes (`tests/golden/cli_contract.json`) guarantees
+  nothing else changed. `magent.cli.main` and `magent.workbench` now pass mypy; a ratchet test
+  keeps the ignore list from growing.
+
 - `magent ask --json` keeps stdout for machine output only: AAIS NDJSON lines (with
   `--approval-stdio`) and one result document, a single line when stdout is not a terminal.
   Status text such as "Loaded N skills" now goes to stderr. Parsers that treated stdout as JSON
@@ -75,6 +86,8 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   task-runtime benchmark from about 70s to about 15s on a slow disk. Commits stay durable.
 
 ### Fixed
+
+- `magent recipe list --json` printed a table; it now prints JSON.
 
 - Web UI on phones: the closed conversation drawer covered the navigation rail, rail buttons lost
   their accessible names when labels are hidden, and the empty-chat welcome and starter prompts

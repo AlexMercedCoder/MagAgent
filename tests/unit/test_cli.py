@@ -1240,7 +1240,7 @@ def test_cli_plan_save_executable_outputs_next_commands(tmp_path: Path, monkeypa
 
     assert result.exit_code == 0
     assert "Saved execution plan" in result.output
-    assert "magent plan-preview" in result.output
+    assert "magent plan preview" in result.output
     plans = store.read("plans", [])
     assert len(plans) == 1
     assert plans[0]["mode"] == "execution"

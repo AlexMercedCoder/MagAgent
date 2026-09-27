@@ -60,7 +60,7 @@ real-agent eval report. Credentialed Nous Portal qualification runs in the separ
 or manually dispatched `Provider Qualification` workflow when its repository secret is set.
 
 Use `magent test explain <file>` when targeted test selection is surprising. Use
-`magent plan-apply --dry-run <plan-id>` before executing buffered plan operations.
+`magent plan apply --dry-run <plan-id>` before executing buffered plan operations.
 
 One-shot tasks are non-interactive by default. If a tool action needs a prompt,
 the tool returns `permission_required` and the final response includes a task

@@ -198,6 +198,7 @@ def _register_command_modules() -> None:
 
     for name in (
         "toplevel",
+        "plans",
         "workbench_cmds",
         "system_cmds",
         "models",

@@ -237,7 +237,7 @@ def _execute_item(
         if payload.get("yes"):
             command.append("--yes")
     elif kind == "plan":
-        command = ["magent", "plan-apply", payload.get("id", ""), "--yes"]
+        command = ["magent", "plan", "apply", payload.get("id", ""), "--yes"]
     elif kind == "shell":
         return _run_shell(payload.get("command", ""), project, control_state=control_state)
     else:

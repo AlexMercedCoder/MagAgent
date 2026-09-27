@@ -8,7 +8,7 @@
 2. Inspect one with `magent recipe show release-prep`.
 3. Save a project-specific flow with `magent recipe save daily-check --step "Run focused tests" --command "pytest -q"`.
 4. Materialize it with `magent recipe run daily-check`.
-5. Inspect the generated plan with `magent plan-show <id>`.
+5. Inspect the generated plan with `magent plan show <id>`.
 
 Built-in recipes include release prep, bug triage, docs audit, dependency upgrade, and test repair. If `.magent/playbook.toml` exists, `magent recipe list` also exposes a `project-playbook` recipe from project routines.
 
@@ -59,7 +59,7 @@ Before using different planning/execution roles, run
 ## Fix failing CI
 
 1. Run `magent ci --logs --repair-plan --save`.
-2. Inspect the saved plan with `magent plan-show <id>`.
+2. Inspect the saved plan with `magent plan show <id>`.
 3. Run the reproduction command from the repair plan.
 4. Patch the smallest failing path.
 5. Run `magent review --json --save`.
@@ -110,11 +110,11 @@ Before using different planning/execution roles, run
 
 ## Apply plans safely
 
-1. Create an executable plan with `magent plan-exec "goal"`.
-2. Preview operations with `magent plan-preview <id>`.
-3. Dry-run apply metadata with `magent plan-apply --dry-run <id>`.
-4. Apply with `magent plan-apply --yes <id> --run-checks`.
-5. Inspect saved stdout/stderr excerpts with `magent plan-show <id>`.
+1. Create an executable plan with `magent plan exec "goal"`.
+2. Preview operations with `magent plan preview <id>`.
+3. Dry-run apply metadata with `magent plan apply --dry-run <id>`.
+4. Apply with `magent plan apply --yes <id> --run-checks`.
+5. Inspect saved stdout/stderr excerpts with `magent plan show <id>`.
 
 ## Patch-first editing
 

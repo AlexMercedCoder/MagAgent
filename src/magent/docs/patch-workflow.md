@@ -16,10 +16,10 @@ plans, saved patches, checkpoint sessions, failed checks, and code index state.
 For executable plans:
 
 ```bash
-magent plan-exec "finish the change" --command "pytest -q"
-magent plan-preview <plan-id>
-magent plan-apply --dry-run <plan-id>
-magent plan-apply --yes --run-checks <plan-id>
+magent plan exec "finish the change" --command "pytest -q"
+magent plan preview <plan-id>
+magent plan apply --dry-run <plan-id>
+magent plan apply --yes --run-checks <plan-id>
 ```
 
 After a change, run `magent review --fail-on P1` to make severe findings fail

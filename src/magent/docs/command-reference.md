@@ -406,6 +406,18 @@ Generated from the active Typer command tree.
 - `magent permission trust-clear`
 - `magent permission trust-list`
 
+## plan
+
+- `magent plan apply`
+- `magent plan create`
+- `magent plan discard`
+- `magent plan exec`
+- `magent plan list`
+- `magent plan preview`
+- `magent plan run`
+- `magent plan sandbox`
+- `magent plan show`
+
 ## plugin
 
 - `magent plugin disable`

@@ -271,17 +271,17 @@ tools, prompts, resources, templates, cache freshness, and structured content.
 - `magent test related <file>`: show likely tests for a file.
 - `magent test explain <file>`: explain why tests were selected.
 - `magent test run-related <file>`: run likely tests for a file.
-- `magent plan-run "goal"`: create a pending plan with diff/review context.
+- `magent plan run "goal"`: create a pending plan with diff/review context.
 - `magent plan "goal"`: render a project-aware local plan without changing files.
 - `magent plan --save "goal"`: save the rendered plan so `plan-list`, `plan-show`, and `plan-apply` can use it.
 - `magent plan --save --executable "goal" -c "pytest -q"`: save executable operations for `plan-preview`, sandboxing, and apply flows.
-- `magent plan-exec "goal"`: create an executable plan from current diff and optional commands.
-- `magent plan-preview <id>`: preview executable plan operations.
-- `magent plan-apply --dry-run <id>`: preview plan apply without executing operations.
-- `magent plan-apply <id> --sandbox worktree`: run plan operations in a sandbox.
-- `magent plan-sandbox <id>`: run or preview a plan in a worktree, copy, or container sandbox.
-- `magent plan-show <id>`: inspect a saved plan record.
-- `magent plan-discard <id>`: discard a saved plan.
+- `magent plan exec "goal"`: create an executable plan from current diff and optional commands.
+- `magent plan preview <id>`: preview executable plan operations.
+- `magent plan apply --dry-run <id>`: preview plan apply without executing operations.
+- `magent plan apply <id> --sandbox worktree`: run plan operations in a sandbox.
+- `magent plan sandbox <id>`: run or preview a plan in a worktree, copy, or container sandbox.
+- `magent plan show <id>`: inspect a saved plan record.
+- `magent plan discard <id>`: discard a saved plan.
 - `magent review --json`: emit structured review findings.
 - `magent review --fail-on P1`: exit non-zero for findings at or above a priority.
 - `magent review --save`: save structured review findings.

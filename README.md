@@ -187,7 +187,7 @@ magent statusline
 magent update
 magent plan "Ship the UX fixes"
 magent plan --save --executable "Ship the UX fixes" -c "pytest -q"
-magent plan-sandbox <plan-id> --dry-run
+magent plan sandbox <plan-id> --dry-run
 magent eval init
 magent onboard --profile coding-cloud
 magent next
@@ -582,7 +582,7 @@ MagAgent's workbench stores practical productivity state under each user profile
 - **Inbox and routines** — `magent inbox add/triage`, `magent routine add/run`
 - **Follow-ups** — `magent followup add/list`
 - **Knowledge commands** — `magent knowledge remember/recall/forget`
-- **Review and planning** — `magent plan --save`, `magent plan-exec`, `magent plan-preview`, `magent plan-run`, `magent plan-list`, `magent plan-show`, `magent plan-apply`, `magent plan-discard`, `magent review --json`, `magent review --save`, `magent review-show`, `magent run`
+- **Review and planning** — `magent plan --save`, `magent plan exec`, `magent plan preview`, `magent plan run`, `magent plan list`, `magent plan show`, `magent plan apply`, `magent plan discard`, `magent review --json`, `magent review --save`, `magent review-show`, `magent run`
 - **Goal loops and jobs** — `magent goal --verify --review`, `magent goal --orchestrated`, `magent goal-run`, `magent goal --background`, `magent jobs`, `magent daemon run-once`, `magent statusline`
 - **Repo/test helpers** — `magent repo-graph`, `magent code graph/index/symbols/related`, `magent test map/related/explain/run-related`, `magent test-intel`, `magent env-doctor`, `magent diagnostics`, `magent diagnostics --deep`, `magent ci --logs`, `magent ci --repair-plan --save`
 - **Patch queue** — `magent patch save/list/apply/revert`

@@ -17,7 +17,7 @@ Run `magent get-started` for a plain-language orientation before this project-fo
 9. Open the local operations dashboard with `magent ui`.
 10. Use `magent docs search <query>` whenever you forget a command.
 
-For larger changes, run `magent plan-exec`, inspect with `magent plan-preview`, then apply with `magent plan-apply`.
+For larger changes, run `magent plan exec`, inspect with `magent plan preview`, then apply with `magent plan apply`.
 For patch-first work, save diffs with `magent patch save`, inspect them with
 `magent patch preview` and `magent patch explain`, then check the whole
 workspace with `magent workspace status`.

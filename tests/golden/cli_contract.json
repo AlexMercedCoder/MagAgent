@@ -10507,123 +10507,588 @@
     "short_help": ""
    },
    "plan": {
-    "help": "Generate a local plan without modifying files.",
-    "hidden": false,
-    "panel": "Planning, Review & Release",
-    "params": [
-     {
-      "default": null,
-      "help": "",
+    "commands": {
+     "apply": {
+      "help": "Mark a saved plan applied, optionally running its suggested checks.",
       "hidden": false,
-      "is_flag": false,
-      "kind": "argument",
-      "multiple": false,
-      "name": "goal",
-      "nargs": 1,
-      "opts": [
-       "goal"
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "plan_id",
+        "nargs": 1,
+        "opts": [
+         "plan_id"
+        ],
+        "required": true,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "run_checks",
+        "nargs": 1,
+        "opts": [
+         "--run-checks"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": false,
+        "help": "",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "dry_run",
+        "nargs": 1,
+        "opts": [
+         "--dry-run"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": null,
+        "help": "Run in worktree, copy, or container sandbox",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "sandbox",
+        "nargs": 1,
+        "opts": [
+         "--sandbox"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "keep_sandbox",
+        "nargs": 1,
+        "opts": [
+         "--keep-sandbox"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": "python:3.12",
+        "help": "Container image for --sandbox container",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "image",
+        "nargs": 1,
+        "opts": [
+         "--image"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "yes",
+        "nargs": 1,
+        "opts": [
+         "--yes",
+         "-y"
+        ],
+        "required": false,
+        "type": "boolean"
+       }
       ],
-      "required": true,
-      "type": "str"
+      "short_help": ""
      },
-     {
-      "default": ".",
-      "help": "",
+     "create": {
+      "help": "Generate a local plan without modifying files.",
       "hidden": false,
-      "is_flag": false,
-      "kind": "option",
-      "multiple": false,
-      "name": "project",
-      "nargs": 1,
-      "opts": [
-       "--project",
-       "-p"
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "goal",
+        "nargs": 1,
+        "opts": [
+         "goal"
+        ],
+        "required": true,
+        "type": "str"
+       },
+       {
+        "default": ".",
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "project",
+        "nargs": 1,
+        "opts": [
+         "--project",
+         "-p"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "Save the plan in the local workbench",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "save",
+        "nargs": 1,
+        "opts": [
+         "--save"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": false,
+        "help": "When saving, create an executable plan compatible with `plan preview` and `plan apply`.",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "executable",
+        "nargs": 1,
+        "opts": [
+         "--executable"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": true,
+        "name": "command",
+        "nargs": 1,
+        "opts": [
+         "--command",
+         "-c"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "Do not capture the current diff for executable plans.",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "no_diff",
+        "nargs": 1,
+        "opts": [
+         "--no-diff"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": false,
+        "help": "Emit machine-readable plan data.",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "json_output",
+        "nargs": 1,
+        "opts": [
+         "--json"
+        ],
+        "required": false,
+        "type": "boolean"
+       }
       ],
-      "required": false,
-      "type": "str"
+      "short_help": ""
      },
-     {
-      "default": false,
-      "help": "Save the plan in the local workbench",
+     "discard": {
+      "help": "Discard a saved plan.",
       "hidden": false,
-      "is_flag": true,
-      "kind": "option",
-      "multiple": false,
-      "name": "save",
-      "nargs": 1,
-      "opts": [
-       "--save"
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "plan_id",
+        "nargs": 1,
+        "opts": [
+         "plan_id"
+        ],
+        "required": true,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "yes",
+        "nargs": 1,
+        "opts": [
+         "--yes",
+         "-y"
+        ],
+        "required": false,
+        "type": "boolean"
+       }
       ],
-      "required": false,
-      "type": "boolean"
+      "short_help": ""
      },
-     {
-      "default": false,
-      "help": "When saving, create an executable plan compatible with plan-preview/apply.",
+     "exec": {
+      "help": "Create an executable plan from current diff and optional shell commands.",
       "hidden": false,
-      "is_flag": true,
-      "kind": "option",
-      "multiple": false,
-      "name": "executable",
-      "nargs": 1,
-      "opts": [
-       "--executable"
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "goal",
+        "nargs": 1,
+        "opts": [
+         "goal"
+        ],
+        "required": true,
+        "type": "str"
+       },
+       {
+        "default": ".",
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "project",
+        "nargs": 1,
+        "opts": [
+         "--project",
+         "-p"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": true,
+        "name": "command",
+        "nargs": 1,
+        "opts": [
+         "--command",
+         "-c"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "no_diff",
+        "nargs": 1,
+        "opts": [
+         "--no-diff"
+        ],
+        "required": false,
+        "type": "boolean"
+       }
       ],
-      "required": false,
-      "type": "boolean"
+      "short_help": ""
      },
-     {
-      "default": null,
-      "help": "",
+     "list": {
+      "help": "List saved plans.",
       "hidden": false,
-      "is_flag": false,
-      "kind": "option",
-      "multiple": true,
-      "name": "command",
-      "nargs": 1,
-      "opts": [
-       "--command",
-       "-c"
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "status",
+        "nargs": 1,
+        "opts": [
+         "--status"
+        ],
+        "required": false,
+        "type": "str"
+       }
       ],
-      "required": false,
-      "type": "str"
+      "short_help": ""
      },
-     {
-      "default": false,
-      "help": "Do not capture the current diff for executable plans.",
+     "preview": {
+      "help": "Preview executable operations for a saved plan.",
       "hidden": false,
-      "is_flag": true,
-      "kind": "option",
-      "multiple": false,
-      "name": "no_diff",
-      "nargs": 1,
-      "opts": [
-       "--no-diff"
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "plan_id",
+        "nargs": 1,
+        "opts": [
+         "plan_id"
+        ],
+        "required": true,
+        "type": "str"
+       }
       ],
-      "required": false,
-      "type": "boolean"
+      "short_help": ""
      },
-     {
-      "default": false,
-      "help": "Emit machine-readable plan data.",
+     "run": {
+      "help": "Create a pending plan-run record with checks, review, and diff context.",
       "hidden": false,
-      "is_flag": true,
-      "kind": "option",
-      "multiple": false,
-      "name": "json_output",
-      "nargs": 1,
-      "opts": [
-       "--json"
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "goal",
+        "nargs": 1,
+        "opts": [
+         "goal"
+        ],
+        "required": true,
+        "type": "str"
+       },
+       {
+        "default": ".",
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "project",
+        "nargs": 1,
+        "opts": [
+         "--project",
+         "-p"
+        ],
+        "required": false,
+        "type": "str"
+       }
       ],
-      "required": false,
-      "type": "boolean"
+      "short_help": ""
+     },
+     "sandbox": {
+      "help": "Run or preview a saved plan in an isolated sandbox.",
+      "hidden": false,
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "plan_id",
+        "nargs": 1,
+        "opts": [
+         "plan_id"
+        ],
+        "required": true,
+        "type": "str"
+       },
+       {
+        "default": "worktree",
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "mode",
+        "nargs": 1,
+        "opts": [
+         "--mode"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "run_checks",
+        "nargs": 1,
+        "opts": [
+         "--run-checks"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": false,
+        "help": "",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "dry_run",
+        "nargs": 1,
+        "opts": [
+         "--dry-run"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": false,
+        "help": "",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "keep",
+        "nargs": 1,
+        "opts": [
+         "--keep"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": "python:3.12",
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "image",
+        "nargs": 1,
+        "opts": [
+         "--image"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "Skip the confirmation prompt.",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "yes",
+        "nargs": 1,
+        "opts": [
+         "--yes",
+         "-y"
+        ],
+        "required": false,
+        "type": "boolean"
+       }
+      ],
+      "short_help": ""
+     },
+     "show": {
+      "help": "Show a saved plan record.",
+      "hidden": false,
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "plan_id",
+        "nargs": 1,
+        "opts": [
+         "plan_id"
+        ],
+        "required": true,
+        "type": "str"
+       }
+      ],
+      "short_help": ""
      }
+    },
+    "help": "Create, review and apply saved plans.\n\nExamples:\n\n  magent plan \"Add JWT auth\" --save\n\n  magent plan list --status pending\n\n  magent plan preview plan_0001\n\n  magent plan apply plan_0001 --run-checks\n\nThe old verbs (plan-list, plan-apply, ...) remain as hidden aliases.",
+    "hidden": false,
+    "order": [
+     "create",
+     "list",
+     "apply",
+     "sandbox",
+     "exec",
+     "preview",
+     "run",
+     "show",
+     "discard"
     ],
+    "panel": "Planning, Review & Release",
+    "params": [],
     "short_help": ""
    },
    "plan-apply": {
     "help": "Mark a saved plan applied, optionally running its suggested checks.",
-    "hidden": false,
+    "hidden": true,
     "panel": "Planning, Review & Release",
     "params": [
      {
@@ -10737,7 +11202,7 @@
    },
    "plan-discard": {
     "help": "Discard a saved plan.",
-    "hidden": false,
+    "hidden": true,
     "panel": "Planning, Review & Release",
     "params": [
      {
@@ -10776,7 +11241,7 @@
    },
    "plan-exec": {
     "help": "Create an executable plan from current diff and optional shell commands.",
-    "hidden": false,
+    "hidden": true,
     "panel": "Planning, Review & Release",
     "params": [
      {
@@ -10846,7 +11311,7 @@
    },
    "plan-list": {
     "help": "List saved plans.",
-    "hidden": false,
+    "hidden": true,
     "panel": "Planning, Review & Release",
     "params": [
      {
@@ -10869,7 +11334,7 @@
    },
    "plan-preview": {
     "help": "Preview executable operations for a saved plan.",
-    "hidden": false,
+    "hidden": true,
     "panel": "Planning, Review & Release",
     "params": [
      {
@@ -10892,7 +11357,7 @@
    },
    "plan-run": {
     "help": "Create a pending plan-run record with checks, review, and diff context.",
-    "hidden": false,
+    "hidden": true,
     "panel": "Planning, Review & Release",
     "params": [
      {
@@ -10931,7 +11396,7 @@
    },
    "plan-sandbox": {
     "help": "Run or preview a saved plan in an isolated sandbox.",
-    "hidden": false,
+    "hidden": true,
     "panel": "Planning, Review & Release",
     "params": [
      {
@@ -11045,7 +11510,7 @@
    },
    "plan-show": {
     "help": "Show a saved plan record.",
-    "hidden": false,
+    "hidden": true,
     "panel": "Planning, Review & Release",
     "params": [
      {
@@ -16392,15 +16857,6 @@
    "ask",
    "research",
    "update",
-   "plan",
-   "plan-list",
-   "plan-apply",
-   "plan-sandbox",
-   "plan-exec",
-   "plan-preview",
-   "plan-run",
-   "plan-show",
-   "plan-discard",
    "run",
    "goal",
    "goal-run",
@@ -16428,6 +16884,14 @@
    "mode",
    "doctor",
    "readiness",
+   "plan-list",
+   "plan-apply",
+   "plan-sandbox",
+   "plan-exec",
+   "plan-preview",
+   "plan-run",
+   "plan-show",
+   "plan-discard",
    "user",
    "memory",
    "gateway",
@@ -16476,7 +16940,8 @@
    "performance",
    "workbench",
    "system",
-   "graph"
+   "graph",
+   "plan"
   ],
   "panel": null,
   "params": [

@@ -4,10 +4,10 @@ MagAgent can run saved plans and workflow recipes away from the active working t
 
 Commands:
 
-- `magent plan-sandbox <plan-id>`
-- `magent plan-sandbox <plan-id> --mode copy`
-- `magent plan-sandbox <plan-id> --mode container --image python:3.12`
-- `magent plan-apply <plan-id> --sandbox worktree --run-checks`
+- `magent plan sandbox <plan-id>`
+- `magent plan sandbox <plan-id> --mode copy`
+- `magent plan sandbox <plan-id> --mode container --image python:3.12`
+- `magent plan apply <plan-id> --sandbox worktree --run-checks`
 - `magent recipe sandbox release-prep`
 
 Modes:

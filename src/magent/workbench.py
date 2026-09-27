@@ -294,8 +294,8 @@ def build_plan(root: str | Path, goal: str) -> str:
             "## Save / Run",
             "- Save this draft: `magent plan --save \"<goal>\"`",
             "- Save executable operations: `magent plan --save --executable \"<goal>\"`",
-            "- Show saved plans: `magent plan-list`",
-            "- Preview executable plan: `magent plan-preview <plan-id>`",
+            "- Show saved plans: `magent plan list`",
+            "- Preview executable plan: `magent plan preview <plan-id>`",
         ]
     )
     return "\n".join(lines)

@@ -180,7 +180,7 @@ def context_audit(data: dict[str, Any]) -> dict[str, Any]:
     if doctor.get("missing"):
         suggestions.append("Configure missing project command roles with `magent project command-promote` or .magent/playbook.toml.")
     if (workspace.get("pending_plans") or 0) > 3:
-        suggestions.append("Review old draft plans with `magent plan-list` and discard stale ones.")
+        suggestions.append("Review old draft plans with `magent plan list` and discard stale ones.")
     if active.get("failed_commands"):
         suggestions.append("Promote recurring command failures with `magent memory inbox` after triage.")
     if memory.get("available") and not (memory.get("recall") or "").strip():
