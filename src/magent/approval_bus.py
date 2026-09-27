@@ -45,7 +45,19 @@ def _socket_dir() -> Path:
     base.mkdir(mode=0o700, exist_ok=True)
     with contextlib.suppress(OSError):
         os.chmod(base, 0o700)
+    _sweep(base)
     return base
+
+
+def _sweep(base: Path) -> None:
+    """Remove sockets left by processes that died without closing them."""
+    from magent.process_liveness import process_alive
+
+    for path in base.glob("*.sock"):
+        pid_text = path.name.split("-", 1)[0]
+        if pid_text.isdigit() and not process_alive(int(pid_text)):
+            with contextlib.suppress(OSError):
+                path.unlink()
 
 
 class Doorbell:
