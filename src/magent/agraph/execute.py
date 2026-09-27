@@ -758,6 +758,24 @@ class GraphExecutor:
         if route is None:
             raise GraphRunError("task node has no route", "RT011")
         prompt = _node_prompt(node, inputs, feedback)
+        from magent.agraph.remote_executors import (
+            ExecutorError,
+            executor_for,
+            run_executor,
+        )
+
+        if executor_for(node) is not None:
+            try:
+                return await run_executor(
+                    full_id,
+                    node,
+                    prompt=prompt,
+                    scope={"inputs": inputs},
+                    mcp_servers=dict(self.config.get("mcp", "servers", default={}) or {}),
+                    approve=self._approve_external_call,
+                )
+            except ExecutorError as error:
+                raise GraphRunError(str(error).split(": ", 1)[-1], error.code) from error
         outputs, token = begin_output_collection()
         try:
             response = await self.agent_runner(full_id, prompt, route, task_id)
@@ -780,6 +798,26 @@ class GraphExecutor:
         result["_magent_files_changed"] = _response_files_changed(response)
         result["_magent_summary"] = _response_summary(response)
         return result
+
+    async def _approve_external_call(self, action: dict[str, Any], description: str) -> bool:
+        """Approve an MCP/A2A executor call through the graph's approval path."""
+        if self.assume_yes:
+            return True
+        if self.permission_prompt is None:
+            return False
+        prompt: Any = self.permission_prompt
+        answer = await asyncio.to_thread(prompt, description, 2, action)
+        if isinstance(answer, str):
+            return answer.strip().lower() in {
+                "once",
+                "session",
+                "persistent",
+                "always",
+                "approve",
+                "yes",
+                "y",
+            }
+        return bool(answer)
 
     async def _run_decision(
         self,

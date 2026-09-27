@@ -121,3 +121,8 @@ Portable run records conform to `agentic-graph-run-1.0.schema.json` and include 
 - `magent graph export-plugin` packages the schemas and bundled authoring skill for another installation.
 
 Examples live under `docs/examples/agraph/`, including release preparation, bug triage, documentation audit, loops, maps, branching, and subgraphs. Tests strictly validate every example and structurally execute every packaged YAML graph through the real scheduler without provider calls or side effects.
+
+## Gallery and external executors
+
+See the `graph-gallery` topic for ready-made graphs, and for running a task node with an MCP tool
+or an A2A agent through the experimental `x-magagent-executor` extension.

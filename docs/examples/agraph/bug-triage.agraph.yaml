@@ -5,6 +5,7 @@ title: Bug triage
 objective: Reproduce, diagnose, and propose a bounded repair for a reported bug.
 version: "1.0.0"
 requires_conformance: 2
+constraints: {max_cost_usd: 2.0}
 params:
   report: {type: string, description: The bug report to investigate.}
 entrypoints: [reproduce]

@@ -876,6 +876,14 @@ def test_packaged_yaml_examples_complete_structural_execution(
         async def _criteria(self, *_args, **_kwargs):
             return True, []
 
+    async def fake_remote_executor(_node_id, node, **_kwargs):
+        # Gallery examples that call MCP/A2A executors: no network here.
+        executor = node["x-magagent-executor"]
+        output = executor.get("output") or next(iter(node["outputs"]))
+        return {output: "ok", "_magent_summary": "structural", "_magent_files_changed": []}
+
+    monkeypatch.setattr("magent.agraph.remote_executors.run_executor", fake_remote_executor)
+
     values = {
         "array": [],
         "file_set": [],

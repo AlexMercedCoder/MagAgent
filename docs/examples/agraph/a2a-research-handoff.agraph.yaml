@@ -1,0 +1,75 @@
+ags_version: "1.0"
+kind: AgenticGraph
+id: examples/a2a-research-handoff
+title: Hand research to an A2A agent, then review it
+version: "1.0.0"
+requires_conformance: 1
+objective: >
+  Delegate a background research question to a specialist agent that speaks the A2A protocol,
+  then have MagAgent check the answer against the project before anyone relies on it.
+constraints:
+  max_cost_usd: 0.5
+params:
+  question:
+    type: string
+    description: The research question.
+    default: Which Parquet compression codec suits our write-heavy tables?
+entrypoints: [research]
+nodes:
+  research:
+    type: task
+    title: Ask the research agent
+    description: Send the question to the research agent and keep its answer.
+    inputs:
+      question: {type: string, description: The research question., from: params.question}
+    # MagAgent extension (experimental): an A2A agent runs this node.
+    x-magagent-executor:
+      kind: a2a
+      url: https://agents.example.com/research
+      message: "Research this and cite sources: ${{ inputs.question }}"
+      token_env: RESEARCH_AGENT_TOKEN
+      timeout_seconds: 600
+      output: findings
+    outputs:
+      findings:
+        type: string
+        description: The research agent's answer.
+    requirements:
+      tools: []
+      permissions: []
+    success:
+      summary: The agent answered.
+      criteria:
+        - id: findings
+          kind: artifact_present
+          description: An answer was captured.
+          output: findings
+  review:
+    type: task
+    title: Check the answer against the project
+    description: >
+      Compare the findings with how this project actually writes data and say what to adopt.
+    depends_on: [research]
+    inputs:
+      findings: {type: string, description: The research answer., from: nodes.research.outputs.findings}
+    intelligence:
+      tier: standard
+    outputs:
+      recommendation:
+        type: string
+        description: What to adopt and why.
+    requirements:
+      tools: [file_read, file_search]
+      permissions: [fs:read:**]
+    success:
+      summary: A recommendation exists.
+      criteria:
+        - id: recommendation
+          kind: artifact_present
+          description: The recommendation was emitted.
+          output: recommendation
+outputs:
+  recommendation:
+    type: string
+    description: The reviewed recommendation.
+    from: nodes.review.outputs.recommendation

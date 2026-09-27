@@ -69,6 +69,16 @@ def validate_graph(
         findings.append(
             Finding("AG303", "error", f"graph requires unsupported conformance level {required}")
         )
+    from magent.agraph.remote_executors import EXECUTOR_KEY, validate_executor
+
+    for node_id, node in (document.data.get("nodes") or {}).items():
+        if isinstance(node, dict) and EXECUTOR_KEY in node:
+            # MagAgent's own x- extension: checked here so a bad executor fails
+            # at validation time rather than halfway through a run.
+            for problem in validate_executor(str(node_id), node):
+                findings.append(
+                    Finding("MX001", "error", problem, f"/nodes/{node_id}/{EXECUTOR_KEY}")
+                )
     if strict:
         findings = [
             Finding(

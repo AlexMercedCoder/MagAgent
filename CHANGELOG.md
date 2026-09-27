@@ -94,6 +94,14 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   reviewed team nodes too (`memory.team.recall`), and memory evidence now carries a `source`
   (`personal` or `team`) per node. The Web UI Memory page gains a Team review panel. No MagGraph
   change was needed: the team clone is an ordinary MagGraph directory.
+- **Graph nodes run by MCP tools or A2A agents, and a graph gallery (Phase 6, experimental).**
+  Task nodes may carry `x-magagent-executor` (`kind: mcp` with a configured server and tool, or
+  `kind: a2a` with an agent's JSON-RPC endpoint): the node calls the executor instead of a model,
+  after approval, and stores its text reply in a declared output. A2A uses `message/send` and
+  polls `tasks/get`; HTTPS is required except on loopback. Validation reports executor mistakes
+  as `MX001`. New examples `mcp-issue-digest` and `a2a-research-handoff`, a `graph-gallery`
+  docs topic listing every example, and `system info` now lists the `x-magagent-*` extensions.
+  The `bug-triage` example gained a cost cap so every example validates strictly.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the

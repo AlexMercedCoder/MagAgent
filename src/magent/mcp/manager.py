@@ -265,6 +265,13 @@ class MCPManager:
         log.debug(f"MCP dispatch: {qualified_name} → [{client.server_name}].{original_name}")
         return await client.call_tool(original_name, args)
 
+    async def call(self, server_name: str, tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+        """Call one tool on one connected server by its original (unqualified) name."""
+        client = self._clients.get(server_name)
+        if client is None:
+            return {"ok": False, "error": f"MCP server {server_name!r} is not connected"}
+        return await client.call_tool(tool_name, args)
+
     # ─────────────────────────────────────────────
     # Inspection / CLI
     # ─────────────────────────────────────────────

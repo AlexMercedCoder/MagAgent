@@ -1,0 +1,76 @@
+ags_version: "1.0"
+kind: AgenticGraph
+id: examples/mcp-issue-digest
+title: Issue digest from an MCP server
+version: "1.0.0"
+requires_conformance: 1
+objective: >
+  Pull open issues about a topic from a GitHub MCP server, then have MagAgent write a short
+  triage digest a maintainer can act on.
+constraints:
+  max_cost_usd: 0.25
+params:
+  topic:
+    type: string
+    description: What to search the issue tracker for.
+    default: flaky test
+entrypoints: [fetch_issues]
+nodes:
+  fetch_issues:
+    type: task
+    title: Fetch matching issues
+    description: Search open issues for the topic through the GitHub MCP server.
+    # MagAgent extension (experimental): run this node with an MCP tool
+    # instead of a model. Requires an [mcp.servers.github] entry.
+    x-magagent-executor:
+      kind: mcp
+      server: github
+      tool: search_issues
+      arguments:
+        query: "${{ inputs.topic }} is:open"
+      output: issues
+    inputs:
+      topic: {type: string, description: The search topic., from: params.topic}
+    outputs:
+      issues:
+        type: string
+        description: The raw search result from the MCP tool.
+    requirements:
+      tools: []
+      permissions: []
+    success:
+      summary: The tool returned a result.
+      criteria:
+        - id: issues
+          kind: artifact_present
+          description: The search result was captured.
+          output: issues
+  write_digest:
+    type: task
+    title: Write the triage digest
+    description: >
+      Group the issues by likely cause, flag duplicates, and recommend the three to fix first.
+    depends_on: [fetch_issues]
+    inputs:
+      issues: {type: string, description: Matching issues., from: nodes.fetch_issues.outputs.issues}
+    intelligence:
+      tier: standard
+    outputs:
+      digest:
+        type: string
+        description: A short Markdown digest.
+    requirements:
+      tools: []
+      permissions: []
+    success:
+      summary: A digest exists.
+      criteria:
+        - id: digest
+          kind: artifact_present
+          description: The digest was emitted.
+          output: digest
+outputs:
+  digest:
+    type: string
+    description: The triage digest.
+    from: nodes.write_digest.outputs.digest

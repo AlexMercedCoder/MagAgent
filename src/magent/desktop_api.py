@@ -179,6 +179,9 @@ def system_info() -> dict[str, Any]:
                 "run-records",
                 "resume",
                 "generation",
+                # MagAgent x- extensions (AGS §23): honoured here, preserved elsewhere.
+                "x-magagent-profile",
+                "x-magagent-executor",
             ],
             "tier_to_model_role": dict(TIER_TO_MODEL_ROLE),
             "logical_tool_mapping": {name: list(tools) for name, tools in TOOL_NAME_MAP.items()},
