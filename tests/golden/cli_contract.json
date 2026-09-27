@@ -14859,6 +14859,119 @@
     ],
     "short_help": ""
    },
+   "serve": {
+    "help": "Serve MagAgent to a remote desktop client (experimental).\n\nStarts the `magent.rpc.v1` JSON-RPC gateway that Mag Command Center's remote\nruntime connects to: run commands, stream a run's output, answer its AAIS\napprovals, and cancel it. Every request needs `Authorization: Bearer <token>`.\n\nExamples:\n\n  magent serve --rpc                        # loopback, generated token\n\n  magent serve --rpc --root ~/code/app --port 7850\n\n  printf '%s' \"$TOKEN\" | magent serve --rpc --token-stdin\n\nSee `magent docs show rpc-gateway` for the protocol and a TLS proxy setup.",
+    "hidden": false,
+    "panel": "Data & Local UI",
+    "params": [
+     {
+      "default": false,
+      "help": "Serve the JSON-RPC gateway (magent.rpc.v1).",
+      "hidden": false,
+      "is_flag": true,
+      "kind": "option",
+      "multiple": false,
+      "name": "rpc",
+      "nargs": 1,
+      "opts": [
+       "--rpc"
+      ],
+      "required": false,
+      "type": "boolean"
+     },
+     {
+      "default": "127.0.0.1",
+      "help": "Bind address (loopback by default).",
+      "hidden": false,
+      "is_flag": false,
+      "kind": "option",
+      "multiple": false,
+      "name": "host",
+      "nargs": 1,
+      "opts": [
+       "--host"
+      ],
+      "required": false,
+      "type": "str"
+     },
+     {
+      "default": 7850,
+      "help": "Port; 0 picks a free one.",
+      "hidden": false,
+      "is_flag": false,
+      "kind": "option",
+      "multiple": false,
+      "name": "port",
+      "nargs": 1,
+      "opts": [
+       "--port"
+      ],
+      "required": false,
+      "type": "int"
+     },
+     {
+      "default": null,
+      "help": "Project root remote callers may use (repeatable; default: current directory).",
+      "hidden": false,
+      "is_flag": false,
+      "kind": "option",
+      "multiple": true,
+      "name": "root",
+      "nargs": 1,
+      "opts": [
+       "--root"
+      ],
+      "required": false,
+      "type": "path"
+     },
+     {
+      "default": false,
+      "help": "Read the bearer token from stdin instead of generating one.",
+      "hidden": false,
+      "is_flag": true,
+      "kind": "option",
+      "multiple": false,
+      "name": "token_stdin",
+      "nargs": 1,
+      "opts": [
+       "--token-stdin"
+      ],
+      "required": false,
+      "type": "boolean"
+     },
+     {
+      "default": null,
+      "help": "Read the bearer token from this file (keep it mode 0600).",
+      "hidden": false,
+      "is_flag": false,
+      "kind": "option",
+      "multiple": false,
+      "name": "token_file",
+      "nargs": 1,
+      "opts": [
+       "--token-file"
+      ],
+      "required": false,
+      "type": "path"
+     },
+     {
+      "default": false,
+      "help": "Allow a non-loopback --host. The gateway speaks plain HTTP: use a TLS proxy.",
+      "hidden": false,
+      "is_flag": true,
+      "kind": "option",
+      "multiple": false,
+      "name": "allow_remote",
+      "nargs": 1,
+      "opts": [
+       "--allow-remote"
+      ],
+      "required": false,
+      "type": "boolean"
+     }
+    ],
+    "short_help": ""
+   },
    "session": {
     "commands": {
      "accept": {
@@ -16892,6 +17005,7 @@
    "plan-run",
    "plan-show",
    "plan-discard",
+   "serve",
    "user",
    "memory",
    "gateway",

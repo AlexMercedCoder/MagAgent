@@ -1,0 +1,391 @@
+{
+  "protocol": "magent.rpc.v1",
+  "note": "Recorded with a scripted stand-in for `python -m magent`; see generate.py.",
+  "exchanges": [
+    {
+      "name": "runtime_info",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-1",
+        "method": "runtime_info",
+        "params": {}
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-1",
+        "result": {
+          "schema": "magent.rpc-gateway.v1",
+          "protocol": "magent.rpc.v1",
+          "transport": "json-rpc-http",
+          "version": "<magent version>",
+          "capabilities": [
+            "commands",
+            "streams",
+            "approvals",
+            "cancel",
+            "events-sse"
+          ],
+          "methods": [
+            "cancel_magent_stream",
+            "run_magent",
+            "run_magent_input",
+            "runtime_info",
+            "stream.events",
+            "stream.list",
+            "stream.start",
+            "write_magent_stream"
+          ],
+          "roots": [
+            "/workspace"
+          ],
+          "limits": {
+            "max_body_bytes": 2097152,
+            "max_args": 256,
+            "max_concurrent_streams": 4,
+            "max_wait_ms": 25000,
+            "command_timeout_seconds": 600
+          }
+        }
+      }
+    },
+    {
+      "name": "unauthorized",
+      "authorization": "Bearer wrong-token-value",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-2",
+        "method": "runtime_info",
+        "params": {}
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {
+          "code": -32001,
+          "message": "missing or invalid bearer token"
+        }
+      }
+    },
+    {
+      "name": "run_magent",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-3",
+        "method": "run_magent",
+        "params": {
+          "args": [
+            "system",
+            "info"
+          ]
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-3",
+        "result": {
+          "ok": true,
+          "command": "magent system info",
+          "stdout": "args:system info\n",
+          "stderr": "warn\n",
+          "status": 0
+        }
+      }
+    },
+    {
+      "name": "run_magent_input",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-4",
+        "method": "run_magent_input",
+        "params": {
+          "args": [
+            "echo-input"
+          ],
+          "input": "profile"
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-4",
+        "result": {
+          "ok": true,
+          "command": "magent echo-input",
+          "stdout": "PROFILE",
+          "stderr": "",
+          "status": 0
+        }
+      }
+    },
+    {
+      "name": "stream_start",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-5",
+        "method": "stream.start",
+        "params": {
+          "id": "fixture-run",
+          "args": [
+            "approve"
+          ]
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-5",
+        "result": {
+          "id": "fixture-run",
+          "command": "magent approve"
+        }
+      }
+    },
+    {
+      "name": "stream_events_until_approval",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-6",
+        "method": "stream.events",
+        "params": {
+          "id": "fixture-run",
+          "after": 0
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-6",
+        "result": {
+          "id": "fixture-run",
+          "events": [
+            {
+              "seq": 1,
+              "id": "fixture-run",
+              "stream": "status",
+              "line": "MagAgent process started"
+            },
+            {
+              "seq": 2,
+              "id": "fixture-run",
+              "stream": "stdout",
+              "line": "{\"type\": \"approval.requested\", \"request\": {\"id\": \"apr_1\"}}"
+            }
+          ],
+          "next": 2,
+          "gap": false,
+          "done": false,
+          "result": null
+        }
+      }
+    },
+    {
+      "name": "write_decision",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-7",
+        "method": "write_magent_stream",
+        "params": {
+          "id": "fixture-run",
+          "line": "{\"aais\": \"1.0\", \"type\": \"approval.decided\", \"id\": \"evt_fixture\", \"occurred_at\": \"2026-09-27T00:00:00Z\", \"sequence\": 1, \"decision\": {\"id\": \"dec_fixture\", \"request_id\": \"apr_1\", \"action_digest\": \"sha256:0000000000000000000000000000000000000000000000000000000000000000\", \"decided_at\": \"2026-09-27T00:00:00Z\", \"decision\": \"approve\", \"scope\": \"once\", \"actor\": {\"id\": \"fixture-user\", \"type\": \"human\"}}}"
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-7",
+        "result": true
+      }
+    },
+    {
+      "name": "stream_events_done",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-8",
+        "method": "stream.events",
+        "params": {
+          "id": "fixture-run",
+          "after": 2
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-8",
+        "result": {
+          "id": "fixture-run",
+          "events": [
+            {
+              "seq": 3,
+              "id": "fixture-run",
+              "stream": "stdout",
+              "line": "decided:approve"
+            },
+            {
+              "seq": 4,
+              "id": "fixture-run",
+              "stream": "status",
+              "line": "MagAgent process completed"
+            }
+          ],
+          "next": 4,
+          "gap": false,
+          "done": true,
+          "result": {
+            "ok": true,
+            "command": "magent approve",
+            "stdout": "{\"type\": \"approval.requested\", \"request\": {\"id\": \"apr_1\"}}\ndecided:approve",
+            "stderr": "",
+            "status": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "stream_start_for_cancel",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-9",
+        "method": "stream.start",
+        "params": {
+          "id": "fixture-cancel",
+          "args": [
+            "sleep"
+          ]
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-9",
+        "result": {
+          "id": "fixture-cancel",
+          "command": "magent sleep"
+        }
+      }
+    },
+    {
+      "name": "cancel",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-10",
+        "method": "cancel_magent_stream",
+        "params": {
+          "id": "fixture-cancel"
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-10",
+        "result": true
+      }
+    },
+    {
+      "name": "forbidden_command",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-11",
+        "method": "run_magent",
+        "params": {
+          "args": [
+            "serve",
+            "--rpc"
+          ]
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-11",
+        "error": {
+          "code": -32003,
+          "message": "`magent serve` is not available through the gateway"
+        }
+      }
+    },
+    {
+      "name": "project_outside_roots",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-12",
+        "method": "run_magent",
+        "params": {
+          "args": [
+            "ask",
+            "x",
+            "--project",
+            "/"
+          ]
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-12",
+        "error": {
+          "code": -32003,
+          "message": "--project must be inside the gateway's allowed roots",
+          "data": {
+            "roots": [
+              "/workspace"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "unknown_method",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-13",
+        "method": "inspect_project",
+        "params": {
+          "path": "/"
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-13",
+        "error": {
+          "code": -32601,
+          "message": "method 'inspect_project' is not provided by the MagAgent gateway",
+          "data": {
+            "methods": [
+              "cancel_magent_stream",
+              "run_magent",
+              "run_magent_input",
+              "runtime_info",
+              "stream.events",
+              "stream.list",
+              "stream.start",
+              "write_magent_stream"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "unknown_stream",
+      "authorization": "Bearer <token>",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "req-14",
+        "method": "stream.events",
+        "params": {
+          "id": "missing"
+        }
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": "req-14",
+        "error": {
+          "code": -32004,
+          "message": "no stream called 'missing'"
+        }
+      }
+    }
+  ]
+}

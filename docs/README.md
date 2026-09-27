@@ -31,6 +31,7 @@ magent docs doctor
 - [Background Worker](../src/magent/docs/daemon.md)
 - [Plugins](../src/magent/docs/plugins.md)
 - [Desktop Integration](../src/magent/docs/desktop-integration.md)
+- [Remote JSON-RPC Gateway (experimental)](../src/magent/docs/rpc-gateway.md)
 - [Agentic Graphs](../src/magent/docs/agentic-graphs.md)
 - [Security And Hardening](../src/magent/docs/hardening.md)
 - [Threat Model](../src/magent/docs/threat-model.md)

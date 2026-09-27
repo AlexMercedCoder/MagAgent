@@ -53,6 +53,15 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   in SecretStorage/jeepney and still needs a running Secret Service. `magent auth list` now
   reports the backend and whether it is usable; `auth add` and Web UI setup say to install the
   extra or use config storage, and the Web UI defaults to config storage when no keyring works.
+- **Remote JSON-RPC gateway (G-6, experimental).** `magent serve --rpc` serves protocol
+  `magent.rpc.v1`, the contract Mag Command Center's remote transport speaks: bearer token on
+  every request, loopback by default (`--allow-remote` needed otherwise), `run_magent`,
+  `run_magent_input`, `stream.start`/`stream.events` long-poll plus an SSE endpoint,
+  `write_magent_stream` for AAIS decisions, `cancel_magent_stream` (whole process group),
+  `runtime_info`. Bounded requests, denied server/interactive commands, `--project` confined to
+  `--root`, redacted audit log, rate limit. Docs include a TLS reverse-proxy setup; recorded
+  lifecycle fixtures for clients are in `tests/fixtures/rpc_gateway/lifecycle.json`.
+  `python -m magent` now runs the CLI.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the

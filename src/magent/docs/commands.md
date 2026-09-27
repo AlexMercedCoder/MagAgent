@@ -132,6 +132,7 @@ Important command paths:
 - `magent model wizard`: interactively set common model roles with guidance for each role and `provider/model` values.
 - `magent model image-wizard`: interactively set the image_maker role and provider credential.
 - `magent auth list`: list configured keyring-backed provider credentials.
+- `magent serve --rpc [--root PATH] [--port N] [--token-stdin | --token-file PATH]`: serve the experimental `magent.rpc.v1` JSON-RPC gateway for remote desktop clients (see the rpc-gateway topic).
 - `magent auth add <provider> [--api-key-stdin] [--storage keyring|config]`: store a provider API key without printing it; `--api-key-stdin` reads it from standard input. Keyring storage needs `mag-agent[keyring]`.
 - `magent auth remove <provider>`: remove a provider key from the OS keyring.
 - `magent system info`: return machine-readable install, path, platform, and user info.

@@ -174,6 +174,7 @@ Generated from the active Typer command tree.
 - `magent review-show`
 - `magent routine`
 - `magent run`
+- `magent serve`
 - `magent session`
 - `magent setup`
 - `magent skill`

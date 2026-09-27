@@ -193,6 +193,9 @@ magent onboard --profile coding-cloud
 magent next
 ```
 
+Remote desktop clients can connect to `magent serve --rpc` (experimental, loopback by default,
+bearer token required); see [the gateway docs](src/magent/docs/rpc-gateway.md).
+
 `magent ask --json` writes exactly one JSON document to stdout (one line when stdout is not a
 terminal); status text goes to stderr. With `--approval-stdio`, AAIS approval envelopes precede it
 as NDJSON lines and decisions are read from stdin, which is why large prompts use

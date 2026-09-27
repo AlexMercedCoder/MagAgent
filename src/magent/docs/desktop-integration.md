@@ -24,6 +24,11 @@ example no OS keyring; the `hint` suggests `--storage config`), 2 usage error (u
 provider, empty stdin, stdin is a terminal, conflicting options).
 - `magent research "topic" --question "focus" --max-sources 8 --project <path> --agent <profile>`
 
+## Remote runtime (experimental)
+
+`magent serve --rpc` exposes the same commands to a remote client over JSON-RPC, with streamed
+output, approvals and cancel. See the `rpc-gateway` topic for the `magent.rpc.v1` protocol.
+
 ## Open Agent Profiles
 
 Use `magent.oap-profile.v1` for visual profile management:
