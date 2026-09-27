@@ -10,6 +10,7 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
@@ -323,6 +324,34 @@ def register_memory_commands(
 
         console.print_json(data=memory_graph(user or _require_user(), query=query, limit=limit))
 
+
+    @memory_app.command("evidence")
+    def memory_evidence_cmd(
+        task_id: str = typer.Argument(
+            "last", help="Execution task id, or 'last' for the newest run that used memory."
+        ),
+        json_output: bool = typer.Option(False, "--json", help="Emit JSON for desktop clients."),
+        user: str | None = typer.Option(None, "--user", "-u"),
+    ):
+        """Show which memories a run recalled: node ids, scores, tokens, truncation.
+
+        Examples: `magent memory evidence`, `magent memory evidence task_0123abcd --json`.
+        """
+        from magent.desktop_api import memory_evidence
+        from magent.memory_evidence import render_lines
+
+        result = memory_evidence(user or _require_user(), task_id)
+        if json_output:
+            console.print_json(data=result)
+        elif result.get("ok"):
+            for index, line in enumerate(render_lines(result)):
+                console.print(escape(line) if index else f"[bold]{escape(line)}[/bold]")
+        else:
+            console.print(f"[yellow]{escape(str(result.get('error')))}[/yellow]")
+            if result.get("hint"):
+                console.print(f"[dim]{escape(str(result['hint']))}[/dim]")
+        if not result.get("ok"):
+            raise typer.Exit(1)
 
     @memory_app.command("node")
     def memory_node_cmd(

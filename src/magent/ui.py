@@ -100,6 +100,11 @@ def _turn_worker(
                 should_continue=run.raise_if_cancelled,
             )
             for result in results:
+                if hasattr(run, "record_memory"):
+                    run.record_memory(
+                        str(result.get("speaker") or "MagAgent"),
+                        list(result.get("memory_evidence") or []),
+                    )
                 conversations.append_message(
                     conversation_id,
                     role="assistant",

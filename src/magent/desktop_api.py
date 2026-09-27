@@ -225,6 +225,12 @@ def platform_contracts() -> dict[str, Any]:
             "config_schema": {"version": "1", "status": "stable"},
             "memory_batch": {"version": "1", "status": "stable", "requires": "maggraph>=0.4.1"},
             "memory_recall": {"version": "2", "status": "stable", "requires": "maggraph>=0.4.1"},
+            "memory_evidence": {
+                "version": "magent.run-memory-evidence.v1",
+                "status": "beta",
+                "transport": "json",
+                "turn_record": "magent.memory-evidence.v1",
+            },
             "persistent_state": {"version": "1", "status": "stable"},
             "supply_chain": {"version": "magent.supply-chain.v1", "status": "stable"},
             "agentic_graph": {
@@ -515,6 +521,18 @@ def memory_recall(
         "context": context,
         "context_stats": dict(mgr.last_recall_stats),
     }
+
+
+def memory_evidence(username: str, task_id: str = "last") -> dict[str, Any]:
+    """Per-run memory evidence (G-3) for desktop clients such as Mag Command Center.
+
+    Returns ``magent.run-memory-evidence.v1``: the task identity plus one
+    ``magent.memory-evidence.v1`` record per turn and a summary. ``task_id`` of
+    ``"last"`` selects the newest task that recorded memory evidence.
+    """
+    from magent.memory_evidence import task_memory_evidence
+
+    return task_memory_evidence(username, task_id)
 
 
 def memory_update_node(

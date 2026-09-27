@@ -82,6 +82,9 @@ class Run:
         self._cancel = threading.Event()
         self.approval: ApprovalRequest | None = None
         self.broker = broker
+        # Per-turn MagGraph recall records (magent.memory-evidence.v1), one
+        # list per speaker for group turns, shown in the run center.
+        self.memory_evidence: list[dict[str, Any]] = []
 
     # -- writing (run thread) ------------------------------------------------
 
@@ -89,6 +92,11 @@ class Run:
         with self._changed:
             self._events.append(event)
             self._changed.notify_all()
+
+    def record_memory(self, speaker: str, records: list[dict[str, Any]]) -> None:
+        with self._lock:
+            for record in records:
+                self.memory_evidence.append({**record, "speaker": speaker})
 
     def finish(self, state: str, error: str = "") -> None:
         with self._changed:
@@ -238,6 +246,7 @@ class Run:
                 "awaiting_approval": (
                     self.approval.as_event() if self.approval is not None else None
                 ),
+                "memory_evidence": list(self.memory_evidence),
             }
 
 

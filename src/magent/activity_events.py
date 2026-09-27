@@ -16,6 +16,7 @@ AgentEventType = Literal[
     "assistant_message",
     "session_message_received",
     "session_message_sent",
+    "memory_recalled",
 ]
 
 

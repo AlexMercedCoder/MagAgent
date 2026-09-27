@@ -104,6 +104,7 @@ class WebChatRunner:
                 "provider": provider.provider_id,
                 "model": provider.model,
                 "profile_revision": profile.resolved.revision if profile else None,
+                "memory_evidence": list(getattr(session, "memory_evidence", None) or []),
             }
         finally:
             await session.end_session()

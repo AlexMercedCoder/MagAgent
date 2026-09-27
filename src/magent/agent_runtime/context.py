@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from rich.markup import escape
@@ -15,7 +16,10 @@ from magent.agent_runtime.support import (
     TOOL_USE_ENFORCEMENT_PROMPT,
     console,
 )
-from magent.tokens import truncate_to_tokens
+from magent.memory_evidence import MAX_TURNS_PER_RUN, build_turn_evidence
+from magent.tokens import estimate_tokens, truncate_to_tokens
+
+PROFILE_RESERVE_TRUNCATION_MARKER = "[memory context truncated to reserve profile state]"
 
 
 class ContextRuntimeMixin:
@@ -36,6 +40,8 @@ class ContextRuntimeMixin:
     scratchpad: dict[str, Any]
     conversation: list[dict[str, str]]
     profile: Any
+    memory_evidence: list[dict[str, Any]]
+    last_memory_evidence: dict[str, Any] | None
 
     def _cwd(self) -> str:
         return str(getattr(self, "cwd", "."))
@@ -77,18 +83,36 @@ class ContextRuntimeMixin:
         memory_allowed = profile is None or getattr(profile, "allows_memory", lambda _action: True)(
             "read"
         )
+        memory_budget = int(getattr(self.config, "memory_budget_tokens", 4000))
+        profile_reserve = int(profile.max_state_tokens) if profile is not None else 0
+        evidence: dict[str, Any] = {
+            "status": "blocked_by_profile" if not memory_allowed else "unavailable"
+        }
         if memory_allowed and self.memory.available:
             recalled = self.memory.recall(user_message)
+            evidence = {"status": "no_match"}
             if recalled:
-                memory_budget = int(getattr(self.config, "memory_budget_tokens", 4000))
                 if profile is not None:
-                    memory_budget = max(0, memory_budget - int(profile.max_state_tokens))
+                    memory_budget = max(0, memory_budget - profile_reserve)
+                before = recalled
                 recalled = truncate_to_tokens(
                     recalled,
                     memory_budget,
-                    "[memory context truncated to reserve profile state]",
+                    PROFILE_RESERVE_TRUNCATION_MARKER,
                 )
+                evidence = {
+                    "status": "used",
+                    "recall": dict(getattr(self.memory, "last_recall_evidence", {}) or {}),
+                    "injected_tokens": estimate_tokens(recalled),
+                    "profile_truncated": recalled != before,
+                }
                 memory_context = f"## Your Memory (what you know about this user)\n\n{recalled}\n"
+        self._record_memory_evidence(
+            user_message,
+            budget_tokens=memory_budget,
+            profile_reserve_tokens=profile_reserve,
+            **evidence,
+        )
         repo_context = ""
         repo_slice = self.repo_map.relevant_slice(user_message, self.config.repo_map_budget_tokens)
         if repo_slice:
@@ -118,6 +142,54 @@ class ContextRuntimeMixin:
             session_context=session_context,
             skill_context=skill_context,
         )
+
+    def _record_memory_evidence(
+        self,
+        user_message: str,
+        *,
+        status: str,
+        budget_tokens: int,
+        profile_reserve_tokens: int = 0,
+        recall: dict[str, Any] | None = None,
+        injected_tokens: int = 0,
+        profile_truncated: bool = False,
+    ) -> dict[str, Any]:
+        """Keep a per-turn record of which memories reached the prompt.
+
+        The record is kept on the session (``last_memory_evidence`` and the
+        run-long ``memory_evidence`` list) and logged as a ``memory_recalled``
+        activity event, which the execution bridge mirrors into the task.
+        """
+        record = build_turn_evidence(
+            turn=int(getattr(self, "turn_count", 0) or 0),
+            status=status,
+            query=user_message,
+            recall=recall,
+            injected_tokens=injected_tokens,
+            budget_tokens=budget_tokens,
+            profile_reserve_tokens=profile_reserve_tokens,
+            profile_truncated=profile_truncated,
+        )
+        history = getattr(self, "memory_evidence", None)
+        if not isinstance(history, list):
+            history = []
+            self.memory_evidence = history
+        history.append(record)
+        del history[:-MAX_TURNS_PER_RUN]
+        self.last_memory_evidence = record
+        logger = getattr(self, "logger", None)
+        if logger is not None and hasattr(logger, "log_activity_event"):
+            # Evidence must never break a turn.
+            with contextlib.suppress(Exception):
+                logger.log_activity_event(
+                    activity_event(
+                        "memory_recalled",
+                        turn=record["turn"],
+                        ok=record["status"] in {"used", "no_match"},
+                        detail=record,
+                    )
+                )
+        return record
 
     def _build_prompt_messages(self, user_message: str) -> list[dict[str, Any]]:
         context_prompt = self._build_context_prompt(user_message)

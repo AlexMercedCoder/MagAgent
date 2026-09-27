@@ -58,6 +58,30 @@ MAGGRAPH_MEMORY_KIND_BY_TYPE = {
 }
 
 
+RECALL_TRUNCATION_MARKER = "[...memory truncated for context budget...]"
+
+
+def _empty_recall_evidence(budget_tokens: int) -> dict[str, Any]:
+    return {"nodes": [], "tokens": 0, "budget_tokens": budget_tokens, "truncated": False}
+
+
+def _recall_node_evidence(anchor: dict[str, Any]) -> dict[str, Any]:
+    """Compact, JSON-safe description of one recalled anchor node."""
+    score = anchor.get("score")
+    try:
+        numeric = round(float(score), 4) if score not in (None, "") else None
+    except (TypeError, ValueError):
+        numeric = None
+    matched = anchor.get("matched") or []
+    return {
+        "id": str(anchor.get("id") or ""),
+        "type": str(anchor.get("type") or ""),
+        "score": numeric,
+        "matched": [str(item) for item in matched] if isinstance(matched, list) else [str(matched)],
+        "reason": str(anchor.get("reason") or ""),
+    }
+
+
 class MemoryManager:
     """Manages a user's MagGraph knowledge graph."""
 
@@ -81,6 +105,9 @@ class MemoryManager:
         self.semantic_model = semantic_model
         self.project_slug = project_slug
         self.last_recall_stats: dict[str, int] = {"nodes": 0, "tokens": 0, "budget": budget_tokens}
+        # Which nodes the most recent recall() used, and why; see
+        # magent.memory_evidence for the per-run record built from it.
+        self.last_recall_evidence: dict[str, Any] = _empty_recall_evidence(budget_tokens)
         self._index: Any | None = None
         self._semantic: Any | None = None
         self._init_graph()
@@ -121,6 +148,7 @@ class MemoryManager:
         Find relevant memory nodes for a query and return Markdown context.
         Returns empty string if memory unavailable or no relevant nodes found.
         """
+        self.last_recall_evidence = _empty_recall_evidence(self.budget_tokens)
         if not self.available:
             return ""
 
@@ -130,10 +158,17 @@ class MemoryManager:
             return ""
 
         rendered = self._format_recall_nodes(anchors, depth=depth)
+        tokens = estimate_tokens(rendered)
         self.last_recall_stats = {
             "nodes": len(anchor_ids),
-            "tokens": estimate_tokens(rendered),
+            "tokens": tokens,
             "budget": self.budget_tokens,
+        }
+        self.last_recall_evidence = {
+            "nodes": [_recall_node_evidence(anchor) for anchor in anchors],
+            "tokens": tokens,
+            "budget_tokens": self.budget_tokens,
+            "truncated": RECALL_TRUNCATION_MARKER in rendered,
         }
         return rendered
 
@@ -196,7 +231,7 @@ class MemoryManager:
             return truncate_to_tokens(
                 "\n".join(lines).strip(),
                 budget,
-                "[...memory truncated for context budget...]",
+                RECALL_TRUNCATION_MARKER,
             )
 
         node_ids = self._expanded_node_ids(anchor_ids, depth=depth)
@@ -247,7 +282,7 @@ class MemoryManager:
                 break
 
         rendered = "\n".join(lines).strip()
-        return truncate_to_tokens(rendered, budget, "[...memory truncated for context budget...]")
+        return truncate_to_tokens(rendered, budget, RECALL_TRUNCATION_MARKER)
 
     def _recall_bundles(
         self, anchors: list[dict[str, Any]], body_chars: int

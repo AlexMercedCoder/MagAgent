@@ -173,6 +173,8 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
         self.session_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + str(uuid.uuid4())[:8]
         self.execution_task_id = ""
         self.turn_count = 0
+        self.memory_evidence: list[dict[str, Any]] = []
+        self.last_memory_evidence: dict[str, Any] | None = None
         self.conversation: list[dict[str, str]] = []
         self.compacted_summary = ""
         self.scratchpad: dict[str, Any] = {

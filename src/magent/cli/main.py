@@ -14,6 +14,7 @@ from typing import Annotated, Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
@@ -624,6 +625,7 @@ def _run_one_shot(
             },
             "session_id": session.session_id,
             "execution_task_id": execution_task_id,
+            "memory_evidence": list(getattr(session, "memory_evidence", None) or []),
         }
         if events_output:
             payload["events"] = _one_shot_events(task, response, final_audit, session)
@@ -784,9 +786,34 @@ def _slugify_filename(value: str) -> str:
     return f"research-{slug or 'report'}"
 
 
+def _print_why_last(session) -> None:
+    """Explain which memories the most recent turn (or recorded run) used."""
+    from magent.memory_evidence import render_lines, run_evidence_payload, task_memory_evidence
+
+    records = list(getattr(session, "memory_evidence", None) or [])
+    if records:
+        payload = run_evidence_payload(
+            records[-1:],
+            source="session",
+            session_id=str(getattr(session, "session_id", "")),
+        )
+        payload["title"] = "the last turn"
+    else:
+        payload = task_memory_evidence(get_current_user() or "", "last")
+        if not payload.get("ok"):
+            console.print(f"[dim]{payload.get('error')}[/dim]")
+            if payload.get("hint"):
+                console.print(f"[dim]{payload['hint']}[/dim]")
+            return
+    for index, line in enumerate(render_lines(payload)):
+        console.print(escape(line) if index else f"[bold]{escape(line)}[/bold]")
+
+
 def _one_shot_events(task: str, response: str, audit: dict, session) -> list[dict]:
     """Return coarse structured events for desktop timelines."""
     events = [{"type": "user_message", "content": task}]
+    for record in getattr(session, "memory_evidence", None) or []:
+        events.append({"type": "memory_recalled", "evidence": record})
     for command in session.scratchpad.get("commands_run", []):
         events.append({"type": "command", "command": command})
     for path in session.scratchpad.get("files_touched", []):
@@ -951,6 +978,7 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
                 "  [cyan]/refuse <id>[/cyan]     — Refuse a held peer message\n"
                 "  [cyan]/receipts[/cyan]        — Show this session's delivery receipts\n"
                 "  [cyan]/memory[/cyan]          — Show memory stats\n"
+                "  [cyan]/why last[/cyan]        — Show which memories the last turn used\n"
                 "  [cyan]/why <query>[/cyan]     — Explain recalled memory and backlinks\n"
                 "  [cyan]/skills[/cyan]          — List active skills\n"
                 "  [cyan]/model[/cyan]           — Show current model\n"
@@ -1151,7 +1179,10 @@ def _handle_slash_command(cmd: str, session, config, provider, loop=None) -> boo
 
     if command == "/why":
         if not arg.strip():
-            console.print("[yellow]Usage: /why <memory query>[/yellow]")
+            console.print("[yellow]Usage: /why last | /why <memory query>[/yellow]")
+            return True
+        if arg.strip().lower() == "last":
+            _print_why_last(session)
             return True
         results = session.memory.search(arg, max_results=5, mode="hybrid")
         table = Table("Memory", "Why recalled", "Backlinks", "Source")

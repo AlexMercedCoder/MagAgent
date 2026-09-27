@@ -115,6 +115,9 @@ class SessionTaskBridge:
                 "commands_run": scratchpad.get("commands_run", []),
                 "permission_failures": scratchpad.get("permission_failures", []),
                 "turns": int(getattr(self.session, "turn_count", 0) or 0),
+                # G-3: which MagGraph nodes each turn recalled, with scores,
+                # token cost and truncation (magent.memory-evidence.v1).
+                "memory_evidence": list(getattr(self.session, "memory_evidence", None) or []),
             },
         )
 
