@@ -425,7 +425,17 @@ def capabilities_cmd(json_output: bool = typer.Option(True, "--json/--no-json"))
 
 @app.command("ask", rich_help_panel="Everyday Agent Work")
 def ask_cmd(
-    task: str = typer.Argument(..., help="One-shot task to run non-interactively"),
+    task: str | None = typer.Argument(
+        None, help="One-shot task to run non-interactively (or use --prompt-file)."
+    ),
+    prompt_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--prompt-file",
+            help="Read the task from this UTF-8 file instead of argv (for large prompts; "
+            "stdin stays free for --approval-stdio).",
+        ),
+    ] = None,
     provider: str | None = typer.Option(None, "--provider", "-p", help="Provider ID"),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name"),
     project: str | None = typer.Option(None, "--project", help="Project directory"),
@@ -475,7 +485,19 @@ def ask_cmd(
         help="Exchange AAIS 1.0 approval envelopes as NDJSON on stdout/stdin.",
     ),
 ):
-    """Run a one-shot MagAgent task."""
+    """Run a one-shot MagAgent task.
+
+    Examples:
+
+      magent ask "Summarise README.md"
+
+      magent ask --prompt-file task.md --project . --json
+
+    With --json the result is one JSON document on stdout; status and progress
+    text go to stderr. With --approval-stdio, AAIS envelopes are NDJSON lines on
+    stdout before that final document, and decisions are read from stdin.
+    """
+    task = _resolve_ask_task(task, prompt_file)
     username = _require_user()
     config = load_config(username)
     permission_override = permission_mode
@@ -507,6 +529,46 @@ def ask_cmd(
     )
 
 
+MAX_PROMPT_FILE_BYTES = 8 * 1024 * 1024
+
+
+def _resolve_ask_task(task: str | None, prompt_file: Path | None) -> str:
+    """Return the task text from argv or --prompt-file, with usage errors as exit 2."""
+    if task and prompt_file is not None:
+        console.print("[red]Give the task as an argument or with --prompt-file, not both.[/red]")
+        raise typer.Exit(2)
+    if prompt_file is None:
+        if not task or not task.strip():
+            console.print('[red]Missing task.[/red] Try: magent ask "Summarise README.md"')
+            console.print("[dim]Large prompts: magent ask --prompt-file task.md[/dim]")
+            raise typer.Exit(2)
+        return task
+    try:
+        size = prompt_file.stat().st_size
+        if size > MAX_PROMPT_FILE_BYTES:
+            console.print(
+                f"[red]--prompt-file is {size} bytes; the limit is {MAX_PROMPT_FILE_BYTES}.[/red]"
+            )
+            raise typer.Exit(2)
+        text = prompt_file.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        console.print(f"[red]--prompt-file not found:[/red] {escape(str(prompt_file))}")
+        raise typer.Exit(2) from None
+    except IsADirectoryError:
+        console.print(f"[red]--prompt-file is a directory:[/red] {escape(str(prompt_file))}")
+        raise typer.Exit(2) from None
+    except UnicodeDecodeError:
+        console.print("[red]--prompt-file must be UTF-8 text.[/red]")
+        raise typer.Exit(2) from None
+    except OSError as error:
+        console.print(f"[red]Could not read --prompt-file:[/red] {escape(str(error))}")
+        raise typer.Exit(2) from None
+    if not text.strip():
+        console.print("[red]--prompt-file is empty.[/red]")
+        raise typer.Exit(2)
+    return text
+
+
 def _run_one_shot(
     username,
     config,
@@ -523,7 +585,63 @@ def _run_one_shot(
     profile=None,
     approval_stdio: bool = False,
 ):
-    """Run a single non-interactive agent task."""
+    """Run a single non-interactive agent task.
+
+    In --json mode stdout is reserved for machine output: AAIS NDJSON lines
+    (with --approval-stdio) and the final result document. Everything else
+    the run prints (skill banners, tool narration, warnings) goes to stderr,
+    so a parser never has to pick the result out of status text.
+    """
+    machine_out = sys.stdout
+    redirect = (
+        contextlib.redirect_stdout(sys.stderr) if json_output else contextlib.nullcontext()
+    )
+    with redirect:
+        _run_one_shot_inner(
+            username,
+            config,
+            main_provider,
+            extract_provider,
+            cwd,
+            task,
+            permission_mode_override=permission_mode_override,
+            repair_attempts=repair_attempts,
+            strict_audit=strict_audit,
+            json_output=json_output,
+            events_output=events_output,
+            execution_task_id=execution_task_id,
+            profile=profile,
+            approval_stdio=approval_stdio,
+            machine_out=machine_out,
+        )
+
+
+def _emit_machine_json(payload: dict[str, Any], out: Any) -> None:
+    """Write one JSON document: pretty for a terminal, a single line otherwise."""
+    is_tty = bool(getattr(out, "isatty", lambda: False)())
+    text = json.dumps(payload, indent=2 if is_tty else None, default=str, ensure_ascii=False)
+    out.write(text + "\n")
+    out.flush()
+
+
+def _run_one_shot_inner(
+    username,
+    config,
+    main_provider,
+    extract_provider,
+    cwd,
+    task,
+    *,
+    permission_mode_override: str | None,
+    repair_attempts: int,
+    strict_audit: bool,
+    json_output: bool,
+    events_output: bool,
+    execution_task_id: str,
+    profile,
+    approval_stdio: bool,
+    machine_out: Any,
+):
     from magent.agent import AgentSession
     from magent.execution_bridge import SessionTaskBridge
     from magent.tui import print_response
@@ -533,7 +651,7 @@ def _run_one_shot(
         from magent.approval_broker import start_stdio_broker
 
         approval_broker, publish = start_stdio_broker(
-            _store(), project=cwd, stream="magent.stdio.approvals"
+            _store(), project=cwd, stream="magent.stdio.approvals", out=machine_out
         )
 
         def permission_prompt(
@@ -629,7 +747,7 @@ def _run_one_shot(
         }
         if events_output:
             payload["events"] = _one_shot_events(task, response, final_audit, session)
-        console.print_json(data=payload)
+        _emit_machine_json(payload, machine_out)
     else:
         response += render_audit_note(final_audit)
         print_response(response)

@@ -735,13 +735,20 @@ def start_stdio_broker(
     *,
     project: str | Path,
     stream: str,
+    out: Any = None,
 ) -> tuple[ApprovalBroker, Publisher]:
-    """Start the AAIS NDJSON decision reader used by headless desktop clients."""
+    """Start the AAIS NDJSON decision reader used by headless desktop clients.
+
+    ``out`` is the machine output stream (stdout when omitted). It is captured
+    here so envelopes still reach the client when the caller redirects
+    ``sys.stdout`` to keep status text off the machine channel.
+    """
 
     broker = ApprovalBroker(store, project=project, stream=stream)
+    target = out if out is not None else sys.stdout
 
     def publish(envelope: Envelope) -> None:
-        print(json.dumps(envelope, separators=(",", ":"), default=str), flush=True)
+        print(json.dumps(envelope, separators=(",", ":"), default=str), file=target, flush=True)
 
     def read_decisions() -> None:
         try:
