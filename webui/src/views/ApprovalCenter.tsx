@@ -1,6 +1,6 @@
 import { useModalFocus } from "./use-modal-focus";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { post, request } from "../api";
+import { followApprovals, post, request } from "../api";
 
 type Choice = {
   decision: "approve" | "deny" | "cancel";
@@ -46,15 +46,39 @@ export function ApprovalCenter({
       const data = await request<Snapshot>("/api/approvals/snapshot");
       setPending(data.snapshot?.pending ?? []);
     } catch {
-      // The normal run stream still carries the request. Polling is only the
-      // route-independent reconnect path, so a transient miss is not alarming.
+      // The normal run stream still carries the request, and the push stream
+      // resends the snapshot on its next change, so a transient miss is fine.
     }
   }, []);
 
   useEffect(() => {
+    // Pushed, not polled (G-7): the server sends the pending snapshot whenever
+    // any process writes approval state. If the stream drops, reconnect with a
+    // growing back-off, refreshing once so nothing is missed in between.
+    const controller = new AbortController();
+    let stopped = false;
+    let delay = 500;
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 800);
-    return () => window.clearInterval(timer);
+    (async () => {
+      while (!stopped) {
+        try {
+          await followApprovals((items) => {
+            delay = 500;
+            setPending(items as PendingApproval[]);
+          }, controller.signal);
+        } catch {
+          /* fall through to the reconnect below */
+        }
+        if (stopped) break;
+        await new Promise((resolve) => window.setTimeout(resolve, delay));
+        delay = Math.min(delay * 2, 10_000);
+        void refresh();
+      }
+    })();
+    return () => {
+      stopped = true;
+      controller.abort();
+    };
   }, [refresh]);
 
   const decide = useCallback(

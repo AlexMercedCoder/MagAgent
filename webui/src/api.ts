@@ -221,3 +221,42 @@ export async function decideApproval(
 ): Promise<{ ok: boolean; error?: string }> {
   return post("/api/runs/approve", { id: runId, request_id: requestId, approved });
 }
+
+/**
+ * Follow the pending-approval snapshot as the server pushes it (G-7).
+ *
+ * The server writes one NDJSON line per change (`{"type": "approvals", ...}`)
+ * and a heartbeat every 15 seconds. The returned promise settles when the
+ * connection ends; the caller reconnects.
+ */
+export async function followApprovals(
+  onSnapshot: (pending: unknown[]) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch("/api/approvals/stream", {
+    headers: headers(false),
+    credentials: "same-origin",
+    signal,
+  });
+  if (!response.ok) throw await responseError(response);
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("Streaming is unavailable in this browser.");
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const event = JSON.parse(line) as { type?: string; snapshot?: { pending?: unknown[] } };
+        if (event.type === "approvals") onSnapshot(event.snapshot?.pending ?? []);
+      } catch {
+        /* ignore a malformed line; the next change resends the whole snapshot */
+      }
+    }
+    if (done) break;
+  }
+}

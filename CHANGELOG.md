@@ -62,6 +62,12 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   `--root`, redacted audit log, rate limit. Docs include a TLS reverse-proxy setup; recorded
   lifecycle fixtures for clients are in `tests/fixtures/rpc_gateway/lifecycle.json`.
   `python -m magent` now runs the CLI.
+- **Pushed approval notifications (G-7).** Processes waiting on an approval, and the Web UI
+  server, register a local "doorbell" socket in the approval store; whoever writes an approval
+  envelope rings them. Waiting tools wake on the ring instead of re-reading the store every
+  100 ms, and the Web UI approval dialog follows `GET /api/approvals/stream` (NDJSON: the pending
+  snapshot on every change, heartbeats every 15 s) instead of polling every 800 ms. A 2 s
+  re-read remains as a safety net, so a lost datagram delays but never loses a decision.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the

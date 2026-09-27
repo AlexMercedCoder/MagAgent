@@ -13,6 +13,7 @@ vi.mock("./api", () => ({
   activeRun: async () => null,
   reattachRun: async () => undefined,
   cancelRun: async () => ({ ok: true }),
+  followApprovals: () => new Promise(() => undefined),
   request: async (path: string) => {
     if (path === "/api/onboarding/readiness") return readiness.current;
     if (path === "/api/onboarding/providers") return { providers: [] };

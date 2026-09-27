@@ -473,3 +473,10 @@ image provider is ready, the selector says that no image models were detected in
 an unlabeled empty input. Unknown existing routes remain visible as custom configuration.
 
 The profile rail labels `managed` profiles as built-in/read-only, `project` profiles as workspace-editable, and `portable` profiles as shared from the universal profile location. The Extensions view provides lifecycle controls for project skills, plugins, MCP servers, the configured image model, and browser automation; credentials are referenced by environment-variable name rather than displayed.
+
+## Approval notifications
+
+The approval dialog does not poll. It follows `GET /api/approvals/stream`, which sends one
+NDJSON line with the pending snapshot whenever any MagAgent process on this machine writes
+approval state (a Web UI run, a terminal run, a graph, or Mag Command Center), plus a heartbeat
+every 15 seconds. If the stream drops, the page reconnects with back-off and refreshes once.

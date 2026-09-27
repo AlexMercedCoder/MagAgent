@@ -41,6 +41,14 @@ from aais.store import (
     UnknownRequestError,
 )
 
+from magent.approval_bus import (
+    DOORBELLS,
+    MAX_DOORBELLS,
+    SAFETY_POLL_SECONDS,
+    Doorbell,
+    DoorbellWatcher,
+    ring_all,
+)
 from magent.workbench_store import WorkbenchStore, WorkbenchStoreError
 
 Envelope = dict[str, Any]
@@ -198,6 +206,8 @@ class ApprovalBroker:
         self._publishers: dict[str, Publisher] = {}
         self._listeners: list[Callable[[Envelope], None]] = []
         self._migrated = False
+        self._doorbell: Doorbell | None = None
+        self._watchers: list[DoorbellWatcher] = []
 
     # ------------------------------------------------------------- plumbing
 
@@ -258,6 +268,80 @@ class ApprovalBroker:
             for listener in list(self._listeners):
                 with suppress(Exception):
                     listener(copy.deepcopy(envelope))
+        if envelopes:
+            self._ring()
+
+    # ------------------------------------------------------------- doorbells
+
+    def _own_doorbell(self) -> Doorbell:
+        if self._doorbell is None:
+            self._doorbell = Doorbell(kind="waiter")
+        return self._doorbell
+
+    @staticmethod
+    def _register_tx(tx: StoreTransaction, doorbell: Doorbell) -> None:
+        records = [
+            item
+            for item in (tx.get_extension(DOORBELLS, []) or [])
+            if isinstance(item, dict) and item.get("id") != doorbell.id
+        ]
+        records.append(doorbell.record())
+        tx.set_extension(DOORBELLS, records[-MAX_DOORBELLS:])
+
+    def _ring(self) -> None:
+        """Wake every other waiting or watching process (best effort)."""
+
+        try:
+            records = self._read(lambda: self.file.get_extension(DOORBELLS, [])) or []
+        except Exception:
+            return
+        own = {self._doorbell.id} if self._doorbell else set()
+        own |= {watcher.doorbell.id for watcher in self._watchers}
+        dead = ring_all([item for item in records if isinstance(item, dict)], skip=own)
+        if dead:
+            with suppress(Exception), self.transaction() as tx:
+                tx.set_extension(
+                    DOORBELLS,
+                    [
+                        item
+                        for item in (tx.get_extension(DOORBELLS, []) or [])
+                        if isinstance(item, dict) and str(item.get("id")) not in set(dead)
+                    ],
+                )
+
+    def watch(self, on_change: Callable[[], None]) -> DoorbellWatcher:
+        """Call ``on_change`` whenever any process writes approval state."""
+
+        def register(doorbell: Doorbell) -> None:
+            with self.transaction() as tx:
+                self._register_tx(tx, doorbell)
+
+        watcher = DoorbellWatcher(register, on_change)
+        self._watchers.append(watcher)
+        return watcher
+
+    def close(self) -> None:
+        """Unregister and close this broker's doorbells."""
+
+        ids = {watcher.doorbell.id for watcher in self._watchers}
+        if self._doorbell is not None:
+            ids.add(self._doorbell.id)
+        if ids:
+            with suppress(Exception), self.transaction() as tx:
+                tx.set_extension(
+                    DOORBELLS,
+                    [
+                        item
+                        for item in (tx.get_extension(DOORBELLS, []) or [])
+                        if isinstance(item, dict) and item.get("id") not in ids
+                    ],
+                )
+        for watcher in self._watchers:
+            watcher.close()
+        self._watchers.clear()
+        if self._doorbell is not None:
+            self._doorbell.close()
+            self._doorbell = None
 
     # ------------------------------------------------------------- requests
 
@@ -420,6 +504,7 @@ class ApprovalBroker:
                     ),
                     ttl=max(1.0, timeout),
                 )
+                self._register_tx(tx, self._own_doorbell())
                 request_id = str(envelope["request"]["id"])
                 waiter = _Waiter(
                     envelope=envelope,
@@ -447,23 +532,29 @@ class ApprovalBroker:
     def _await(
         self, request_id: str, waiter: _Waiter, publish: Publisher, timeout: float
     ) -> Envelope | None:
-        """Wait for a decision from this process (event) or another one (the file)."""
+        """Wait for a decision from this process (event) or another one (a ring).
 
+        Rings are pushed by whichever process writes the decision; the store is
+        re-read only on a ring or every few seconds as a safety net.
+        """
+
+        doorbell = self._own_doorbell()
         deadline = time.monotonic() + timeout
         while True:
-            remaining = deadline - time.monotonic()
             if waiter.resolved.is_set():
                 return waiter.resolution
-            if remaining <= 0:
-                break
-            durable = self._wait_durable(request_id, remaining, waiter.resolved)
-            if waiter.resolved.is_set():
-                return waiter.resolution
-            if durable is not None:
+            durable = self._read(lambda: self.file.get_resolution(request_id))
+            if durable is not None and not waiter.resolved.is_set():
                 waiter.resolution = durable
-                self._notify(durable)
+                for listener in list(self._listeners):
+                    with suppress(Exception):
+                        listener(copy.deepcopy(durable))
                 publish(copy.deepcopy(durable))
                 return durable
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            doorbell.wait(min(remaining, SAFETY_POLL_SECONDS))
         with suppress(ConflictError, ValueError, UnknownRequestError):
             self.decide(
                 request_id,
@@ -522,6 +613,8 @@ class ApprovalBroker:
             publisher(copy.deepcopy(resolution))
         if waiter:
             waiter.resolved.set()
+            if self._doorbell is not None:
+                self._doorbell.poke()
         return copy.deepcopy(resolution)
 
     def record_local_decision(

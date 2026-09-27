@@ -52,6 +52,7 @@ from magent.workbench import (
 from magent.workbench_cockpit import cockpit_state
 
 WEBUI_DIR = Path(__file__).with_name("webui")
+APPROVAL_HEARTBEAT_SECONDS = 15.0
 # Vite writes the built bundle here. It is committed and ships inside the
 # wheel, so installed users never need Node.
 STATIC_DIR = WEBUI_DIR / "static"
@@ -240,8 +241,20 @@ def serve_ui(
     conversations = ConversationStore(store)
     conversation_locks: dict[str, threading.Lock] = {}
     from magent.approval_broker import ApprovalBroker
+    from magent.approval_bus import ApprovalEventBus
 
     approval_broker = ApprovalBroker(store, project=root)
+    # G-7: approvals are pushed to the browser. Envelopes this process writes
+    # arrive through the broker listener; writes from other processes (a CLI
+    # run, the desktop app) ring this server's doorbell.
+    approval_bus = ApprovalEventBus()
+    approval_broker.add_listener(approval_bus.publish)
+    approval_watcher_state: dict[str, Any] = {"watcher": None}
+
+    def ensure_approval_watcher() -> None:
+        if approval_watcher_state["watcher"] is None:
+            approval_watcher_state["watcher"] = approval_broker.watch(approval_bus.nudge)
+
     runs = RunStore(approval_broker)
     graph_runs = (
         GraphRunManager(store, username, root, approval_broker=approval_broker)
@@ -385,6 +398,38 @@ def serve_ui(
         def _stream_event(self, data: dict[str, Any]) -> None:
             self.wfile.write((json.dumps(data, default=str) + "\n").encode("utf-8"))
             self.wfile.flush()
+
+        def _stream_approvals(self) -> None:
+            """Push the pending-approval snapshot whenever it may have changed.
+
+            One NDJSON line per change: ``{"type": "approvals", "snapshot": {pending,
+            ...}, "envelope": <the AAIS approval.snapshot>}``,
+            plus a ``{"type": "heartbeat"}`` every 15 seconds so proxies and the
+            browser notice a dead connection. Runs until the browser disconnects.
+            """
+            ensure_approval_watcher()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+            self._security_headers()
+            self.end_headers()
+            version = -1
+            try:
+                while True:
+                    current = approval_bus.version
+                    if current != version:
+                        version = current
+                        envelope = approval_broker.snapshot()
+                        self._stream_event(
+                            {
+                                "type": "approvals",
+                                "snapshot": envelope.get("snapshot", {}),
+                                "envelope": envelope,
+                            }
+                        )
+                    elif approval_bus.wait(version, APPROVAL_HEARTBEAT_SECONDS) == version:
+                        self._stream_event({"type": "heartbeat"})
+            except (BrokenPipeError, ConnectionResetError):
+                return
 
         def _stream_run(self, run: Any, *, after: int = 0) -> None:
             """Stream a run's event log from a cursor until the run ends.
@@ -1177,6 +1222,8 @@ def serve_ui(
                     )
                 elif parsed.path == "/api/approvals/snapshot":
                     self._json(approval_broker.snapshot())
+                elif parsed.path == "/api/approvals/stream":
+                    self._stream_approvals()
                 elif parsed.path == "/api/approvals/recovery":
                     self._json(approval_broker.recovery())
                 elif parsed.path == "/api/approvals/events":
@@ -1262,14 +1309,15 @@ def serve_ui(
     except OSError as e:
         return {"ok": False, "error": f"Could not bind 127.0.0.1:{port}: {e}", "port": port}
 
-    if schedules:
-        shutdown_server = server.shutdown
+    shutdown_server = server.shutdown
 
-        def shutdown() -> None:
+    def shutdown() -> None:
+        if schedules:
             schedules.stop()
-            shutdown_server()
+        approval_broker.close()
+        shutdown_server()
 
-        server.shutdown = shutdown  # type: ignore[method-assign]
+    server.shutdown = shutdown  # type: ignore[method-assign]
 
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
