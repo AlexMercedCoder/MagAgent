@@ -60,6 +60,8 @@ dependencies = [
     "jmespath>=1.0",
     # Template engine
     "jinja2>=3.1",
+    # Ed25519 plugin signatures (plugin sign/verify/install)
+    "cryptography>=42",
 ]
 
 [project.optional-dependencies]

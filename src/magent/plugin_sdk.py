@@ -89,7 +89,14 @@ def verify_plugin(path: str | Path) -> dict[str, Any]:
 def plugin_digest(path: str | Path) -> str:
     root = Path(path).expanduser().resolve()
     digest = hashlib.sha256()
-    for file in sorted(item for item in root.rglob("*") if item.is_file() and item.name != "magent-plugin.toml"):
+    # The manifest and the signature are covered separately by the signature
+    # (see plugin_signing); the digest is over the pack's content files.
+    excluded = {"magent-plugin.toml", "magent-plugin.sig"}
+    for file in sorted(
+        item
+        for item in root.rglob("*")
+        if item.is_file() and item.name not in excluded
+    ):
         relative = file.relative_to(root).as_posix()
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")

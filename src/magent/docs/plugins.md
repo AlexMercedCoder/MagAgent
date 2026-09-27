@@ -128,3 +128,38 @@ Enabled plugins with `mcp.toml` contribute MCP servers to runtime config at load
 Enabled plugin `agents/` directories are included in agent discovery. Enabled plugin `mcp.toml` files are included in runtime MCP config. Plugin metadata records source URLs, compatibility tags, capabilities, permissions, and trust status so MagAgent can be careful about broader ecosystem installs.
 
 Use plugins for shareable team conventions, specialist agents, reusable recipes, and local MCP/tool configuration bundles.
+
+## Signed plugins and registries
+
+Plugin packs can be signed with Ed25519. A signature covers every file in the pack, the manifest
+(so declared permissions cannot change after signing), and the name and version.
+
+Publishers:
+
+```bash
+magent plugin keygen ~/keys/acme-plugins.pem          # keep this file private, never commit it
+magent plugin sign ./release-kit --key ~/keys/acme-plugins.pem --key-id acme
+magent plugin registry build ./release-kit ./docs-kit --out ./site/plugins --name acme
+# upload ./site/plugins (index.json and the .tar.gz archives) to any static host
+```
+
+Users:
+
+```bash
+magent plugin registry add acme https://example.com/plugins/index.json
+magent plugin search release
+magent plugin install release-kit@1.2.0          # asks before trusting a new signing key
+magent plugin trust list
+magent plugin verify ~/.config/magent/plugins/release-kit --require-signature
+```
+
+Installing from a registry checks the archive's sha256, unpacks it without allowing links or
+paths outside the pack, checks the pack digest against the index, and verifies the signature.
+A pack signed by a key you have not trusted shows the key's fingerprint and requested
+permissions and asks before trusting it (`--yes` trusts it without asking; in a
+non-interactive shell it refuses). Unsigned packs need `--allow-unsigned`. Registries must use
+HTTPS (plain HTTP only on loopback). MagAgent only reads registries: there is no hosted
+registry, and nothing is published for you.
+
+Trusted keys live in `~/.config/magent/trusted-plugin-keys.json`; registries in
+`~/.config/magent/plugin-registries.json`. Private keys are never stored by MagAgent.

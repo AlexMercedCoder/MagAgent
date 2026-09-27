@@ -442,6 +442,7 @@ Generated from the active Typer command tree.
 - `magent plugin import opencode`
 - `magent plugin import pi`
 - `magent plugin install`
+- `magent plugin keygen`
 - `magent plugin list`
 - `magent plugin mcp`
 - `magent plugin mcp apply`
@@ -449,8 +450,19 @@ Generated from the active Typer command tree.
 - `magent plugin metadata`
 - `magent plugin pi`
 - `magent plugin pi bridge`
+- `magent plugin registry`
+- `magent plugin registry add`
+- `magent plugin registry build`
+- `magent plugin registry list`
+- `magent plugin registry remove`
 - `magent plugin registry-index`
 - `magent plugin schema`
+- `magent plugin search`
+- `magent plugin sign`
+- `magent plugin trust`
+- `magent plugin trust add`
+- `magent plugin trust list`
+- `magent plugin trust remove`
 - `magent plugin validate`
 - `magent plugin verify`
 

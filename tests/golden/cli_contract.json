@@ -12499,13 +12499,13 @@
       "short_help": ""
      },
      "install": {
-      "help": "Install a local plugin pack directory.",
+      "help": "Install a plugin pack from a directory or a configured registry.\n\nRegistry installs check the archive hash, the pack digest and the Ed25519\nsignature. A pack signed by a key you have not trusted asks first.\n\nExamples: `magent plugin install ./my-pack`,\n`magent plugin install release-kit@1.2.0 --registry acme`.",
       "hidden": false,
       "panel": null,
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "A plugin directory, or NAME[@VERSION] from a registry.",
         "hidden": false,
         "is_flag": false,
         "kind": "argument",
@@ -12547,6 +12547,75 @@
         ],
         "required": false,
         "type": "boolean"
+       },
+       {
+        "default": "",
+        "help": "Only look in this registry.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "registry",
+        "nargs": 1,
+        "opts": [
+         "--registry"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "Install a registry pack that has no signature.",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "allow_unsigned",
+        "nargs": 1,
+        "opts": [
+         "--allow-unsigned"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": false,
+        "help": "Trust the signing key without asking (non-interactive).",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "yes",
+        "nargs": 1,
+        "opts": [
+         "--yes",
+         "-y"
+        ],
+        "required": false,
+        "type": "boolean"
+       }
+      ],
+      "short_help": ""
+     },
+     "keygen": {
+      "help": "Create an Ed25519 signing key for your plugins (kept by you, mode 0600).",
+      "hidden": false,
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "Where to write the new private key (PEM).",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "out",
+        "nargs": 1,
+        "opts": [
+         "out"
+        ],
+        "required": true,
+        "type": "str"
        }
       ],
       "short_help": ""
@@ -12798,6 +12867,172 @@
       "params": [],
       "short_help": ""
      },
+     "registry": {
+      "commands": {
+       "add": {
+        "help": "Add a static plugin registry (its index is fetched once to check it).",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "name"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": null,
+          "help": "HTTPS URL or local path of index.json.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "location",
+          "nargs": 1,
+          "opts": [
+           "location"
+          ],
+          "required": true,
+          "type": "str"
+         }
+        ],
+        "short_help": ""
+       },
+       "build": {
+        "help": "Build a static registry (index.json plus .tar.gz archives) to host anywhere.",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "Plugin directories to publish.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "packs",
+          "nargs": -1,
+          "opts": [
+           "packs"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": null,
+          "help": "Directory for index.json and archives.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "out",
+          "nargs": 1,
+          "opts": [
+           "--out"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": null,
+          "help": "Registry name.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": "",
+          "help": "Sign each pack with this Ed25519 key first.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "key",
+          "nargs": 1,
+          "opts": [
+           "--key"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": "",
+          "help": "",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "key_id",
+          "nargs": 1,
+          "opts": [
+           "--key-id"
+          ],
+          "required": false,
+          "type": "str"
+         }
+        ],
+        "short_help": ""
+       },
+       "list": {
+        "help": "List configured plugin registries.",
+        "hidden": false,
+        "panel": null,
+        "params": [],
+        "short_help": ""
+       },
+       "remove": {
+        "help": "Remove a plugin registry.",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "name"
+          ],
+          "required": true,
+          "type": "str"
+         }
+        ],
+        "short_help": ""
+       }
+      },
+      "help": "Static plugin registries to search and install from.",
+      "hidden": false,
+      "order": [
+       "add",
+       "list",
+       "remove",
+       "build"
+      ],
+      "panel": null,
+      "params": [],
+      "short_help": ""
+     },
      "registry-index": {
       "help": "Build deterministic registry metadata from local reviewed plugin packs.",
       "hidden": false,
@@ -12861,6 +13096,209 @@
       ],
       "short_help": ""
      },
+     "search": {
+      "help": "Search configured plugin registries.",
+      "hidden": false,
+      "panel": null,
+      "params": [
+       {
+        "default": "",
+        "help": "Text to match in names and descriptions.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "query",
+        "nargs": 1,
+        "opts": [
+         "query"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": "",
+        "help": "Only search this registry.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "registry",
+        "nargs": 1,
+        "opts": [
+         "--registry"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "Emit JSON.",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "json_output",
+        "nargs": 1,
+        "opts": [
+         "--json"
+        ],
+        "required": false,
+        "type": "boolean"
+       }
+      ],
+      "short_help": ""
+     },
+     "sign": {
+      "help": "Sign a plugin pack (writes magent-plugin.sig over its files and manifest).",
+      "hidden": false,
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "Plugin directory to sign.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "path",
+        "nargs": 1,
+        "opts": [
+         "path"
+        ],
+        "required": true,
+        "type": "str"
+       },
+       {
+        "default": null,
+        "help": "Ed25519 private key (PEM) from `plugin keygen`.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "key",
+        "nargs": 1,
+        "opts": [
+         "--key"
+        ],
+        "required": true,
+        "type": "str"
+       },
+       {
+        "default": null,
+        "help": "Name users will see, e.g. your org.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "key_id",
+        "nargs": 1,
+        "opts": [
+         "--key-id"
+        ],
+        "required": true,
+        "type": "str"
+       }
+      ],
+      "short_help": ""
+     },
+     "trust": {
+      "commands": {
+       "add": {
+        "help": "Trust a publisher's public key (check its fingerprint with them first).",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "A name for the signer, e.g. acme.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "key_id",
+          "nargs": 1,
+          "opts": [
+           "key_id"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": null,
+          "help": "ed25519:<base64> from the publisher.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "public_key",
+          "nargs": 1,
+          "opts": [
+           "public_key"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": "",
+          "help": "",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "note",
+          "nargs": 1,
+          "opts": [
+           "--note"
+          ],
+          "required": false,
+          "type": "str"
+         }
+        ],
+        "short_help": ""
+       },
+       "list": {
+        "help": "List trusted plugin signing keys.",
+        "hidden": false,
+        "panel": null,
+        "params": [],
+        "short_help": ""
+       },
+       "remove": {
+        "help": "Stop trusting a signing key (installed plugins stay installed).",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "key_id",
+          "nargs": 1,
+          "opts": [
+           "key_id"
+          ],
+          "required": true,
+          "type": "str"
+         }
+        ],
+        "short_help": ""
+       }
+      },
+      "help": "Public keys you trust to sign plugins.",
+      "hidden": false,
+      "order": [
+       "add",
+       "list",
+       "remove"
+      ],
+      "panel": null,
+      "params": [],
+      "short_help": ""
+     },
      "validate": {
       "help": "Run the plugin SDK manifest, permission, and contribution checks.",
       "hidden": false,
@@ -12900,7 +13338,7 @@
       "short_help": ""
      },
      "verify": {
-      "help": "Verify a plugin's deterministic content checksum and conformance.",
+      "help": "Verify a plugin's checksum, conformance and Ed25519 signature.",
       "hidden": false,
       "panel": null,
       "params": [
@@ -12918,6 +13356,21 @@
         ],
         "required": true,
         "type": "str"
+       },
+       {
+        "default": false,
+        "help": "Fail unless signed by a trusted key.",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "require_signature",
+        "nargs": 1,
+        "opts": [
+         "--require-signature"
+        ],
+        "required": false,
+        "type": "boolean"
        }
       ],
       "short_help": ""
@@ -12928,15 +13381,20 @@
     "order": [
      "list",
      "install",
+     "search",
      "enable",
      "disable",
      "metadata",
      "validate",
      "verify",
+     "keygen",
+     "sign",
      "grant",
      "schema",
      "registry-index",
      "import",
+     "trust",
+     "registry",
      "mcp",
      "pi"
     ],

@@ -102,6 +102,13 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   as `MX001`. New examples `mcp-issue-digest` and `a2a-research-handoff`, a `graph-gallery`
   docs topic listing every example, and `system info` now lists the `x-magagent-*` extensions.
   The `bug-triage` example gained a cost cap so every example validates strictly.
+- **Signed plugins and static registries (Phase 6).** Ed25519 signatures over a pack's files,
+  manifest, name and version (`magent plugin keygen`, `plugin sign`), a local trust store
+  (`plugin trust add|list|remove`), and static JSON registries (`plugin registry
+  add|list|remove|build`, `plugin search`, `plugin install NAME[@VERSION]`). Registry installs
+  check the archive hash, safe extraction, the pack digest and the signature, and ask before
+  trusting a new key. `plugin verify` reports signature status (`--require-signature` enforces
+  it). New core dependency: `cryptography>=42` for Ed25519. No hosted registry exists.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the
