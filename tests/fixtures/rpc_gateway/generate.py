@@ -17,8 +17,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
-from magent.rpc_gateway import Gateway  # noqa: E402
 from tests.unit.test_rpc_gateway import TOKEN, fake_command  # noqa: E402
+
+from magent.rpc_gateway import Gateway  # noqa: E402
 
 DECISION = {
     "aais": "1.0",
