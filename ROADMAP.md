@@ -36,66 +36,54 @@ across other harnesses.
 | 1.2.0 | 2026-09-06 | WebMCP origin allowlist and governed WebMCP tools |
 | 1.3.0 | 2026-09-12 | Approval broker hardening, stdio decision validation, run-center recovery evidence ([notes](docs/RELEASE_NOTES_1.3.0.md)) |
 
-## 1.4.0: Visible memory and closed audit gaps (in progress)
+## 1.4.0: Visible memory, closed audit gaps, and the Phase 4-6 work (in progress)
 
 Work lands on `claude/next-release`; the CHANGELOG `Unreleased` section is the detailed record.
+Release prerequisite: `agent-approval-interchange` 0.2.0 must be on PyPI first.
 
 | ID | Item | Status |
 | --- | --- | --- |
-| G-3 | Per-run memory evidence: node ids, scores, token cost and truncation in the run record; `/why last`; `magent memory evidence`; Web UI "Memory used" panel; desktop API for Mag Command Center | Done |
-| G-1 | Approval grants: 30-day default expiry (configurable), legacy grants grandfathered and flagged, `permission grants list/revoke`, an AAIS receipt and event for every grant hit | Done |
-| G-4 | `magent auth add <provider> --api-key-stdin` so desktop apps never pass keys in argv | Done |
-| G-5 | Offline `mock` provider for first runs, demos and CI (experimental) | Done |
-| G-11 | `magent ask --prompt-file`, and `--json` stdout reserved for machine output | Done |
-| H-1, H-2 | Version and count drift fixed; `scripts/check_release_metadata.py` in CI | Done |
-| H-5 | Slow tests split into their own CI job; flaky shell test fixed at the root | Done |
-| A-3 | Replace the approval store in `approval_broker.py` with the hardened store from `agent-approval-interchange` 0.2.0. Closes event-log truncation replay gaps and PID-only owner identity; the F01/F02 regression tests move to real separate processes | Waiting on the AAIS 0.2.0 library |
-| G-0 | This roadmap and the PRD status refresh | Done |
+| G-3 | Per-run memory evidence, `/why last`, `magent memory evidence`, Web UI "Memory used" panel, desktop API | Done |
+| G-1 | Approval grants: 30-day default expiry, legacy grants flagged, `permission grants list/revoke`, receipts on every grant hit | Done |
+| G-12 | Terminal and gateway "always" approvals become the same expiring, receipted, revocable grants | Done |
+| A-3 | Approval state on the shared AAIS 0.2 file store (cross-process locks, PID-reuse-safe owners, replay gaps, quarantine), legacy state imported | Done |
+| G-7 | Pushed approval notifications (doorbells, `/api/approvals/stream`) instead of polling | Done |
+| G-4 | `magent auth add <provider> --api-key-stdin` | Done |
+| G-13 | Keyring as the optional `mag-agent[keyring]` extra with clear hints | Done |
+| G-5 | Offline `mock` provider (experimental), with a scripted mode for fixtures | Done |
+| G-11 | `magent ask --prompt-file`; `--json` stdout reserved for machine output | Done |
+| G-6 | `magent serve --rpc` (`magent.rpc.v1`, experimental) for Mag Command Center's remote runtime | Done |
+| G-8 | Offline workflow fixtures: edit, test, artifact, approvals in graphs and subagents, cancel mid-tool | Done |
+| G-9 | `magent provider ping`; OpenAI and Anthropic connectivity evidence refreshed (tiers unchanged) | Done |
+| G-10 | Parallel read-only tool calls; offline edit-quality benchmark (found and fixed two `edit_file` bugs) | Done |
+| S-2 | CLI contract snapshot, `cli/main.py` split into command modules, `magent plan <sub>` with hidden aliases, `cli.main` and `workbench` type-checked | Done |
+| H-1, H-2, H-5 | Drift fixes, release-metadata check, slow-test job and flake root cause | Done |
+| Team memory | Shared MagGraph via Git with review-gated merge, CLI and Web UI review inbox, team recall | Done (Phase 6) |
+| Graph executors | AGS task nodes run by MCP tools or A2A agents (`x-magagent-executor`, experimental); graph gallery | Done (Phase 6) |
+| Signed plugins | Ed25519 signatures, trust store, static registries, `plugin search/install/verify` | Done (Phase 6) |
+| VS Code bridge | Minimal extension in `editors/vscode` over the machine API (preview, unpublished) | Done (Phase 6) |
 
 Exit gates: full suite, slow job and coverage floor green; mypy clean; release-metadata check
-strict-clean; Web UI bundle current; the memory evidence contract consumed by Mag Command Center.
+strict-clean; Web UI bundle current; VS Code extension tests green; AAIS 0.2.0 published.
 
-## Next: structure and contracts (about one quarter)
+## Next
 
-Before any refactor, `--help` output and every `--json` shape are snapshotted as golden tests so a
-split provably changes nothing.
-
-- **S-2: split `cli/main.py`** (about 5,000 lines) into command modules, fold the nine `plan-*`
-  verbs into `magent plan <sub>` with hidden aliases, and take `cli.main` off the mypy ignore list.
 - **S-6: AGS executor convergence note.** A design note comparing the Loro and MagAgent Agentic
   Graph executors and whether a shared executor is worth it. No code.
-
-## Then: differentiators (quarters 1 and 2)
-
-Each item starts with a short design note for approval, because these are product bets.
-
-- **G-6: remote JSON-RPC gateway.** `magent serve --rpc` implementing the contract Mag Command
-  Center's remote client already speaks (run start, event subscription, decide, cancel). Token
-  required, loopback by default, documented TLS reverse-proxy setup, lifecycle fixtures shared
-  with Mag Command Center.
-- **G-7: push-based approval notification** over the daemon event bus instead of 100 ms polling,
-  with sequence compaction and an explicit gap signal.
-- **G-8: workflow fixtures** for edit, test and artifact tasks, approvals inside a graph or a
-  subagent, and cancel in the middle of a tool.
-- **G-9: provider qualification.** Fresh live evals for OpenAI, Anthropic and Ollama so their
-  support tiers are backed by dated evidence (today only Nous Portal is `qualified`).
-- **G-10: parallel read-only tool calls** plus a diff-edit quality benchmark.
-
-## Later (6+ months, to be re-planned)
-
-- A team or shared MagGraph with review-gated merge.
-- Agentic Graphs that call MCP and A2A agents, and a public graph gallery.
-- Signed plugin trust and a plugin registry.
-- A VS Code bridge that uses the stable machine API.
+- **G-9 follow-up:** full qualification runs (tools, streaming) for OpenAI, Anthropic and Ollama,
+  so their tier can move beyond `compatible`. This needs a spending decision.
+- **Promote experimental features** once used: the RPC gateway (after Mag Command Center's
+  remote mode ships against it), graph executors, the mock provider's scripted mode.
+- **VS Code bridge:** decide whether to publish it, and add inline diff review.
 
 ## Known gaps being tracked
 
-- Terminal "always" approvals still save trusted shell patterns in the user profile with no
-  expiry (`magent permission trust-list` / `trust-clear`). The new grant expiry applies to
-  approvals made through the AAIS broker (Web UI, graphs, Mag Command Center, `--approval-stdio`).
-- The approval event log keeps the newest 1,000 entries; replay across that window can skip
-  events until A-3 lands.
+- Grants are exact to the action and, for shell commands, to the project directory; there is no
+  pattern-based grant by design.
+- Team memory identity is the MagAgent user name written as the Git author, not an
+  authenticated identity; access to the Git remote is the real control.
 - Memory evidence token counts are estimates (about four characters per token).
+- A2A executors cannot answer an agent's follow-up questions (`input-required` fails the node).
 
 ## Scope held
 
