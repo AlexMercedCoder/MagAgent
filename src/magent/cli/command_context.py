@@ -75,12 +75,29 @@ def build_provider(config: Any, provider_id: str | None, model: str | None):
     from magent.providers import build_provider as _build_provider
 
     p_id = canonical_provider_id(provider_id or config.default_provider)
-    m = model or config.default_model
-    api_key = config.resolve_api_key(p_id)
     p_cfg = config.provider_config(p_id)
+    m = model or _default_model_for(config, p_id, p_cfg)
+    api_key = config.resolve_api_key(p_id)
     _ensure_known_provider(p_id, p_cfg)
     _ensure_provider_credentials(p_id, api_key, p_cfg)
     return _build_provider(p_id, m, api_key, p_cfg)
+
+
+def _default_model_for(config: Any, provider_id: str, provider_cfg: dict[str, Any]) -> str:
+    """Model to use when only a provider was named.
+
+    The configured default model belongs to the configured default provider;
+    `--provider mock` with no `--model` used to pair the mock provider with,
+    say, an Ollama model name. Another provider gets its own configured or
+    catalog default instead.
+    """
+    if provider_id == canonical_provider_id(config.default_provider):
+        return config.default_model
+    return str(
+        provider_cfg.get("default_model")
+        or provider_metadata(provider_id).get("default_model")
+        or config.default_model
+    )
 
 
 def build_provider_for_role(config: Any, role: str):

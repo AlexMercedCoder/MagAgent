@@ -26,6 +26,7 @@ Generated from `magent.provider_catalog`.
 | Fireworks AI | `fireworks_ai` | `accounts/fireworks/models/deepseek-coder-v2-instruct` | api | `FIREWORKS_API_KEY` | fireworks_ai | compatible | 2026-08-11 |
 | DeepInfra | `deepinfra` | `openai/gpt-oss-120b` | api | `DEEPINFRA_API_KEY` | deepinfra | compatible | 2026-08-11 |
 | Custom Endpoint | `custom` | `your-model-name` | api |  | openai-compatible | compatible | 2026-08-11 |
+| Mock (offline demo) | `mock` | `offline-demo` | local |  | magent-mock | experimental | 2026-09-27 |
 
 Use `magent provider matrix`, `magent provider explain <provider>`, and `magent provider env` for live readiness details.
 

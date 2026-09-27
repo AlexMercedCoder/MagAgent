@@ -30,6 +30,10 @@ PROVIDER_DISPLAY_NAMES: dict[str, str] = provider_display_names()
 
 def _build_litellm_model(provider: str, model: str) -> str:
     """Build the LiteLLM model string for a given provider/model pair."""
+    if provider == "mock":
+        from magent.providers.mock import litellm_model
+
+        return litellm_model(model)
     if provider == "ollama":
         return f"ollama/{model}"
     if provider == "openai":
@@ -61,6 +65,12 @@ def _build_api_kwargs(
 ) -> dict[str, Any]:
     """Build kwargs dict for litellm.acompletion."""
     litellm_model = _build_litellm_model(provider, model)
+    if provider == "mock":
+        # Offline demo provider: a LiteLLM custom handler, never the network.
+        from magent.providers.mock import ensure_registered
+
+        ensure_registered()
+        return {"model": litellm_model, "api_key": "magent-mock-offline"}
 
     kwargs: dict[str, Any] = {"model": litellm_model}
 

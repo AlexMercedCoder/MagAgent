@@ -186,6 +186,15 @@ PROVIDER_CATALOG: dict[str, dict[str, Any]] = {
         "access_mode": "api",
         "litellm": "openai-compatible",
     },
+    "mock": {
+        "label": "Mock (offline demo, no model: canned replies, no key needed)",
+        "display": "Mock (offline demo)",
+        "default_model": "offline-demo",
+        "access_mode": "local",
+        "litellm": "magent-mock",
+        "local": True,
+        "offline": True,
+    },
 }
 
 PROVIDER_ORDER = [
@@ -211,6 +220,7 @@ PROVIDER_ORDER = [
     "fireworks_ai",
     "deepinfra",
     "custom",
+    "mock",
 ]
 
 OPENAI_COMPATIBLE_PROVIDERS = {
@@ -264,6 +274,15 @@ PROVIDER_SUPPORT["nous-portal"] = {
         "artifact-creation",
     ],
     "limitations": ["Qualification applies to the tested model and account tier."],
+}
+PROVIDER_SUPPORT["mock"] = {
+    "tier": "experimental",
+    "evidence_date": "2026-09-27",
+    "evidence_source": "tests/unit/test_mock_provider.py",
+    "capabilities": ["completion", "streaming", "usage"],
+    "limitations": [
+        "Offline demo only: deterministic canned replies, no model, no tool calls.",
+    ],
 }
 for _local_provider in ("ollama", "lmstudio"):
     PROVIDER_SUPPORT[_local_provider] = {

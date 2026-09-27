@@ -9,7 +9,7 @@ Stored at `~/.config/magent/config.toml`.
 ### `agent`
 
 - `agent.name` default: `'MagAgent'`
-- `agent.version` default: `'1.2.0'`
+- `agent.version` default: `'1.3.0'`
 - `agent.selective_tools` default: `True`
 - `agent.max_subagents` default: `3`
 - `agent.max_model_rounds_per_turn` default: `16`
@@ -73,6 +73,7 @@ Stored at `~/.config/magent/config.toml`.
 - `permissions.shell_sandbox_network` default: `False`
 - `permissions.allowed_shell_patterns` default: `[]`
 - `permissions.trusted_shell_patterns` default: `[]`
+- `permissions.grant_ttl_days` default: `30`
 ### `skills`
 
 - `skills.lockfile` default: `'~/.config/magent/skills.lock'`
@@ -202,3 +203,4 @@ Use `magent provider matrix` and `magent provider test-matrix` for live readines
 - `fireworks_ai`
 - `deepinfra`
 - `custom`
+- `mock`

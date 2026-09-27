@@ -334,6 +334,7 @@ Generated from the active Typer command tree.
 - `magent memory batch`
 - `magent memory configure`
 - `magent memory delete`
+- `magent memory evidence`
 - `magent memory export`
 - `magent memory graph`
 - `magent memory hygiene`
@@ -393,6 +394,9 @@ Generated from the active Typer command tree.
 - `magent permission apply-profile`
 - `magent permission classify`
 - `magent permission explain`
+- `magent permission grants`
+- `magent permission grants list`
+- `magent permission grants revoke`
 - `magent permission profiles`
 - `magent permission propose`
 - `magent permission secrets`

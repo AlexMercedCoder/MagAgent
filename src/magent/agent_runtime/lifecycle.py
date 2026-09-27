@@ -162,12 +162,15 @@ class LifecycleRuntimeMixin:
         cache_usage = extract_cache_usage(usage)
         cached_tokens = int(cache_usage["cached_tokens"] or 0)
         cost = None
-        try:
-            import litellm
+        if getattr(self.provider, "provider_id", "") == "mock":
+            cost = 0.0  # offline demo provider: nothing is billed
+        else:
+            try:
+                import litellm
 
-            cost = float(litellm.completion_cost(completion_response=response))
-        except Exception:
-            cost = None
+                cost = float(litellm.completion_cost(completion_response=response))
+            except Exception:
+                cost = None
         self.logger.log_token_usage(
             provider=self.provider.provider_id,
             model=self.provider.model,
