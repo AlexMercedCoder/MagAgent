@@ -1,11 +1,14 @@
 # MagAgent — Product Requirements Document (PRD)
 
-> **Decisions resolved:** 2026-06-05 — All open questions from §21 have been answered and folded into the spec.
-
-> **Version:** 0.1 — Draft  
-> **Date:** 2026-06-05  
-> **Author:** AI Research (Antigravity)  
-> **Status:** In Review
+> **Status (reviewed 2026-09-27):** Implemented and shipped. MagAgent 1.0.0 released on
+> 2026-08-29; the current release is 1.3.0 (2026-09-12) and 1.4.0 is in progress. This document
+> is the original product specification (version 0.1, 2026-06-05, all §21 decisions resolved the
+> same day) and is kept as design history. Where it and the code disagree, the code, the
+> [README](README.md), the packaged docs and the [CHANGELOG](CHANGELOG.md) describe current
+> behavior. Forward-looking work lives in [ROADMAP.md](ROADMAP.md); §17 below is the original
+> build plan, not the current roadmap.
+>
+> **Original author:** AI Research (Antigravity)
 
 ---
 
@@ -749,7 +752,10 @@ The `magent setup` wizard:
 
 ---
 
-## 17. Implementation Roadmap
+## 17. Implementation Roadmap (original, historical)
+
+> Historical build plan from the 0.1 draft. These phases shipped on the way to 1.0; the unchecked
+> boxes below were never updated and do not mean the work is missing. See [ROADMAP.md](ROADMAP.md).
 
 ### Phase 1 — Foundation (v0.1)
 

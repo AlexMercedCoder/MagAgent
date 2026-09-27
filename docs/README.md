@@ -110,6 +110,7 @@ Gateway setup covers user/channel allowlists rather than tokens alone. See
 ## Architecture And Workflow
 
 - [MagAgent Roadmap (post-1.0)](../ROADMAP.md)
+- [Archived roadmap to 1.0](ROADMAP_TO_1.0.md)
 - [Architecture](../src/magent/docs/architecture.md)
 - [Architecture Exceptions](../src/magent/docs/architecture-exceptions.md)
 - [Workbench](../src/magent/docs/workbench.md)
