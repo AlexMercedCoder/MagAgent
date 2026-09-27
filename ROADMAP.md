@@ -62,14 +62,17 @@ Release prerequisite: `agent-approval-interchange` 0.2.0 must be on PyPI first.
 | Graph executors | AGS task nodes run by MCP tools or A2A agents (`x-magagent-executor`, experimental); graph gallery | Done (Phase 6) |
 | Signed plugins | Ed25519 signatures, trust store, static registries, `plugin search/install/verify` | Done (Phase 6) |
 | VS Code bridge | Minimal extension in `editors/vscode` over the machine API (preview, unpublished) | Done (Phase 6) |
+| SEC-1 | Security self-review of everything above: 30 fixes with regression tests, per-surface threat model | Done |
+| S-6 | AGS executor convergence design note (`docs/design/ags-executor-convergence.md`) | Done |
 
 Exit gates: full suite, slow job and coverage floor green; mypy clean; release-metadata check
 strict-clean; Web UI bundle current; VS Code extension tests green; AAIS 0.2.0 published.
 
 ## Next
 
-- **S-6: AGS executor convergence note.** A design note comparing the Loro and MagAgent Agentic
-  Graph executors and whether a shared executor is worth it. No code.
+- **AGS convergence (from S-6):** propose an AGX evaluator for the `ags` support library,
+  behavioural conformance fixtures (resume, retries, gate timeouts), an uncertain-node resume
+  guard, and re-supplying redacted parameters on `graph resume`.
 - **G-9 follow-up:** full qualification runs (tools, streaming) for OpenAI, Anthropic and Ollama,
   so their tier can move beyond `compatible`. This needs a spending decision.
 - **Promote experimental features** once used: the RPC gateway (after Mag Command Center's
