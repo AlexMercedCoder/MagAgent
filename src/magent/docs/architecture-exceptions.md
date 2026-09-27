@@ -2,9 +2,10 @@
 
 The 0.60 size budget permits a module over roughly 1,000 lines only when the compatibility reason and extraction condition are documented.
 
-## `magent.cli.main`
+## `magent.cli.main` (closed in 1.4)
 
-This remains a large compatibility facade because the public console entry point, interactive chat loop, and older top-level command callbacks share closure-based Typer registration. Focused groups already live in `magent.cli.commands.*`; 0.60 also extracts tool capability commands. New command behavior may not be added directly unless it is inseparable from the interactive root loop. The exception closes when remaining legacy groups use injected registration modules and `main.py` contains only composition, root callbacks, and interactive entry points.
+Closed: `main.py` now contains only composition, the root callback and command-module imports. Commands moved to `magent.cli.commands.*` and shared helpers to `magent.cli.shared`, with a golden contract test proving the CLI surface did not change. The module also passes mypy now.
+
 
 ## `magent.workbench`
 

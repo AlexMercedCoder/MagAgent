@@ -12,7 +12,7 @@ MagAgent is organized around four local layers. Keeping these layers distinct ma
 
 ### CLI And TUI
 
-`magent.cli.app` composes the Typer app and command groups. `magent.cli.main` remains the console compatibility facade and interactive-session entry point; focused registrations live under `magent.cli.commands.*`. `magent.tui` owns Rich rendering helpers such as the startup banner, response panels, status lines, and streaming output.
+`magent.cli.app` composes the Typer app and command groups. `magent.cli.main` is the console entry point: the root callback, the `register_*` calls and the import of every command module. Commands live under `magent.cli.commands.*` (for example `toplevel`, `plans`, `workbench_cmds`, `system_cmds`, `models`, `sessions`, `gateway`, `mcp_servers`); helpers they share, including the one-shot and REPL runners, live in `magent.cli.shared` and are called as `shared.<name>` so tests patch one place. `tests/golden/cli_contract.json` snapshots the whole command tree and the JSON output shapes. `magent.tui` owns Rich rendering helpers such as the startup banner, response panels, status lines, and streaming output.
 
 Future command modules should register command groups from `magent.cli.commands.*` while preserving `magent.cli.main:app` as the console entry point.
 

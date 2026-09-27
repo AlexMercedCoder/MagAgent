@@ -1190,7 +1190,9 @@ src/magent/
 ├── cli/
 │   ├── app.py        # Typer app and command-group composition
 │   ├── command_context.py # Shared command helper/context functions
-│   └── main.py       # CLI entry point and command implementations
+│   ├── commands/     # Command modules (plans, models, sessions, gateway, ...)
+│   ├── shared.py     # Helpers shared by command modules (one-shot, REPL)
+│   └── main.py       # CLI entry point: callback and registration
 ├── config/           # TOML config, user profiles
 ├── gateway/          # Remote gateway (Slack, Discord, Telegram)
 │   └── adapters/     # Platform-specific adapters
