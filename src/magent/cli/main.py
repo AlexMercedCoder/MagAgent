@@ -10,7 +10,7 @@ import signal
 import sys
 import time
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, NoReturn
 
 import typer
 from rich.console import Console
@@ -3249,20 +3249,106 @@ def auth_list_cmd():
 
 @auth_app.command("add")
 def auth_add_cmd(
-    provider_id: str = typer.Argument(...),
-    api_key: str = typer.Option("", "--api-key", prompt=True, hide_input=True),
+    provider_id: str = typer.Argument(..., help="Provider id, e.g. nous-portal or openai."),
+    api_key_stdin: bool = typer.Option(
+        False,
+        "--api-key-stdin",
+        help="Read the key from standard input (non-interactive; never via argv).",
+    ),
+    storage: str = typer.Option(
+        "keyring",
+        "--storage",
+        help="Where to keep the key: keyring (OS credential store) or config (0600 config.toml).",
+    ),
+    api_key: str = typer.Option(
+        "",
+        "--api-key",
+        help="Deprecated: a key on the command line is visible to other processes "
+        "and shell history. Use --api-key-stdin.",
+        hidden=True,
+    ),
+    json_output: bool = typer.Option(
+        False, "--json", help="Accepted for scripts; the result is always JSON."
+    ),
 ):
-    """Store a provider API key in the OS keyring and reference it from config."""
-    from magent.auth_store import keyring_account, save_keyring_secret
-    from magent.config import load_global_config, save_global_config
+    """Store a provider API key without printing it.
 
-    result = save_keyring_secret(provider_id, api_key)
-    if result.get("ok"):
-        cfg = load_global_config()
-        entry = cfg.setdefault("providers", {}).setdefault(provider_id, {})
-        entry.pop("api_key", None)
-        entry["api_key_keyring"] = keyring_account(provider_id)
-        save_global_config(cfg)
+    Interactive: `magent auth add openai` prompts with hidden input.
+
+    Scripts and desktop apps pipe the key over stdin so it never appears in
+    argv or shell history:
+
+      printf '%s' "$KEY" | magent auth add nous-portal --api-key-stdin
+
+      printf '%s' "$KEY" | magent auth add openai --api-key-stdin --storage config
+
+    Exit codes: 0 stored, 1 storage failed, 2 usage error (unknown provider,
+    empty stdin, stdin is a terminal, conflicting options).
+    """
+    from magent.auth_store import store_provider_secret
+
+    del json_output  # the result is JSON either way
+
+    def usage_error(message: str, hint: str = "") -> NoReturn:
+        payload = {"ok": False, "provider": provider_id, "error": message}
+        if hint:
+            payload["hint"] = hint
+        console.print_json(data=payload)
+        raise typer.Exit(2)
+
+    storage_choice = storage.strip().lower()
+    if storage_choice not in {"keyring", "config"}:
+        usage_error("--storage must be keyring or config.")
+    if api_key_stdin and api_key:
+        usage_error("Use either --api-key-stdin or --api-key, not both.")
+
+    from magent.provider_catalog import canonical_provider_id, provider_metadata
+
+    canonical = canonical_provider_id(provider_id)
+    config = load_config(get_current_user())
+    if not provider_metadata(canonical) and canonical not in (
+        config.providers or {}
+    ):
+        usage_error(
+            f"Unknown provider: {provider_id}",
+            "List providers with `magent provider matrix`; configure a custom endpoint "
+            "with `magent provider set <id> --base-url <url>`.",
+        )
+    if provider_metadata(canonical).get("local"):
+        usage_error(f"{canonical} runs locally and does not use an API key.")
+
+    source = "prompt"
+    if api_key_stdin:
+        if sys.stdin is None or sys.stdin.isatty():
+            usage_error(
+                "--api-key-stdin expects the key on standard input, but stdin is a terminal.",
+                "Pipe it in, e.g. printf '%s' \"$KEY\" | magent auth add "
+                f"{canonical} --api-key-stdin",
+            )
+        secret = sys.stdin.read().strip()
+        source = "stdin"
+        if not secret:
+            usage_error("No key was received on standard input.")
+    elif api_key:
+        source = "argv"
+        secret = api_key.strip()
+        print(
+            "Warning: --api-key exposes the key to process listings and shell history; "
+            "use --api-key-stdin instead.",
+            file=sys.stderr,
+        )
+    else:
+        if sys.stdin is None or not sys.stdin.isatty():
+            usage_error(
+                "No key given and no terminal to prompt on.",
+                f"Pipe the key in with `magent auth add {canonical} --api-key-stdin`.",
+            )
+        secret = typer.prompt(f"API key for {canonical}", hide_input=True, default="").strip()
+        if not secret:
+            usage_error("No key entered.")
+
+    result = store_provider_secret(canonical, secret, storage=storage_choice)
+    result["source"] = source
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)
@@ -3270,19 +3356,35 @@ def auth_add_cmd(
 
 @auth_app.command("remove")
 def auth_remove_cmd(provider_id: str = typer.Argument(...)):
-    """Remove a provider API key from keyring/config references."""
-    from magent.auth_store import delete_keyring_secret
+    """Remove a stored provider API key (keyring entry and config.toml copy)."""
+    from magent.auth_store import delete_keyring_secret, keyring_available
     from magent.config import load_global_config, save_global_config
+    from magent.provider_catalog import canonical_provider_id
 
-    result = delete_keyring_secret(provider_id)
+    provider_id = canonical_provider_id(provider_id)
     cfg = load_global_config()
     # Only touch a provider that was actually configured: setdefault created an
     # empty entry for providers that never existed, which then showed up as
     # `configured: true`.
     providers = cfg.get("providers") or {}
     entry = providers.get(provider_id)
-    if isinstance(entry, dict) and entry.pop("api_key_keyring", None) is not None:
-        save_global_config(cfg)
+    removed_config = False
+    referenced_keyring = False
+    if isinstance(entry, dict):
+        referenced_keyring = entry.pop("api_key_keyring", None) is not None
+        removed_config = entry.pop("api_key", None) is not None
+        if referenced_keyring or removed_config:
+            save_global_config(cfg)
+    if keyring_available():
+        result = delete_keyring_secret(provider_id)
+    else:
+        result = {"ok": not referenced_keyring, "provider": provider_id, "deleted": False}
+        if referenced_keyring:
+            result["error"] = (
+                "Config referenced a keyring entry, but no keyring is available to delete it."
+            )
+    result["removed_from_config"] = removed_config
+    result["ok"] = bool(result.get("ok")) or removed_config
     console.print_json(data=result)
     if not result.get("ok"):
         raise typer.Exit(1)

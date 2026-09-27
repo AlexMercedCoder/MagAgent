@@ -6,7 +6,9 @@ an optional OS keyring boundary for users who want secrets out of TOML.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 SERVICE_NAME = "magent"
@@ -42,7 +44,12 @@ def save_keyring_secret(provider_id: str, value: str) -> dict[str, Any]:
         keyring.set_password(SERVICE_NAME, keyring_account(provider_id), value)
     except Exception as exc:
         return {"ok": False, "error": f"keyring save failed: {exc}"}
-    return {"ok": True, "provider": provider_id, "storage": "keyring", "account": keyring_account(provider_id)}
+    return {
+        "ok": True,
+        "provider": provider_id,
+        "storage": "keyring",
+        "account": keyring_account(provider_id),
+    }
 
 
 def load_keyring_secret(provider_id: str) -> str | None:
@@ -95,3 +102,52 @@ def list_auth_entries(providers: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return rows
+
+
+def store_provider_secret(
+    provider_id: str, secret: str, *, storage: str = "keyring"
+) -> dict[str, Any]:
+    """Store a provider key and point the global config at it.
+
+    ``keyring`` keeps the value in the OS credential store and records only the
+    account name in config. ``config`` writes it to ``config.toml`` and tightens
+    the file to 0600. The returned dict never contains the secret.
+    """
+    from magent.config import GLOBAL_CONFIG, load_global_config, save_global_config
+
+    if storage not in {"keyring", "config"}:
+        return {"ok": False, "provider": provider_id, "error": "storage must be keyring or config"}
+    if not secret:
+        return {"ok": False, "provider": provider_id, "error": "secret value is required"}
+    if storage == "keyring":
+        if not keyring_available():
+            return {
+                "ok": False,
+                "provider": provider_id,
+                "storage": "keyring",
+                "error": "No OS keyring is available to this Python environment.",
+                "hint": "Install it with `pip install keyring`, or rerun with --storage config "
+                "to keep the key in config.toml (mode 0600).",
+            }
+        result = save_keyring_secret(provider_id, secret)
+        if not result.get("ok"):
+            return {**result, "provider": provider_id, "storage": "keyring"}
+    cfg = load_global_config()
+    entry = cfg.setdefault("providers", {}).setdefault(provider_id, {})
+    if storage == "keyring":
+        entry.pop("api_key", None)
+        entry["api_key_keyring"] = keyring_account(provider_id)
+    else:
+        entry.pop("api_key_keyring", None)
+        entry["api_key"] = secret
+    save_global_config(cfg)
+    path = Path(GLOBAL_CONFIG)
+    if storage == "config":
+        with contextlib.suppress(OSError):
+            path.chmod(0o600)
+    payload: dict[str, Any] = {"ok": True, "provider": provider_id, "storage": storage}
+    if storage == "keyring":
+        payload["account"] = keyring_account(provider_id)
+    else:
+        payload["config_path"] = str(path)
+    return payload
