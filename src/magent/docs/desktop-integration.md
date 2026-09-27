@@ -112,7 +112,7 @@ returns `magent.run-memory-evidence.v1` (beta):
       "recorded_at": "...",
       "status": "used",
       "query_preview": "first 160 characters of the message",
-      "nodes": [{"id": "prefers_pytest", "type": "preference", "score": 0.91, "matched": ["body"], "reason": "..."}],
+      "nodes": [{"id": "prefers_pytest", "type": "preference", "score": 0.91, "matched": ["body"], "reason": "...", "source": "personal"}],
       "tokens": {"recalled": 812, "injected": 640, "budget": 4000, "profile_reserve": 1200},
       "truncated": false,
       "truncation": []

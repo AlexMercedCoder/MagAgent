@@ -9185,6 +9185,535 @@
       ],
       "short_help": ""
      },
+     "team": {
+      "commands": {
+       "accept": {
+        "help": "Merge a teammate's proposal into the team graph.",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "proposal_id",
+          "nargs": 1,
+          "opts": [
+           "proposal_id"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": "",
+          "help": "Optional note for the review log.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "reason",
+          "nargs": 1,
+          "opts": [
+           "--reason"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Accept your own proposal (one-person teams).",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "allow_self_review",
+          "nargs": 1,
+          "opts": [
+           "--allow-self-review"
+          ],
+          "required": false,
+          "type": "boolean"
+         },
+         {
+          "default": "team",
+          "help": "Which team graph (default: team).",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Emit JSON.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "json_output",
+          "nargs": 1,
+          "opts": [
+           "--json"
+          ],
+          "required": false,
+          "type": "boolean"
+         }
+        ],
+        "short_help": ""
+       },
+       "inbox": {
+        "help": "List proposals waiting for review.",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": "team",
+          "help": "Which team graph (default: team).",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Emit JSON.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "json_output",
+          "nargs": 1,
+          "opts": [
+           "--json"
+          ],
+          "required": false,
+          "type": "boolean"
+         }
+        ],
+        "short_help": ""
+       },
+       "init": {
+        "help": "Connect to (or create) a team memory repository and clone it locally.",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "Git URL or path of the team repository.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "remote",
+          "nargs": 1,
+          "opts": [
+           "remote"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Create a new bare repository at this path first.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "create",
+          "nargs": 1,
+          "opts": [
+           "--create"
+          ],
+          "required": false,
+          "type": "boolean"
+         },
+         {
+          "default": "team",
+          "help": "Which team graph (default: team).",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Emit JSON.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "json_output",
+          "nargs": 1,
+          "opts": [
+           "--json"
+          ],
+          "required": false,
+          "type": "boolean"
+         }
+        ],
+        "short_help": ""
+       },
+       "propose": {
+        "help": "Propose personal memory nodes for the team graph (a teammate must accept).",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "Personal memory node ids to share.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "node_ids",
+          "nargs": -1,
+          "opts": [
+           "node_ids"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": "",
+          "help": "Why these nodes are useful.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "message",
+          "nargs": 1,
+          "opts": [
+           "--message",
+           "-m"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": "team",
+          "help": "Which team graph (default: team).",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Emit JSON.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "json_output",
+          "nargs": 1,
+          "opts": [
+           "--json"
+          ],
+          "required": false,
+          "type": "boolean"
+         }
+        ],
+        "short_help": ""
+       },
+       "reject": {
+        "help": "Reject a proposal; nothing is merged and the decision is recorded.",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "proposal_id",
+          "nargs": 1,
+          "opts": [
+           "proposal_id"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": "",
+          "help": "Why; recorded in REVIEWS.jsonl.",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "reason",
+          "nargs": 1,
+          "opts": [
+           "--reason"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": "team",
+          "help": "Which team graph (default: team).",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Emit JSON.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "json_output",
+          "nargs": 1,
+          "opts": [
+           "--json"
+          ],
+          "required": false,
+          "type": "boolean"
+         }
+        ],
+        "short_help": ""
+       },
+       "reviews": {
+        "help": "Show recent review decisions from the team's REVIEWS.jsonl.",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": 20,
+          "help": "",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "limit",
+          "nargs": 1,
+          "opts": [
+           "--limit",
+           "-n"
+          ],
+          "required": false,
+          "type": "int"
+         },
+         {
+          "default": "team",
+          "help": "Which team graph (default: team).",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Emit JSON.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "json_output",
+          "nargs": 1,
+          "opts": [
+           "--json"
+          ],
+          "required": false,
+          "type": "boolean"
+         }
+        ],
+        "short_help": ""
+       },
+       "show": {
+        "help": "Show a proposal's diff and automatic checks.",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": null,
+          "help": "",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "argument",
+          "multiple": false,
+          "name": "proposal_id",
+          "nargs": 1,
+          "opts": [
+           "proposal_id"
+          ],
+          "required": true,
+          "type": "str"
+         },
+         {
+          "default": "team",
+          "help": "Which team graph (default: team).",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Emit JSON.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "json_output",
+          "nargs": 1,
+          "opts": [
+           "--json"
+          ],
+          "required": false,
+          "type": "boolean"
+         }
+        ],
+        "short_help": ""
+       },
+       "status": {
+        "help": "Show the team graph's remote, reviewed node count and waiting proposals.",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": "team",
+          "help": "Which team graph (default: team).",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Emit JSON.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "json_output",
+          "nargs": 1,
+          "opts": [
+           "--json"
+          ],
+          "required": false,
+          "type": "boolean"
+         }
+        ],
+        "short_help": ""
+       },
+       "sync": {
+        "help": "Pull the team's latest reviewed nodes (fast-forward only).",
+        "hidden": false,
+        "panel": null,
+        "params": [
+         {
+          "default": "team",
+          "help": "Which team graph (default: team).",
+          "hidden": false,
+          "is_flag": false,
+          "kind": "option",
+          "multiple": false,
+          "name": "name",
+          "nargs": 1,
+          "opts": [
+           "--name"
+          ],
+          "required": false,
+          "type": "str"
+         },
+         {
+          "default": false,
+          "help": "Emit JSON.",
+          "hidden": false,
+          "is_flag": true,
+          "kind": "option",
+          "multiple": false,
+          "name": "json_output",
+          "nargs": 1,
+          "opts": [
+           "--json"
+          ],
+          "required": false,
+          "type": "boolean"
+         }
+        ],
+        "short_help": ""
+       }
+      },
+      "help": "Share reviewed memory with a team (a Git repository of MagGraph nodes).\n\nNodes reach the team graph only as proposals that a teammate accepts.\n\nExamples:\n\n  magent memory team init git@github.com:acme/team-memory.git\n\n  magent memory team init --create /shared/team-memory.git\n\n  magent memory team propose prefers_pytest -m 'Test runner convention'\n\n  magent memory team inbox\n\n  magent memory team show 3fa2c1d9e0\n\n  magent memory team accept 3fa2c1d9e0",
+      "hidden": false,
+      "order": [
+       "init",
+       "status",
+       "sync",
+       "propose",
+       "inbox",
+       "show",
+       "accept",
+       "reject",
+       "reviews"
+      ],
+      "panel": null,
+      "params": [],
+      "short_help": ""
+     },
      "traverse": {
       "help": "Traverse the memory graph from a node.",
       "hidden": false,
@@ -9423,7 +9952,8 @@
      "sync",
      "configure",
      "wizard",
-     "semantic"
+     "semantic",
+     "team"
     ],
     "panel": "Memory & Context",
     "params": [],

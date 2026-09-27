@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { post, request } from "../api";
+import { TeamReview } from "./TeamReview";
 
 /**
  * Memory browser.
@@ -183,6 +184,8 @@ export function MemoryView({ setError, notify }: { setError: (message: string) =
               <strong>{String(overview?.quality?.suppressed?.length ?? 0)}</strong>
             </div>
           </div>
+
+          <TeamReview setError={setError} notify={notify} />
 
           <form
             className="memory-search"

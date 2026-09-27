@@ -15,13 +15,13 @@ Record shape (``magent.memory-evidence.v1``)::
       "recorded_at": "2026-09-27T12:00:00+00:00",
       "status": "used" | "no_match" | "unavailable" | "blocked_by_profile",
       "query_preview": "first 160 characters of the user message",
-      "nodes": [{"id", "type", "score", "matched", "reason"}],
+      "nodes": [{"id", "type", "score", "matched", "reason", "source"}],
       "tokens": {"recalled": 812, "injected": 640, "budget": 4000, "profile_reserve": 1200},
       "truncated": true,
       "truncation": ["recall_budget", "profile_reserve"]
     }
 
-``tokens`` are estimates (about four characters per token), the same
+``source`` is ``personal`` or ``team`` (reviewed team memory). ``tokens`` are estimates (about four characters per token), the same
 estimator the context budget uses.
 """
 

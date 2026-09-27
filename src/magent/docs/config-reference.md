@@ -42,6 +42,10 @@ Stored at `~/.config/magent/config.toml`.
 - `memory.semantic_provider` default: `'ollama'`
 - `memory.semantic_model` default: `'nomic-embed-text'`
 - `memory.semantic_top_k` default: `8`
+### `memory.team`
+
+- `memory.team.name` default: `'team'`
+- `memory.team.recall` default: `True`
 ### `context`
 
 - `context.compact_every_n_turns` default: `10`

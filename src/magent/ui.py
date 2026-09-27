@@ -303,6 +303,7 @@ def serve_ui(
         "/api/extensions/manage",
         "/api/extensions/mcp/test",
         "/api/memory/nodes",
+        "/api/memory/team/decide",
         "/api/tasks/action",
         "/api/schedules",
         "/api/schedules/action",
@@ -1250,6 +1251,25 @@ def serve_ui(
                         self._json({"ok": False, "error": str(error)}, status=409)
                     else:
                         self._json({"ok": True, "resolution": resolution})
+                elif parsed.path == "/api/memory/team/inbox":
+                    from magent.web_memory import team_inbox
+
+                    self._json(team_inbox(username or ""))
+                elif parsed.path == "/api/memory/team/proposal":
+                    from magent.web_memory import team_proposal
+
+                    self._json(team_proposal(username or "", query.get("id", [""])[0]))
+                elif parsed.path == "/api/memory/team/decide":
+                    from magent.web_memory import team_decide
+
+                    body = self._body()
+                    result = team_decide(
+                        username or "",
+                        str(body.get("id", "")),
+                        str(body.get("decision", "")),
+                        reason=str(body.get("reason", "")),
+                    )
+                    self._json(result, status=200 if result.get("ok") else 409)
                 elif parsed.path == "/api/memory/overview":
                     from magent.web_memory import overview
 

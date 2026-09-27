@@ -67,6 +67,9 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "semantic_provider": "ollama",
         "semantic_model": "nomic-embed-text",
         "semantic_top_k": 8,
+        # Shared, review-gated team graph (magent memory team ...). Recall
+        # reads the local clone's reviewed nodes only; false turns it off.
+        "team": {"name": "team", "recall": True},
     },
     "context": {
         "compact_every_n_turns": 10,

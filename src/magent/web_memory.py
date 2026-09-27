@@ -157,8 +157,14 @@ def create(username: str, payload: dict[str, Any]) -> dict[str, Any]:
     if manager.read_node(node_id):
         return {"ok": False, "error": f"A memory node called {node_id} already exists."}
     written = manager.write_memories(
-        [{"id": node_id, "type": str(payload.get("type") or "fact"), "body": body,
-          "links": list(payload.get("links") or [])}]
+        [
+            {
+                "id": node_id,
+                "type": str(payload.get("type") or "fact"),
+                "body": body,
+                "links": list(payload.get("links") or []),
+            }
+        ]
     )
     if not written:
         return {"ok": False, "error": "The memory store is unavailable or rejected the node."}
@@ -189,4 +195,58 @@ def delete(username: str, node_id: str) -> dict[str, Any]:
     if not node_id:
         return {"ok": False, "error": "A node id is required."}
     removed = _manager(username).delete_node(node_id)
-    return {"ok": removed, "id": node_id, **({} if removed else {"error": f"No memory node called {node_id}."})}
+    return {
+        "ok": removed,
+        "id": node_id,
+        **({} if removed else {"error": f"No memory node called {node_id}."}),
+    }
+
+
+def _team(username: str) -> Any:
+    from magent.config import load_config
+    from magent.team_memory import TeamMemory, team_settings
+
+    settings = team_settings(load_config(username or None))
+    return TeamMemory(username, name=str(settings.get("name") or "team"))
+
+
+def team_inbox(username: str) -> dict[str, Any]:
+    """Proposals waiting for review in the team graph (Web UI)."""
+    from magent.team_memory import TeamMemoryError
+
+    if not username:
+        return {"ok": False, "configured": False, "error": "No MagAgent user is active."}
+    team = _team(username)
+    if not team.configured:
+        return {
+            "ok": True,
+            "configured": False,
+            "proposals": [],
+            "note": "No team memory is set up. Run `magent memory team init <git-url-or-path>`.",
+        }
+    try:
+        return {"configured": True, "user": username, **team.inbox(), "status": team.status()}
+    except TeamMemoryError as error:
+        return {"ok": False, "configured": True, "proposals": [], "error": str(error)}
+
+
+def team_proposal(username: str, proposal_id: str) -> dict[str, Any]:
+    from magent.team_memory import TeamMemoryError
+
+    try:
+        return _team(username).show(proposal_id)
+    except TeamMemoryError as error:
+        return {"ok": False, "error": str(error)}
+
+
+def team_decide(
+    username: str, proposal_id: str, decision: str, *, reason: str = ""
+) -> dict[str, Any]:
+    from magent.team_memory import TeamMemoryError
+
+    if decision not in {"accept", "reject"}:
+        return {"ok": False, "error": "decision must be accept or reject"}
+    try:
+        return _team(username).decide(proposal_id, decision=decision, reason=reason)
+    except TeamMemoryError as error:
+        return {"ok": False, "error": str(error)}

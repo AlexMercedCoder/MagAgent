@@ -200,6 +200,7 @@ def _register_command_modules() -> None:
         "toplevel",
         "plans",
         "serve",
+        "team_memory",
         "workbench_cmds",
         "system_cmds",
         "models",

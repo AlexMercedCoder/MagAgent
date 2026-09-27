@@ -29,7 +29,7 @@ TURN_KEYS = {
     "truncated",
     "truncation",
 }
-NODE_KEYS = {"id", "type", "score", "matched", "reason"}
+NODE_KEYS = {"id", "type", "score", "matched", "reason", "source"}
 TOKEN_KEYS = {"recalled", "injected", "budget", "profile_reserve"}
 
 
@@ -122,6 +122,7 @@ def test_context_assembly_records_used_memory(monkeypatch) -> None:
         "score": 0.91,
         "matched": ["body"],
         "reason": "keyword",
+        "source": "personal",
     }
     runtime, logged = _context_runtime(monkeypatch, memory=_memory("memory text", [node]))
 

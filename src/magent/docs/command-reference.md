@@ -357,6 +357,16 @@ Generated from the active Typer command tree.
 - `magent memory stats`
 - `magent memory suppress`
 - `magent memory sync`
+- `magent memory team`
+- `magent memory team accept`
+- `magent memory team inbox`
+- `magent memory team init`
+- `magent memory team propose`
+- `magent memory team reject`
+- `magent memory team reviews`
+- `magent memory team show`
+- `magent memory team status`
+- `magent memory team sync`
 - `magent memory traverse`
 - `magent memory ui`
 - `magent memory unsuppress`

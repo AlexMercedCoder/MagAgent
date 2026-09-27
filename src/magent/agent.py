@@ -204,6 +204,7 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
             semantic_model=config.semantic_memory_model,
             project_slug=self.project_slug,
         )
+        self.team_memory = _team_memory_manager(config, username, self.project_slug)
         self.repo_map = RepoMapCache(cwd)
         self.tools = ToolExecutor(
             cwd=cwd,
@@ -463,3 +464,29 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
             return
         self.profile, self.tools.allowed_tools, self.tools.permission_mode = restore
         self._turn_profile_restore = None
+
+
+def _team_memory_manager(config: Any, username: str, project_slug: str | None) -> Any:
+    """A read-only MemoryManager over the reviewed team graph, when one is set up."""
+    from magent.team_memory import NODES_DIR, TeamMemory, team_settings
+
+    settings = team_settings(config)
+    if settings.get("recall") is False:
+        return None
+    try:
+        team = TeamMemory(username, name=str(settings.get("name") or "team"))
+    except Exception:
+        return None
+    if not team.configured or not (team.root / NODES_DIR).is_dir():
+        return None
+    try:
+        return MemoryManager(
+            team.root / NODES_DIR,
+            min(1200, int(config.memory_budget_tokens)),
+            max_node_tokens=config.recall_body_tokens,
+            username=username,
+            project_slug=project_slug,
+            source="team",
+        )
+    except Exception:
+        return None

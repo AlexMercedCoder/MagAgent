@@ -123,3 +123,33 @@ magent memory evidence <task-id> --json
 
 The Web UI run center shows the same data in its "Memory used" panel, and
 `magent ask --json` includes it as `memory_evidence`. Token counts are estimates.
+
+## Team memory (shared, review-gated)
+
+A team graph is a Git repository of MagGraph nodes that several people share. Nothing reaches
+its `main` branch without review:
+
+```bash
+magent memory team init --create /shared/team-memory.git   # or: init git@host:acme/team-memory.git
+magent memory team propose deploy_window -m "Release conventions"
+magent memory team inbox             # proposals waiting for review
+magent memory team show <id>         # node diff plus automatic checks
+magent memory team accept <id>       # merge (a teammate; not the author)
+magent memory team reject <id> --reason "..."
+magent memory team sync              # pull reviewed nodes
+magent memory team reviews           # the REVIEWS.jsonl audit trail
+```
+
+- A proposal is a branch `proposals/<user>/<id>` holding copies of your personal nodes.
+- Automatic checks block nodes without MagGraph front matter (`id`, `type`), nodes over 64 KiB
+  and nodes that look like they contain secrets.
+- The author cannot accept their own proposal unless they pass `--allow-self-review` (for a
+  one-person team). Accepts merge with `--no-ff`; accepts and rejects are both appended to
+  `REVIEWS.jsonl` on `main`.
+- Your clone lives in `~/.config/magent/users/<user>/team/<name>/`. Sessions also recall from its
+  reviewed nodes (turn this off with `memory.team.recall = false`); memory evidence marks those
+  nodes `source: team`, and the prompt labels them as team memory.
+- The Web UI Memory page has a **Team review** panel with the same inbox, diff, checks and
+  accept/reject.
+- Identity is your MagAgent user name, written as the Git author. It is not authentication:
+  access to the Git remote decides who can propose and review.

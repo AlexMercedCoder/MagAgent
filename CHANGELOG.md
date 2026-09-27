@@ -86,6 +86,14 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   permission prompts are still asked one at a time.
 - **Edit-quality benchmark (G-10).** `magent eval edit-quality [--json] [--report-out]` scores
   the real `edit_file` tool on 13 fixed edits by the exact bytes left on disk; it runs in CI.
+- **Team memory with review-gated merge (Phase 6).** `magent memory team init|status|sync|
+  propose|inbox|show|accept|reject|reviews` shares MagGraph nodes through a Git repository
+  (hosted, or a bare repository on a shared drive via `--create`). Nodes arrive only as proposal
+  branches that pass automatic checks (front matter, size, no secrets) and are accepted by
+  someone other than the author; every decision is appended to `REVIEWS.jsonl`. Sessions recall
+  reviewed team nodes too (`memory.team.recall`), and memory evidence now carries a `source`
+  (`personal` or `team`) per node. The Web UI Memory page gains a Team review panel. No MagGraph
+  change was needed: the team clone is an ordinary MagGraph directory.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the

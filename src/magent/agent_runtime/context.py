@@ -107,6 +107,33 @@ class ContextRuntimeMixin:
                     "profile_truncated": recalled != before,
                 }
                 memory_context = f"## Your Memory (what you know about this user)\n\n{recalled}\n"
+            team = getattr(self, "team_memory", None)
+            if team is not None and getattr(team, "available", False):
+                team_recalled = team.recall(user_message)
+                if team_recalled:
+                    team_evidence = dict(getattr(team, "last_recall_evidence", {}) or {})
+                    memory_context += (
+                        "## Team Memory (reviewed and shared by your team)\n\n"
+                        f"{team_recalled}\n"
+                    )
+                    recall = dict(evidence.get("recall") or {})
+                    recall["nodes"] = [
+                        *recall.get("nodes", []),
+                        *team_evidence.get("nodes", []),
+                    ]
+                    recall["tokens"] = int(recall.get("tokens", 0) or 0) + int(
+                        team_evidence.get("tokens", 0) or 0
+                    )
+                    recall["truncated"] = bool(recall.get("truncated")) or bool(
+                        team_evidence.get("truncated")
+                    )
+                    evidence = {
+                        "status": "used",
+                        "recall": recall,
+                        "injected_tokens": int(evidence.get("injected_tokens", 0) or 0)
+                        + estimate_tokens(team_recalled),
+                        "profile_truncated": bool(evidence.get("profile_truncated")),
+                    }
         self._record_memory_evidence(
             user_message,
             budget_tokens=memory_budget,

@@ -65,7 +65,7 @@ def _empty_recall_evidence(budget_tokens: int) -> dict[str, Any]:
     return {"nodes": [], "tokens": 0, "budget_tokens": budget_tokens, "truncated": False}
 
 
-def _recall_node_evidence(anchor: dict[str, Any]) -> dict[str, Any]:
+def _recall_node_evidence(anchor: dict[str, Any], source: str = "personal") -> dict[str, Any]:
     """Compact, JSON-safe description of one recalled anchor node."""
     score = anchor.get("score")
     try:
@@ -79,6 +79,7 @@ def _recall_node_evidence(anchor: dict[str, Any]) -> dict[str, Any]:
         "score": numeric,
         "matched": [str(item) for item in matched] if isinstance(matched, list) else [str(matched)],
         "reason": str(anchor.get("reason") or ""),
+        "source": source,
     }
 
 
@@ -95,8 +96,11 @@ class MemoryManager:
         semantic_provider: str = "ollama",
         semantic_model: str = "nomic-embed-text",
         project_slug: str | None = None,
+        source: str = "personal",
     ):
         self.memory_dir = memory_dir
+        # "personal", or "team" for a reviewed team graph (see team_memory).
+        self.source = source
         self.budget_tokens = budget_tokens
         self.max_node_tokens = max_node_tokens
         self.username = username
@@ -165,7 +169,7 @@ class MemoryManager:
             "budget": self.budget_tokens,
         }
         self.last_recall_evidence = {
-            "nodes": [_recall_node_evidence(anchor) for anchor in anchors],
+            "nodes": [_recall_node_evidence(anchor, self.source) for anchor in anchors],
             "tokens": tokens,
             "budget_tokens": self.budget_tokens,
             "truncated": RECALL_TRUNCATION_MARKER in rendered,
