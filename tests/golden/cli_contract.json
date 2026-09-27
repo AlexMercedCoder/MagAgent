@@ -13183,6 +13183,90 @@
       ],
       "short_help": ""
      },
+     "ping": {
+      "help": "One tiny completion to prove a provider's key, endpoint and model work.\n\nCosts at most 16 output tokens. It does not exercise tools or streaming,\nso it refreshes evidence but is not a qualification run.\n\nExamples: `magent provider ping openai`, `magent provider ping anthropic --json`.",
+      "hidden": false,
+      "panel": null,
+      "params": [
+       {
+        "default": null,
+        "help": "Provider id, e.g. openai.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "argument",
+        "multiple": false,
+        "name": "provider_id",
+        "nargs": 1,
+        "opts": [
+         "provider_id"
+        ],
+        "required": true,
+        "type": "str"
+       },
+       {
+        "default": "",
+        "help": "Model (default: catalog default).",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "model",
+        "nargs": 1,
+        "opts": [
+         "--model",
+         "-m"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": 16,
+        "help": "",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "max_tokens",
+        "nargs": 1,
+        "opts": [
+         "--max-tokens"
+        ],
+        "required": false,
+        "type": "int range"
+       },
+       {
+        "default": "",
+        "help": "Append the result to this JSON report.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "record",
+        "nargs": 1,
+        "opts": [
+         "--record"
+        ],
+        "required": false,
+        "type": "str"
+       },
+       {
+        "default": false,
+        "help": "Emit JSON.",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "json_output",
+        "nargs": 1,
+        "opts": [
+         "--json"
+        ],
+        "required": false,
+        "type": "boolean"
+       }
+      ],
+      "short_help": ""
+     },
      "recommend": {
       "help": "Recommend providers for coding, review, cheap, local, memory, or research.",
       "hidden": false,
@@ -13588,6 +13672,7 @@
      "catalog-doctor",
      "support-report",
      "test-matrix",
+     "ping",
      "conformance",
      "models",
      "recommend-model",

@@ -73,6 +73,11 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   cancelling mid-tool through the RPC gateway (the tool's child process is verified gone). They
   drive the real CLI with the `mock` provider's new scripted mode: `MAGENT_MOCK_SCRIPT` points at
   a JSON list of tool-call and content steps.
+- **`magent provider ping` (G-9).** One completion of at most 16 tokens proves a provider's key,
+  endpoint and model; `--record` appends the result to a report. On 2026-09-27 OpenAI (`gpt-5`)
+  and Anthropic (`claude-sonnet-5`) passed (`docs/reports/2026-09-27-provider-connectivity.json`)
+  and their evidence date moved; both stay `compatible` because tools and streaming were not
+  re-qualified. Ollama was not running on the check machine, so it was not refreshed.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the

@@ -7,8 +7,8 @@ Generated from `magent.provider_catalog`.
 | OpenCode Go | `opencode-go` | `deepseek-v4-flash` | subscription | `OPENCODE_GO_KEY` | openai-compatible | compatible | 2026-08-11 |
 | Ollama (local) | `ollama` | `qwen2.5-coder:32b` | local |  | ollama | compatible | 2026-08-11 |
 | LM Studio (local) | `lmstudio` | `local-model` | local |  | openai-compatible | compatible | 2026-08-11 |
-| OpenAI | `openai` | `gpt-5` | api | `OPENAI_API_KEY` | openai | compatible | 2026-08-11 |
-| Anthropic | `anthropic` | `claude-sonnet-5` | api | `ANTHROPIC_API_KEY` | anthropic | compatible | 2026-08-11 |
+| OpenAI | `openai` | `gpt-5` | api | `OPENAI_API_KEY` | openai | compatible | 2026-09-27 |
+| Anthropic | `anthropic` | `claude-sonnet-5` | api | `ANTHROPIC_API_KEY` | anthropic | compatible | 2026-09-27 |
 | Nous Portal | `nous-portal` | `deepseek/deepseek-v4-flash` | api | `NOUS_API_KEY` | openai-compatible | qualified | 2026-08-11 |
 | OpenCode Zen | `opencode-zen` | `deepseek-v4-flash` | payg | `OPENCODE_ZEN_KEY` | openai-compatible | compatible | 2026-08-11 |
 | Google Gemini | `google` | `gemini-3.6-flash` | api | `GEMINI_API_KEY` | gemini | compatible | 2026-08-11 |

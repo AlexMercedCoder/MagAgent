@@ -484,6 +484,7 @@ Generated from the active Typer command tree.
 - `magent provider list`
 - `magent provider matrix`
 - `magent provider models`
+- `magent provider ping`
 - `magent provider recommend`
 - `magent provider recommend-model`
 - `magent provider set`

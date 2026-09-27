@@ -275,6 +275,20 @@ PROVIDER_SUPPORT["nous-portal"] = {
     ],
     "limitations": ["Qualification applies to the tested model and account tier."],
 }
+# G-9: a one-call connectivity check (at most 16 output tokens) on 2026-09-27.
+# It proves key, endpoint and default model, so the evidence date moves; the
+# tier stays "compatible" because tools and streaming were not re-qualified.
+for _pinged in ("openai", "anthropic"):
+    PROVIDER_SUPPORT[_pinged] = {
+        "tier": "compatible",
+        "evidence_date": "2026-09-27",
+        "evidence_source": "docs/reports/2026-09-27-provider-connectivity.json",
+        "capabilities": ["completion", "streaming", "tools", "usage"],
+        "limitations": [
+            "2026-09-27 evidence is a connectivity check of the default model only; "
+            "tool use and streaming were last qualified on 2026-08-11.",
+        ],
+    }
 PROVIDER_SUPPORT["mock"] = {
     "tier": "experimental",
     "evidence_date": "2026-09-27",

@@ -1,0 +1,48 @@
+{
+  "schema": "magent.provider-connectivity.v1",
+  "checks": [
+    {
+      "schema": "magent.provider-ping.v1",
+      "provider": "openai",
+      "model": "gpt-5",
+      "checked_at": "2026-09-27T18:48:53.766508+00:00",
+      "max_tokens": 16,
+      "prompt": "Reply with the single word OK.",
+      "ok": true,
+      "latency_ms": 5157.1,
+      "finish_reason": "length",
+      "reply": "",
+      "usage": {
+        "prompt_tokens": 13,
+        "completion_tokens": 16
+      }
+    },
+    {
+      "schema": "magent.provider-ping.v1",
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "checked_at": "2026-09-27T18:48:59.774964+00:00",
+      "max_tokens": 16,
+      "prompt": "Reply with the single word OK.",
+      "ok": true,
+      "latency_ms": 3840.2,
+      "finish_reason": "stop",
+      "reply": "OK",
+      "usage": {
+        "prompt_tokens": 16,
+        "completion_tokens": 4
+      }
+    },
+    {
+      "schema": "magent.provider-ping.v1",
+      "provider": "ollama",
+      "model": "qwen2.5-coder:32b",
+      "checked_at": "2026-09-27T18:49:10.458964+00:00",
+      "max_tokens": 16,
+      "prompt": "Reply with the single word OK.",
+      "ok": false,
+      "latency_ms": 2362.4,
+      "error": "litellm.APIConnectionError: OllamaException - Cannot connect to host localhost:11434 ssl:<ssl.SSLContext object at 0x7dbb750e32f0> [Multiple exceptions: [Errno 111] Connect call failed ('::1', 11434, 0, 0), [Errno 111] Connect call failed ('127.0.0.1', 11434)]"
+    }
+  ]
+}

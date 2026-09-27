@@ -135,6 +135,50 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
             }
         )
 
+    @provider_app.command("ping")
+    def provider_ping_cmd(
+        provider_id: str = typer.Argument(..., help="Provider id, e.g. openai."),
+        model: str = typer.Option("", "--model", "-m", help="Model (default: catalog default)."),
+        max_tokens: int = typer.Option(16, "--max-tokens", min=1, max=16),
+        record: str = typer.Option("", "--record", help="Append the result to this JSON report."),
+        json_output: bool = typer.Option(False, "--json", help="Emit JSON."),
+    ) -> None:
+        """One tiny completion to prove a provider's key, endpoint and model work.
+
+        Costs at most 16 output tokens. It does not exercise tools or streaming,
+        so it refreshes evidence but is not a qualification run.
+
+        Examples: `magent provider ping openai`, `magent provider ping anthropic --json`.
+        """
+        from magent.cli.command_context import require_user
+        from magent.config import load_config
+        from magent.provider_catalog import canonical_provider_id
+        from magent.provider_ping import append_record, ping_provider
+
+        config = load_config(require_user())
+        result = ping_provider(config, canonical_provider_id(provider_id), model, max_tokens)
+        if record:
+            append_record(record, result)
+        if json_output:
+            console.print_json(data=result)
+        elif result["ok"]:
+            console.print(
+                f"[green]OK[/green] {result['provider']}/{result['model']} answered in "
+                f"{result['latency_ms']} ms ({result['usage']['completion_tokens']} tokens)"
+            )
+        else:
+            from magent.provider_catalog import provider_metadata
+
+            console.print(f"[red]Failed[/red] {result['provider']}: {result.get('error')}")
+            if provider_metadata(result["provider"]).get("local"):
+                console.print("[dim]Is the local server running and reachable at its base URL?[/dim]")
+            else:
+                console.print(
+                    "[dim]Check the key with `magent auth list` and `magent provider env`.[/dim]"
+                )
+        if not result["ok"]:
+            raise typer.Exit(1)
+
     @provider_app.command("conformance")
     def provider_conformance_cmd(
         record: bool = typer.Option(False, "--record", help="Rewrite the recorded fixture."),
