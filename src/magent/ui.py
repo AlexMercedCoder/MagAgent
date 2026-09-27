@@ -1181,7 +1181,9 @@ def serve_ui(
                     self._json(approval_broker.recovery())
                 elif parsed.path == "/api/approvals/events":
                     after = _int_or(query.get("after", ["0"])[0], 0)
-                    self._json({"events": approval_broker.events_after(after)})
+                    # events plus gap/compacted_through/latest_sequence/store_id:
+                    # on a gap, resync from /api/approvals/snapshot.
+                    self._json(approval_broker.events_page(after))
                 elif parsed.path == "/api/approvals/decide":
                     body = self._body()
                     try:

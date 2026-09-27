@@ -1,22 +1,29 @@
 """AAIS authority broker shared by every MagAgent execution surface.
 
 The broker is deliberately independent from HTTP, the terminal, and the graph
-runtime.  A presenter receives validated AAIS envelopes and sends a decision
+runtime. A presenter receives validated AAIS envelopes and sends a decision
 back here; this class remains the authority that persists, revalidates, and
 atomically resolves the exact action before the waiting tool may continue.
+
+Since 1.4 the durable state lives in the shared ``aais.store.FileApprovalStore``
+from ``agent-approval-interchange`` 0.2 (whole-transaction cross-process
+locking, PID-reuse-safe owner identity, bounded retention with explicit replay
+gaps, corruption quarantine). MagAgent keeps only its own policy on top:
+remembered grants, stored as a store extension and checked in the same
+transaction that would otherwise create a new request.
 """
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import hashlib
 import json
-import os
 import signal
 import sys
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -24,13 +31,14 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from aais import (
-    ApprovalStore,
-    ConflictError,
-    action_digest,
-    create_decision,
-    create_request,
-    validate,
+from aais import ConflictError, action_digest, validate
+from aais.store import (
+    FileApprovalStore,
+    RecoveryRequired,
+    RetentionPolicy,
+    StoreError,
+    StoreTransaction,
+    UnknownRequestError,
 )
 
 from magent.workbench_store import WorkbenchStore, WorkbenchStoreError
@@ -42,8 +50,12 @@ CurrentAction = Callable[[], Mapping[str, Any]]
 # D6: persistent grants expire after this many days unless configured
 # otherwise with ``permissions.grant_ttl_days`` (0 disables expiry).
 DEFAULT_GRANT_TTL_DAYS = 30
-EVENT_LOG_LIMIT = 1000
 GRANT_HIT_LIMIT = 1000
+LOCK_TIMEOUT_SECONDS = 30.0
+STATE_FILE = "aais-approvals.json"
+LEGACY_STATE_FILE = "aais_approvals.json"
+GRANTS = "grants"
+GRANT_HITS = "grant_hits"
 _GRANT_ACTOR = {"type": "policy", "authenticated_by": "authority"}
 
 
@@ -98,6 +110,19 @@ def grant_status(grant: Mapping[str, Any], now: datetime | None = None) -> str:
     return "active"
 
 
+def shell_action(command: str, *, project: str | Path = ".") -> Envelope:
+    """The exact AAIS action for running ``command`` in ``project``."""
+
+    return {
+        "kind": "tool.call",
+        "name": "shell.exec",
+        "summary": f"Run: {command}",
+        "arguments": {"command": command},
+        "working_directory": str(Path(project).resolve()),
+        "effects": ["Executes a local process in the selected project."],
+    }
+
+
 def legacy_action(description: str, *, project: str | Path = ".") -> Envelope:
     """Project the older description/tier callback into an exact AAIS action."""
 
@@ -122,6 +147,10 @@ def legacy_action(description: str, *, project: str | Path = ".") -> Envelope:
     }
 
 
+def _risk_level(tier: int) -> str:
+    return {0: "low", 1: "low", 2: "medium", 3: "high"}.get(int(tier), "high")
+
+
 @dataclass
 class _Waiter:
     envelope: Envelope
@@ -133,7 +162,7 @@ class _Waiter:
 class ApprovalBroker:
     """Durable, replay-safe AAIS authority for one MagAgent process."""
 
-    STORE_NAME = "aais_approvals"
+    STATE_FILE = STATE_FILE
 
     def __init__(
         self,
@@ -142,6 +171,7 @@ class ApprovalBroker:
         project: str | Path,
         stream: str = "magent.approvals",
         grant_ttl_days: int | None = None,
+        retention: RetentionPolicy | None = None,
     ) -> None:
         self.store = store
         self.project = str(Path(project).resolve())
@@ -151,40 +181,85 @@ class ApprovalBroker:
             if grant_ttl_days is None
             else max(0, int(grant_ttl_days))
         )
+        root = Path(store.root)
+        self.path = root / STATE_FILE
+        self.legacy_path = root / LEGACY_STATE_FILE
+        self.file = FileApprovalStore(
+            self.path,
+            stream=stream,
+            presenter_stream="magent.presenter",
+            retention=retention,
+            # Each write fsyncs the file and its directory. On a slow or busy
+            # disk a queue of writers can exceed the library's 10s default.
+            lock_timeout=LOCK_TIMEOUT_SECONDS,
+        )
         self._lock = threading.RLock()
         self._waiters: dict[str, _Waiter] = {}
         self._publishers: dict[str, Publisher] = {}
+        self._listeners: list[Callable[[Envelope], None]] = []
+        self._migrated = False
 
-    @staticmethod
-    def _empty() -> Envelope:
-        return {
-            "schema": "magent.aais-store.v1",
-            "sequence": 0,
-            "presenter_sequence": 0,
-            "pending": {},
-            "resolutions": {},
-            "decisions": {},
-            "grants": [],
-            "events": [],
-        }
+    # ------------------------------------------------------------- plumbing
 
-    def _state(self) -> Envelope:
-        state = self.store.read(self.STORE_NAME, self._empty(), strict=True)
-        if (
-            not isinstance(state, dict)
-            or state.get("schema") != self._empty()["schema"]
-            or any(
-                key not in state or not isinstance(state[key], type(default))
-                for key, default in self._empty().items()
-            )
-        ):
-            raise WorkbenchStoreError("Invalid approval state; explicit recovery is required")
-        return state
+    def _migrate(self) -> None:
+        """Import the pre-1.4 ``aais_approvals.json`` once, then set it aside."""
 
-    def _next_sequence(self, state: Envelope, key: str = "sequence") -> int:
-        value = int(state.get(key, 0)) + 1
-        state[key] = value
-        return value
+        if self._migrated:
+            return
+        if self.legacy_path.exists() and not self.path.exists():
+            try:
+                legacy = json.loads(self.legacy_path.read_text(encoding="utf-8"))
+                if not isinstance(legacy, dict) or legacy.get("schema") != "magent.aais-store.v1":
+                    raise ValueError("unrecognized legacy approval state")
+            except (OSError, ValueError) as error:
+                raise WorkbenchStoreError(
+                    f"Invalid approval state in {self.legacy_path}: {error}. "
+                    "Explicit recovery is required; the file was left untouched."
+                ) from error
+            with suppress(StoreError):  # another process imported it first
+                self.file.import_legacy_state(legacy)
+            stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+            with suppress(OSError):
+                self.legacy_path.replace(
+                    self.legacy_path.with_name(f"{LEGACY_STATE_FILE}.migrated-{stamp}")
+                )
+        self._migrated = True
+
+    @contextlib.contextmanager
+    def transaction(self) -> Iterator[StoreTransaction]:
+        """A locked store transaction, with store errors reported MagAgent's way."""
+
+        self._migrate()
+        try:
+            with self.file.transaction() as tx:
+                yield tx
+        except RecoveryRequired as error:
+            raise WorkbenchStoreError(
+                f"Approval state needs recovery: {error.reason}. It was quarantined to "
+                f"{error.quarantined_to}; explicit recovery is required."
+            ) from error
+
+    def _read(self, call: Callable[[], Any]) -> Any:
+        self._migrate()
+        try:
+            return call()
+        except RecoveryRequired as error:
+            raise WorkbenchStoreError(
+                f"Approval state needs recovery: {error.reason}; explicit recovery is required."
+            ) from error
+
+    def add_listener(self, listener: Callable[[Envelope], None]) -> None:
+        """Receive every envelope this broker writes (used by the event bus)."""
+
+        self._listeners.append(listener)
+
+    def _notify(self, *envelopes: Envelope) -> None:
+        for envelope in envelopes:
+            for listener in list(self._listeners):
+                with suppress(Exception):
+                    listener(copy.deepcopy(envelope))
+
+    # ------------------------------------------------------------- requests
 
     def request_legacy(
         self,
@@ -201,7 +276,7 @@ class ApprovalBroker:
         return self.request(
             action,
             origin=origin,
-            risk_level={0: "low", 1: "low", 2: "medium", 3: "high"}.get(int(tier), "high"),
+            risk_level=_risk_level(tier),
             risk_reasons=[f"MagAgent permission tier {int(tier)} requires an explicit decision."],
             publish=publish,
             timeout=timeout,
@@ -222,10 +297,99 @@ class ApprovalBroker:
             return self.request_legacy(description, tier, **kwargs)
         return self.request(
             action,
-            risk_level={0: "low", 1: "low", 2: "medium", 3: "high"}.get(int(tier), "high"),
+            risk_level=_risk_level(tier),
             risk_reasons=[f"MagAgent permission tier {int(tier)} requires approval."],
             **kwargs,
         )
+
+    @staticmethod
+    def _choices(
+        digest: str, *, allow_session: bool, allow_persistent: bool
+    ) -> list[Mapping[str, Any]]:
+        choices: list[Mapping[str, Any]] = [{"decision": "approve", "scope": "once", "label": "Allow once"}]
+        if allow_session:
+            choices.append(
+                {
+                    "decision": "approve",
+                    "scope": "session",
+                    "label": "Allow this exact action for this session",
+                    "scope_constraints": {"action_digest": digest},
+                }
+            )
+        if allow_persistent:
+            choices.append(
+                {
+                    "decision": "approve",
+                    "scope": "persistent",
+                    "label": "Always allow this exact action",
+                    "scope_constraints": {"action_digest": digest},
+                }
+            )
+        choices.append({"decision": "deny", "scope": "once", "label": "Deny"})
+        return choices
+
+    def _origin(self, origin: Mapping[str, Any]) -> Envelope:
+        merged: Envelope = {"harness": "magagent", "project": self.project, **dict(origin)}
+        merged["session_id"] = str(merged.get("session_id") or "magent-session")
+        return merged
+
+    def remembered_scope(
+        self,
+        action: Mapping[str, Any],
+        *,
+        origin: Mapping[str, Any],
+        risk_level: str = "medium",
+        risk_reasons: list[str] | None = None,
+    ) -> str | None:
+        """Return the scope of an active grant for ``action`` and receipt the hit.
+
+        Returns ``None`` (and writes nothing) when no active grant matches.
+        """
+
+        exact = copy.deepcopy(dict(action))
+        with self._lock, self.transaction() as tx:
+            written = self._use_grant_tx(
+                tx, exact, origin=origin, risk_level=risk_level, risk_reasons=risk_reasons or []
+            )
+        if written is None:
+            return None
+        scope, envelopes = written
+        self._notify(*envelopes)
+        return scope
+
+    def _use_grant_tx(
+        self,
+        tx: StoreTransaction,
+        action: Envelope,
+        *,
+        origin: Mapping[str, Any],
+        risk_level: str,
+        risk_reasons: list[str],
+    ) -> tuple[str, list[Envelope]] | None:
+        digest = action_digest(action)
+        session_id = str(origin.get("session_id") or "")
+        now = _now()
+        grants = tx.get_extension(GRANTS, []) or []
+        for grant in grants:
+            if (
+                isinstance(grant, dict)
+                and grant.get("action_digest") == digest
+                and grant.get("scope") in {"session", "persistent"}
+                and grant_status(grant, now) == "active"
+                and (grant.get("scope") == "persistent" or grant.get("session_id") == session_id)
+            ):
+                envelopes = self._record_grant_hit(
+                    tx,
+                    grants,
+                    grant,
+                    action,
+                    origin=origin,
+                    risk_level=risk_level,
+                    risk_reasons=risk_reasons,
+                    now=now,
+                )
+                return str(grant["scope"]), envelopes
+        return None
 
     def request(
         self,
@@ -242,108 +406,35 @@ class ApprovalBroker:
     ) -> str:
         exact_action = copy.deepcopy(dict(action))
         digest = action_digest(exact_action)
-        with self._lock, self.store.lock(self.STORE_NAME):
-            state = self._state()
-            session_id = str(origin.get("session_id") or "")
-            now = _now()
-            remembered = next(
-                (
-                    item
-                    for item in state.get("grants", [])
-                    if item.get("action_digest") == digest
-                    and item.get("scope") in {"session", "persistent"}
-                    and grant_status(item, now) == "active"
-                    and (item.get("scope") == "persistent" or item.get("session_id") == session_id)
-                ),
-                None,
+        with self._lock, self.transaction() as tx:
+            remembered = self._use_grant_tx(
+                tx, exact_action, origin=origin, risk_level=risk_level, risk_reasons=risk_reasons
             )
-            if remembered is not None:
-                self._record_grant_hit(
-                    state,
-                    remembered,
-                    exact_action,
-                    origin=origin,
-                    risk_level=risk_level,
-                    risk_reasons=risk_reasons,
-                    now=now,
+            if remembered is None:
+                envelope = tx.add_request(
+                    action=exact_action,
+                    origin=self._origin(origin),
+                    risk={"level": risk_level, "reasons": risk_reasons or ["Protected action."]},
+                    choices=self._choices(
+                        digest, allow_session=allow_session, allow_persistent=allow_persistent
+                    ),
+                    ttl=max(1.0, timeout),
                 )
-                self.store.write(self.STORE_NAME, state)
-                return str(remembered["scope"])
-            choices: list[Envelope] = [
-                {"decision": "approve", "scope": "once", "label": "Allow once"}
-            ]
-            if allow_session:
-                choices.append(
-                    {
-                        "decision": "approve",
-                        "scope": "session",
-                        "label": "Allow this exact action for this session",
-                        "scope_constraints": {"action_digest": digest},
-                    }
+                request_id = str(envelope["request"]["id"])
+                waiter = _Waiter(
+                    envelope=envelope,
+                    current_action=current_action or (lambda: exact_action),
+                    resolved=threading.Event(),
                 )
-            if allow_persistent:
-                choices.append(
-                    {
-                        "decision": "approve",
-                        "scope": "persistent",
-                        "label": "Always allow this exact action",
-                        "scope_constraints": {"action_digest": digest},
-                    }
-                )
-            choices.append({"decision": "deny", "scope": "once", "label": "Deny"})
-            created = _now()
-            envelope = create_request(
-                action=exact_action,
-                origin={
-                    "harness": "magagent",
-                    "project": self.project,
-                    **dict(origin),
-                },
-                risk={"level": risk_level, "reasons": risk_reasons or ["Protected action."]},
-                choices=choices,
-                sequence=self._next_sequence(state),
-                stream=self.stream,
-                created_at=_timestamp(created),
-                expires_at=_timestamp(created + timedelta(seconds=max(1.0, timeout))),
-            )
-            request_id = str(envelope["request"]["id"])
-            state.setdefault("pending", {})[request_id] = envelope
-            state.setdefault("owners", {})[request_id] = os.getpid()
-            self._append_events(state, envelope)
-            self.store.write(self.STORE_NAME, state)
-            waiter = _Waiter(
-                envelope=envelope,
-                current_action=current_action or (lambda: exact_action),
-                resolved=threading.Event(),
-            )
-            self._waiters[request_id] = waiter
-            self._publishers[request_id] = publish
+                self._waiters[request_id] = waiter
+                self._publishers[request_id] = publish
+        if remembered is not None:
+            self._notify(*remembered[1])
+            return remembered[0]
+        self._notify(envelope)
         publish(copy.deepcopy(envelope))
-        deadline = time.monotonic() + timeout
-        while not waiter.resolved.wait(min(0.1, max(0, deadline - time.monotonic()))):
-            with self._lock, self.store.lock(self.STORE_NAME):
-                durable = self._state().get("resolutions", {}).get(request_id)
-            if durable:
-                waiter.resolution = durable
-                publish(copy.deepcopy(durable))
-                break
-            if time.monotonic() >= deadline:
-                with suppress(ConflictError, ValueError):
-                    self.decide(
-                        request_id,
-                        decision="deny",
-                        scope="once",
-                        actor={
-                            "id": "magent.timeout",
-                            "type": "policy",
-                            "authenticated_by": "authority",
-                        },
-                    )
-                with self._lock, self.store.lock(self.STORE_NAME):
-                    waiter.resolution = self._state().get("resolutions", {}).get(request_id)
-                break
+        resolution = self._await(request_id, waiter, publish, timeout)
         with self._lock:
-            resolution = waiter.resolution
             self._waiters.pop(request_id, None)
             self._publishers.pop(request_id, None)
         if not resolution:
@@ -352,6 +443,42 @@ class ApprovalBroker:
         if body["outcome"] == "approved" and action_digest(waiter.current_action()) != digest:
             return "deny"
         return str(body.get("effective_scope", "deny")) if body["outcome"] == "approved" else "deny"
+
+    def _await(
+        self, request_id: str, waiter: _Waiter, publish: Publisher, timeout: float
+    ) -> Envelope | None:
+        """Wait for a decision from this process (event) or another one (the file)."""
+
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if waiter.resolved.is_set():
+                return waiter.resolution
+            if remaining <= 0:
+                break
+            durable = self._wait_durable(request_id, remaining, waiter.resolved)
+            if waiter.resolved.is_set():
+                return waiter.resolution
+            if durable is not None:
+                waiter.resolution = durable
+                self._notify(durable)
+                publish(copy.deepcopy(durable))
+                return durable
+        with suppress(ConflictError, ValueError, UnknownRequestError):
+            self.decide(
+                request_id,
+                decision="deny",
+                scope="once",
+                actor={"id": "magent.timeout", "type": "policy", "authenticated_by": "authority"},
+            )
+        return waiter.resolution or self._read(lambda: self.file.get_resolution(request_id))
+
+    def _wait_durable(
+        self, request_id: str, timeout: float, cancelled: threading.Event
+    ) -> Envelope | None:
+        return self._read(
+            lambda: self.file.wait_for_resolution(request_id, timeout=timeout, cancelled=cancelled)
+        )
 
     def decide(
         self,
@@ -364,77 +491,84 @@ class ApprovalBroker:
         reviewed_digest: str | None = None,
     ) -> Envelope:
         publisher: Publisher | None = None
-        waiter: _Waiter | None = None
-        with self._lock, self.store.lock(self.STORE_NAME):
-            state = self._state()
-            prior = state.get("resolutions", {}).get(request_id)
-            prior_decision = state.get("decisions", {}).get(request_id)
-            pending = state.get("pending", {}).get(request_id)
-            if prior is not None:
-                if prior_decision and (
-                    prior_decision["decision"]["decision"],
-                    prior_decision["decision"]["scope"],
-                ) == (decision, scope):
-                    return copy.deepcopy(prior)
-                raise ConflictError(f"request {request_id} was already resolved")
-            if pending is None:
-                raise ValueError(f"unknown pending approval: {request_id}")
-            if (
-                reviewed_digest is not None
-                and reviewed_digest != pending["request"]["action_digest"]
-            ):
-                raise ConflictError("Decision digest does not match the reviewed action")
-            owner = state.get("owners", {}).get(request_id)
-            if decision == "approve" and owner is not None and not self._owner_alive(owner):
-                raise ConflictError(
-                    "The issuing process stopped; inspect recovery before starting new work"
-                )
-            decided = create_decision(
-                pending,
-                decision=decision,
-                scope=scope,
-                actor=dict(actor),
-                sequence=self._next_sequence(state, "presenter_sequence"),
-                stream="magent.presenter",
-                decision_id=decision_id,
-            )
+        with self._lock:
             waiter = self._waiters.get(request_id)
-            current = waiter.current_action() if waiter else pending["request"]["action"]
-            machine = ApprovalStore()
-            machine.add(pending)
-            resolution = machine.decide(
-                decided,
-                current_action=current,
-                sequence=self._next_sequence(state),
-            )
-            state.setdefault("pending", {}).pop(request_id, None)
-            state.setdefault("decisions", {})[request_id] = decided
-            state.setdefault("resolutions", {})[request_id] = resolution
-            self._append_events(state, resolution)
-            if resolution["resolution"]["outcome"] == "approved" and scope in {
-                "session",
-                "persistent",
-            }:
-                state.setdefault("grants", []).append(
-                    self._new_grant(pending, scope, resolution, actor=actor)
+            with self.transaction() as tx:
+                pending = tx.get_pending(request_id)
+                current = waiter.current_action() if waiter and pending else None
+                resolution = tx.decide(
+                    request_id,
+                    decision=decision,
+                    scope=scope,
+                    actor=dict(actor),
+                    decision_id=decision_id,
+                    reviewed_digest=reviewed_digest,
+                    current_action=current,
                 )
-            self.store.write(self.STORE_NAME, state)
+                if (
+                    pending is not None
+                    and resolution["resolution"]["outcome"] == "approved"
+                    and scope in {"session", "persistent"}
+                ):
+                    grants = tx.get_extension(GRANTS, []) or []
+                    grants.append(self._new_grant(pending, scope, resolution, actor=actor))
+                    tx.set_extension(GRANTS, grants)
             publisher = self._publishers.get(request_id)
-            if waiter:
+            if waiter and pending is not None:
                 waiter.resolution = resolution
-        if publisher:
+        if pending is not None:
+            self._notify(resolution)
+        if publisher and pending is not None:
             publisher(copy.deepcopy(resolution))
         if waiter:
             waiter.resolved.set()
         return copy.deepcopy(resolution)
 
-    # ------------------------------------------------------------------ grants
+    def record_local_decision(
+        self,
+        action: Mapping[str, Any],
+        *,
+        origin: Mapping[str, Any],
+        decision: str,
+        scope: str,
+        actor: Mapping[str, Any],
+        risk_level: str = "medium",
+        risk_reasons: list[str] | None = None,
+        allow_persistent: bool = True,
+    ) -> Envelope:
+        """Record a decision a local presenter (the terminal) already collected.
 
-    @staticmethod
-    def _append_events(state: Envelope, *envelopes: Envelope) -> None:
-        events = state.setdefault("events", [])
-        events.extend(envelopes)
-        state["events"] = events[-EVENT_LOG_LIMIT:]
+        The request and its decision are written in one transaction, so the
+        approval log shows the terminal answer like any other, and a
+        session/persistent approval becomes a grant with the same expiry,
+        listing, revocation and receipts as broker-mediated grants.
+        """
+
+        exact = copy.deepcopy(dict(action))
+        digest = action_digest(exact)
+        with self._lock, self.transaction() as tx:
+            requested = tx.add_request(
+                action=exact,
+                origin=self._origin(origin),
+                risk={"level": risk_level, "reasons": risk_reasons or ["Protected action."]},
+                choices=self._choices(
+                    digest, allow_session=True, allow_persistent=allow_persistent
+                ),
+            )
+            request_id = str(requested["request"]["id"])
+            pending = tx.get_pending(request_id)
+            resolution = tx.decide(request_id, decision=decision, scope=scope, actor=dict(actor))
+            if resolution["resolution"]["outcome"] == "approved" and scope in {
+                "session",
+                "persistent",
+            }:
+                grants = tx.get_extension(GRANTS, []) or []
+                grants.append(self._new_grant(pending or requested, scope, resolution, actor=actor))
+                tx.set_extension(GRANTS, grants)
+        self._notify(requested, resolution)
+        return copy.deepcopy(resolution)
+
+    # ------------------------------------------------------------------ grants
 
     def _new_grant(
         self,
@@ -457,6 +591,7 @@ class ApprovalBroker:
             "action_name": str(action.get("name") or ""),
             "action_summary": str(action.get("summary") or ""),
             "granted_by": str(actor.get("id") or ""),
+            "source": str(actor.get("authenticated_by") or ""),
             "hits": 0,
         }
         if scope == "persistent" and self.grant_ttl_days > 0:
@@ -466,7 +601,8 @@ class ApprovalBroker:
 
     def _record_grant_hit(
         self,
-        state: Envelope,
+        tx: StoreTransaction,
+        grants: list[Any],
         grant: Envelope,
         action: Envelope,
         *,
@@ -474,26 +610,20 @@ class ApprovalBroker:
         risk_level: str,
         risk_reasons: list[str],
         now: datetime,
-    ) -> Envelope:
+    ) -> list[Envelope]:
         """Write an AAIS receipt for an action a remembered grant approved.
 
-        A grant hit used to return silently, so the audit trail showed nothing
-        for every repeat of a remembered action. The hit is now recorded as a
-        complete requested/decided/resolved exchange whose decision actor is
-        the grant itself, plus a compact entry in ``grant_hits``.
+        The hit is a complete requested/decided/resolved exchange whose decision
+        actor is the grant itself, plus a compact ``grant_hits`` entry.
         """
 
         grant_id = grant_id_for(grant)
         scope = str(grant["scope"])
         digest = str(grant["action_digest"])
         stamp = _timestamp(now)
-        requested = create_request(
+        requested = tx.add_request(
             action=action,
-            origin={
-                "harness": "magagent",
-                "project": self.project,
-                **dict(origin),
-            },
+            origin=self._origin(origin),
             risk={"level": risk_level, "reasons": risk_reasons or ["Protected action."]},
             choices=[
                 {
@@ -504,47 +634,38 @@ class ApprovalBroker:
                 },
                 {"decision": "deny", "scope": "once", "label": "Deny"},
             ],
-            sequence=self._next_sequence(state),
-            stream=self.stream,
             created_at=stamp,
         )
-        decided = create_decision(
-            requested,
+        request_id = str(requested["request"]["id"])
+        resolution = tx.decide(
+            request_id,
             decision="approve",
             scope=scope,
             actor={"id": f"magent.grant:{grant_id}", **_GRANT_ACTOR},
-            sequence=self._next_sequence(state, "presenter_sequence"),
-            stream="magent.grants",
-            decided_at=stamp,
+            current_action=action,
         )
-        machine = ApprovalStore()
-        machine.add(requested)
-        resolution = machine.decide(
-            decided, now=now, current_action=action, sequence=self._next_sequence(state)
-        )
-        request_id = str(requested["request"]["id"])
-        state.setdefault("decisions", {})[request_id] = decided
-        state.setdefault("resolutions", {})[request_id] = resolution
-        self._append_events(state, requested, resolution)
         grant["id"] = grant_id
         grant["hits"] = int(grant.get("hits", 0) or 0) + 1
         grant["last_used_at"] = stamp
-        receipt = {
-            "grant_id": grant_id,
-            "request_id": request_id,
-            "resolution_id": resolution["resolution"]["id"],
-            "action_digest": digest,
-            "scope": scope,
-            "session_id": str(origin.get("session_id") or ""),
-            "occurred_at": stamp,
-        }
-        hits = state.setdefault("grant_hits", [])
-        hits.append(receipt)
-        state["grant_hits"] = hits[-GRANT_HIT_LIMIT:]
-        return receipt
+        tx.set_extension(GRANTS, grants)
+        hits = tx.get_extension(GRANT_HITS, []) or []
+        hits.append(
+            {
+                "grant_id": grant_id,
+                "request_id": request_id,
+                "resolution_id": resolution["resolution"]["id"],
+                "action_digest": digest,
+                "scope": scope,
+                "session_id": str(origin.get("session_id") or ""),
+                "occurred_at": stamp,
+            }
+        )
+        tx.set_extension(GRANT_HITS, hits[-GRANT_HIT_LIMIT:])
+        return [requested, resolution]
 
-    def _action_details(self, state: Envelope, digest: str) -> Envelope:
-        for event in reversed(state.get("events", [])):
+    @staticmethod
+    def _action_details(events: list[Envelope], digest: str) -> Envelope:
+        for event in reversed(events):
             request = event.get("request") if isinstance(event, dict) else None
             if isinstance(request, dict) and request.get("action_digest") == digest:
                 action = request.get("action", {})
@@ -557,11 +678,11 @@ class ApprovalBroker:
     def list_grants(self, *, include_inactive: bool = True) -> list[Envelope]:
         """Return remembered grants with status, expiry and legacy flags."""
 
-        with self._lock, self.store.lock(self.STORE_NAME):
-            state = self._state()
+        grants = self._read(lambda: self.file.get_extension(GRANTS, [])) or []
+        events: list[Envelope] | None = None
         now = _now()
         rows: list[Envelope] = []
-        for grant in state.get("grants", []):
+        for grant in grants:
             if not isinstance(grant, dict):
                 continue
             status = grant_status(grant, now)
@@ -573,9 +694,11 @@ class ApprovalBroker:
                 "action_summary": grant.get("action_summary", ""),
             }
             if legacy or not details["action_summary"]:
+                if events is None:
+                    events = self._read(lambda: self.file.events_after(0).events)
                 details = {
                     **details,
-                    **self._action_details(state, str(grant.get("action_digest"))),
+                    **self._action_details(events, str(grant.get("action_digest"))),
                 }
             row: Envelope = {
                 "id": grant_id_for(grant),
@@ -589,6 +712,7 @@ class ApprovalBroker:
                 "expires_at": grant.get("expires_at"),
                 "last_used_at": grant.get("last_used_at"),
                 "hits": int(grant.get("hits", 0) or 0),
+                "source": grant.get("source", "") or ("legacy" if legacy else ""),
                 "legacy": legacy,
             }
             if grant.get("revoked_at"):
@@ -615,14 +739,12 @@ class ApprovalBroker:
         wanted = {str(item) for item in grant_ids or []}
         stamp = _timestamp(_now())
         revoked: list[str] = []
-        with self._lock, self.store.lock(self.STORE_NAME):
-            state = self._state()
+        with self._lock, self.transaction() as tx:
+            grants = tx.get_extension(GRANTS, []) or []
             now = _now()
-            known = {
-                grant_id_for(item) for item in state.get("grants", []) if isinstance(item, dict)
-            }
+            known = {grant_id_for(item) for item in grants if isinstance(item, dict)}
             missing = sorted(wanted - known)
-            for grant in state.get("grants", []):
+            for grant in grants:
                 if not isinstance(grant, dict):
                     continue
                 status = grant_status(grant, now)
@@ -639,28 +761,28 @@ class ApprovalBroker:
                     grant["revoked_by"] = actor
                     revoked.append(identifier)
             if revoked:
-                self.store.write(self.STORE_NAME, state)
+                tx.set_extension(GRANTS, grants)
         return {"ok": not missing, "revoked": revoked, "missing": missing}
 
     def grant_hits(self, limit: int = 100) -> list[Envelope]:
-        with self._lock, self.store.lock(self.STORE_NAME):
-            hits = list(self._state().get("grant_hits", []))
+        hits = self._read(lambda: self.file.get_extension(GRANT_HITS, [])) or []
         return [copy.deepcopy(item) for item in hits[-max(1, limit) :]]
 
+    # ------------------------------------------------------------ lifecycle
+
     def cancel_owner(self, **origin: str) -> int:
-        snapshot = self.snapshot()
         matches = [
             request
-            for request in snapshot["snapshot"]["pending"]
+            for request in self._read(self.file.pending_requests)
             if all(
-                str(request.get("origin", {}).get(key, "")) == value
+                str(request.get("request", {}).get("origin", {}).get(key, "")) == value
                 for key, value in origin.items()
             )
         ]
         for request in matches:
             with suppress(ConflictError, ValueError):
                 self.decide(
-                    str(request["id"]),
+                    str(request["request"]["id"]),
                     decision="cancel",
                     scope="once",
                     actor={
@@ -690,44 +812,26 @@ class ApprovalBroker:
                 )
         return len(request_ids)
 
-    @staticmethod
-    def _owner_alive(pid: int | None) -> bool:
-        from magent.process_liveness import process_alive
-
-        return process_alive(pid)
-
     def recovery(self) -> Envelope:
-        with self._lock, self.store.lock(self.STORE_NAME):
-            state = self._state()
-            owners = state.get("owners", {})
-            return {
-                "orphaned": [
-                    key
-                    for key in state["pending"]
-                    if key in owners and not self._owner_alive(owners[key])
-                ],
-                "unknown_owner": [key for key in state["pending"] if key not in owners],
-                "receipts": list(state["resolutions"].values())[-100:],
-                "guidance": "Stopped owners are not restarted. Inspect completed effects before creating a new run.",
-            }
+        report = self._read(self.file.recovery).to_dict()
+        report["guidance"] = (
+            "Stopped owners are not restarted. Inspect completed effects before creating a new run."
+        )
+        return report
+
+    def cancel_orphaned(self) -> list[Envelope]:
+        return list(self._read(lambda: self.file.cancel_orphaned(actor_id="magent.recovery")))
 
     def snapshot(self) -> Envelope:
-        with self._lock:
-            state = self._state()
-            machine = ApprovalStore(last_sequence=int(state.get("sequence", 0)))
-            for key, envelope in state.get("pending", {}).items():
-                owner = state.get("owners", {}).get(key)
-                if owner is None or self._owner_alive(owner):
-                    machine.add(validate(envelope))
-            return machine.snapshot(stream=self.stream)
+        return dict(self._read(self.file.snapshot))
+
+    def events_page(self, sequence: int) -> Envelope:
+        """Replay with an explicit gap flag (resync from ``snapshot`` on a gap)."""
+
+        return dict(self._read(lambda: self.file.events_after(sequence)).to_dict())
 
     def events_after(self, sequence: int) -> list[Envelope]:
-        with self._lock:
-            return [
-                copy.deepcopy(item)
-                for item in self._state().get("events", [])
-                if int(item.get("sequence", 0)) > sequence
-            ]
+        return list(self.events_page(sequence)["events"])
 
 
 def start_stdio_broker(

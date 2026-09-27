@@ -67,7 +67,21 @@ def grant(broker: ApprovalBroker, scope: str, session: str = "s1") -> None:
 
 
 def _state(broker: ApprovalBroker) -> dict:
-    return broker.store.read(broker.STORE_NAME, {})
+    import json
+
+    return json.loads(broker.path.read_text())
+
+
+def _flat(broker: ApprovalBroker) -> dict:
+    """Store state with MagAgent's extensions lifted to the top level."""
+
+    state = _state(broker)
+    return {**state, **state.get("extensions", {})}
+
+
+def _set_grants(broker: ApprovalBroker, grants: list) -> None:
+    with broker.transaction() as tx:
+        tx.set_extension("grants", grants)
 
 
 def test_new_persistent_grant_expires_after_default_ttl(tmp_path: Path) -> None:
@@ -85,9 +99,9 @@ def test_new_persistent_grant_expires_after_default_ttl(tmp_path: Path) -> None:
 def test_expired_persistent_grant_asks_again(tmp_path: Path) -> None:
     broker = make_broker(tmp_path)
     grant(broker, "persistent")
-    state = _state(broker)
-    state["grants"][0]["expires_at"] = "2000-01-01T00:00:00Z"
-    broker.store.write(broker.STORE_NAME, state)
+    grants = _flat(broker)["grants"]
+    grants[0]["expires_at"] = "2000-01-01T00:00:00Z"
+    _set_grants(broker, grants)
     assert broker.list_grants()[0]["status"] == "expired"
 
     published: list[dict] = []
@@ -110,14 +124,14 @@ def test_session_grants_do_not_get_a_calendar_expiry(tmp_path: Path) -> None:
 def test_grant_hit_writes_receipt_and_events(tmp_path: Path) -> None:
     broker = make_broker(tmp_path)
     grant(broker, "persistent")
-    before = _state(broker)
+    before = _flat(broker)
     sequence = int(before["sequence"])
 
     assert _request(broker, "another-session", publish=lambda _e: pytest.fail("no prompt")) == (
         "persistent"
     )
 
-    state = _state(broker)
+    state = _flat(broker)
     [hit] = state["grant_hits"]
     grant_id = state["grants"][0]["id"]
     assert hit["grant_id"] == grant_id
@@ -167,9 +181,9 @@ def test_revoke_expired_and_all(tmp_path: Path) -> None:
     broker = make_broker(tmp_path)
     grant(broker, "session", session="s2")
     grant(broker, "persistent")
-    state = _state(broker)
-    state["grants"][1]["expires_at"] = "2000-01-01T00:00:00Z"
-    broker.store.write(broker.STORE_NAME, state)
+    grants = _flat(broker)["grants"]
+    grants[1]["expires_at"] = "2000-01-01T00:00:00Z"
+    _set_grants(broker, grants)
 
     expired = broker.revoke_grants(expired=True)
     assert len(expired["revoked"]) == 1
@@ -181,13 +195,12 @@ def test_revoke_expired_and_all(tmp_path: Path) -> None:
 def test_legacy_grants_are_grandfathered_and_flagged(tmp_path: Path) -> None:
     broker = make_broker(tmp_path)
     grant(broker, "persistent")
-    state = _state(broker)
+    state = _flat(broker)
     legacy = {
         key: state["grants"][0][key]
         for key in ("action_digest", "scope", "session_id", "created_at")
     }
-    state["grants"] = [legacy]
-    broker.store.write(broker.STORE_NAME, state)
+    _set_grants(broker, [legacy])
 
     [row] = broker.list_grants()
     assert row["legacy"] is True
@@ -199,7 +212,7 @@ def test_legacy_grants_are_grandfathered_and_flagged(tmp_path: Path) -> None:
     assert row["action_summary"] == ACTION["summary"]
     # Still honoured (grandfathered), and the hit is still receipted.
     assert _request(broker, "s9", publish=lambda _e: pytest.fail("no prompt")) == "persistent"
-    assert _state(broker)["grant_hits"][-1]["grant_id"] == row["id"]
+    assert _flat(broker)["grant_hits"][-1]["grant_id"] == row["id"]
     # Revocable by its derived id.
     assert broker.revoke_grants([row["id"]])["revoked"] == [row["id"]]
 
