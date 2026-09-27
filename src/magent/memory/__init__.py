@@ -86,6 +86,9 @@ def _recall_node_evidence(anchor: dict[str, Any], source: str = "personal") -> d
 class MemoryManager:
     """Manages a user's MagGraph knowledge graph."""
 
+    # Class default so instances built without __init__ still label evidence.
+    source = "personal"
+
     def __init__(
         self,
         memory_dir: Path,

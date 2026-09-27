@@ -284,7 +284,7 @@ def test_scripted_agent_task_runs_real_tool_loop_without_user_state(tmp_path: Pa
         ],
     }
 
-    result = run_agent_task(task, tmp_path, timeout_seconds=10)
+    result = run_agent_task(task, tmp_path, timeout_seconds=90)  # behaviour, not speed: 10s timed out on a loaded disk
 
     assert result["ok"] is True
     assert result["response"] == "Done"

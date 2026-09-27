@@ -8,7 +8,7 @@ export type MemoryEvidence = {
   status?: "used" | "no_match" | "unavailable" | "blocked_by_profile" | string;
   query_preview?: string;
   speaker?: string;
-  nodes?: { id: string; type?: string; score?: number | null; matched?: string[]; reason?: string }[];
+  nodes?: { id: string; type?: string; score?: number | null; matched?: string[]; reason?: string; source?: string }[];
   tokens?: { recalled?: number; injected?: number; budget?: number; profile_reserve?: number };
   truncated?: boolean;
   truncation?: string[];
@@ -162,7 +162,7 @@ export function MemoryUsedPanel({ sources }: { sources: EvidenceSource[] }) {
                               <tr key={node.id}>
                                 <td>
                                   <code>{node.id}</code>
-                                  {node.type && <small>{node.type}</small>}
+                                  {(node.type || node.source === "team") && <small>{[node.type, node.source === "team" ? "team memory" : ""].filter(Boolean).join(" · ")}</small>}
                                 </td>
                                 <td data-label="Score">{score(node.score)}</td>
                                 <td data-label="Matched">{(node.matched || []).join(", ") || node.reason || "graph search"}</td>
