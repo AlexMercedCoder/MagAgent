@@ -67,12 +67,22 @@ def _effective_shell_timeout(command: str, requested_timeout: int) -> int:
 
 
 async def _create_shell_process(command: str, cwd: str | Path) -> asyncio.subprocess.Process:
-    """Run shell syntax through bash when available so brace expansion behaves."""
+    """Run shell syntax through bash when available so brace expansion behaves.
+
+    This is a plain non-login, non-interactive shell. It used to be a login
+    shell (``bash -lc``), which re-sourced the user's profile for every
+    command: about 17x slower on a quiet machine, and anything the profile
+    printed landed in the command's stdout. That made results depend on the
+    host's dotfiles and on load. The command inherits MagAgent's own
+    environment, including PATH, so the profile adds nothing it needs.
+    """
     bash = shutil.which("bash")
     if bash:
         return await asyncio.create_subprocess_exec(
             bash,
-            "-lc",
+            "--noprofile",
+            "--norc",
+            "-c",
             command,
             cwd=cwd,
             stdout=asyncio.subprocess.PIPE,

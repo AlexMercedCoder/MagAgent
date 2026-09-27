@@ -478,6 +478,25 @@ async def test_run_shell_allows_quoted_html_in_read_only_validation(tmp_path: Pa
     assert result["stdout"] == "1\n1\n"
 
 
+@pytest.mark.asyncio
+async def test_run_shell_output_does_not_depend_on_login_profile(tmp_path: Path, monkeypatch) -> None:
+    """H-5: the quoted-HTML test above was flaky because every shell-syntax
+    command ran as a login shell and re-sourced the host's profile. Anything a
+    profile printed (or a slow profile under load) leaked into the result."""
+    home = tmp_path / "home"
+    home.mkdir()
+    for name in (".bash_profile", ".profile", ".bashrc"):
+        (home / name).write_text("echo PROFILE-NOISE\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    (tmp_path / "index.html").write_text("<section>x</section>\n", encoding="utf-8")
+    tools = ToolExecutor(str(tmp_path), permission_mode="silent", interactive_permissions=False)
+
+    result = await tools.run_shell("grep -c '<section' index.html && echo done")
+
+    assert result["ok"] is True
+    assert result["stdout"] == "1\ndone\n"
+
+
 def test_native_file_policy_ignores_quoted_and_escaped_angle_brackets() -> None:
     assert shell_module._shell_native_file_tool_guidance("grep -c '<section>' index.html") == ""
     assert shell_module._shell_native_file_tool_guidance('grep -c "</section>" index.html') == ""

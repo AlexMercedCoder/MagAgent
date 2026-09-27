@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import sqlite3
@@ -397,6 +398,7 @@ class TaskRuntime:
     @contextmanager
     def _connect(self, *, write: bool = False) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self.path, timeout=60)
+        _skip_checkpoint_on_close(connection)
         try:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys = ON")
@@ -487,6 +489,23 @@ class TaskRuntime:
             ),
         )
         return event
+
+
+def _skip_checkpoint_on_close(connection: sqlite3.Connection) -> None:
+    """Leave WAL checkpoints to SQLite's automatic threshold.
+
+    Every ledger operation opens and closes its own connection. Closing the
+    last connection to a WAL database runs a full checkpoint, which costs
+    extra fsyncs on every single event write; on a slow disk that dominated
+    task and graph latency. Commits are still durable (the WAL is synced on
+    commit) and the next connection recovers the WAL normally. Needs
+    Python 3.12+; older interpreters keep the default behaviour.
+    """
+    option = getattr(sqlite3, "SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE", None)
+    setconfig = getattr(connection, "setconfig", None)
+    if option is not None and setconfig is not None:
+        with contextlib.suppress(sqlite3.Error):
+            setconfig(option, True)
 
 
 def _task_from_row(row: sqlite3.Row) -> dict[str, Any]:

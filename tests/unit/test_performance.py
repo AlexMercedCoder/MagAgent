@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from magent import config as magent_config
 from magent import workbench
 from magent.performance import (
@@ -80,6 +82,7 @@ def test_performance_doctor_reports_local_state(tmp_path: Path, monkeypatch) -> 
     assert "load_global_config_ms" in result["timings_ms"]
 
 
+@pytest.mark.slow
 def test_task_runtime_benchmark_exercises_events_and_concurrency() -> None:
     result = _task_runtime_benchmark(25)
 

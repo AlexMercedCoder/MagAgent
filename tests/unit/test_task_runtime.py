@@ -88,6 +88,7 @@ def test_parent_child_filters_and_event_cursor(tmp_path: Path) -> None:
     assert [event["type"] for event in later] == ["progress"]
 
 
+@pytest.mark.slow
 def test_concurrent_event_writers_keep_a_single_ordered_stream(tmp_path: Path) -> None:
     runtime = TaskRuntime(tmp_path)
     task = runtime.create("ask", "Concurrent work", project=tmp_path)
@@ -180,3 +181,20 @@ def test_task_runtime_filters_noops_and_controls(tmp_path: Path) -> None:
 def test_task_runtime_json_fallback_handles_corrupt_values() -> None:
     assert _load_json("not-json", {"safe": True}) == {"safe": True}
     assert _load_json(None, []) == []  # type: ignore[arg-type]
+
+
+def test_ledger_connections_skip_checkpoint_on_close(tmp_path) -> None:
+    """H-5: every ledger call opens its own connection; a full WAL checkpoint
+    on each close multiplied fsyncs and dominated task latency on slow disks."""
+    import sqlite3
+
+    from magent.task_runtime import TaskRuntime
+
+    option = getattr(sqlite3, "SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE", None)
+    if option is None:
+        pytest.skip("sqlite3.Connection.setconfig needs Python 3.12+")
+    runtime = TaskRuntime(tmp_path)
+    with runtime._connect() as connection:
+        assert connection.getconfig(option) is True
+    task = runtime.create("ask", "durable")
+    assert TaskRuntime(tmp_path).get(task["id"])["title"] == "durable"

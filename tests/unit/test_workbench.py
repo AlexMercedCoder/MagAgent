@@ -3,6 +3,8 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from magent import workbench
 from magent.goal_orchestrator import (
     build_step_packet,
@@ -223,6 +225,7 @@ def test_orchestrated_step_packet_includes_prior_summaries(tmp_path: Path) -> No
     assert "Validation evidence" in packet
 
 
+@pytest.mark.slow
 def test_run_orchestrated_goal_uses_subagent_runner(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     (tmp_path / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
@@ -272,6 +275,7 @@ def test_run_orchestrated_goal_uses_subagent_runner(tmp_path: Path, monkeypatch)
     assert "MasterPlanCacheKey" in calls[1]["description"]
 
 
+@pytest.mark.slow
 def test_orchestrated_plan_preview_and_retry_resume(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = workbench.WorkbenchStore("alice")
@@ -333,6 +337,7 @@ def test_orchestrated_plan_preview_and_retry_resume(tmp_path: Path, monkeypatch)
     assert retry["orchestration"]["step_statuses"][1]["status"] == "completed"
 
 
+@pytest.mark.slow
 def test_orchestrated_runner_exception_blocks_durable_parent_and_child(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = workbench.WorkbenchStore("alice")

@@ -195,6 +195,14 @@ ignore_errors = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Tests marked `slow` (multi-minute graph, orchestration and SQLite-concurrency
+# runs) are skipped by default so a local run stays short. Run them with
+# `pytest -m slow`, or everything with `pytest -m "slow or not slow"`; CI runs
+# them in the separate "Slow tests and coverage" job.
+addopts = ["-m", "not slow"]
+markers = [
+    "slow: multi-minute end-to-end tests; excluded by default, run with -m slow",
+]
 pythonpath = ["src"]
 filterwarnings = [
     "error::ResourceWarning",

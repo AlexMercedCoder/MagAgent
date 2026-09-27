@@ -193,6 +193,7 @@ def test_cross_harness_minimal_golden_plan() -> None:
     assert list(plan.order) == golden["topological_order"]
 
 
+@pytest.mark.slow
 def test_generated_graph_completes_real_scheduler_execution(tmp_path: Path) -> None:
     generated, report = generate_and_validate(
         "Create a small verified project artifact", project=tmp_path
@@ -849,6 +850,7 @@ def test_success_criteria_modes_count_only_required_checks(tmp_path: Path) -> No
     assert not two_ok
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "path",
     sorted((ROOT / "docs/examples/agraph").glob("*.agraph.yaml")),

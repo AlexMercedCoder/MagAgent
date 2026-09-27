@@ -5,6 +5,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from magent.daemon import enqueue_task, list_queue, run_once
 from magent.task_runtime import TaskRuntime
 from magent.workbench_store import WorkbenchStore
@@ -25,6 +27,7 @@ CANCEL_BUDGET_SECONDS = 15
 STARTUP_GRACE_SECONDS = 60
 
 
+@pytest.mark.slow
 def test_running_daemon_process_observes_durable_cancellation(tmp_path: Path) -> None:
     store = _store(tmp_path)
     queued = enqueue_task(

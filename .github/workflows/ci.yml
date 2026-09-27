@@ -67,6 +67,8 @@ jobs:
 
       - name: Unit tests
         # -n auto: the suite is subprocess-heavy and parallelises well.
+        # Tests marked `slow` are excluded by pyproject addopts and run in the
+        # "Slow tests and coverage" job below.
         run: python -m pytest tests/unit -q -n auto
 
       - name: Immutable specification fixtures
@@ -146,10 +148,6 @@ jobs:
             performance-budget.json
           if-no-files-found: error
 
-      - name: Coverage
-        if: matrix.python-version == '3.12'
-        run: python -m pytest tests/unit tests/integration --cov=magent --cov-report=term-missing:skip-covered
-
       - name: Build package
         if: matrix.python-version == '3.12'
         run: python -m build
@@ -189,6 +187,25 @@ jobs:
           )
           raise SystemExit(0 if report["ok"] else 1)
           PY
+
+  slow-and-coverage:
+    # H-5: the multi-minute graph, orchestration and SQLite-concurrency tests
+    # run here, in parallel with the fast matrix, and the coverage floor is
+    # measured over the whole suite (slow tests included).
+    name: Slow tests and coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install package
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,full]"
+      - name: Slow tests
+        run: python -m pytest tests/unit -q -n auto -m slow
+      - name: Coverage (whole suite)
+        run: python -m pytest tests/unit tests/integration -q -n auto -m "slow or not slow" --cov=magent --cov-report=term-missing:skip-covered
 
   packaged-acceptance:
     name: Packaged acceptance (${{ matrix.os }})
