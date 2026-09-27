@@ -137,6 +137,7 @@ jobs:
           magent user create ci
           magent eval memory evals/memory-quality-v2.json --memory-dir evals/fixtures/memory-demo --project demo --report-out memory-quality.json
           magent performance budget --profile quick --project . --report-out performance-budget.json
+          magent eval edit-quality --report-out edit-quality.json
 
       - name: Upload security evidence
         if: always() && matrix.python-version == '3.12'
@@ -154,6 +155,7 @@ jobs:
           path: |
             memory-quality.json
             performance-budget.json
+            edit-quality.json
           if-no-files-found: error
 
       - name: Build package

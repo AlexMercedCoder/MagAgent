@@ -78,6 +78,14 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   and Anthropic (`claude-sonnet-5`) passed (`docs/reports/2026-09-27-provider-connectivity.json`)
   and their evidence date moved; both stay `compatible` because tools and streaming were not
   re-qualified. Ollama was not running on the check machine, so it was not refreshed.
+- **Parallel read-only tool calls (G-10).** When one model response asks for several read-only
+  tools in a row (`read_file`, `read_file_range`, `outline_file`, `list_dir`, `search_codebase`,
+  `diff_files`, `json_query`, `magent_docs_search`, `db_list_tables`, `db_schema`), they run
+  concurrently, at most `agent.max_parallel_read_tools` (default 4; 1 disables) at a time. Results
+  are still recorded in the model's order, reads never move across a write or shell call, and
+  permission prompts are still asked one at a time.
+- **Edit-quality benchmark (G-10).** `magent eval edit-quality [--json] [--report-out]` scores
+  the real `edit_file` tool on 13 fixed edits by the exact bytes left on disk; it runs in CI.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the
@@ -111,6 +119,11 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   task-runtime benchmark from about 70s to about 15s on a slow disk. Commits stay durable.
 
 ### Fixed
+
+- `edit_file` silently converted CRLF files to LF and rewrote non-UTF-8 files with replacement
+  characters. It now edits bytes, keeps a consistently CRLF file CRLF (an LF `old_str` still
+  matches), and refuses files that are not UTF-8. The edit-quality benchmark went from 10/13 to
+  13/13 (`docs/reports/2026-09-27-edit-quality.json`).
 
 - `magent recipe list --json` printed a table; it now prints JSON.
 

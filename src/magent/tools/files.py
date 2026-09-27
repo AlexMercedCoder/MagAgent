@@ -201,9 +201,29 @@ class FileToolsMixin:
         if not perm.approved:
             return self._permission_denied(perm)
         try:
-            # errors="replace" so a non-UTF-8 file reports a readable failure
-            # instead of raising out of the tool.
-            content = abs_path.read_text(encoding="utf-8", errors="replace")
+            # Bytes in, bytes out: read_text() translated CRLF to LF (so every
+            # CRLF file came back LF) and errors="replace" rewrote undecodable
+            # bytes as U+FFFD across the whole file. Both were silent damage.
+            raw = abs_path.read_bytes()
+            try:
+                content = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                return {
+                    "ok": False,
+                    "error": (
+                        f"{path} is not valid UTF-8, so edit_file will not rewrite it: the "
+                        "bytes it cannot decode would be corrupted. Replace the whole file with "
+                        "write_file only if that is intended."
+                    ),
+                }
+            crlf = "\r\n" in content and content.count("\r\n") == content.count("\n")
+            if crlf:
+                # Models write LF. In a consistently CRLF file, match and write
+                # CRLF so untouched and edited lines keep the file's convention.
+                if "\n" in old_str and "\r\n" not in old_str:
+                    old_str = old_str.replace("\n", "\r\n")
+                if "\n" in new_str and "\r\n" not in new_str:
+                    new_str = new_str.replace("\n", "\r\n")
             occurrences = content.count(old_str)
             if occurrences == 0:
                 return {"ok": False, "error": f"String not found in {path}"}
@@ -220,7 +240,7 @@ class FileToolsMixin:
                     "occurrences": occurrences,
                 }
             checkpoint_id = self._checkpoint(abs_path, "edit_file")
-            abs_path.write_text(content.replace(old_str, new_str, 1), encoding="utf-8")
+            abs_path.write_bytes(content.replace(old_str, new_str, 1).encode("utf-8"))
             return {"ok": True, "path": str(abs_path), "checkpoint_id": checkpoint_id}
         except Exception as e:
             return {"ok": False, "error": str(e)}

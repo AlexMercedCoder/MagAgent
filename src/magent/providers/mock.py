@@ -16,7 +16,8 @@ Scripted mode (for offline workflow fixtures and demos of tool use): point
 canned reply. The file is either a list of steps or
 ``{"scripts": [{"when": "substring of the last user message", "steps": [...]}],
 "default": [...]}``. A step is ``{"tool": name, "arguments": {...}}`` (one tool
-call) or ``{"content": "text"}`` (a final answer). The step played is the
+call), ``{"tools": [{"tool": ..., "arguments": ...}, ...]}`` (several calls in
+one response) or ``{"content": "text"}`` (a final answer). The step played is the
 number of assistant messages since the last user message, so the script is
 stateless and every agent (graph node, subagent) gets its own copy. Replies
 are still labelled as mock output.
@@ -144,8 +145,16 @@ def _usage(messages: list[dict[str, Any]], reply: str) -> dict[str, int]:
     }
 
 
-def _tool_call_id(messages: list[dict[str, Any]], step: dict[str, Any]) -> str:
-    seed = json.dumps([len(messages), step], sort_keys=True, default=str)
+def _step_calls(step: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if step is None:
+        return []
+    if step.get("tool"):
+        return [step]
+    return [item for item in step.get("tools") or [] if isinstance(item, dict) and item.get("tool")]
+
+
+def _tool_call_id(messages: list[dict[str, Any]], step: dict[str, Any], position: int = 0) -> str:
+    seed = json.dumps([len(messages), position, step], sort_keys=True, default=str)
     return "call_mock_" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
 
 
@@ -160,20 +169,23 @@ def _model_response(model: str, messages: list[dict[str, Any]]) -> Any:
     )
 
     step = scripted_step(messages)
-    if step is not None and step.get("tool"):
-        arguments = json.dumps(step.get("arguments") or {})
+    calls = _step_calls(step)
+    if calls:
         message = Message(
             role="assistant",
             content=None,
             tool_calls=[
                 ChatCompletionMessageToolCall(
-                    id=_tool_call_id(messages, step),
+                    id=_tool_call_id(messages, call, position),
                     type="function",
-                    function=Function(name=str(step["tool"]), arguments=arguments),
+                    function=Function(
+                        name=str(call["tool"]), arguments=json.dumps(call.get("arguments") or {})
+                    ),
                 )
+                for position, call in enumerate(calls)
             ],
         )
-        reply, finish = arguments, "tool_calls"
+        reply, finish = json.dumps(calls), "tool_calls"
     else:
         reply = str(step.get("content") or "") if step is not None else mock_reply(messages)
         message = Message(role="assistant", content=reply)
@@ -198,21 +210,24 @@ def _litellm_usage(usage_type: Any, counts: dict[str, int]) -> Any:
 
 def _chunks(messages: list[dict[str, Any]]) -> Iterator[dict[str, Any]]:
     step = scripted_step(messages)
-    if step is not None and step.get("tool"):
-        arguments = json.dumps(step.get("arguments") or {})
-        yield {
-            "text": "",
-            "is_finished": True,
-            "finish_reason": "tool_calls",
-            "usage": _usage(messages, arguments),
-            "index": 0,
-            "tool_use": {
-                "id": _tool_call_id(messages, step),
-                "type": "function",
-                "function": {"name": str(step["tool"]), "arguments": arguments},
+    calls = _step_calls(step)
+    if calls:
+        for position, call in enumerate(calls):
+            arguments = json.dumps(call.get("arguments") or {})
+            last = position == len(calls) - 1
+            yield {
+                "text": "",
+                "is_finished": last,
+                "finish_reason": "tool_calls" if last else None,
+                "usage": _usage(messages, arguments) if last else None,
                 "index": 0,
-            },
-        }
+                "tool_use": {
+                    "id": _tool_call_id(messages, call, position),
+                    "type": "function",
+                    "function": {"name": str(call["tool"]), "arguments": arguments},
+                    "index": position,
+                },
+            }
         return
     reply = str(step.get("content") or "") if step is not None else mock_reply(messages)
     words = reply.split(" ")

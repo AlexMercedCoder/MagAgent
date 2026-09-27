@@ -43,6 +43,23 @@ from magent.artifact_contracts import (
 from magent.hooks import run_hooks_async
 from magent.tools.registry import normalize_tool_activity, strip_tool_activity
 
+# Tools that only read local state, so several in a row may run at once (G-10).
+PARALLEL_READ_ONLY_TOOLS = frozenset(
+    {
+        "read_file",
+        "read_file_range",
+        "outline_file",
+        "list_dir",
+        "search_codebase",
+        "diff_files",
+        "json_query",
+        "magent_docs_search",
+        "db_list_tables",
+        "db_schema",
+    }
+)
+PARALLEL_READ_DEFAULT = 4
+
 
 class ToolLoopRuntimeMixin:
     config: Any
@@ -344,7 +361,12 @@ class ToolLoopRuntimeMixin:
             messages.append(_sanitize_message(message.model_dump()))
             total_tool_calls += len(message.tool_calls)
 
-            for tc in message.tool_calls:
+            # G-10: runs of consecutive read-only calls are prefetched
+            # concurrently (bounded); results are still consumed below in the
+            # model's order, so the transcript is identical to a serial run.
+            prefetched = await self._prefetch_read_only_calls(message.tool_calls)
+
+            for call_index, tc in enumerate(message.tool_calls):
                 tool_name = tc.function.name
                 try:
                     tool_args = json.loads(tc.function.arguments)
@@ -366,14 +388,17 @@ class ToolLoopRuntimeMixin:
                 if narrate and activity_label and self.tools.show_tool_calls:
                     console.print(f"[dim]    intent: {escape(activity_label)}[/dim]")
                 tool_started = time.monotonic()
-                result = await self._await_activity(
-                    self._execute_tool_call(tool_name, tool_args),
-                    label=tool_name,
-                    narrate=narrate,
-                    event_kind="tool",
-                    tool_name=tool_name,
-                    tool_args=tool_args,
-                )
+                if call_index in prefetched:
+                    result, tool_started = prefetched[call_index]
+                else:
+                    result = await self._await_activity(
+                        self._execute_tool_call(tool_name, tool_args),
+                        label=tool_name,
+                        narrate=narrate,
+                        event_kind="tool",
+                        tool_name=tool_name,
+                        tool_args=tool_args,
+                    )
                 result_str = self._compress_tool_result(tool_name, result)
                 tool_elapsed = self._log_timing(
                     f"tool.{tool_name}",
@@ -444,6 +469,75 @@ class ToolLoopRuntimeMixin:
                     self._prune_stale_tool_results(messages, tool_name, result)
 
         return "", messages, total_tool_calls  # unreachable
+
+    def _max_parallel_read_tools(self) -> int:
+        value = getattr(self.config, "max_parallel_read_tools", PARALLEL_READ_DEFAULT)
+        try:
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return PARALLEL_READ_DEFAULT
+
+    async def _prefetch_read_only_calls(
+        self, tool_calls: list[Any]
+    ) -> dict[int, tuple[dict[str, Any], float]]:
+        """Run each run of 2+ consecutive read-only calls concurrently.
+
+        Only tools in PARALLEL_READ_ONLY_TOOLS qualify, only when they sit next
+        to each other (a read after a write must see the write), and at most
+        ``agent.max_parallel_read_tools`` at a time. Any permission prompt a
+        read needs is synchronous, so prompts are still asked one at a time.
+        Returns {call index: (result, start time)}.
+        """
+        limit = self._max_parallel_read_tools()
+        if limit <= 1 or len(tool_calls) < 2:
+            return {}
+        parsed: list[tuple[str, dict[str, Any]] | None] = []
+        for tc in tool_calls:
+            name = str(getattr(tc.function, "name", "") or "")
+            try:
+                arguments = json.loads(tc.function.arguments)
+            except (TypeError, json.JSONDecodeError):
+                arguments = None
+            parsed.append(
+                (name, arguments)
+                if name in PARALLEL_READ_ONLY_TOOLS and isinstance(arguments, dict)
+                else None
+            )
+        segments: list[list[int]] = []
+        current: list[int] = []
+        for index, item in enumerate(parsed):
+            if item is None:
+                if len(current) > 1:
+                    segments.append(current)
+                current = []
+            else:
+                current.append(index)
+        if len(current) > 1:
+            segments.append(current)
+        if not segments:
+            return {}
+        semaphore = asyncio.Semaphore(limit)
+        results: dict[int, tuple[dict[str, Any], float]] = {}
+
+        async def run(index: int) -> None:
+            name, arguments = parsed[index]  # type: ignore[misc]
+            async with semaphore:
+                started = time.monotonic()
+                results[index] = (await self._execute_tool_call(name, arguments), started)
+
+        for segment in segments:
+            await asyncio.gather(*(run(index) for index in segment))
+        self.logger.log_activity_event(
+            activity_event(
+                "tool_progress",
+                turn=self.turn_count,
+                detail={
+                    "parallel_read_only": [len(segment) for segment in segments],
+                    "limit": limit,
+                },
+            )
+        )
+        return results
 
     async def _run_turn(
         self,

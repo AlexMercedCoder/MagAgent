@@ -1,0 +1,22 @@
+{
+  "schema": "magent.edit-quality-comparison.v1",
+  "date": "2026-09-27",
+  "command": "magent eval edit-quality --json",
+  "before": {
+    "version": "1.3.0 edit_file",
+    "passed": 10,
+    "total": 13,
+    "failed": [
+      "crlf-preserved",
+      "crlf-multiline-match",
+      "non-utf8-refused"
+    ]
+  },
+  "after": {
+    "version": "1.4.0 (unreleased) edit_file",
+    "passed": 13,
+    "total": 13,
+    "failed": []
+  },
+  "notes": "CRLF files were silently converted to LF; non-UTF-8 files were rewritten with U+FFFD replacement characters. Both fixed by editing bytes and refusing undecodable files."
+}

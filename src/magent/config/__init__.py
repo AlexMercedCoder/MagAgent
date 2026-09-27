@@ -42,6 +42,9 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "doom_loop_policy": "halt",
         "tool_use_enforcement": "auto",
         "file_mutation_verifier": True,
+        # Consecutive read-only tool calls in one model response run
+        # concurrently, up to this many at once (1 = always one at a time).
+        "max_parallel_read_tools": 4,
     },
     "defaults": {
         "provider": "ollama",
@@ -415,6 +418,13 @@ class Config:
     @property
     def max_model_rounds_per_turn(self) -> int:
         return int(self._global.get("agent", {}).get("max_model_rounds_per_turn", 16))
+
+    @property
+    def max_parallel_read_tools(self) -> int:
+        try:
+            return max(1, int(self._global.get("agent", {}).get("max_parallel_read_tools", 4)))
+        except (TypeError, ValueError):
+            return 4
 
     @property
     def max_tool_calls_per_turn(self) -> int:

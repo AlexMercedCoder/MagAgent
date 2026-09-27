@@ -3964,6 +3964,44 @@
    },
    "eval": {
     "commands": {
+     "edit-quality": {
+      "help": "Score the edit_file tool on fixed edits (offline, no model).\n\nChecks the exact bytes on disk: line endings, trailing newlines,\nencodings, ambiguous and missing matches. Exit 1 if any case fails.",
+      "hidden": false,
+      "panel": null,
+      "params": [
+       {
+        "default": false,
+        "help": "Emit the full JSON report.",
+        "hidden": false,
+        "is_flag": true,
+        "kind": "option",
+        "multiple": false,
+        "name": "json_output",
+        "nargs": 1,
+        "opts": [
+         "--json"
+        ],
+        "required": false,
+        "type": "boolean"
+       },
+       {
+        "default": "",
+        "help": "Also write the report here.",
+        "hidden": false,
+        "is_flag": false,
+        "kind": "option",
+        "multiple": false,
+        "name": "report_out",
+        "nargs": 1,
+        "opts": [
+         "--report-out"
+        ],
+        "required": false,
+        "type": "str"
+       }
+      ],
+      "short_help": ""
+     },
      "init": {
       "help": "Create a starter local eval suite.",
       "hidden": false,
@@ -4272,6 +4310,7 @@
      "list",
      "run",
      "report",
+     "edit-quality",
      "memory"
     ],
     "panel": "Code Intelligence & Testing",

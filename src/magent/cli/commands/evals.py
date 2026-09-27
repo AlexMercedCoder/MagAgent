@@ -91,6 +91,38 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
 
         console.print_json(data={"ok": True, "runs": eval_report(store(), limit=limit)})
 
+    @eval_app.command("edit-quality")
+    def eval_edit_quality_cmd(
+        json_output: bool = typer.Option(False, "--json", help="Emit the full JSON report."),
+        report_out: str = typer.Option("", "--report-out", help="Also write the report here."),
+    ) -> None:
+        """Score the edit_file tool on fixed edits (offline, no model).
+
+        Checks the exact bytes on disk: line endings, trailing newlines,
+        encodings, ambiguous and missing matches. Exit 1 if any case fails.
+        """
+        from rich.table import Table
+
+        from magent.edit_quality import run_edit_quality
+
+        report = run_edit_quality()
+        if report_out:
+            Path(report_out).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        if json_output:
+            console.print_json(data=report)
+        else:
+            table = Table("Case", "Result", "Detail")
+            for case in report["cases"]:
+                table.add_row(
+                    case["id"],
+                    "[green]pass[/green]" if case["passed"] else "[red]fail[/red]",
+                    "" if case["passed"] else (case["error"] or "bytes differ")[:80],
+                )
+            console.print(table)
+            console.print(f"Edit quality: {report['passed']}/{report['total']} ({report['score']:.0%})")
+        if not report["ok"]:
+            raise typer.Exit(1)
+
     @eval_app.command("memory")
     def eval_memory_cmd(
         suite: str = typer.Argument(..., help="Labeled memory eval JSON file."),

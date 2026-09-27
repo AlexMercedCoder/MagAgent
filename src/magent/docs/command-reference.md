@@ -221,6 +221,7 @@ Generated from the active Typer command tree.
 
 ## eval
 
+- `magent eval edit-quality`
 - `magent eval init`
 - `magent eval list`
 - `magent eval memory`

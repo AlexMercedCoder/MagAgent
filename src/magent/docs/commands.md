@@ -133,6 +133,7 @@ Important command paths:
 - `magent model image-wizard`: interactively set the image_maker role and provider credential.
 - `magent auth list`: list configured keyring-backed provider credentials.
 - `magent serve --rpc [--root PATH] [--port N] [--token-stdin | --token-file PATH]`: serve the experimental `magent.rpc.v1` JSON-RPC gateway for remote desktop clients (see the rpc-gateway topic).
+- `magent eval edit-quality [--json] [--report-out FILE]`: score the `edit_file` tool on fixed edits (line endings, encodings, ambiguous and missing matches) without a model.
 - `magent provider ping <provider> [--model M] [--record FILE] [--json]`: one completion of at most 16 tokens to prove a provider's key, endpoint and model work (not a qualification run).
 - `magent auth add <provider> [--api-key-stdin] [--storage keyring|config]`: store a provider API key without printing it; `--api-key-stdin` reads it from standard input. Keyring storage needs `mag-agent[keyring]`.
 - `magent auth remove <provider>`: remove a provider key from the OS keyring.

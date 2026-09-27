@@ -19,6 +19,7 @@ Stored at `~/.config/magent/config.toml`.
 - `agent.doom_loop_policy` default: `'halt'`
 - `agent.tool_use_enforcement` default: `'auto'`
 - `agent.file_mutation_verifier` default: `True`
+- `agent.max_parallel_read_tools` default: `4`
 ### `defaults`
 
 - `defaults.provider` default: `'ollama'`
