@@ -2,13 +2,165 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
 from rich.console import Console
+from rich.table import Table
 
 console = Console()
 
+grants_app = typer.Typer(
+    help=(
+        "Review and revoke remembered approval grants.\n\n"
+        "A grant is created when you answer an approval with 'Allow this exact action for "
+        "this session' or 'Always allow this exact action'. New 'always' grants expire after "
+        "permissions.grant_ttl_days (default 30).\n\n"
+        "Examples:\n\n"
+        "  magent permission grants list\n\n"
+        "  magent permission grants list --active --json\n\n"
+        "  magent permission grants revoke grt_0123abcd\n\n"
+        "  magent permission grants revoke --expired"
+    ),
+    name="grants",
+    no_args_is_help=True,
+)
+
+
+def _grant_broker():
+    from pathlib import Path
+
+    from magent.approval_broker import ApprovalBroker
+    from magent.cli.command_context import require_user
+    from magent.workbench_store import WorkbenchStore, WorkbenchStoreError
+
+    try:
+        return ApprovalBroker(WorkbenchStore(require_user()), project=Path.cwd())
+    except WorkbenchStoreError as error:
+        console.print(f"[red]{error}[/red]")
+        console.print(
+            "[dim]The approval state file (workbench/aais_approvals.json) is unreadable. "
+            "Move it aside only after reviewing it; MagAgent never overwrites it silently.[/dim]"
+        )
+        raise typer.Exit(1) from error
+
+
+def _read_grants(broker, *, include_inactive: bool) -> list[dict]:
+    from magent.workbench_store import WorkbenchStoreError
+
+    try:
+        return broker.list_grants(include_inactive=include_inactive)
+    except WorkbenchStoreError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(1) from error
+
+
+@grants_app.command("list")
+def grants_list_cmd(
+    active: bool = typer.Option(False, "--active", help="Only show grants that still apply."),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON instead of a table."),
+) -> None:
+    """List remembered approval grants with status, expiry and use counts.
+
+    Grants created before expiry existed are flagged as legacy: they never
+    expire until you revoke them.
+    """
+    from magent.approval_broker import configured_grant_ttl_days
+    from magent.cli.command_context import require_user
+
+    broker = _grant_broker()
+    rows = _read_grants(broker, include_inactive=not active)
+    payload = {
+        "ok": True,
+        "schema": "magent.approval-grants.v1",
+        "grant_ttl_days": configured_grant_ttl_days(require_user()),
+        "grants": rows,
+    }
+    if json_output:
+        console.print_json(data=payload)
+        return
+    if not rows:
+        console.print("[dim]No remembered approval grants.[/dim]")
+        return
+    table = Table()
+    table.add_column("Grant", no_wrap=True)
+    table.add_column("Scope", no_wrap=True)
+    table.add_column("Status")
+    table.add_column("Action", overflow="fold")
+    table.add_column("Expires", no_wrap=True)
+    table.add_column("Uses", justify="right")
+    for row in rows:
+        status = row["status"]
+        if row.get("flag"):
+            status += " (legacy)"
+        expires = str(row.get("expires_at") or "")[:10] or (
+            "never" if row["scope"] == "persistent" else "session end"
+        )
+        table.add_row(
+            row["id"],
+            row["scope"],
+            status,
+            row.get("action_summary") or row.get("action_name") or row["action_digest"][:19],
+            expires,
+            str(row.get("hits", 0)),
+        )
+    console.print(table)
+    if any(row.get("flag") for row in rows):
+        console.print(
+            "[yellow]Legacy grants never expire. Revoke them with "
+            "`magent permission grants revoke <id>` and approve again to get an expiring grant.[/yellow]"
+        )
+
+
+@grants_app.command("revoke")
+def grants_revoke_cmd(
+    grant_ids: Annotated[
+        list[str] | None,
+        typer.Argument(help="Grant ids from `magent permission grants list`."),
+    ] = None,
+    expired: bool = typer.Option(False, "--expired", help="Revoke every expired grant."),
+    all_grants: bool = typer.Option(
+        False, "--all", help="Revoke every active grant (needs --yes)."
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Confirm --all."),
+    json_output: bool = typer.Option(False, "--json", help="Emit JSON instead of text."),
+) -> None:
+    """Revoke grants so the next matching action asks again.
+
+    Examples: `magent permission grants revoke grt_0123abcd`,
+    `magent permission grants revoke --expired`, `magent permission grants revoke --all --yes`.
+    """
+    from magent.cli.command_context import require_user
+
+    ids = [item for item in (grant_ids or []) if item]
+    if not ids and not expired and not all_grants:
+        console.print("[red]Name at least one grant id, or pass --expired or --all.[/red]")
+        console.print("[dim]See ids with `magent permission grants list`.[/dim]")
+        raise typer.Exit(2)
+    if all_grants and not yes:
+        console.print("[red]Revoking every grant requires --yes.[/red]")
+        raise typer.Exit(2)
+    broker = _grant_broker()
+    result = broker.revoke_grants(ids, expired=expired, all_grants=all_grants, actor=require_user())
+    if json_output:
+        console.print_json(data=result)
+    else:
+        if result["revoked"]:
+            console.print(
+                f"[green]Revoked {len(result['revoked'])} grant(s):[/green] "
+                + ", ".join(result["revoked"])
+            )
+        else:
+            console.print("[dim]Nothing to revoke.[/dim]")
+        if result["missing"]:
+            console.print("[red]Unknown grant id(s):[/red] " + ", ".join(result["missing"]))
+    if not result["ok"]:
+        raise typer.Exit(1)
+
 
 def register_permission_commands(permission_app: typer.Typer) -> None:
+    permission_app.add_typer(grants_app, name="grants")
+
     @permission_app.command("status")
     def permission_status_cmd() -> None:
         """Show the active user's permission profile."""

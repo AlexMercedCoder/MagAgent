@@ -80,6 +80,15 @@ CONFIG_SCHEMA: list[dict[str, Any]] = [
         "description": "Default tool permission posture.",
     },
     {
+        "path": "permissions.grant_ttl_days",
+        "label": "Approval grant lifetime (days)",
+        "type": "integer",
+        "scope": "global",
+        "category": "permissions",
+        "min": 0,
+        "description": "Days a new 'always allow' approval grant stays valid; 0 means it never expires.",
+    },
+    {
         "path": "memory.auto_write",
         "label": "Memory auto-write",
         "type": "boolean",

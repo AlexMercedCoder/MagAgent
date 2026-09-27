@@ -96,6 +96,10 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         "shell_sandbox_network": False,
         "allowed_shell_patterns": [],
         "trusted_shell_patterns": [],
+        # Lifetime of a new "always allow" approval grant, in days. 0 means
+        # grants never expire. Grants created before 1.4 have no expiry and are
+        # flagged by `magent permission grants list`.
+        "grant_ttl_days": 30,
     },
     "skills": {
         "lockfile": str(SKILLS_LOCK),
@@ -299,6 +303,17 @@ class Config:
             self._user.get("permissions", {}).get("trusted_shell_patterns"),
             self._global.get("permissions", {}).get("trusted_shell_patterns"),
         )
+
+    @property
+    def approval_grant_ttl_days(self) -> int:
+        """Days a new persistent approval grant stays valid (0 = no expiry)."""
+        value = self._user.get("permissions", {}).get("grant_ttl_days")
+        if value is None:
+            value = self._global.get("permissions", {}).get("grant_ttl_days", 30)
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 30
 
     @property
     def memory_budget_tokens(self) -> int:

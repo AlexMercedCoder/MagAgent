@@ -9,6 +9,7 @@ atomically resolves the exact action before the waiting tool may continue.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import signal
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from aais import (
     ApprovalStore,
@@ -37,6 +39,13 @@ Envelope = dict[str, Any]
 Publisher = Callable[[Envelope], None]
 CurrentAction = Callable[[], Mapping[str, Any]]
 
+# D6: persistent grants expire after this many days unless configured
+# otherwise with ``permissions.grant_ttl_days`` (0 disables expiry).
+DEFAULT_GRANT_TTL_DAYS = 30
+EVENT_LOG_LIMIT = 1000
+GRANT_HIT_LIMIT = 1000
+_GRANT_ACTOR = {"type": "policy", "authenticated_by": "authority"}
+
 
 def _now() -> datetime:
     return datetime.now(UTC)
@@ -44,6 +53,49 @@ def _now() -> datetime:
 
 def _timestamp(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _parse_timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def configured_grant_ttl_days(username: str | None = None) -> int:
+    """Return the configured persistent-grant lifetime in days (0 = never expires)."""
+
+    try:
+        from magent.config import load_config
+
+        return max(0, int(load_config(username).approval_grant_ttl_days))
+    except Exception:
+        return DEFAULT_GRANT_TTL_DAYS
+
+
+def grant_id_for(grant: Mapping[str, Any]) -> str:
+    """Stable identifier for a grant, including grants stored before ids existed."""
+
+    if grant.get("id"):
+        return str(grant["id"])
+    seed = "|".join(
+        str(grant.get(key) or "") for key in ("action_digest", "scope", "session_id", "created_at")
+    )
+    return "grt_legacy_" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+
+
+def grant_status(grant: Mapping[str, Any], now: datetime | None = None) -> str:
+    """Return ``active``, ``expired`` or ``revoked`` for one stored grant."""
+
+    if grant.get("revoked_at"):
+        return "revoked"
+    expires = _parse_timestamp(grant.get("expires_at"))
+    if expires is not None and (now or _now()) >= expires:
+        return "expired"
+    return "active"
 
 
 def legacy_action(description: str, *, project: str | Path = ".") -> Envelope:
@@ -89,10 +141,16 @@ class ApprovalBroker:
         *,
         project: str | Path,
         stream: str = "magent.approvals",
+        grant_ttl_days: int | None = None,
     ) -> None:
         self.store = store
         self.project = str(Path(project).resolve())
         self.stream = stream
+        self.grant_ttl_days = (
+            configured_grant_ttl_days(getattr(store, "username", None))
+            if grant_ttl_days is None
+            else max(0, int(grant_ttl_days))
+        )
         self._lock = threading.RLock()
         self._waiters: dict[str, _Waiter] = {}
         self._publishers: dict[str, Publisher] = {}
@@ -186,21 +244,31 @@ class ApprovalBroker:
         digest = action_digest(exact_action)
         with self._lock, self.store.lock(self.STORE_NAME):
             state = self._state()
+            session_id = str(origin.get("session_id") or "")
+            now = _now()
             remembered = next(
                 (
-                    str(item["scope"])
+                    item
                     for item in state.get("grants", [])
                     if item.get("action_digest") == digest
                     and item.get("scope") in {"session", "persistent"}
-                    and (
-                        item.get("scope") == "persistent"
-                        or item.get("session_id") == str(origin.get("session_id") or "")
-                    )
+                    and grant_status(item, now) == "active"
+                    and (item.get("scope") == "persistent" or item.get("session_id") == session_id)
                 ),
                 None,
             )
-            if remembered:
-                return remembered
+            if remembered is not None:
+                self._record_grant_hit(
+                    state,
+                    remembered,
+                    exact_action,
+                    origin=origin,
+                    risk_level=risk_level,
+                    risk_reasons=risk_reasons,
+                    now=now,
+                )
+                self.store.write(self.STORE_NAME, state)
+                return str(remembered["scope"])
             choices: list[Envelope] = [
                 {"decision": "approve", "scope": "once", "label": "Allow once"}
             ]
@@ -241,8 +309,7 @@ class ApprovalBroker:
             request_id = str(envelope["request"]["id"])
             state.setdefault("pending", {})[request_id] = envelope
             state.setdefault("owners", {})[request_id] = os.getpid()
-            state.setdefault("events", []).append(envelope)
-            state["events"] = state["events"][-1000:]
+            self._append_events(state, envelope)
             self.store.write(self.STORE_NAME, state)
             waiter = _Waiter(
                 envelope=envelope,
@@ -343,21 +410,13 @@ class ApprovalBroker:
             state.setdefault("pending", {}).pop(request_id, None)
             state.setdefault("decisions", {})[request_id] = decided
             state.setdefault("resolutions", {})[request_id] = resolution
-            state.setdefault("events", []).append(resolution)
-            state["events"] = state["events"][-1000:]
+            self._append_events(state, resolution)
             if resolution["resolution"]["outcome"] == "approved" and scope in {
                 "session",
                 "persistent",
             }:
                 state.setdefault("grants", []).append(
-                    {
-                        "action_digest": pending["request"]["action_digest"],
-                        "scope": scope,
-                        "session_id": str(
-                            pending["request"].get("origin", {}).get("session_id") or ""
-                        ),
-                        "created_at": resolution["occurred_at"],
-                    }
+                    self._new_grant(pending, scope, resolution, actor=actor)
                 )
             self.store.write(self.STORE_NAME, state)
             publisher = self._publishers.get(request_id)
@@ -368,6 +427,225 @@ class ApprovalBroker:
         if waiter:
             waiter.resolved.set()
         return copy.deepcopy(resolution)
+
+    # ------------------------------------------------------------------ grants
+
+    @staticmethod
+    def _append_events(state: Envelope, *envelopes: Envelope) -> None:
+        events = state.setdefault("events", [])
+        events.extend(envelopes)
+        state["events"] = events[-EVENT_LOG_LIMIT:]
+
+    def _new_grant(
+        self,
+        pending: Envelope,
+        scope: str,
+        resolution: Envelope,
+        *,
+        actor: Mapping[str, Any],
+    ) -> Envelope:
+        request = pending["request"]
+        action = request.get("action", {})
+        created_at = str(resolution["occurred_at"])
+        grant: Envelope = {
+            "id": f"grt_{uuid4().hex[:20]}",
+            "action_digest": request["action_digest"],
+            "scope": scope,
+            "session_id": str(request.get("origin", {}).get("session_id") or ""),
+            "created_at": created_at,
+            "request_id": str(request["id"]),
+            "action_name": str(action.get("name") or ""),
+            "action_summary": str(action.get("summary") or ""),
+            "granted_by": str(actor.get("id") or ""),
+            "hits": 0,
+        }
+        if scope == "persistent" and self.grant_ttl_days > 0:
+            created = _parse_timestamp(created_at) or _now()
+            grant["expires_at"] = _timestamp(created + timedelta(days=self.grant_ttl_days))
+        return grant
+
+    def _record_grant_hit(
+        self,
+        state: Envelope,
+        grant: Envelope,
+        action: Envelope,
+        *,
+        origin: Mapping[str, Any],
+        risk_level: str,
+        risk_reasons: list[str],
+        now: datetime,
+    ) -> Envelope:
+        """Write an AAIS receipt for an action a remembered grant approved.
+
+        A grant hit used to return silently, so the audit trail showed nothing
+        for every repeat of a remembered action. The hit is now recorded as a
+        complete requested/decided/resolved exchange whose decision actor is
+        the grant itself, plus a compact entry in ``grant_hits``.
+        """
+
+        grant_id = grant_id_for(grant)
+        scope = str(grant["scope"])
+        digest = str(grant["action_digest"])
+        stamp = _timestamp(now)
+        requested = create_request(
+            action=action,
+            origin={
+                "harness": "magagent",
+                "project": self.project,
+                **dict(origin),
+            },
+            risk={"level": risk_level, "reasons": risk_reasons or ["Protected action."]},
+            choices=[
+                {
+                    "decision": "approve",
+                    "scope": scope,
+                    "label": "Approved by a remembered grant",
+                    "scope_constraints": {"action_digest": digest},
+                },
+                {"decision": "deny", "scope": "once", "label": "Deny"},
+            ],
+            sequence=self._next_sequence(state),
+            stream=self.stream,
+            created_at=stamp,
+        )
+        decided = create_decision(
+            requested,
+            decision="approve",
+            scope=scope,
+            actor={"id": f"magent.grant:{grant_id}", **_GRANT_ACTOR},
+            sequence=self._next_sequence(state, "presenter_sequence"),
+            stream="magent.grants",
+            decided_at=stamp,
+        )
+        machine = ApprovalStore()
+        machine.add(requested)
+        resolution = machine.decide(
+            decided, now=now, current_action=action, sequence=self._next_sequence(state)
+        )
+        request_id = str(requested["request"]["id"])
+        state.setdefault("decisions", {})[request_id] = decided
+        state.setdefault("resolutions", {})[request_id] = resolution
+        self._append_events(state, requested, resolution)
+        grant["id"] = grant_id
+        grant["hits"] = int(grant.get("hits", 0) or 0) + 1
+        grant["last_used_at"] = stamp
+        receipt = {
+            "grant_id": grant_id,
+            "request_id": request_id,
+            "resolution_id": resolution["resolution"]["id"],
+            "action_digest": digest,
+            "scope": scope,
+            "session_id": str(origin.get("session_id") or ""),
+            "occurred_at": stamp,
+        }
+        hits = state.setdefault("grant_hits", [])
+        hits.append(receipt)
+        state["grant_hits"] = hits[-GRANT_HIT_LIMIT:]
+        return receipt
+
+    def _action_details(self, state: Envelope, digest: str) -> Envelope:
+        for event in reversed(state.get("events", [])):
+            request = event.get("request") if isinstance(event, dict) else None
+            if isinstance(request, dict) and request.get("action_digest") == digest:
+                action = request.get("action", {})
+                return {
+                    "action_name": str(action.get("name") or ""),
+                    "action_summary": str(action.get("summary") or ""),
+                }
+        return {}
+
+    def list_grants(self, *, include_inactive: bool = True) -> list[Envelope]:
+        """Return remembered grants with status, expiry and legacy flags."""
+
+        with self._lock, self.store.lock(self.STORE_NAME):
+            state = self._state()
+        now = _now()
+        rows: list[Envelope] = []
+        for grant in state.get("grants", []):
+            if not isinstance(grant, dict):
+                continue
+            status = grant_status(grant, now)
+            if not include_inactive and status != "active":
+                continue
+            legacy = not grant.get("id")
+            details = {
+                "action_name": grant.get("action_name", ""),
+                "action_summary": grant.get("action_summary", ""),
+            }
+            if legacy or not details["action_summary"]:
+                details = {
+                    **details,
+                    **self._action_details(state, str(grant.get("action_digest"))),
+                }
+            row: Envelope = {
+                "id": grant_id_for(grant),
+                "scope": grant.get("scope", ""),
+                "status": status,
+                "action_digest": grant.get("action_digest", ""),
+                "action_name": details.get("action_name", ""),
+                "action_summary": details.get("action_summary", ""),
+                "session_id": grant.get("session_id", ""),
+                "created_at": grant.get("created_at", ""),
+                "expires_at": grant.get("expires_at"),
+                "last_used_at": grant.get("last_used_at"),
+                "hits": int(grant.get("hits", 0) or 0),
+                "legacy": legacy,
+            }
+            if grant.get("revoked_at"):
+                row["revoked_at"] = grant["revoked_at"]
+                row["revoked_by"] = grant.get("revoked_by", "")
+            if legacy and grant.get("scope") == "persistent" and not grant.get("expires_at"):
+                row["flag"] = (
+                    "Created before grant expiry existed; it never expires. "
+                    "Revoke it and approve again to get an expiring grant."
+                )
+            rows.append(row)
+        return rows
+
+    def revoke_grants(
+        self,
+        grant_ids: list[str] | None = None,
+        *,
+        expired: bool = False,
+        all_grants: bool = False,
+        actor: str = "local-user",
+    ) -> Envelope:
+        """Revoke grants by id, every expired grant, or every active grant."""
+
+        wanted = {str(item) for item in grant_ids or []}
+        stamp = _timestamp(_now())
+        revoked: list[str] = []
+        with self._lock, self.store.lock(self.STORE_NAME):
+            state = self._state()
+            now = _now()
+            known = {
+                grant_id_for(item) for item in state.get("grants", []) if isinstance(item, dict)
+            }
+            missing = sorted(wanted - known)
+            for grant in state.get("grants", []):
+                if not isinstance(grant, dict):
+                    continue
+                status = grant_status(grant, now)
+                identifier = grant_id_for(grant)
+                if status == "revoked":
+                    continue
+                if (
+                    identifier in wanted
+                    or (expired and status == "expired")
+                    or (all_grants and status == "active")
+                ):
+                    grant["id"] = identifier
+                    grant["revoked_at"] = stamp
+                    grant["revoked_by"] = actor
+                    revoked.append(identifier)
+            if revoked:
+                self.store.write(self.STORE_NAME, state)
+        return {"ok": not missing, "revoked": revoked, "missing": missing}
+
+    def grant_hits(self, limit: int = 100) -> list[Envelope]:
+        with self._lock, self.store.lock(self.STORE_NAME):
+            hits = list(self._state().get("grant_hits", []))
+        return [copy.deepcopy(item) for item in hits[-max(1, limit) :]]
 
     def cancel_owner(self, **origin: str) -> int:
         snapshot = self.snapshot()
