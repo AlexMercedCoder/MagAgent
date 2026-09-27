@@ -184,7 +184,6 @@ module = [
     "magent.cli.commands.graph",
     "magent.cli.commands.permissions",
     "magent.cli.commands.plugins",
-    "magent.cli.main",
     "magent.config",
     "magent.gateway.adapters.slack",
     "magent.goal_orchestrator",
@@ -193,7 +192,6 @@ module = [
     "magent.session_controls",
     "magent.tools.web",
     "magent.utils",
-    "magent.workbench",
 ]
 ignore_errors = true
 

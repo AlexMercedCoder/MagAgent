@@ -11,6 +11,7 @@ from magent import config as magent_config
 from magent import config_ux, workbench, workbench_store
 from magent.cli import command_context, model_picker
 from magent.cli import main as cli_main
+from magent.cli import shared as cli_shared
 from magent.task_runtime import TaskRuntime
 from magent.workbench import WorkbenchStore
 
@@ -101,7 +102,7 @@ def test_cli_cache_commands_and_compose_slash(monkeypatch) -> None:
 
     from magent import tui
 
-    monkeypatch.setattr(cli_main, "read_multiline_prompt", lambda _username: "line 1\nline 2")
+    monkeypatch.setattr(cli_shared, "read_multiline_prompt", lambda _username: "line 1\nline 2")
     monkeypatch.setattr(
         tui,
         "print_streaming_response",
@@ -316,7 +317,7 @@ def test_cli_guided_ux_commands(tmp_path: Path, monkeypatch) -> None:
     (project / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     store = WorkbenchStore("cli-user")
     store.append("tasks", {"title": "Remember guided UX", "status": "open"})
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     profiles = runner.invoke(cli_main.app, ["profile", "list"])
     applied = runner.invoke(cli_main.app, ["profile", "apply", "low-cost"])
@@ -718,8 +719,8 @@ def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -
     project.mkdir()
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("cli-test")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
-    monkeypatch.setattr(cli_main, "_require_user", lambda: "cli-test")
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_require_user", lambda: "cli-test")
 
     import magent.ui
 
@@ -743,7 +744,7 @@ def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -
     )
     # signal.pause() does not exist on Windows, so the server is now blocked
     # on a portable, interruptible wait instead.
-    monkeypatch.setattr(cli_main, "_block_until_interrupt", blocked_on.append)
+    monkeypatch.setattr(cli_shared, "_block_until_interrupt", blocked_on.append)
 
     result = runner.invoke(cli_main.app, ["ui", "--project", str(project), "--port", "9999"])
 
@@ -763,7 +764,7 @@ def test_cli_dashboard_serve_does_not_print_the_server_handle(tmp_path: Path, mo
     """
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("cli-test")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     class NotSerializable:
         """Stands in for the bound ThreadingHTTPServer."""
@@ -783,7 +784,7 @@ def test_cli_dashboard_serve_does_not_print_the_server_handle(tmp_path: Path, mo
             "server": sentinel,
         },
     )
-    monkeypatch.setattr(cli_main, "_block_until_interrupt", blocked_on.append)
+    monkeypatch.setattr(cli_shared, "_block_until_interrupt", blocked_on.append)
 
     result = runner.invoke(cli_main.app, ["dashboard", "--serve", "--port", "9998"])
 
@@ -800,7 +801,7 @@ def test_cli_context_map_and_memory_promote(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("cli-test")
     store.append("tasks", {"title": "Remember the release checklist", "status": "open"})
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     class FakeMemory:
         available = True
@@ -850,7 +851,7 @@ def test_cli_goal_jobs_statusline_config_and_context_audit(tmp_path: Path, monke
     magent_config.create_user("cli-user")
     magent_config.set_current_user("cli-user")
     store = WorkbenchStore("cli-user")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     class FakeMemory:
         available = True
@@ -894,7 +895,7 @@ def test_cli_goal_orchestrated_creates_staged_plan(tmp_path: Path, monkeypatch) 
     magent_config.create_user("cli-user")
     magent_config.set_current_user("cli-user")
     store = WorkbenchStore("cli-user")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     result = runner.invoke(
         cli_main.app,
@@ -925,7 +926,7 @@ def test_cli_goal_orchestrated_background_and_goal_run_preview(tmp_path: Path, m
     magent_config.create_user("cli-user")
     magent_config.set_current_user("cli-user")
     store = WorkbenchStore("cli-user")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     result = runner.invoke(
         cli_main.app,
@@ -970,7 +971,7 @@ def test_cli_goal_run_executes_saved_plan_with_fake_runner(tmp_path: Path, monke
     magent_config.create_user("cli-user")
     magent_config.set_current_user("cli-user")
     store = WorkbenchStore("cli-user")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     created = runner.invoke(
         cli_main.app,
@@ -1038,7 +1039,7 @@ def test_cli_recipes_playbook_tools_and_memory_inbox(tmp_path: Path, monkeypatch
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("cli-test")
     store.append("tasks", {"title": "Remember inbox task", "status": "open"})
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     class FakeMemory:
         available = True
@@ -1125,7 +1126,7 @@ def test_cli_code_and_test_commands(tmp_path: Path, monkeypatch) -> None:
     )
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("cli-test")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     indexed = runner.invoke(cli_main.app, ["code", "index", "--project", str(project)])
     symbols = runner.invoke(
@@ -1166,7 +1167,7 @@ def test_cli_project_patch_workspace_and_release_commands(tmp_path: Path, monkey
     )
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("cli-test")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
     monkeypatch.setattr(
         workbench,
         "release_check",
@@ -1220,7 +1221,7 @@ def test_cli_plan_save_executable_outputs_next_commands(tmp_path: Path, monkeypa
     (project / "pyproject.toml").write_text("[project]\nname='demo'\n", encoding="utf-8")
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("cli-test")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     result = runner.invoke(
         cli_main.app,
@@ -1276,7 +1277,7 @@ def test_cli_memory_quality(monkeypatch) -> None:
 def test_checkpoint_commands_offer_machine_readable_output(tmp_path: Path, monkeypatch) -> None:
     redirect_config(monkeypatch, tmp_path)
     store = WorkbenchStore("checkpoint-cli")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
     target = tmp_path / "example.txt"
     target.write_text("before\n", encoding="utf-8")
     checkpoint = workbench.create_checkpoint(

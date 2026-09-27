@@ -322,9 +322,10 @@ def test_why_last_explains_the_most_recent_turn(capsys) -> None:
 
 def test_why_last_without_evidence_points_to_next_step(monkeypatch, tmp_path: Path, capsys) -> None:
     from magent.cli import main as cli_main
+    from magent.cli import shared as cli_shared
 
     _isolated_store(monkeypatch, tmp_path)
-    monkeypatch.setattr(cli_main, "get_current_user", lambda: "alex")
+    monkeypatch.setattr(cli_shared, "get_current_user", lambda: "alex")
     session = SimpleNamespace(session_id="s1", memory_evidence=[])
 
     assert _slash(cli_main, "/why last", session) is True

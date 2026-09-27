@@ -11,6 +11,7 @@ import pytest
 from typer.testing import CliRunner
 
 from magent.cli import main as cli_main
+from magent.cli import shared as cli_shared
 from tests.unit.test_cli import redirect_config
 
 SECRET = "test-key-not-real-0123456789"
@@ -128,8 +129,8 @@ def test_terminal_stdin_is_refused(cli, monkeypatch) -> None:
         def read(self) -> str:  # pragma: no cover - must not be read
             raise AssertionError("must not read a terminal")
 
-    monkeypatch.setattr(cli_main.sys, "stdin", Tty())
-    from magent.cli.main import auth_add_cmd
+    monkeypatch.setattr(cli_shared.sys, "stdin", Tty())
+    from magent.cli.commands.models import auth_add_cmd
 
     with pytest.raises(Exception) as raised:
         auth_add_cmd("openai", api_key_stdin=True, storage="config", api_key="", json_output=False)

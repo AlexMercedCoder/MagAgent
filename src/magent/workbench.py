@@ -664,7 +664,7 @@ def code_index(root: str | Path) -> dict[str, Any]:
         file_info = {"path": rel, "lines": len(text.splitlines()), "symbols": []}
         try:
             tree = ast.parse(text)
-            file_imports = []
+            file_imports: list[str] = []
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     file_imports.extend(alias.name for alias in node.names)
@@ -829,7 +829,7 @@ def suggest_tests(root: str | Path, changed_files: list[str] | None = None) -> l
     if not changed_files:
         diff_files = _run_git(root_path, ["diff", "--name-only", "HEAD"]).splitlines()
         changed_files = diff_files
-    suggestions = []
+    suggestions: list[str] = []
     for file in changed_files:
         p = Path(file)
         candidates = [
@@ -1281,7 +1281,7 @@ def project_diagnostics(root: str | Path, store: WorkbenchStore | None = None) -
         checks.append(("tsc", ["npx", "tsc", "--noEmit"], True))
     if (root_path / "Cargo.toml").exists() and shutil.which("cargo"):
         checks.append(("cargo check", ["cargo", "check"], True))
-    results = [
+    results: list[dict[str, Any]] = [
         {
             "name": name,
             "ok": result.returncode == 0,
@@ -1293,7 +1293,9 @@ def project_diagnostics(root: str | Path, store: WorkbenchStore | None = None) -
     ]
     if store is not None:
         for item in results:
-            record_command_result(store, root_path, item["name"], item["ok"], source="diagnostics")
+            record_command_result(
+                store, root_path, str(item["name"]), bool(item["ok"]), source="diagnostics"
+            )
     lsp_result = lsp_diagnostics(root_path)
     results.append(
         {
@@ -1318,21 +1320,25 @@ def release_check(store: WorkbenchStore | None = None, root: str | Path = ".") -
         ("docs", ["magent", "docs", "doctor"]),
     ]
     for name, cmd in commands:
-        result = _run_command_args(root_path, cmd, timeout=180)
-        item = {
+        completed = _run_command_args(root_path, cmd, timeout=180)
+        item: dict[str, Any] = {
             "name": name,
             "command": shlex.join(cmd),
-            "ok": result.returncode == 0,
-            "returncode": result.returncode,
-            "stdout": result.stdout[-3000:],
-            "stderr": result.stderr[-3000:],
+            "ok": completed.returncode == 0,
+            "returncode": completed.returncode,
+            "stdout": completed.stdout[-3000:],
+            "stderr": completed.stderr[-3000:],
         }
         checks.append(item)
         if store is not None:
             record_command_result(store, root_path, item["command"], item["ok"], source="release-check")
-    result = {"ok": all(item["ok"] for item in checks), "root": str(root_path), "checks": checks}
-    result["hooks"] = run_hooks(root_path, "release_check", result)
-    return result
+    report: dict[str, Any] = {
+        "ok": all(item["ok"] for item in checks),
+        "root": str(root_path),
+        "checks": checks,
+    }
+    report["hooks"] = run_hooks(root_path, "release_check", report)
+    return report
 
 
 def release_notes(root: str | Path = ".", since: str = "HEAD~5") -> dict[str, Any]:

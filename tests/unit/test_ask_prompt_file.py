@@ -13,6 +13,7 @@ import pytest
 from typer.testing import CliRunner
 
 from magent.cli import main as cli_main
+from magent.cli import shared as cli_shared
 from tests.unit.test_cli import redirect_config
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -122,7 +123,7 @@ def test_prompt_file_usage_errors_exit_2(cli, setup, args, message) -> None:
 
 def test_prompt_file_size_limit(cli, monkeypatch) -> None:
     runner, root = cli
-    monkeypatch.setattr(cli_main, "MAX_PROMPT_FILE_BYTES", 10)
+    monkeypatch.setattr(cli_shared, "MAX_PROMPT_FILE_BYTES", 10)
     path = root / "big.md"
     path.write_text("x" * 20, encoding="utf-8")
     result = runner.invoke(cli_main.app, ["ask", "--prompt-file", str(path)])

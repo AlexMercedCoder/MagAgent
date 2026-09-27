@@ -34,11 +34,15 @@ def _diff_paths(expected, actual, path="") -> list[str]:
             else:
                 out.extend(_diff_paths(expected[key], actual[key], f"{path}/{key}"))
         return out
-    if isinstance(expected, list) and isinstance(actual, list) and path.startswith("/shape"):
-        # An empty list carries no element shape (it depends on local state,
-        # such as which optional tools are installed), so it matches any list.
-        if not expected or not actual:
-            return []
+    # An empty list carries no element shape (it depends on local state, such
+    # as which optional tools are installed), so it matches any list.
+    if (
+        isinstance(expected, list)
+        and isinstance(actual, list)
+        and path.startswith("/shape")
+        and (not expected or not actual)
+    ):
+        return []
     return [] if expected == actual else [f"{path}: {expected!r} -> {actual!r}"]
 
 

@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from magent import browser, evals, github_workflows, sandbox, workbench
 from magent.cli import main as cli_main
+from magent.cli import shared as cli_shared
 from magent.tools.executor import ToolExecutor
 from magent.workbench import WorkbenchStore
 from magent.workbench_cockpit import cockpit_state
@@ -170,7 +171,7 @@ def test_cli_new_release_016_commands(tmp_path: Path, monkeypatch) -> None:
     project.mkdir()
     monkeypatch.setattr(workbench, "USERS_DIR", tmp_path / "users")
     store = WorkbenchStore("cli-016")
-    monkeypatch.setattr(cli_main, "_store", lambda: store)
+    monkeypatch.setattr(cli_shared, "_store", lambda: store)
 
     plan = workbench.save_execution_plan(store, project, "Run smoke", commands=["python -c 'print(1)'"], include_diff=False)
     sandboxed = runner.invoke(cli_main.app, ["plan-sandbox", plan["id"], "--mode", "copy", "--dry-run"])

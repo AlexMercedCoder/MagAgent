@@ -17,6 +17,7 @@ import typer
 from typer.testing import CliRunner
 
 from magent.cli import main as cli_main
+from magent.cli import shared as cli_shared
 
 runner = CliRunner()
 
@@ -93,7 +94,7 @@ def test_run_command_does_not_call_a_typer_command_as_a_function(tmp_path, monke
     import magent.workbench_store as workbench_store
 
     monkeypatch.setattr(workbench_store, "USERS_DIR", tmp_path / "users")
-    monkeypatch.setattr(cli_main, "_store", lambda: workbench_store.WorkbenchStore("smoke"))
+    monkeypatch.setattr(cli_shared, "_store", lambda: workbench_store.WorkbenchStore("smoke"))
 
     result = runner.invoke(cli_main.app, ["run", "ship the thing", "--project", str(tmp_path)])
 
