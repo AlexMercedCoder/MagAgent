@@ -21,9 +21,10 @@ wildcard to cross into another pipeline or interpreter.
 Use `magent permission trust-list` to inspect saved approvals and
 `magent permission trust-clear --yes` to remove them.
 
-Those trusted shell patterns come from the terminal prompt. Approvals answered through the AAIS
-broker (Web UI, graphs, Mag Command Center, `--approval-stdio`) create exact-action grants
-instead. New "always" grants expire after `permissions.grant_ttl_days` (default 30, 0 disables).
+Those trusted shell patterns were written by the terminal "always" answer before 1.4 and are
+now legacy. Since 1.4 every "always" answer, from the terminal, a gateway or the AAIS broker
+(Web UI, graphs, Mag Command Center, `--approval-stdio`), creates an exact-action grant in the
+approval store instead. New "always" grants expire after `permissions.grant_ttl_days` (default 30, 0 disables).
 Every grant hit is written to the approval log as a requested/decided/resolved exchange with
 the grant as the decision actor, so remembered approvals stay auditable.
 
@@ -119,3 +120,15 @@ Focused regression suites cover permission bypasses, gateway authorization, loca
 plugin and session path containment, durable state, provider conformance, CLI registration, and
 safe resource naming. See `magent docs show threat-model` for trust boundaries,
 threats, mitigations, residual risks, and the release-blocking policy.
+
+## Approval State Recovery
+
+Approval state is `workbench/aais-approvals.json`, managed by the AAIS 0.2 file store. A damaged
+file is moved to `aais-approvals.json.corrupt-<timestamp>` and every process refuses approvals
+until you decide what to do:
+
+```bash
+magent permission approvals-recovery                  # health, orphaned and unverified requests
+magent permission approvals-recovery --cancel-orphaned # withdraw requests whose process stopped
+magent permission approvals-recovery --acknowledge    # accept the quarantine (or a restored file)
+```

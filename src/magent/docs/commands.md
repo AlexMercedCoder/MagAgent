@@ -87,6 +87,9 @@ Important command paths:
 - `magent permission explain <mode>`: explain a permission mode.
 - `magent permission set <mode>`: set the active user's permission mode.
 - `magent permission propose "request"`: parse a permission request into a suggested action.
+- `magent permission grants list [--active] [--json]`: list remembered approval grants with status, expiry, use counts and legacy flags.
+- `magent permission grants revoke <id>... | --expired | --all --yes`: revoke grants so the next matching action asks again.
+- `magent permission approvals-recovery [--cancel-orphaned] [--acknowledge] [--json]`: inspect approval-state health, withdraw requests whose process stopped, or accept a quarantined corrupt file.
 - `magent events list`: list recent workbench events.
 - `magent events show <event-id>`: show one event record.
 - `magent execution create "task"`: create a queued durable execution task.
@@ -129,7 +132,7 @@ Important command paths:
 - `magent model wizard`: interactively set common model roles with guidance for each role and `provider/model` values.
 - `magent model image-wizard`: interactively set the image_maker role and provider credential.
 - `magent auth list`: list configured keyring-backed provider credentials.
-- `magent auth add <provider>`: store a provider API key in the OS keyring when available.
+- `magent auth add <provider> [--api-key-stdin] [--storage keyring|config]`: store a provider API key without printing it; `--api-key-stdin` reads it from standard input. Keyring storage needs `mag-agent[keyring]`.
 - `magent auth remove <provider>`: remove a provider key from the OS keyring.
 - `magent system info`: return machine-readable install, path, platform, and user info.
 - `magent system contracts`: return versioned platform contracts, compatibility levels, and support policy.

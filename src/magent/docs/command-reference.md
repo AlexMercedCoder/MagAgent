@@ -392,6 +392,7 @@ Generated from the active Typer command tree.
 ## permission
 
 - `magent permission apply-profile`
+- `magent permission approvals-recovery`
 - `magent permission classify`
 - `magent permission explain`
 - `magent permission grants`

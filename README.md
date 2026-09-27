@@ -304,7 +304,10 @@ magent provider set openai --model gpt-5 --api-key-keyring openai
 
 `--api-key-stdin` reads the key from standard input so it never appears in argv, process
 listings or shell history; scripts and desktop apps should use it. By default the key goes to
-the OS credential store (this needs the Python `keyring` package); `--storage config` writes it
+the OS credential store, which needs the optional `keyring` extra
+(`pip install 'mag-agent[keyring]'`, included in `[full]`) and a running credential service
+(macOS Keychain, Windows Credential Manager, or Secret Service on Linux). `magent auth list`
+reports whether one is usable, and the error says what to do when it is not. `--storage config` writes it
 to `config.toml` and tightens the file to mode 0600. The command prints JSON and never echoes the
 key. Exit codes: 0 stored, 1 storage failed, 2 usage error.
 
@@ -440,7 +443,7 @@ magent permission apply-profile coding
 magent permission explain paranoid
 magent permission set paranoid
 magent permission trust-list
-magent permission trust-clear "curl * | *"
+magent permission trust-clear "npm run lint"
 /mode paranoid
 ```
 
@@ -463,11 +466,15 @@ magent permission grants revoke --all --yes
 Grants created before 1.4 have no expiry. They still apply, and the list flags them as legacy
 so you can revoke them and approve again.
 
-Terminal shell prompts can be approved once, for the current session, or always. Saved
-approvals are stored as trusted shell patterns in the active user profile. For
-safe read-only fetch pipelines such as `curl | grep | head`, MagAgent stores a
-broader scoped pattern like `curl * | *` so similar diagnostic probes do not
-repeatedly interrupt the session.
+Terminal shell prompts can be approved once, for the current session, or always. "Always"
+creates the same kind of grant, for that exact command in that project, and every terminal
+answer is written to the approval log. Trusted shell patterns saved by "always" before 1.4 keep
+working and appear in `grants list` as legacy entries you can revoke.
+
+Approval state lives in `~/.config/magent/users/<user>/workbench/aais-approvals.json`, managed by
+the shared [AAIS](https://github.com/AlexMercedCoder/agent-approval-interchange-spec) file store
+(cross-process locking, crash-safe writes, bounded retention). If the file is ever damaged it is
+quarantined, and `magent permission approvals-recovery` explains what to do next.
 
 When a prompt explicitly names artifacts such as `cheese.html`, MagAgent verifies
 that the expected paths exist and are not obvious placeholders before finalizing.

@@ -32,7 +32,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "agent-approval-interchange>=0.1.0,<0.2",
+    "agent-approval-interchange>=0.2.0,<0.3",
     "agentic-graph-spec>=1.0.1,<2",
     "open-agent-profile>=1.0.1,<2",
     # Core CLI & UI
@@ -111,6 +111,10 @@ desktop = [
 lsp = [
     "python-lsp-server>=1.12.0",
 ]
+# OS credential store for `magent auth add` (optional; see docs/configuration).
+keyring = [
+    "keyring>=25.0",
+]
 full = [
     "slack-bolt>=1.18",
     "discord.py>=2.3",
@@ -131,6 +135,7 @@ full = [
     "psutil>=5.9",
     "plyer>=2.1",
     "python-lsp-server>=1.12.0",
+    "keyring>=25.0",
 ]
 
 [project.scripts]

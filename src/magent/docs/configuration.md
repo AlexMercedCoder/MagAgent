@@ -80,7 +80,7 @@ During `magent configure`, cloud providers offer three credential paths:
 
 - paste an API key and let MagAgent save it in local config
 - reference an environment variable such as `OPENCODE_ZEN_KEY`, `OPENCODE_ZEN_API_KEY`, or `NOUS_API_KEY`
-- store an API key in the OS keyring with `magent auth add <provider>`
+- store an API key in the OS keyring with `magent auth add <provider>` (install the optional `mag-agent[keyring]` extra first), or pipe it in with `--api-key-stdin`; use `--storage config` on machines without a credential service
 
 The local Web UI offers the same provider/model selection in first-run setup and Settings. It can
 store a newly supplied key in the OS keyring (the default) or, only after an explicit warning, in

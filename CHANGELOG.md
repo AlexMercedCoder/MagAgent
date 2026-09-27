@@ -4,7 +4,29 @@
 
 Target: 1.4.0. The package version in `pyproject.toml` stays 1.3.0 until the release is cut.
 
+**Release prerequisite:** this release requires `agent-approval-interchange>=0.2.0,<0.3`, which
+is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the pin.
+
 ### Added
+
+- **Shared AAIS approval store (A-3).** The approval authority now uses
+  `aais.store.FileApprovalStore` from AAIS 0.2 instead of MagAgent's own JSON store:
+  whole-transaction cross-process locking, owner identity by PID plus process start time plus
+  host (PID reuse can no longer make a stopped owner look alive), bounded retention with an
+  explicit replay gap (`/api/approvals/events` now returns `gap`, `compacted_through`,
+  `latest_sequence` and `store_id`; resync from the snapshot on a gap), and corrupt files
+  quarantined instead of read as empty. Grants live in a store extension and are checked in the
+  same transaction that would otherwise create a request. Existing
+  `workbench/aais_approvals.json` state (including grants) is imported once into
+  `workbench/aais-approvals.json` and the old file is renamed `*.migrated-<timestamp>`.
+  Waiting processes no longer poll the store every 100 ms; they re-read the file only when it
+  changes. New `magent permission approvals-recovery [--cancel-orphaned] [--acknowledge]`.
+- **Terminal approvals are grants too (G-12).** Answering "always" at the terminal (or through a
+  gateway prompt) now creates an exact-action, per-project grant in the approval store with the
+  same expiry, `grants list/revoke` and per-use receipts as other grants, instead of an
+  unexpiring profile `trusted_shell_patterns` entry. Every terminal answer (once, session,
+  always, no) is also written to the approval log. Patterns saved before 1.4 keep working and
+  are listed as legacy grants (`source: profile-trusted-pattern`) that can be revoked.
 
 - **Per-run memory evidence (G-3).** Every turn records which MagGraph nodes were recalled
   (id, type, score, matched fields, reason), estimated tokens recalled and injected against the
@@ -26,6 +48,11 @@ Target: 1.4.0. The package version in `pyproject.toml` stays 1.3.0 until the rel
 - **`magent auth add <provider> --api-key-stdin` (G-4)** reads the key from stdin so it never
   appears in argv. `--storage keyring|config` chooses the store. `--api-key VALUE` still works but
   is hidden and warns.
+- **Keyring as an optional extra (G-13).** `pip install 'mag-agent[keyring]'` (also part of
+  `[full]`) installs the OS credential-store backend. It stays optional because on Linux it pulls
+  in SecretStorage/jeepney and still needs a running Secret Service. `magent auth list` now
+  reports the backend and whether it is usable; `auth add` and Web UI setup say to install the
+  extra or use config storage, and the Web UI defaults to config storage when no keyring works.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the
