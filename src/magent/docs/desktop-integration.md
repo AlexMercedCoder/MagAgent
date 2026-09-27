@@ -7,6 +7,21 @@ MagAgent exposes stable machine-readable CLI commands for desktop shells such as
 - `magent system info`
 - `magent readiness --project <path>`
 - `magent ask --json --events --project <path> "task"`
+- `magent ask --json --events --project <path> --prompt-file <file>` for prompts too large for argv
+- `printf '%s' "$KEY" | magent auth add <provider> --api-key-stdin [--storage keyring|config]`
+- `magent ask "hello" --provider mock --json` for an offline first run (no key, no network)
+
+`magent ask --json` writes machine output only to stdout: with `--approval-stdio`, AAIS 1.0
+NDJSON envelopes, then one result document (a single line when stdout is not a terminal).
+Status text goes to stderr. The result includes `response`, `audit`, `scratchpad`,
+`session_id`, `execution_task_id` and `memory_evidence`; `--events` adds `events`, including
+one `{"type": "memory_recalled", "evidence": {...}}` per turn.
+
+`magent auth add ... --api-key-stdin` prints one JSON object and never the key:
+`{"ok": true, "provider": "nous-portal", "storage": "keyring", "account": "provider:nous-portal", "source": "stdin"}`
+(or `"storage": "config", "config_path": "..."`). Exit codes: 0 stored, 1 storage failed (for
+example no OS keyring; the `hint` suggests `--storage config`), 2 usage error (unknown or local
+provider, empty stdin, stdin is a terminal, conflicting options).
 - `magent research "topic" --question "focus" --max-sources 8 --project <path> --agent <profile>`
 
 ## Open Agent Profiles
@@ -71,6 +86,42 @@ Python hosts can call `desktop_api.memory_recall(user, query, project=...)` for 
 backlinks, bounded Markdown context, and context token statistics. Node detail also
 returns backlinks explicitly. Desktop clients should render this contract rather than
 reimplementing graph ranking.
+
+### Memory evidence per run
+
+`magent memory evidence [TASK_ID|last] --json` (Python: `desktop_api.memory_evidence(user, task_id="last")`)
+returns `magent.run-memory-evidence.v1` (beta):
+
+```json
+{
+  "ok": true,
+  "schema": "magent.run-memory-evidence.v1",
+  "source": "task",
+  "task_id": "task_...", "run_id": "", "session_id": "...",
+  "title": "...", "state": "completed", "provider": "nous-portal", "model": "...",
+  "updated_at": "2026-09-27T12:00:00+00:00",
+  "turns": [
+    {
+      "schema": "magent.memory-evidence.v1",
+      "turn": 1,
+      "recorded_at": "...",
+      "status": "used",
+      "query_preview": "first 160 characters of the message",
+      "nodes": [{"id": "prefers_pytest", "type": "preference", "score": 0.91, "matched": ["body"], "reason": "..."}],
+      "tokens": {"recalled": 812, "injected": 640, "budget": 4000, "profile_reserve": 1200},
+      "truncated": false,
+      "truncation": []
+    }
+  ],
+  "summary": {"turns": 1, "turns_with_memory": 1, "unique_nodes": ["prefers_pytest"], "tokens_injected": 640, "truncated": false}
+}
+```
+
+`status` is one of `used`, `no_match`, `unavailable` or `blocked_by_profile`; `truncation`
+lists `recall_budget` and/or `profile_reserve`; `score` may be `null`. `last` picks the newest
+task that recorded evidence. When nothing matches, the command exits 1 with
+`{"ok": false, "schema": ..., "error": ..., "hint": ...}`. The same records are in the task's
+`metadata.memory_evidence` (`magent execution show <task-id>`).
 
 `memory update-node --preview` returns old/new body hashes and char counts without writing. Use that before applying desktop edits.
 

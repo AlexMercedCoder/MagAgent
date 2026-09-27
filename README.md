@@ -1,6 +1,8 @@
 <div align="center">
 
-Release: [1.3.0 release notes](docs/RELEASE_NOTES_1.3.0.md).
+**The memory-first personal agent: it remembers you across sessions, in Git-backed Markdown you can review.**
+
+Current release: **1.3.0** ([release notes](docs/RELEASE_NOTES_1.3.0.md)). Unreleased work for 1.4.0 is tracked in the [CHANGELOG](CHANGELOG.md).
 
 <img src="docs/assets/brand/magagent-logo.png" alt="MagAgent logo" width="220">
 
@@ -13,9 +15,22 @@ Release: [1.3.0 release notes](docs/RELEASE_NOTES_1.3.0.md).
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![CI](https://github.com/AlexMercedCoder/MagAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexMercedCoder/MagAgent/actions/workflows/ci.yml)
 
-[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Agentic Graphs](#agentic-graphs) · [Gateway](#remote-gateway) · [Roadmap to 1.0](ROADMAP.md) · [Docs](docs/)
+[Quick Start](#quick-start) · [Providers](#providers) · [Tools](#tools) · [Skills](#skills) · [Memory](#memory-graph) · [Agentic Graphs](#agentic-graphs) · [Gateway](#remote-gateway) · [Roadmap](ROADMAP.md) · [Docs](docs/)
 
 </div>
+
+---
+
+## Which tool do I want?
+
+MagAgent is one of four related projects. Pick by what you need:
+
+| I want... | Use |
+|---|---|
+| A governed agent for a team or data platform | [Loro](https://github.com/alexmerced-oss/loro) |
+| A personal agent that remembers me | [MagAgent](https://github.com/AlexMercedCoder/MagAgent) |
+| A desktop app for my agent | [Mag Command Center](https://github.com/AlexMercedCoder/MagCommandCenter) |
+| One identity across Claude Code, Codex, Gemini and the other harnesses I already use | [Merced AI](https://github.com/AlexMercedCoder/merced-ai) |
 
 ---
 
@@ -73,8 +88,9 @@ MagAgent is a **CLI-first AI coding agent** that:
 - Publishes a proposed 1.0 contract inventory and refuses unsafe persistent-state downgrades
 - Provides backup-first state migration and rollback through `magent system migrate` and `magent system rollback`
 - Generates dependency-audit, secret-scan, CycloneDX SBOM, SHA-256, and in-toto provenance evidence for releases
-- Connects to **20 provider options** (local and cloud) via a single config
-- Has **40 built-in tools** out of the box — no plugins or configuration required
+- Connects to **22 provider options** (local and cloud) via a single config, plus an offline `mock` provider for demos and CI
+- Has **49 built-in tools** out of the box — no plugins or configuration required
+- Records which memories every run used (node ids, scores, token cost, truncation) and shows them with `/why last`, `magent memory evidence` and the Web UI run center
 - Includes **10 pre-built skill libraries** for docs, spreadsheets, PDFs, images, video, data analysis, REST APIs, databases, desktop automation, and Git
 - Uses token-efficient context management: conversation compaction, repo-map slices, memory/skill budgets, and compressed tool results
 - Ships built-in offline documentation and self-help search through `magent docs`
@@ -151,6 +167,7 @@ magent
 
 ```bash
 magent ask "Refactor the auth module to use JWTs and add tests"
+magent ask --prompt-file task.md --json   # large prompts; stdout carries only JSON
 magent goal "Implement the dashboard until tests pass and review is clean"
 magent goal "Ship the dashboard" --orchestrated
 magent goal-run plan_0001 --dry-run
@@ -175,6 +192,11 @@ magent eval init
 magent onboard --profile coding-cloud
 magent next
 ```
+
+`magent ask --json` writes exactly one JSON document to stdout (one line when stdout is not a
+terminal); status text goes to stderr. With `--approval-stdio`, AAIS approval envelopes precede it
+as NDJSON lines and decisions are read from stdin, which is why large prompts use
+`--prompt-file` rather than stdin.
 
 ---
 
@@ -209,6 +231,10 @@ keys.
 | **Fireworks AI** | `fireworks_ai` | Hosted open and coding models |
 | **DeepInfra** | `deepinfra` | Hosted open models |
 | **Custom** | `custom` | Any OpenAI-compatible endpoint |
+| **Mock** | `mock` | Offline demo: deterministic, clearly labeled canned replies, no model, no key, no tool calls (experimental) |
+
+Try MagAgent with no key at all: `magent ask "hello" --provider mock`. Every mock reply starts with
+`[MagAgent mock provider: offline demo reply, no model was called]`.
 
 Configure multiple providers and switch mid-session: `/model anthropic/claude-3-5-sonnet`
 
@@ -269,12 +295,18 @@ Credential helpers:
 
 ```bash
 magent auth list
-magent auth add openai
+magent auth add openai                       # prompts with hidden input
+printf '%s' "$KEY" | magent auth add nous-portal --api-key-stdin
+printf '%s' "$KEY" | magent auth add openai --api-key-stdin --storage config
 magent auth remove openai
 magent provider set openai --model gpt-5 --api-key-keyring openai
 ```
 
-When Python `keyring` is available, `magent auth add` stores the provider key in the OS credential store and config can reference it without putting the secret in TOML.
+`--api-key-stdin` reads the key from standard input so it never appears in argv, process
+listings or shell history; scripts and desktop apps should use it. By default the key goes to
+the OS credential store (this needs the Python `keyring` package); `--storage config` writes it
+to `config.toml` and tightens the file to mode 0600. The command prints JSON and never echoes the
+key. Exit codes: 0 stored, 1 storage failed, 2 usage error.
 
 Review config changes before applying them:
 
@@ -289,7 +321,7 @@ magent events list
 
 ## Tools
 
-MagAgent ships with **40 built-in tools** the agent can call without any setup.
+MagAgent ships with **49 built-in tools** the agent can call without any setup (the count comes from the tool registry; `magent tools list` shows them).
 
 Tool capability packs make selective loading explicit:
 
@@ -412,7 +444,26 @@ magent permission trust-clear "curl * | *"
 /mode paranoid
 ```
 
-Shell prompts can be approved once, for the current session, or always. Saved
+### Approval grants
+
+When a run started from the Web UI, a graph, Mag Command Center or `--approval-stdio` asks for
+approval, "Allow this exact action for this session" and "Always allow this exact action" create
+a *grant* for that exact action digest. New "always" grants expire after 30 days
+(`permissions.grant_ttl_days`; 0 disables expiry). Every action a grant approves is still
+recorded: a full AAIS requested/decided/resolved exchange whose decision actor is the grant.
+
+```bash
+magent permission grants list            # status, expiry, use count
+magent permission grants list --active --json
+magent permission grants revoke grt_0123abcd
+magent permission grants revoke --expired
+magent permission grants revoke --all --yes
+```
+
+Grants created before 1.4 have no expiry. They still apply, and the list flags them as legacy
+so you can revoke them and approve again.
+
+Terminal shell prompts can be approved once, for the current session, or always. Saved
 approvals are stored as trusted shell patterns in the active user profile. For
 safe read-only fetch pipelines such as `curl | grep | head`, MagAgent stores a
 broader scoped pattern like `curl * | *` so similar diagnostic probes do not
@@ -478,9 +529,21 @@ magent memory suppress <node-id>        # Mark stale memory suppressed
 magent memory unsuppress <node-id>      # Remove suppression markers
 magent memory ui                        # Open MagGraph dashboard
 magent memory sync status               # Run MagGraph sync status
+magent memory evidence                  # Which memories the newest run used
+magent memory evidence <task-id> --json # Same, for one run, as JSON
 magent memory export --out backup.json  # Export all nodes as JSON
 magent memory reset                     # Wipe all memory (with confirmation)
 ```
+
+### Memory evidence per run
+
+Every turn records which memory nodes reached the prompt: node id, type, score, what matched,
+the estimated tokens recalled and injected against the memory budget, and whether the budget or
+the profile-state reserve truncated it. A turn that used no memory records why (no match, graph
+unavailable, or the agent profile does not allow memory reads). The evidence is saved with the
+run's execution task, returned by `magent ask --json` (`memory_evidence`), shown by `/why last`
+in a terminal session and `magent memory evidence`, and displayed in the Web UI run center's
+"Memory used" panel. Token figures are estimates (about four characters per token).
 
 ### Token-Efficient Context
 
@@ -1132,7 +1195,7 @@ src/magent/
 ├── skills/           # SKILL.md discovery, matching, lockfile
 ├── subagents/        # Sub-agent runner
 ├── tokens.py         # Lightweight token budgeting helpers
-├── tools/            # 47 built-in tools (file, web/WebMCP, browser, db, system, image)
+├── tools/            # 49 built-in tools (file, web/WebMCP, browser, db, system, image)
 │   ├── executor.py   # Stable ToolExecutor dispatch facade
 │   ├── artifacts.py  # Document, diagram, and image capability tools
 │   ├── data.py       # JSON query and named SQLite facade tools

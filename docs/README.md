@@ -36,6 +36,7 @@ magent docs doctor
 - [Threat Model](../src/magent/docs/threat-model.md)
 - [Compatibility And State Migration](../src/magent/docs/compatibility.md)
 - [Release Supply Chain](../src/magent/docs/supply-chain.md)
+- [MagAgent 1.3.0 Release Notes](RELEASE_NOTES_1.3.0.md) (current release)
 - [MagAgent 1.2.0 WebMCP Release](RELEASE_1.2.0.md)
 - [MagAgent 1.0.0 Web UI Release](RELEASE_1.0.0.md)
 - [MagAgent 0.99.0 OAP/AGS Alignment](RELEASE_0.99.0.md)
@@ -108,7 +109,7 @@ Gateway setup covers user/channel allowlists rather than tokens alone. See
 
 ## Architecture And Workflow
 
-- [MagAgent Roadmap to 1.0](../ROADMAP.md)
+- [MagAgent Roadmap (post-1.0)](../ROADMAP.md)
 - [Architecture](../src/magent/docs/architecture.md)
 - [Architecture Exceptions](../src/magent/docs/architecture-exceptions.md)
 - [Workbench](../src/magent/docs/workbench.md)

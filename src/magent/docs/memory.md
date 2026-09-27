@@ -109,3 +109,17 @@ The repository baseline can be reproduced with:
 magent eval memory evals/memory-quality-v2.json \
   --memory-dir evals/fixtures/memory-demo --project demo
 ```
+
+## Which memories did a run use?
+
+Each turn records the recalled node ids, scores, what matched, the estimated token cost and any
+truncation. Look at it with:
+
+```bash
+/why last                          # inside a terminal session
+magent memory evidence             # newest run that recorded evidence
+magent memory evidence <task-id> --json
+```
+
+The Web UI run center shows the same data in its "Memory used" panel, and
+`magent ask --json` includes it as `memory_evidence`. Token counts are estimates.

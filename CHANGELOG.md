@@ -1,10 +1,75 @@
 # Changelog
 
-## 1.3.0 — Unreleased
+## Unreleased
+
+Target: 1.4.0. The package version in `pyproject.toml` stays 1.3.0 until the release is cut.
+
+### Added
+
+- **Per-run memory evidence (G-3).** Every turn records which MagGraph nodes were recalled
+  (id, type, score, matched fields, reason), estimated tokens recalled and injected against the
+  budget, and whether the memory budget or the profile-state reserve truncated it
+  (`magent.memory-evidence.v1`). Turns that used no memory record why. The records are saved with
+  the execution task (`metadata.memory_evidence`), emitted as `memory_recalled` activity events,
+  returned by `magent ask --json` and `--events`, and attached to Web UI chat runs.
+- `/why last` in terminal sessions explains the last turn's memory use (or the newest recorded
+  run). `magent memory evidence [TASK_ID|last] [--json]` and `desktop_api.memory_evidence()`
+  return `magent.run-memory-evidence.v1` for desktop clients; the contract is listed as beta in
+  `magent system compatibility`.
+- Web UI run center: a "Memory used" panel with per-run totals, a per-turn token meter and a node
+  table.
+- **Approval grant lifecycle (G-1).** New "always allow" grants expire after
+  `permissions.grant_ttl_days` (default 30; 0 disables). Grants created before this release are
+  still honoured and are flagged as legacy. Each grant hit is recorded as a full AAIS
+  requested/decided/resolved exchange (actor `magent.grant:<id>`) plus a `grant_hits` receipt.
+  New `magent permission grants list` and `magent permission grants revoke`.
+- **`magent auth add <provider> --api-key-stdin` (G-4)** reads the key from stdin so it never
+  appears in argv. `--storage keyring|config` chooses the store. `--api-key VALUE` still works but
+  is hidden and warns.
+- **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
+  clearly labeled replies, no network, no key, no tool calls, $0 usage.
+- **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the
+  AAIS approval channel.
+
+### Changed
+
+- `magent ask --json` keeps stdout for machine output only: AAIS NDJSON lines (with
+  `--approval-stdio`) and one result document, a single line when stdout is not a terminal.
+  Status text such as "Loaded N skills" now goes to stderr. Parsers that treated stdout as JSON
+  Lines previously saw only the approval envelopes and reported an empty reply.
+- Naming only `--provider` now uses that provider's default model instead of the default
+  provider's model.
+- The shell tool runs shell syntax with `bash --noprofile --norc -c` instead of a login shell.
+  Commands no longer re-source your profile (about 17x slower per command) and profile output no
+  longer leaks into results. Commands still inherit MagAgent's environment, including `PATH`.
+- `magent auth remove` also clears a key stored in `config.toml` and no longer fails when no
+  keyring backend is installed.
+- Task-ledger SQLite connections skip the WAL checkpoint on close (Python 3.12+), which cut the
+  task-runtime benchmark from about 70s to about 15s on a slow disk. Commits stay durable.
+
+### Fixed
+
+- Web UI on phones: the closed conversation drawer covered the navigation rail, rail buttons lost
+  their accessible names when labels are hidden, and the empty-chat welcome and starter prompts
+  were unstyled.
+- Deflaked `test_run_shell_allows_quoted_html_in_read_only_validation`: its result depended on the
+  host's login profile and load (see the shell change above). A regression test pins it.
+
+### Docs and tooling
+
+- README opens with MagAgent's role and a shared "Which tool do I want?" table.
+- Fixed drift: tool count (49, from the registry), provider count (22 plus `mock`), conformance
+  stamps (`docs/*-conformance.json` now `1.3.0`, re-checked against the pinned OAP and AGS
+  fixtures), the 1.3.0 CHANGELOG heading, the generated config reference, ROADMAP and PRD status.
+- `scripts/check_release_metadata.py` checks that the package version, README current-release
+  line, conformance stamps, web UI package version and top released CHANGELOG heading agree. CI
+  runs it strictly on tags and as an advisory check otherwise.
+- Tests marked `slow` are skipped by default (`pytest -m slow` runs them) and run with the
+  coverage measurement in a separate CI job.
+
+## 1.3.0 (2026-09-12)
 
 See [release notes](docs/RELEASE_NOTES_1.3.0.md).
-
-## Unreleased
 
 ## 1.2.0 (2026-09-06)
 

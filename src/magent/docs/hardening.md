@@ -21,6 +21,20 @@ wildcard to cross into another pipeline or interpreter.
 Use `magent permission trust-list` to inspect saved approvals and
 `magent permission trust-clear --yes` to remove them.
 
+Those trusted shell patterns come from the terminal prompt. Approvals answered through the AAIS
+broker (Web UI, graphs, Mag Command Center, `--approval-stdio`) create exact-action grants
+instead. New "always" grants expire after `permissions.grant_ttl_days` (default 30, 0 disables).
+Every grant hit is written to the approval log as a requested/decided/resolved exchange with
+the grant as the decision actor, so remembered approvals stay auditable.
+
+```bash
+magent permission grants list
+magent permission grants revoke <grant-id>
+magent permission grants revoke --expired
+```
+
+Grants from before 1.4 have no expiry; the list flags them as legacy until you revoke them.
+
 ## Check Secret Hygiene
 
 ```bash
