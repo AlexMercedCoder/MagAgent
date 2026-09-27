@@ -40,6 +40,12 @@ REGISTRY_SCHEMA = "magent.plugin-registry.v2"
 REGISTRIES_FILE = "plugin-registries.json"
 MAX_INDEX_BYTES = 4 * 1024 * 1024
 MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
+# Limits on what an archive may unpack to (a small .tar.gz can expand to
+# gigabytes).
+MAX_UNPACKED_BYTES = 200 * 1024 * 1024
+MAX_ARCHIVE_MEMBERS = 5000
+MAX_REDIRECTS = 5
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
 class RegistryError(RuntimeError):
@@ -93,22 +99,38 @@ def _is_url(location: str) -> bool:
     return urlparse(location).scheme in {"http", "https"}
 
 
+def _check_scheme(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme == "https":
+        return
+    if parsed.scheme == "http" and parsed.hostname in LOOPBACK_HOSTS:
+        return
+    raise RegistryError(f"Registries must use HTTPS (plain HTTP only on loopback): {url}")
+
+
 def _read(location: str, limit: int) -> bytes:
     if _is_url(location):
-        parsed = urlparse(location)
-        if parsed.scheme == "http" and parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
-            raise RegistryError("Registries must use HTTPS (plain HTTP only on loopback).")
         import httpx
 
-        with httpx.stream("GET", location, timeout=60, follow_redirects=True) as response:
-            if response.status_code >= 400:
-                raise RegistryError(f"{location} returned HTTP {response.status_code}")
-            chunks = bytearray()
-            for chunk in response.iter_bytes():
-                chunks.extend(chunk)
-                if len(chunks) > limit:
-                    raise RegistryError(f"{location} is larger than {limit} bytes")
-            return bytes(chunks)
+        # Redirects are followed by hand so every hop is checked: an HTTPS
+        # registry that redirects to plain HTTP would otherwise let anyone on
+        # the network rewrite the index.
+        url = location
+        for _hop in range(MAX_REDIRECTS + 1):
+            _check_scheme(url)
+            with httpx.stream("GET", url, timeout=60, follow_redirects=False) as response:
+                if response.is_redirect:
+                    url = urljoin(url, response.headers.get("location", ""))
+                    continue
+                if response.status_code >= 400:
+                    raise RegistryError(f"{location} returned HTTP {response.status_code}")
+                chunks = bytearray()
+                for chunk in response.iter_bytes():
+                    chunks.extend(chunk)
+                    if len(chunks) > limit:
+                        raise RegistryError(f"{location} is larger than {limit} bytes")
+                return bytes(chunks)
+        raise RegistryError(f"{location} redirected more than {MAX_REDIRECTS} times")
     path = Path(location).expanduser()
     if path.is_dir():
         path = path / "index.json"
@@ -161,9 +183,37 @@ def search(query: str = "", *, registry: str = "") -> list[dict[str, Any]]:
     return sorted(results, key=lambda item: (str(item.get("name")), str(item.get("version"))))
 
 
+def version_key(version: str) -> tuple[tuple[int, int | str], ...]:
+    """Order versions numerically (1.10.0 after 1.9.0); text parts sort before numbers."""
+
+    import re
+
+    parts = re.split(r"[.+-]", version.strip().lstrip("vV"))
+    return tuple((1, int(part)) if part.isdigit() else (0, part) for part in parts if part)
+
+
+def _installed_version(name: str) -> str:
+    from magent.plugin_sdk import _manifest
+    from magent.plugins import _plugin_target
+
+    target = _plugin_target(name)
+    if not target.get("ok") or not target["path"].exists():
+        return ""
+    return str(_manifest(target["path"]).get("version") or "")
+
+
 def _safe_extract(archive: bytes, target: Path) -> Path:
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as bundle:
-        members = bundle.getmembers()
+        members = []
+        unpacked = 0
+        for member in bundle:
+            members.append(member)
+            unpacked += max(0, member.size)
+            if len(members) > MAX_ARCHIVE_MEMBERS or unpacked > MAX_UNPACKED_BYTES:
+                raise RegistryError(
+                    "the archive unpacks to more than "
+                    f"{MAX_ARCHIVE_MEMBERS} entries or {MAX_UNPACKED_BYTES // (1024 * 1024)} MiB"
+                )
         for member in members:
             if member.issym() or member.islnk() or member.isdev():
                 raise RegistryError(f"archive entry {member.name!r} is a link or device")
@@ -198,7 +248,7 @@ def install_from_registry(
     the key to the trust store.
     """
 
-    from magent.plugin_sdk import plugin_digest
+    from magent.plugin_sdk import _manifest, plugin_digest
     from magent.plugin_signing import trust_key, verify_signature
     from magent.plugins import install_plugin
 
@@ -208,11 +258,24 @@ def install_from_registry(
         matches = [item for item in matches if item.get("version") == version]
     if not matches:
         raise RegistryError(f"No plugin {spec!r} in the configured registries.")
-    entry = matches[-1]
+    sources = sorted({str(item["registry"]) for item in matches})
+    if len(sources) > 1:
+        # Otherwise any configured registry could shadow a plugin from another
+        # one simply by publishing a higher version number.
+        raise RegistryError(
+            f"{name} is offered by more than one registry ({', '.join(sources)}); "
+            "choose one with --registry."
+        )
+    entry = max(matches, key=lambda item: version_key(str(item.get("version") or "")))
     location = list_registries()[entry["registry"]]
     archive_ref = str(entry.get("archive") or "")
     if not archive_ref:
         raise RegistryError(f"{spec} has no archive in its registry entry")
+    if _is_url(archive_ref) and _is_url(location):
+        index_host = urlparse(location).hostname
+        archive_host = urlparse(archive_ref).hostname
+        if archive_host in LOOPBACK_HOSTS and index_host not in LOOPBACK_HOSTS:
+            raise RegistryError("a remote registry may not point archives at this machine")
     source = (
         archive_ref
         if _is_url(archive_ref)
@@ -233,7 +296,28 @@ def install_from_registry(
         digest = plugin_digest(root)
         if entry.get("digest") and digest != entry["digest"]:
             raise RegistryError("the unpacked plugin does not match the registry's digest")
+        manifest = _manifest(root)
+        if (str(manifest.get("name") or ""), str(manifest.get("version") or "")) != (
+            name,
+            str(entry.get("version") or ""),
+        ):
+            raise RegistryError(
+                f"the archive holds {manifest.get('name')} {manifest.get('version')}, not "
+                f"{name} {entry.get('version')} as the registry claims"
+            )
+        installed = _installed_version(name)
+        if (
+            installed
+            and not version
+            and version_key(installed) > version_key(str(entry.get("version") or ""))
+        ):
+            raise RegistryError(
+                f"{name} {installed} is installed and the registry offers only "
+                f"{entry.get('version')}; install {name}@{entry.get('version')} to downgrade"
+            )
         verification = verify_signature(root)
+        # What the pack itself asks for, not what the (unsigned) index says.
+        verification["permissions"] = list(manifest.get("permissions") or [])
         status = verification["status"]
         if status == "invalid":
             raise RegistryError(f"signature check failed: {verification.get('reason')}")
@@ -251,11 +335,14 @@ def install_from_registry(
                     f"`magent plugin trust add {verification['key_id']} {verification['public_key']}` "
                     "after checking the fingerprint with its publisher."
                 )
-            trust_key(
-                str(verification["key_id"] or entry["registry"]),
-                verification["public_key"],
-                note=f"trusted while installing {spec}",
-            )
+            try:
+                trust_key(
+                    str(verification["key_id"] or entry["registry"]),
+                    verification["public_key"],
+                    note=f"trusted while installing {spec}",
+                )
+            except ValueError as error:
+                raise RegistryError(str(error)) from error
             verification = verify_signature(root)
         result = install_plugin(root, force=force)
     if not result.get("ok"):

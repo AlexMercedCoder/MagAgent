@@ -153,13 +153,23 @@ magent plugin trust list
 magent plugin verify ~/.config/magent/plugins/release-kit --require-signature
 ```
 
-Installing from a registry checks the archive's sha256, unpacks it without allowing links or
-paths outside the pack, checks the pack digest against the index, and verifies the signature.
-A pack signed by a key you have not trusted shows the key's fingerprint and requested
-permissions and asks before trusting it (`--yes` trusts it without asking; in a
+Installing from a registry checks the archive's sha256, unpacks it without allowing links,
+paths outside the pack, more than 5,000 entries or more than 200 MiB, checks the pack digest
+against the index, checks that the archive holds the name and version the index claims, and
+verifies the signature on the installed copy. Versions compare numerically (1.10.0 is newer
+than 1.9.0); a plain `install NAME` never downgrades an installed plugin (name the version to do
+that), and a plugin offered by more than one registry needs `--registry`. Redirects are checked
+at every hop, so an HTTPS registry cannot be redirected to plain HTTP. A pack signed by a key
+you have not trusted shows the key's fingerprint and the permissions from the signed manifest
+(not from the index) and asks before trusting it (`--yes` trusts it without asking; in a
 non-interactive shell it refuses). Unsigned packs need `--allow-unsigned`. Registries must use
 HTTPS (plain HTTP only on loopback). MagAgent only reads registries: there is no hosted
 registry, and nothing is published for you.
+
+A signed pack is installed with its manifest unchanged, so `plugin verify --require-signature`
+works on the installed copy, and `plugin enable` refuses a signed pack whose signature no longer
+verifies. Signed packs may not contain symlinks. Trusting a key never replaces a different key
+already trusted under the same name: remove the old one first.
 
 Trusted keys live in `~/.config/magent/trusted-plugin-keys.json`; registries in
 `~/.config/magent/plugin-registries.json`. Private keys are never stored by MagAgent.

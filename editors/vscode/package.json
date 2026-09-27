@@ -6,16 +6,39 @@
   "private": true,
   "publisher": "alexmerced",
   "license": "Apache-2.0",
-  "engines": { "vscode": "^1.95.0" },
-  "categories": ["AI", "Other"],
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
   "main": "./dist/extension.js",
   "activationEvents": [],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "MagAgent runs an agent with your permissions in the workspace folder, so it only runs in trusted workspaces."
+    }
+  },
   "contributes": {
     "commands": [
-      { "command": "magagent.ask", "title": "MagAgent: Ask" },
-      { "command": "magagent.askAboutSelection", "title": "MagAgent: Ask About Selection" },
-      { "command": "magagent.cancel", "title": "MagAgent: Cancel Run" },
-      { "command": "magagent.memoryUsed", "title": "MagAgent: Show Memory Used by Last Run" }
+      {
+        "command": "magagent.ask",
+        "title": "MagAgent: Ask"
+      },
+      {
+        "command": "magagent.askAboutSelection",
+        "title": "MagAgent: Ask About Selection"
+      },
+      {
+        "command": "magagent.cancel",
+        "title": "MagAgent: Cancel Run"
+      },
+      {
+        "command": "magagent.memoryUsed",
+        "title": "MagAgent: Show Memory Used by Last Run"
+      }
     ],
     "configuration": {
       "title": "MagAgent",
@@ -23,13 +46,19 @@
         "magagent.executable": {
           "type": "string",
           "default": "magent",
-          "description": "The magent command (or full path) to run."
+          "description": "The magent command (or full path) to run. User settings only: a workspace cannot change it.",
+          "scope": "machine"
         },
         "magagent.permissionMode": {
           "type": "string",
-          "enum": ["balanced", "paranoid", "silent"],
+          "enum": [
+            "balanced",
+            "paranoid",
+            "silent"
+          ],
           "default": "balanced",
-          "description": "Permission mode for runs started from VS Code. Approvals are asked in VS Code."
+          "description": "Permission mode for runs started from VS Code. Approvals are asked in VS Code. User settings only.",
+          "scope": "machine"
         }
       }
     }

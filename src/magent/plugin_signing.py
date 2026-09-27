@@ -144,7 +144,7 @@ def verify_signature(root: Path, trusted: dict[str, str] | None = None) -> dict[
     from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-    from magent.plugin_sdk import _manifest, plugin_digest
+    from magent.plugin_sdk import _manifest, pack_symlinks, plugin_digest
 
     path = root / SIGNATURE_FILE
     if not path.exists():
@@ -159,12 +159,24 @@ def verify_signature(root: Path, trusted: dict[str, str] | None = None) -> dict[
     manifest = _manifest(root)
     name, version = str(manifest.get("name") or ""), str(manifest.get("version") or "")
     digest, manifest_hash = plugin_digest(root), manifest_digest(root)
+    try:
+        key_fingerprint = fingerprint(public)
+    except ValueError as error:
+        return {"status": "invalid", "ok": False, "reason": f"unreadable public key: {error}"}
     base = {
         "key_id": document.get("key_id", ""),
         "public_key": public,
-        "fingerprint": fingerprint(public),
+        "fingerprint": key_fingerprint,
         "digest": digest,
     }
+    links = pack_symlinks(root)
+    if links:
+        return {
+            **base,
+            "status": "invalid",
+            "ok": False,
+            "reason": "signed packs may not contain symlinks: " + ", ".join(links[:5]),
+        }
     if (document.get("name"), document.get("version")) != (name, version):
         return {**base, "status": "invalid", "ok": False, "reason": "name or version changed"}
     if document.get("digest") != digest:
@@ -216,6 +228,15 @@ def trust_key(key_id: str, public_key: str, *, note: str = "") -> dict[str, Any]
     if path.exists():
         with contextlib.suppress(ValueError):
             data = json.loads(path.read_text(encoding="utf-8"))
+    existing = data.get("keys", {}).get(key_id)
+    if isinstance(existing, dict) and existing.get("public_key") not in {None, public_key}:
+        # A pack can name any key_id; replacing a trusted key under the same
+        # name would silently hand that name's trust to a different key.
+        raise ValueError(
+            f"a different key is already trusted as {key_id!r} "
+            f"({existing.get('fingerprint', '')}); remove it first with "
+            f"`magent plugin trust remove {key_id}` if you really mean to replace it"
+        )
     data.setdefault("keys", {})[key_id] = {
         "public_key": public_key,
         "fingerprint": fingerprint(public_key),

@@ -77,7 +77,16 @@ DENIED_COMMANDS = {
     ("memory", "ui"),
     ("mcp", "serve"),
 }
+# Root options that change the user's shell configuration.
+DENIED_ROOT_FLAGS = {"--install-completion", "--show-completion"}
 SECRET_FLAGS = {"--api-key", "--token", "--password", "--secret"}
+MAX_FINISHED_STREAMS = 32
+MAX_LINE_BYTES = 1024 * 1024
+SOCKET_TIMEOUT_SECONDS = 60
+# Failed-authentication records written to the audit log per minute; beyond
+# that they are counted but not written, so an unauthenticated flood cannot
+# fill the disk.
+UNAUTHORIZED_AUDIT_PER_MINUTE = 60
 
 # JSON-RPC error codes.
 PARSE_ERROR = -32700
@@ -110,6 +119,54 @@ def magent_argv() -> list[str]:
     """How the gateway starts MagAgent: the same interpreter, `python -m magent`."""
 
     return [sys.executable, "-m", "magent"]
+
+
+def _is_group(command: Any) -> bool:
+    return hasattr(command, "resolve_command") and hasattr(command, "commands")
+
+
+def _leftover(ctx: Any) -> list[str]:
+    return list(getattr(ctx, "_protected_args", None) or []) + list(ctx.args)
+
+
+def resolve_command_path(args: list[str]) -> tuple[str, ...] | None:
+    """The command MagAgent's CLI would run for ``args``, as canonical names.
+
+    Parsed with the real CLI definition, so root options that take values
+    (``--provider x serve``), ``--opt=value`` forms and ``--`` are handled the
+    way ``magent`` itself handles them. ``None`` when the CLI cannot be loaded.
+    """
+
+    try:
+        import typer
+
+        from magent.cli.main import app
+
+        command: Any = typer.main.get_command(app)
+        ctx = command.make_context("magent", list(args), resilient_parsing=True)
+    except Exception:
+        return None
+    path: list[str] = []
+    rest = _leftover(ctx)
+    while _is_group(command) and rest:
+        try:
+            name, sub, rest = command.resolve_command(ctx, rest)
+        except Exception:
+            break
+        if sub is None:
+            break
+        path.append(str(sub.name or name))
+        try:
+            ctx = sub.make_context(name, list(rest), parent=ctx, resilient_parsing=True)
+        except Exception:
+            break
+        rest = _leftover(ctx) if _is_group(sub) else []
+        command = sub
+    return tuple(path)
+
+
+def _heuristic_command_path(args: list[str]) -> tuple[str, ...]:
+    return tuple(item for item in args if not item.startswith("-"))
 
 
 def redact_args(args: Iterable[str]) -> list[str]:
@@ -211,6 +268,8 @@ class Gateway:
         self.roots = [Path(root).resolve() for root in roots] or [Path.cwd().resolve()]
         self.audit_path = audit_path
         self.bucket = TokenBucket(rate_per_minute)
+        self.unauthorized_audit = TokenBucket(UNAUTHORIZED_AUDIT_PER_MINUTE)
+        self.unauthorized_dropped = 0
         self.command = command
         self.env = env
         self.streams: dict[str, StreamRun] = {}
@@ -240,7 +299,9 @@ class Gateway:
         entry = {"ts": datetime.now(UTC).isoformat(), **record}
         with self.audit_lock, contextlib.suppress(OSError):
             self.audit_path.parent.mkdir(parents=True, exist_ok=True)
-            with self.audit_path.open("a", encoding="utf-8") as handle:
+            # Prompts and arguments are private: create the log owner-only.
+            descriptor = os.open(self.audit_path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            with os.fdopen(descriptor, "a", encoding="utf-8") as handle:
                 handle.write(json.dumps(entry, default=str) + "\n")
 
     def validate_args(self, params: dict[str, Any]) -> list[str]:
@@ -249,7 +310,11 @@ class Gateway:
             raise RpcError(INVALID_PARAMS, "params.args must be a list of strings")
         if len(args) > MAX_ARGS or any(len(item.encode()) > MAX_ARG_BYTES for item in args):
             raise RpcError(INVALID_PARAMS, "params.args exceeds the gateway limits")
-        words = tuple(item for item in args if not item.startswith("-"))
+        for item in args:
+            if item.partition("=")[0] in DENIED_ROOT_FLAGS:
+                raise RpcError(FORBIDDEN, f"`magent {item}` is not available through the gateway")
+        resolved = resolve_command_path(args)
+        words = resolved if resolved is not None else _heuristic_command_path(args)
         for denied in DENIED_COMMANDS:
             if words[: len(denied)] == denied:
                 raise RpcError(
@@ -356,6 +421,7 @@ class Gateway:
                 raise RpcError(BUSY, f"at most {MAX_CONCURRENT_STREAMS} streams may run at once")
             if stream_id in self.streams:
                 raise RpcError(INVALID_PARAMS, f"stream {stream_id} already exists")
+            self._evict_finished()
             process = self._spawn(args, stdin=True)
             run = StreamRun(stream_id, args, process, time.time())
             self.streams[stream_id] = run
@@ -369,9 +435,17 @@ class Gateway:
         threading.Thread(target=self._reap, args=(run, readers), daemon=True).start()
         return {"id": stream_id, "command": self._command_string(args)}
 
+    def _evict_finished(self) -> None:
+        """Forget the oldest finished streams beyond MAX_FINISHED_STREAMS (lock held)."""
+
+        finished = [run for run in self.streams.values() if run.result is not None]
+        finished.sort(key=lambda run: run.started_at)
+        for run in finished[: max(0, len(finished) - MAX_FINISHED_STREAMS + 1)]:
+            self.streams.pop(run.id, None)
+
     def _pump(self, run: StreamRun, pipe: Any, stream: str) -> None:
         with contextlib.suppress(Exception):
-            for raw in iter(pipe.readline, b""):
+            for raw in iter(lambda: pipe.readline(MAX_LINE_BYTES), b""):
                 run.append(stream, raw.decode("utf-8", errors="replace").rstrip("\n"))
         with contextlib.suppress(Exception):
             pipe.close()
@@ -413,8 +487,13 @@ class Gateway:
 
     def stream_events(self, params: dict[str, Any]) -> dict[str, Any]:
         run = self._stream(params)
-        after = int(params.get("after") or 0)
-        wait_ms = max(0, min(int(params.get("wait_ms") or 0), MAX_WAIT_MS))
+        try:
+            after = int(params.get("after") or 0)
+            wait_ms = max(0, min(int(params.get("wait_ms") or 0), MAX_WAIT_MS))
+        except (TypeError, ValueError) as error:
+            raise RpcError(
+                INVALID_PARAMS, "params.after and params.wait_ms must be integers"
+            ) from error
         deadline = time.monotonic() + wait_ms / 1000
         with run.changed:
             while run.sequence <= after and run.result is None:
@@ -541,7 +620,10 @@ class Gateway:
             )
             return {"jsonrpc": "2.0", "id": request_id, "result": result}
         except RpcError as error:
-            self.audit({"peer": peer, "method": method, "ok": False, "error": error.message})
+            if error.code != UNAUTHORIZED or self.unauthorized_audit.take():
+                self.audit({"peer": peer, "method": method, "ok": False, "error": error.message})
+            else:
+                self.unauthorized_dropped += 1
             return {"jsonrpc": "2.0", "id": request_id, "error": error.to_dict()}
         except Exception as error:  # never leak a traceback to the client
             self.audit({"peer": peer, "method": method, "ok": False, "error": "internal"})
@@ -559,6 +641,18 @@ def _handler_class(gateway: Gateway) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = f"magent-rpc/{__version__}"
         protocol_version = "HTTP/1.1"
+        # A socket timeout, so a client that connects and sends nothing (or
+        # half a body) cannot hold a thread forever. The SSE stream writes a
+        # keep-alive every 15 s, well inside it.
+        timeout = SOCKET_TIMEOUT_SECONDS
+
+        def _from_browser(self) -> bool:
+            """Browsers add Origin / Sec-Fetch-* headers; the gateway's clients never do.
+
+            Refusing them keeps a web page (including one reached by DNS
+            rebinding) from using the gateway even if it learned the token.
+            """
+            return bool(self.headers.get("Origin") or self.headers.get("Sec-Fetch-Site"))
 
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002 - stdlib signature
             return
@@ -576,7 +670,13 @@ def _handler_class(gateway: Gateway) -> type[BaseHTTPRequestHandler]:
             if urlparse(self.path).path != "/rpc":
                 self._send(404, {"error": "not found"})
                 return
-            length = int(self.headers.get("Content-Length") or 0)
+            if self._from_browser():
+                self._send(403, {"error": "browser requests are not accepted"})
+                return
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                length = 0
             if length <= 0 or length > MAX_BODY_BYTES:
                 self._send(
                     413 if length > MAX_BODY_BYTES else 400,
@@ -587,7 +687,11 @@ def _handler_class(gateway: Gateway) -> type[BaseHTTPRequestHandler]:
                     },
                 )
                 return
-            body = self.rfile.read(length)
+            try:
+                body = self.rfile.read(length)
+            except (TimeoutError, OSError):
+                self.close_connection = True  # slow or vanished client
+                return
             response = gateway.handle(
                 body, self.headers.get("Authorization"), peer=self.client_address[0]
             )
@@ -606,6 +710,9 @@ def _handler_class(gateway: Gateway) -> type[BaseHTTPRequestHandler]:
             if len(parts) != 4 or parts[:2] != ["rpc", "streams"] or parts[3] != "events":
                 self._send(404, {"error": "not found"})
                 return
+            if self._from_browser():
+                self._send(403, {"error": "browser requests are not accepted"})
+                return
             if not gateway.authorized(self.headers.get("Authorization")):
                 self._send(401, {"error": "missing or invalid bearer token"})
                 return
@@ -614,7 +721,11 @@ def _handler_class(gateway: Gateway) -> type[BaseHTTPRequestHandler]:
             except RpcError as error:
                 self._send(404, {"error": error.message})
                 return
-            after = int((parse_qs(parsed.query).get("after") or ["0"])[0] or 0)
+            try:
+                after = int((parse_qs(parsed.query).get("after") or ["0"])[0] or 0)
+            except ValueError:
+                self._send(400, {"error": "after must be an integer"})
+                return
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-store")

@@ -6,7 +6,7 @@ an optional OS keyring boundary for users who want secrets out of TOML.
 
 from __future__ import annotations
 
-import contextlib
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -77,7 +77,9 @@ def save_keyring_secret(provider_id: str, value: str) -> dict[str, Any]:
 
         keyring.set_password(SERVICE_NAME, keyring_account(provider_id), value)
     except Exception as exc:
-        return {"ok": False, "error": f"keyring save failed: {exc}"}
+        # Some backends echo what they were given; never return the value.
+        message = str(exc).replace(value, "<redacted>") if value else str(exc)
+        return {"ok": False, "error": f"keyring save failed: {message}"}
     return {
         "ok": True,
         "provider": provider_id,
@@ -179,11 +181,23 @@ def store_provider_secret(
     else:
         entry.pop("api_key_keyring", None)
         entry["api_key"] = secret
-    save_global_config(cfg)
     path = Path(GLOBAL_CONFIG)
     if storage == "config":
-        with contextlib.suppress(OSError):
+        # Make the file owner-only *before* the key is written: tightening it
+        # afterwards left a new config.toml world-readable (umask 022) for
+        # the moment between the write and the chmod.
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            os.close(os.open(path, os.O_WRONLY | os.O_CREAT, 0o600))
             path.chmod(0o600)
+        except OSError as error:
+            return {
+                "ok": False,
+                "provider": provider_id,
+                "storage": "config",
+                "error": f"could not make {path} private: {error.strerror or error}",
+            }
+    save_global_config(cfg)
     payload: dict[str, Any] = {"ok": True, "provider": provider_id, "storage": storage}
     if storage == "keyring":
         payload["account"] = keyring_account(provider_id)

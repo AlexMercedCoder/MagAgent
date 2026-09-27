@@ -42,64 +42,63 @@ class ParallelReadMixin:
         except (TypeError, ValueError):
             return PARALLEL_READ_DEFAULT
 
-    async def _prefetch_read_only_calls(
-        self, tool_calls: list[Any]
-    ) -> dict[int, tuple[dict[str, Any], float]]:
-        """Run each run of 2+ consecutive read-only calls concurrently.
+    def _read_only_segments(self, tool_calls: list[Any]) -> dict[int, list[int]]:
+        """Runs of 2+ consecutive read-only calls, keyed by their first index.
 
-        Only tools in PARALLEL_READ_ONLY_TOOLS qualify, only when they sit next
-        to each other (a read after a write must see the write), and at most
-        ``agent.max_parallel_read_tools`` at a time. Any permission prompt a
-        read needs is synchronous, so prompts are still asked one at a time.
-        Returns {call index: (result, start time)}.
+        Only tools in PARALLEL_READ_ONLY_TOOLS with well-formed arguments
+        qualify, and only when they sit next to each other.
+        """
+        if self._max_parallel_read_tools() <= 1 or len(tool_calls) < 2:
+            return {}
+        segments: dict[int, list[int]] = {}
+        current: list[int] = []
+        for index, tc in enumerate([*tool_calls, None]):
+            if tc is not None and _read_only_call(tc) is not None:
+                current.append(index)
+                continue
+            if len(current) > 1:
+                segments[current[0]] = current
+            current = []
+        return segments
+
+    async def _run_read_segment(
+        self, tool_calls: list[Any], segment: list[int]
+    ) -> dict[int, tuple[dict[str, Any], float]]:
+        """Run one segment concurrently (bounded); {call index: (result, start time)}.
+
+        The tool loop calls this only when it reaches the segment's first call,
+        so every earlier call (a write, a shell command, an approval that
+        stops the turn) has already happened: reads never run ahead of them.
+        Any permission prompt a read needs is synchronous, so prompts are
+        still asked one at a time.
         """
         limit = self._max_parallel_read_tools()
-        if limit <= 1 or len(tool_calls) < 2:
-            return {}
-        parsed: list[tuple[str, dict[str, Any]] | None] = []
-        for tc in tool_calls:
-            name = str(getattr(tc.function, "name", "") or "")
-            try:
-                arguments = json.loads(tc.function.arguments)
-            except (TypeError, json.JSONDecodeError):
-                arguments = None
-            parsed.append(
-                (name, arguments)
-                if name in PARALLEL_READ_ONLY_TOOLS and isinstance(arguments, dict)
-                else None
-            )
-        segments: list[list[int]] = []
-        current: list[int] = []
-        for index, item in enumerate(parsed):
-            if item is None:
-                if len(current) > 1:
-                    segments.append(current)
-                current = []
-            else:
-                current.append(index)
-        if len(current) > 1:
-            segments.append(current)
-        if not segments:
-            return {}
         semaphore = asyncio.Semaphore(limit)
         results: dict[int, tuple[dict[str, Any], float]] = {}
 
         async def run(index: int) -> None:
-            name, arguments = parsed[index]  # type: ignore[misc]
+            name, arguments = _read_only_call(tool_calls[index])  # type: ignore[misc]
             async with semaphore:
                 started = time.monotonic()
                 results[index] = (await self._execute_tool_call(name, arguments), started)
 
-        for segment in segments:
-            await asyncio.gather(*(run(index) for index in segment))
+        await asyncio.gather(*(run(index) for index in segment))
         self.logger.log_activity_event(
             activity_event(
                 "tool_progress",
                 turn=self.turn_count,
-                detail={
-                    "parallel_read_only": [len(segment) for segment in segments],
-                    "limit": limit,
-                },
+                detail={"parallel_read_only": [len(segment)], "limit": limit},
             )
         )
         return results
+
+
+def _read_only_call(tc: Any) -> tuple[str, dict[str, Any]] | None:
+    name = str(getattr(tc.function, "name", "") or "")
+    if name not in PARALLEL_READ_ONLY_TOOLS:
+        return None
+    try:
+        arguments = json.loads(tc.function.arguments)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    return (name, arguments) if isinstance(arguments, dict) else None

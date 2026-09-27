@@ -27,7 +27,7 @@ nodes:
       kind: a2a
       url: https://agents.example.com/research
       message: "Research this and cite sources: ${{ inputs.question }}"
-      token_env: RESEARCH_AGENT_TOKEN
+      token_env: A2A_RESEARCH_TOKEN
       timeout_seconds: 600
       output: findings
     outputs:

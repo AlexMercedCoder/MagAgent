@@ -26,15 +26,26 @@ stopping cancels every running stream.
 - Requests are bounded: 2 MiB bodies, 256 arguments of at most 64 KiB, 2 MiB of stdin, 8 MiB of
   captured output, 4 concurrent streams, 240 requests per minute.
 - Commands that start servers or need a terminal are refused: `serve`, `ui`, `setup`,
-  `configure`, `dashboard`, `daemon start`, `gateway start`, `memory ui`, `mcp serve`.
+  `configure`, `dashboard`, `daemon start`, `gateway start`, `memory ui`, `mcp serve`, and the
+  root `--install-completion` / `--show-completion` flags. The command is found by parsing the
+  arguments with MagAgent's own CLI definition, so root options such as `--provider x` in
+  front of it do not hide it.
+- Requests that carry browser headers (`Origin` or `Sec-Fetch-Site`) are refused with HTTP 403,
+  so a web page cannot use the gateway even through DNS rebinding. Desktop clients never send
+  them.
+- Idle or half-sent connections are closed after 60 seconds. The 32 most recent finished
+  streams are kept for `stream.events`; older ones are forgotten. Failed authentication is
+  logged at most 60 times a minute.
 - `--project` values must resolve inside a `--root`; commands run with the first root as their
   working directory.
-- Every call is appended to `~/.config/magent/logs/rpc-gateway.jsonl` with the peer address,
+- Every call is appended to `~/.config/magent/logs/rpc-gateway.jsonl` (created mode 0600) with the peer address,
   method and arguments, with values after `--api-key`, `--token`, `--password` and `--secret`
   redacted.
-- The token grants the same authority as your MagAgent user. Approvals are still enforced by
-  the run itself: a streamed run started with `--approval-stdio` waits for an AAIS decision
-  written through `write_magent_stream`.
+- The token grants the same authority as your MagAgent user. The command denials and the
+  `--root` check are guard rails, not a sandbox: a token holder can run any other command,
+  including ones that read files outside the roots (`ask --prompt-file`) or change settings.
+  Approvals are still enforced by the run itself: a streamed run started with
+  `--approval-stdio` waits for an AAIS decision written through `write_magent_stream`.
 
 ## Protocol `magent.rpc.v1`
 

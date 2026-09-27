@@ -38,7 +38,7 @@ class FakeRuntime(ToolLoopRuntimeMixin):
         return {"ok": True, "path": arguments.get("path")}
 
 
-def test_only_runs_of_read_only_calls_are_prefetched_with_a_bound() -> None:
+def test_only_runs_of_read_only_calls_are_grouped_and_run_with_a_bound() -> None:
     runtime = FakeRuntime(limit=2)
     calls = [
         _call("read_file", path="a"),
@@ -50,18 +50,21 @@ def test_only_runs_of_read_only_calls_are_prefetched_with_a_bound() -> None:
         _call("run_shell", command="ls"),
         _call("read_file", path="f"),
     ]
-    results = asyncio.run(runtime._prefetch_read_only_calls(calls))
+    segments = runtime._read_only_segments(calls)
     # The write, the shell call and the lone trailing read are left for the
     # serial loop; reads never jump across a write.
-    assert sorted(results) == [0, 1, 3, 4, 5]
+    assert segments == {0: [0, 1], 3: [3, 4, 5]}
+    results = asyncio.run(runtime._run_read_segment(calls, segments[3]))
+    assert sorted(results) == [3, 4, 5]
     assert all(results[index][0]["ok"] for index in results)
     assert runtime.peak == 2
+    assert sorted(runtime.order) == ["c", "d", "e"]  # only the requested segment ran
 
 
 def test_parallelism_can_be_disabled() -> None:
     runtime = FakeRuntime(limit=1)
     calls = [_call("read_file", path="a"), _call("read_file", path="b")]
-    assert asyncio.run(runtime._prefetch_read_only_calls(calls)) == {}
+    assert runtime._read_only_segments(calls) == {}
 
 
 def test_read_only_set_excludes_anything_that_writes_or_runs() -> None:

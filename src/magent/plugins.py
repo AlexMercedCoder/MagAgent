@@ -109,9 +109,33 @@ def install_plugin(source: str | Path, *, name: str = "", force: bool = False) -
         shutil.rmtree(target)
     if target.exists():
         return {"ok": False, "error": f"Plugin already installed: {plugin_name}"}
+    from magent.plugin_signing import SIGNATURE_FILE
+
+    signed = (src / SIGNATURE_FILE).exists()
+    if signed and plugin_name != str(manifest.get("name") or ""):
+        return {
+            "ok": False,
+            "error": "A signed plugin keeps its signed name; install it without --name.",
+        }
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(src, target)
-    _write_manifest(target, {**manifest, "name": plugin_name})
+    shutil.copytree(src, target, symlinks=signed)
+    if signed:
+        # A signed pack keeps its manifest byte for byte: rewriting it (to add
+        # a checksum) broke the signature, so `plugin verify
+        # --require-signature` failed on every installed signed pack. The
+        # copy is verified, not the source, so a source changed after the
+        # caller checked it cannot slip in.
+        from magent.plugin_signing import verify_signature
+
+        installed = verify_signature(target)
+        if installed["status"] == "invalid":
+            shutil.rmtree(target)
+            return {
+                "ok": False,
+                "error": f"Signature check failed on the installed copy: {installed['reason']}",
+            }
+    else:
+        _write_manifest(target, {**manifest, "name": plugin_name})
     from magent.plugin_sdk import validate_plugin
 
     validation = validate_plugin(target, strict=True)
@@ -141,6 +165,13 @@ def set_plugin_enabled(name: str, enabled: bool) -> dict[str, Any]:
         from magent.plugin_sdk import verify_plugin
 
         verification = verify_plugin(target_result["path"])
+        from magent.plugin_signing import SIGNATURE_FILE, verify_signature
+
+        if (target_result["path"] / SIGNATURE_FILE).exists():
+            signature = verify_signature(target_result["path"])
+            verification["signature"] = signature
+            if signature["status"] == "invalid":
+                verification["ok"] = False
         if not verification["ok"]:
             return {
                 "ok": False,

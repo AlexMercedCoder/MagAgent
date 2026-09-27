@@ -479,6 +479,10 @@ def _team_memory_manager(config: Any, username: str, project_slug: str | None) -
         return None
     if not team.configured or not (team.root / NODES_DIR).is_dir():
         return None
+    if not team.recall_safe():
+        # A symlink in the shared graph could pull any local file into the
+        # model's context; recall nothing rather than follow it.
+        return None
     try:
         return MemoryManager(
             team.root / NODES_DIR,

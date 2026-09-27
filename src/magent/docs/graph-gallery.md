@@ -44,14 +44,18 @@ x-magagent-executor:
   kind: a2a                 # an A2A agent's JSON-RPC endpoint (message/send, tasks/get)
   url: https://agents.example.com/research
   message: "Research this: ${{ inputs.question }}"   # default: the node's prompt
-  token_env: RESEARCH_AGENT_TOKEN                    # optional bearer token variable
+  token_env: A2A_RESEARCH_TOKEN                      # optional; must start with A2A_
   timeout_seconds: 600
   output: findings
 ```
 
 - Every executor call is approved like any other external action: through `--approval-stdio`,
   the Web UI, the terminal, or `--yes`. With no way to ask, the call is refused (`RT042`).
-- A2A needs HTTPS except on loopback. The reply's text parts (task artifacts, then the status
+- A2A needs HTTPS except on loopback. Private, link-local and cloud-metadata addresses are
+  refused (`RT049`) unless the node sets `allow_private_network: true`, which the approval shows.
+- `token_env` must name a variable that starts with `A2A_`, so a graph you did not write cannot
+  send your provider keys to the URL it chose. The approval names the variable it sends.
+- The reply's text parts (task artifacts, then the status
   message) become the output; `json: true` parses them as JSON.
 - A task that ends `failed`, `canceled` or `rejected`, or asks for more input, fails the node
   (`RT047`); graphs cannot answer follow-up questions from an A2A agent.

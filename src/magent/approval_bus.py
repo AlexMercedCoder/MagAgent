@@ -25,6 +25,7 @@ import contextlib
 import os
 import secrets
 import socket
+import stat
 import tempfile
 import threading
 import weakref
@@ -39,12 +40,41 @@ MAX_DOORBELLS = 64
 _RING = b"approval"
 
 
-def _socket_dir() -> Path:
+def _private_dir(base: Path) -> bool:
+    """True when ``base`` is a real directory owned by us and closed to others.
+
+    The shared temp directory is writable by every user, so a name like
+    ``/tmp/magent-doorbells-1000`` can be created first by someone else (or be a
+    symlink to their directory). Using it would let them replace our sockets.
+    """
+
+    try:
+        info = os.lstat(base)
+    except OSError:
+        return False
+
+    if not stat.S_ISDIR(info.st_mode):
+        return False
+    if hasattr(os, "getuid") and info.st_uid != os.getuid():
+        return False
+    if info.st_mode & 0o077:
+        with contextlib.suppress(OSError):
+            os.chmod(base, 0o700)
+        with contextlib.suppress(OSError):
+            return not (os.lstat(base).st_mode & 0o077)
+        return False
+    return True
+
+
+def _socket_dir() -> Path | None:
+    """A private directory for doorbell sockets, or None to fall back to UDP."""
+
     owner = os.getuid() if hasattr(os, "getuid") else "user"
     base = Path(tempfile.gettempdir()) / f"magent-doorbells-{owner}"
-    base.mkdir(mode=0o700, exist_ok=True)
     with contextlib.suppress(OSError):
-        os.chmod(base, 0o700)
+        base.mkdir(mode=0o700, exist_ok=True)
+    if not _private_dir(base):
+        return None
     _sweep(base)
     return base
 
@@ -69,8 +99,9 @@ class Doorbell:
         self._closed = False
         self.path: Path | None = None
         self.address: Any = None
-        if hasattr(socket, "AF_UNIX"):
-            path = _socket_dir() / f"{os.getpid()}-{self.id}.sock"
+        directory = _socket_dir() if hasattr(socket, "AF_UNIX") else None
+        if directory is not None:
+            path = directory / f"{os.getpid()}-{self.id}.sock"
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             try:
                 sock.bind(str(path))  # fails if the temp path is too long

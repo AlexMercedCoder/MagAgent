@@ -31,6 +31,11 @@ Only public, versioned CLI contracts (see `magent docs show desktop-integration`
 | `magagent.executable` | `magent` | Command to run; `python -m magent` also works. |
 | `magagent.permissionMode` | `balanced` | Permission mode for runs started here. |
 
+Both settings are read from your user settings only. A repository's `.vscode/settings.json`
+cannot change them, because otherwise opening a hostile repository and asking a question would
+run whatever program it named. The extension is disabled in untrusted (Restricted Mode)
+workspaces, since a run acts with your permissions in the workspace folder.
+
 ## Build and install locally
 
 ```bash

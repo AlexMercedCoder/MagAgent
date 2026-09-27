@@ -161,6 +161,46 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
 - Deflaked `test_run_shell_allows_quoted_html_in_read_only_validation`: its result depended on the
   host's login profile and load (see the shell change above). A regression test pins it.
 
+### Security (SEC-1 self-review)
+
+A self-review of everything added for 1.4.0 found and fixed these before release. Each has a
+regression test in `tests/unit/test_sec1_regressions.py` (or the VS Code extension's tests)
+that failed before the fix. `magent docs show threat-model` has the per-surface model.
+
+- RPC gateway: denied commands could be reached by putting a root option with a value first
+  (`--provider x serve --rpc --allow-remote`); `--install-completion` could edit shell startup
+  files. No socket timeout, so unauthenticated clients could hold threads open. Finished
+  streams were never forgotten. Unauthenticated requests could grow the audit log without
+  bound, and the log was world-readable. A bad `Content-Length` dropped the connection without
+  an answer. Browser requests (`Origin`/`Sec-Fetch-Site`) are now refused.
+- Approval doorbells: a socket directory in `/tmp` created first by another user (or a symlink)
+  was used anyway; it must now be ours and private, else doorbells fall back to loopback UDP.
+- Team memory: a symlink pushed straight to `main` was checked out and recall followed it, so
+  any local file could reach the model. `sync` now refuses content review would refuse, the
+  clone checks symlinks out as files and runs no hooks, and recall skips a clone with symlinks.
+  A forged `Magent-Author` trailer let an author accept their own proposal.
+- Plugins: installing a signed pack rewrote its manifest, so the installed copy never verified;
+  files named like the manifest in subdirectories, and files under symlinked directories, were
+  outside the signature; `install NAME` compared versions as text (1.9.0 beat 1.10.0), let a
+  second registry shadow a plugin, trusted the archive to hold the plugin the index named, and
+  showed the index's permissions in the trust prompt instead of the signed manifest's; trusting
+  a key could silently replace another key with the same name; archives had no unpacked-size
+  limit; redirects could downgrade HTTPS to HTTP.
+- Graph A2A executors: `token_env` could name any variable (a provider key) and send it to the
+  graph's URL without the approval saying so; it must now start with `A2A_` and the approval
+  names it. Private, link-local and metadata addresses are refused unless the node sets
+  `allow_private_network: true` (`RT049`).
+- Parallel read tools: reads in a batch ran before earlier calls in the same response, so a
+  read could miss a preceding write or run after a denial stopped the turn.
+- Grants: executors without a real session shared the session id `manual`, so "allow for this
+  session" in one graph check became a never-expiring grant for all of them.
+- `ask --prompt-file` read devices and FIFOs without limit (`/dev/zero`); it now needs a regular
+  file and reads at most the size limit from one handle.
+- `auth add --storage config` wrote the key before making a new `config.toml` private;
+  keyring errors could echo the key.
+- VS Code: a workspace's `.vscode/settings.json` could set `magagent.executable` (any program)
+  or the permission mode; both are now user-only and the extension needs a trusted workspace.
+
 ### Docs and tooling
 
 - README opens with MagAgent's role and a shared "Which tool do I want?" table.

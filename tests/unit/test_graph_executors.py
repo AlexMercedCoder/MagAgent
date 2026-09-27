@@ -163,14 +163,14 @@ class FakeA2A(BaseHTTPRequestHandler):
 def test_a2a_executor_sends_polls_and_stores_the_answer(tmp_path: Path, monkeypatch) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), FakeA2A)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    monkeypatch.setenv("AGENT_TOKEN", "agent-token")
+    monkeypatch.setenv("A2A_AGENT_TOKEN", "agent-token")
     try:
         document = graph(
             {
                 "kind": "a2a",
                 "url": f"http://127.0.0.1:{server.server_address[1]}/",
                 "message": "Summarise ${{ inputs.topic }}",
-                "token_env": "AGENT_TOKEN",
+                "token_env": "A2A_AGENT_TOKEN",
                 "output": "answer",
             }
         )

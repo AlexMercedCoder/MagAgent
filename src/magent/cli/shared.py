@@ -11,6 +11,7 @@ import contextlib
 import json
 import os
 import signal
+import stat
 import sys
 import time
 from pathlib import Path
@@ -120,13 +121,25 @@ def _resolve_ask_task(task: str | None, prompt_file: Path | None) -> str:
             raise typer.Exit(2)
         return task
     try:
-        size = prompt_file.stat().st_size
-        if size > MAX_PROMPT_FILE_BYTES:
+        # Read from one open handle, bounded: a stat() check followed by
+        # read_text() let a device (/dev/zero), a FIFO or a file that grew in
+        # between be read without limit.
+        # O_NONBLOCK so opening a FIFO cannot hang before the check below.
+        descriptor = os.open(prompt_file, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+        with os.fdopen(descriptor, "rb") as handle:
+            mode = os.fstat(handle.fileno()).st_mode
+            if stat.S_ISDIR(mode):
+                raise IsADirectoryError(str(prompt_file))
+            if not stat.S_ISREG(mode):
+                console.print("[red]--prompt-file must be a regular file.[/red]")
+                raise typer.Exit(2)
+            data = handle.read(MAX_PROMPT_FILE_BYTES + 1)
+        if len(data) > MAX_PROMPT_FILE_BYTES:
             console.print(
-                f"[red]--prompt-file is {size} bytes; the limit is {MAX_PROMPT_FILE_BYTES}.[/red]"
+                f"[red]--prompt-file is larger than the {MAX_PROMPT_FILE_BYTES}-byte limit.[/red]"
             )
             raise typer.Exit(2)
-        text = prompt_file.read_text(encoding="utf-8")
+        text = data.decode("utf-8")
     except FileNotFoundError:
         console.print(f"[red]--prompt-file not found:[/red] {escape(str(prompt_file))}")
         raise typer.Exit(2) from None

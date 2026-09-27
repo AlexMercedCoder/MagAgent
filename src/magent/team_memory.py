@@ -74,6 +74,15 @@ class TeamMemory:
             "init.defaultBranch=main",
             "-c",
             "commit.gpgsign=false",
+            # The shared repository is untrusted input: check symlinks out as
+            # plain files (a node must never point at ~/.ssh), and never run
+            # hooks or an fsmonitor from it.
+            "-c",
+            "core.symlinks=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "core.fsmonitor=false",
             *args,
         ]
         result = subprocess.run(  # noqa: S603 - fixed git argv
@@ -123,7 +132,7 @@ class TeamMemory:
             self._git("init", "--bare", "--initial-branch=main", str(target), cwd=target.parent)
             remote = str(target.resolve())
         self.root.parent.mkdir(parents=True, exist_ok=True)
-        self._git("clone", remote, str(self.root), cwd=self.root.parent)
+        self._git("clone", "--", remote, str(self.root), cwd=self.root.parent)
         if not self._git("branch", "-r", check=False).strip():
             # An empty repository: seed main so proposals have a base.
             self.nodes_dir.mkdir(parents=True, exist_ok=True)
@@ -160,9 +169,56 @@ class TeamMemory:
 
         self._require()
         self._git("fetch", "--prune", "origin")
+        problems = self.tree_problems("origin/main")
+        if problems:
+            # Review is enforced by MagAgent clients, not by the Git server, so
+            # someone with push access can write main directly. Refuse to take
+            # anything that could not have passed review.
+            raise TeamMemoryError(
+                "The team's main branch has content that review would refuse, so it was "
+                "not synced: " + "; ".join(problems[:10])
+            )
         self._git("checkout", "main")
         self._git("merge", "--ff-only", "origin/main")
         return self.status()
+
+    ALLOWED_TOP_LEVEL = frozenset({"README.md", "maggraph.toml", REVIEWS_FILE})
+
+    def tree_problems(self, ref: str) -> list[str]:
+        """Why the tree at ``ref`` is not a valid team graph (empty = fine).
+
+        Only regular files may appear: ``nodes/**.md`` that pass the node
+        checks, plus the README, maggraph.toml and the review log. Symlinks and
+        submodules are refused outright.
+        """
+
+        problems: list[str] = []
+        listing = self._git("ls-tree", "-r", "-z", "--full-tree", ref)
+        for entry in filter(None, listing.split("\0")):
+            meta, _, path = entry.partition("\t")
+            mode = meta.split(" ", 1)[0]
+            if mode not in {"100644", "100755"}:
+                problems.append(f"{path}: not a regular file (mode {mode})")
+                continue
+            if path in self.ALLOWED_TOP_LEVEL or path == f"{NODES_DIR}/.gitkeep":
+                continue
+            if not path.startswith(f"{NODES_DIR}/") or not path.endswith(".md"):
+                problems.append(f"{path}: only nodes/*.md belong in the team graph")
+                continue
+            text = self._git("show", f"{ref}:{path}", check=False)
+            problems.extend(self.validate_node(text, filename=path))
+        return problems
+
+    def recall_safe(self) -> bool:
+        """True when the checked-out nodes are plain files inside the clone."""
+
+        if not self.nodes_dir.is_dir() or self.nodes_dir.is_symlink():
+            return False
+        root = self.nodes_dir.resolve()
+        for path in self.nodes_dir.rglob("*"):
+            if path.is_symlink() or not path.resolve().is_relative_to(root):
+                return False
+        return True
 
     # ------------------------------------------------------------ proposals
 
@@ -296,18 +352,46 @@ class TeamMemory:
             if not line.startswith(f"{NODES_DIR}/") or not line.endswith(".md"):
                 problems.append(f"{line}: proposals may only add or change nodes/*.md")
                 continue
+            mode = self._git("ls-tree", ref, "--", line, check=False).split(" ", 1)[0]
+            if mode and mode not in {"100644", "100755"}:
+                problems.append(f"{line}: not a regular file (mode {mode})")
+                continue
             text = self._git("show", f"{ref}:{line}", check=False)
             if text:
                 problems.extend(self.validate_node(text, filename=line))
+        authors = self._authors(branch, ref, trailers)
+        if len(authors) != 1:
+            problems.append(
+                "the proposal's author is ambiguous (branch, trailer and commit authors "
+                f"disagree: {', '.join(sorted(authors))})"
+            )
         return {
             "ok": True,
             "id": proposal_id,
             "branch": branch,
+            "authors": sorted(authors),
             "author": trailers.get("Author", ""),
             "title": self._git("log", "-1", "--format=%s", ref).strip(),
             "diff": diff,
             "checks": {"ok": not problems, "problems": problems},
         }
+
+    def _authors(self, branch: str, ref: str, trailers: dict[str, str]) -> set[str]:
+        """Every name the proposal claims as its author.
+
+        The branch path, the Magent-Author trailer and the Git author of each
+        proposed commit must agree; a reviewer who matches any of them is
+        reviewing their own work. None of these are authenticated (see the
+        module docstring), so this stops mistakes and casual forgery only.
+        """
+
+        parts = branch.split("/")
+        names = {parts[1]} if len(parts) >= 3 else set()
+        if trailers.get("Author"):
+            names.add(trailers["Author"].strip())
+        log = self._git("log", "--format=%an", f"origin/main..{ref}", check=False)
+        names.update(line.strip() for line in log.splitlines() if line.strip())
+        return names
 
     def _record_review(self, record: dict[str, Any]) -> None:
         path = self.root / REVIEWS_FILE
@@ -331,7 +415,7 @@ class TeamMemory:
         details = self.show(proposal_id)
         author = details["author"]
         if decision == "accept":
-            if author == self.username and not allow_self_review:
+            if self.username in details["authors"] and not allow_self_review:
                 raise TeamMemoryError(
                     "You wrote this proposal, so a teammate has to accept it "
                     "(or pass --allow-self-review for a one-person team)."

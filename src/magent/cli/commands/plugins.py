@@ -181,9 +181,9 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
                 f"'{verification['key_id']}' ({verification['fingerprint']}), a key you do "
                 "not trust yet.[/yellow]"
             )
-            console.print(
-                "It asks for permissions: " + (", ".join(entry.get("permissions") or []) or "none")
-            )
+            # Permissions from the signed manifest, never the registry index.
+            permissions = verification.get("permissions") or []
+            console.print("It asks for permissions: " + (", ".join(permissions) or "none"))
             return Confirm.ask("Trust this key and install?", default=False)
 
         try:

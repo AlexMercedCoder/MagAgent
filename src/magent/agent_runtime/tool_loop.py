@@ -349,10 +349,9 @@ class ToolLoopRuntimeMixin(ParallelReadMixin):
             messages.append(_sanitize_message(message.model_dump()))
             total_tool_calls += len(message.tool_calls)
 
-            # G-10: runs of consecutive read-only calls are prefetched
-            # concurrently (bounded); results are still consumed below in the
-            # model's order, so the transcript is identical to a serial run.
-            prefetched = await self._prefetch_read_only_calls(message.tool_calls)
+            # G-10: read-only runs execute concurrently once reached (see parallel_tools).
+            read_segments = self._read_only_segments(message.tool_calls)
+            prefetched: dict[int, tuple[dict[str, Any], float]] = {}
 
             for call_index, tc in enumerate(message.tool_calls):
                 tool_name = tc.function.name
@@ -376,6 +375,9 @@ class ToolLoopRuntimeMixin(ParallelReadMixin):
                 if narrate and activity_label and self.tools.show_tool_calls:
                     console.print(f"[dim]    intent: {escape(activity_label)}[/dim]")
                 tool_started = time.monotonic()
+                if call_index in read_segments:
+                    segment = read_segments[call_index]
+                    prefetched.update(await self._run_read_segment(message.tool_calls, segment))
                 if call_index in prefetched:
                     result, tool_started = prefetched[call_index]
                 else:

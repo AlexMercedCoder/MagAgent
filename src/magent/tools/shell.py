@@ -278,7 +278,19 @@ class ShellToolsMixin:
         return broker
 
     def _shell_grant_origin(self) -> dict[str, str]:
-        return {"session_id": str(getattr(self, "session_id", "") or "terminal")}
+        session = str(getattr(self, "session_id", "") or "")
+        if not session or session == "manual":
+            # No real session (graph criteria, research, ad-hoc executors):
+            # a per-executor id, so "allow for this session" cannot turn into
+            # a never-expiring grant shared by every such run, as the old
+            # shared "manual"/"terminal" ids did.
+            session = getattr(self, "_grant_session_id", "")
+            if not session:
+                import uuid
+
+                session = f"tools-{uuid.uuid4().hex[:16]}"
+                self._grant_session_id = session
+        return {"session_id": session}
 
     def _shell_grant_scope(self, command: str, tier: RiskTier) -> str | None:
         """Scope of an active grant for this exact command, receipting the hit."""

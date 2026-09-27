@@ -20,13 +20,18 @@ A2A agent (JSON-RPC ``message/send``, polling ``tasks/get`` until the task ends)
       kind: a2a
       url: https://agents.example.com/research   # the agent's JSON-RPC endpoint
       message: "Summarise ${{ inputs.topic }}"   # default: the node's own prompt
-      token_env: RESEARCH_AGENT_TOKEN            # optional bearer token variable
+      token_env: A2A_RESEARCH_TOKEN              # optional; must start with A2A_
       timeout_seconds: 300
       output: summary
 
 Every call is an external side effect, so it asks for approval through the
 graph's permission prompt (``--approval-stdio``, the Web UI, the terminal), or
-needs ``--yes``. HTTPS is required for A2A except on loopback.
+needs ``--yes``. HTTPS is required for A2A except on loopback. Private,
+link-local and metadata addresses are refused unless the node sets
+``allow_private_network: true`` (shown in the approval). ``token_env`` may only
+name a variable that starts with ``A2A_``, so a graph cannot send one of your
+other secrets (a provider API key, say) to the URL it chose; the approval says
+which variable is sent.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -43,6 +49,8 @@ from urllib.parse import urlparse
 EXECUTOR_KEY = "x-magagent-executor"
 A2A_TERMINAL = {"completed", "failed", "canceled", "rejected"}
 A2A_BLOCKED = {"input-required", "auth-required"}
+A2A_TOKEN_PREFIX = "A2A_"
+LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 MAX_REPLY_CHARS = 200_000
 
 Approve = Callable[[dict[str, Any], str], Awaitable[bool]]
@@ -80,8 +88,16 @@ def validate_executor(node_id: str, node: dict[str, Any]) -> list[str]:
         parsed = urlparse(url)
         if parsed.scheme not in {"https", "http"} or not parsed.netloc:
             problems.append(f"{node_id}: a2a executor needs an http(s) 'url'")
-        elif parsed.scheme == "http" and parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+        elif parsed.scheme == "http" and parsed.hostname not in LOOPBACK_HOSTS:
             problems.append(f"{node_id}: a2a executor must use https except on loopback")
+        token_env = executor.get("token_env")
+        if token_env is not None and not re.fullmatch(
+            rf"{A2A_TOKEN_PREFIX}[A-Z0-9_]+", str(token_env)
+        ):
+            problems.append(
+                f"{node_id}: a2a token_env must name a variable starting with "
+                f"{A2A_TOKEN_PREFIX} (for example A2A_RESEARCH_TOKEN)"
+            )
     else:
         problems.append(f"{node_id}: executor kind must be 'mcp' or 'a2a'")
     outputs = node.get("outputs") or {}
@@ -133,16 +149,26 @@ async def run_executor(
     else:
         url = str(executor["url"])
         message = str(resolve_value(executor.get("message") or prompt, scope))
+        token_env = str(executor.get("token_env") or "")
+        allow_private = bool(executor.get("allow_private_network"))
+        _check_a2a_address(url, allow_private=allow_private)
+        effects = ["Sends the task text to an external agent over the network."]
+        request_args: dict[str, Any] = {"url": url, "message": message}
+        if token_env:
+            request_args["bearer_token_from"] = token_env
+            effects.append(f"Sends the value of ${token_env} to {url} as a bearer token.")
+        if allow_private:
+            request_args["allow_private_network"] = True
+            effects.append("May reach private-network addresses.")
         action = {
             "kind": "agent.message",
             "name": "a2a.message/send",
             "summary": f"Send graph node {node_id}'s task to the A2A agent at {url}",
-            "arguments": {"url": url, "message": message},
-            "effects": ["Sends the task text to an external agent over the network."],
+            "arguments": request_args,
+            "effects": effects,
         }
         if not await approve(action, f"Graph node {node_id} messages A2A agent {url}"):
             raise ExecutorError(f"the A2A call for {node_id} was not approved", "RT042")
-        token_env = str(executor.get("token_env") or "")
         reply = await _call_a2a(
             url,
             message,
@@ -163,6 +189,26 @@ async def run_executor(
         "_magent_summary": f"{kind} executor finished in {time.monotonic() - started:.1f}s",
         "_magent_files_changed": [],
     }
+
+
+def _check_a2a_address(url: str, *, allow_private: bool) -> None:
+    """Refuse private, link-local and metadata addresses (SSRF) unless allowed.
+
+    Loopback URLs are the documented way to reach a local agent and stay
+    allowed. The check resolves the name now; a DNS answer that changes
+    between this check and the request is a residual risk.
+    """
+
+    from magent.net_policy import UrlPolicyError, validate_request_url
+
+    host = urlparse(url).hostname or ""
+    try:
+        validate_request_url(url, allow_private=allow_private or host in LOOPBACK_HOSTS)
+    except UrlPolicyError as error:
+        raise ExecutorError(
+            f"{error}. Set allow_private_network: true on the node to reach a private agent.",
+            "RT049",
+        ) from error
 
 
 async def _call_mcp(

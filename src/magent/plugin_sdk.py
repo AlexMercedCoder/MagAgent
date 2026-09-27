@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -86,21 +87,44 @@ def verify_plugin(path: str | Path) -> dict[str, Any]:
     return report
 
 
+def pack_symlinks(path: str | Path) -> list[str]:
+    """Relative paths of every symlink inside a pack (signed packs may have none)."""
+
+    root = Path(path).expanduser().resolve()
+    links: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        base = Path(dirpath)
+        for name in [*dirnames, *filenames]:
+            if (base / name).is_symlink():
+                links.append((base / name).relative_to(root).as_posix())
+    return sorted(links)
+
+
 def plugin_digest(path: str | Path) -> str:
     root = Path(path).expanduser().resolve()
     digest = hashlib.sha256()
-    # The manifest and the signature are covered separately by the signature
-    # (see plugin_signing); the digest is over the pack's content files.
+    # The top-level manifest and signature are covered separately by the
+    # signature (see plugin_signing); the digest is over everything else.
+    # Files with those names deeper in the pack are ordinary content, and a
+    # symlink is hashed as the link itself: following it would leave a
+    # symlinked directory's files outside the digest.
     excluded = {"magent-plugin.toml", "magent-plugin.sig"}
-    for file in sorted(
-        item
-        for item in root.rglob("*")
-        if item.is_file() and item.name not in excluded
-    ):
-        relative = file.relative_to(root).as_posix()
+    entries: list[tuple[Path, bytes | None]] = []
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        base = Path(dirpath)
+        for name in [*dirnames, *filenames]:
+            item = base / name
+            if item.is_symlink():
+                entries.append((item, b"symlink:" + os.readlink(item).encode("utf-8")))
+            elif name in filenames and item.is_file():
+                if base == root and name in excluded:
+                    continue
+                entries.append((item, None))
+    for item, special in sorted(entries, key=lambda entry: entry[0]):
+        relative = item.relative_to(root).as_posix()
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
-        digest.update(file.read_bytes())
+        digest.update(special if special is not None else item.read_bytes())
         digest.update(b"\0")
     return f"sha256:{digest.hexdigest()}"
 

@@ -46,6 +46,19 @@ export type RunHandlers = {
 
 export type MagentOptions = { executable: string; cwd: string; permissionMode?: string };
 
+/** What `WorkspaceConfiguration.inspect()` returns, minus the VS Code types. */
+export type InspectedSetting<T> = { defaultValue?: T; globalValue?: T; workspaceValue?: T; workspaceFolderValue?: T };
+
+/**
+ * A setting's value from user settings or the default only. A repository's
+ * `.vscode/settings.json` must never choose the program MagAgent runs or its
+ * permission mode, or opening a hostile repo and asking a question would run
+ * whatever it names. package.json also scopes both settings to `machine`.
+ */
+export function userSetting<T>(inspected: InspectedSetting<T> | undefined, fallback: T): T {
+  return inspected?.globalValue ?? inspected?.defaultValue ?? fallback;
+}
+
 export function decisionEnvelope(request: ApprovalRequest, choice: Choice, actorId: string, sequence: number): Record<string, unknown> {
   const now = new Date().toISOString();
   return {

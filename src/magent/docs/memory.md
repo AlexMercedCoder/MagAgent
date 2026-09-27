@@ -152,4 +152,14 @@ magent memory team reviews           # the REVIEWS.jsonl audit trail
 - The Web UI Memory page has a **Team review** panel with the same inbox, diff, checks and
   accept/reject.
 - Identity is your MagAgent user name, written as the Git author. It is not authentication:
-  access to the Git remote decides who can propose and review.
+  access to the Git remote decides who can propose and review. The branch name, the
+  `Magent-Author` trailer and the Git author of every proposed commit must agree, and a reviewer
+  who matches any of them cannot accept; this stops mistakes and casual forgery, not a teammate
+  determined to lie about their name.
+- Review is enforced by MagAgent, not by the Git server. Protect `main` on the host (branch
+  protection) so only reviewed merges land. As a backstop, `sync` refuses a `main` that holds
+  anything review would refuse (symlinks, submodules, files outside `nodes/*.md`, nodes that
+  fail the checks), the clone checks symlinks out as plain files and never runs hooks, and
+  recall is skipped if the clone contains a symlink.
+- Team nodes are recalled as reference notes and labelled as written by teammates, not as
+  instructions. Treat a shared graph like any other shared document.

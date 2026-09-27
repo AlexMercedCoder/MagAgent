@@ -7,7 +7,7 @@
  * - "MagAgent: Show Memory Used by Last Run" shows which memories it recalled.
  */
 import * as vscode from "vscode";
-import { AskRun, type ApprovalRequest, type Choice, memoryEvidence, renderEvidence } from "./client";
+import { AskRun, type ApprovalRequest, type Choice, memoryEvidence, renderEvidence, userSetting } from "./client";
 
 let active: AskRun | undefined;
 
@@ -19,9 +19,9 @@ function options(): { executable: string; cwd: string; permissionMode: string } 
   }
   const config = vscode.workspace.getConfiguration("magagent");
   return {
-    executable: config.get<string>("executable", "magent"),
+    executable: userSetting(config.inspect<string>("executable"), "magent"),
     cwd: folder.uri.fsPath,
-    permissionMode: config.get<string>("permissionMode", "balanced"),
+    permissionMode: userSetting(config.inspect<string>("permissionMode"), "balanced"),
   };
 }
 

