@@ -1,0 +1,4 @@
+[
+  {"tool": "run_shell", "arguments": {"command": "mkdir sub-output"}},
+  {"content": "Created sub-output."}
+]

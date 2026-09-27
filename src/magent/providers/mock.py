@@ -10,14 +10,27 @@ memory extraction. It never requests tools, so a mock run cannot change files.
 
 Use it with ``magent ask "hello" --provider mock`` or select it as the default
 with ``magent provider set mock``.
+
+Scripted mode (for offline workflow fixtures and demos of tool use): point
+``MAGENT_MOCK_SCRIPT`` at a JSON file and the mock plays it back instead of the
+canned reply. The file is either a list of steps or
+``{"scripts": [{"when": "substring of the last user message", "steps": [...]}],
+"default": [...]}``. A step is ``{"tool": name, "arguments": {...}}`` (one tool
+call) or ``{"content": "text"}`` (a final answer). The step played is the
+number of assistant messages since the last user message, so the script is
+stateless and every agent (graph node, subagent) gets its own copy. Replies
+are still labelled as mock output.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import re
 import time
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from typing import Any
 
 PROVIDER_ID = "mock"
@@ -51,6 +64,44 @@ def _recalled_node_ids(messages: list[dict[str, Any]]) -> list[str]:
         if match:
             return re.findall(r"`([^`]+)`", match.group(1))
     return []
+
+
+SCRIPT_ENV = "MAGENT_MOCK_SCRIPT"
+
+
+def _load_script() -> Any:
+    path = os.environ.get(SCRIPT_ENV, "").strip()
+    if not path:
+        return None
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        return [{"content": f"{REPLY_LABEL}\n\nCould not read {SCRIPT_ENV}={path}: {error}"}]
+
+
+def scripted_step(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The scripted step for this model round, or None when not scripted."""
+
+    script = _load_script()
+    if script is None:
+        return None
+    users = [index for index, message in enumerate(messages) if message.get("role") == "user"]
+    last_user = users[-1] if users else -1
+    prompt = _text(messages[last_user].get("content")) if users else ""
+    steps: list[Any] = []
+    if isinstance(script, list):
+        steps = script
+    elif isinstance(script, dict):
+        for entry in script.get("scripts", []):
+            if isinstance(entry, dict) and str(entry.get("when", "")) in prompt:
+                steps = list(entry.get("steps") or [])
+                break
+        else:
+            steps = list(script.get("default") or [])
+    position = sum(1 for message in messages[last_user + 1 :] if message.get("role") == "assistant")
+    if position < len(steps) and isinstance(steps[position], dict):
+        return dict(steps[position])
+    return {"content": f"{REPLY_LABEL}\n\nScript finished."}
 
 
 def mock_reply(messages: list[dict[str, Any]]) -> str:
@@ -93,22 +144,46 @@ def _usage(messages: list[dict[str, Any]], reply: str) -> dict[str, int]:
     }
 
 
-def _model_response(model: str, messages: list[dict[str, Any]]) -> Any:
-    from litellm.types.utils import Choices, Message, ModelResponse, Usage
+def _tool_call_id(messages: list[dict[str, Any]], step: dict[str, Any]) -> str:
+    seed = json.dumps([len(messages), step], sort_keys=True, default=str)
+    return "call_mock_" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
 
-    reply = mock_reply(messages)
+
+def _model_response(model: str, messages: list[dict[str, Any]]) -> Any:
+    from litellm.types.utils import (
+        ChatCompletionMessageToolCall,
+        Choices,
+        Function,
+        Message,
+        ModelResponse,
+        Usage,
+    )
+
+    step = scripted_step(messages)
+    if step is not None and step.get("tool"):
+        arguments = json.dumps(step.get("arguments") or {})
+        message = Message(
+            role="assistant",
+            content=None,
+            tool_calls=[
+                ChatCompletionMessageToolCall(
+                    id=_tool_call_id(messages, step),
+                    type="function",
+                    function=Function(name=str(step["tool"]), arguments=arguments),
+                )
+            ],
+        )
+        reply, finish = arguments, "tool_calls"
+    else:
+        reply = str(step.get("content") or "") if step is not None else mock_reply(messages)
+        message = Message(role="assistant", content=reply)
+        finish = "stop"
     return ModelResponse(
         id="chatcmpl-magent-mock-" + hashlib.sha256(reply.encode("utf-8")).hexdigest()[:12],
         created=int(time.time()),
         model=model,
         object="chat.completion",
-        choices=[
-            Choices(
-                index=0,
-                finish_reason="stop",
-                message=Message(role="assistant", content=reply),
-            )
-        ],
+        choices=[Choices(index=0, finish_reason=finish, message=message)],
         usage=_litellm_usage(Usage, _usage(messages, reply)),
     )
 
@@ -122,7 +197,24 @@ def _litellm_usage(usage_type: Any, counts: dict[str, int]) -> Any:
 
 
 def _chunks(messages: list[dict[str, Any]]) -> Iterator[dict[str, Any]]:
-    reply = mock_reply(messages)
+    step = scripted_step(messages)
+    if step is not None and step.get("tool"):
+        arguments = json.dumps(step.get("arguments") or {})
+        yield {
+            "text": "",
+            "is_finished": True,
+            "finish_reason": "tool_calls",
+            "usage": _usage(messages, arguments),
+            "index": 0,
+            "tool_use": {
+                "id": _tool_call_id(messages, step),
+                "type": "function",
+                "function": {"name": str(step["tool"]), "arguments": arguments},
+                "index": 0,
+            },
+        }
+        return
+    reply = str(step.get("content") or "") if step is not None else mock_reply(messages)
     words = reply.split(" ")
     for index, word in enumerate(words):
         yield {

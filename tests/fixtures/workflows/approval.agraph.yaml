@@ -1,0 +1,39 @@
+ags_version: "1.0"
+kind: AgenticGraph
+id: fixtures/approval-inside-graph
+title: A graph node that needs an approval
+requires_conformance: 1
+objective: Create a build output directory, which the permission policy asks a human to approve.
+constraints:
+  max_cost_usd: 0.01
+entrypoints: [make_dir]
+nodes:
+  make_dir:
+    type: task
+    title: Create the build output directory
+    description: Create the build output directory named build-output with a shell command.
+    outputs:
+      result:
+        type: string
+        description: What was done.
+    intelligence:
+      tier: standard
+    requirements:
+      tools: [shell_exec]
+      permissions:
+        - shell:exec:mkdir*
+      workspace: read_write
+    constraints:
+      max_agent_steps: 6
+    success:
+      summary: The directory exists.
+      criteria:
+        - id: result
+          kind: artifact_present
+          description: Result emitted.
+          output: result
+outputs:
+  result:
+    type: string
+    description: Final result.
+    from: nodes.make_dir.outputs.result

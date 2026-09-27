@@ -68,6 +68,11 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
   100 ms, and the Web UI approval dialog follows `GET /api/approvals/stream` (NDJSON: the pending
   snapshot on every change, heartbeats every 15 s) instead of polling every 800 ms. A 2 s
   re-read remains as a safety net, so a lost datagram delays but never loses a decision.
+- **Workflow fixtures (G-8).** Offline end-to-end tests for edit, test and artifact workflows,
+  an approval inside a graph node (approved and denied), an approval inside a subagent, and
+  cancelling mid-tool through the RPC gateway (the tool's child process is verified gone). They
+  drive the real CLI with the `mock` provider's new scripted mode: `MAGENT_MOCK_SCRIPT` points at
+  a JSON list of tool-call and content steps.
 - **Offline `mock` provider (G-5, experimental)** for first-run demos and CI: deterministic,
   clearly labeled replies, no network, no key, no tool calls, $0 usage.
 - **`magent ask --prompt-file PATH` (G-11)** for prompts too large for argv while stdin stays the

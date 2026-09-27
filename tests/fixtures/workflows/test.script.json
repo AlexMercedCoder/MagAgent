@@ -1,0 +1,6 @@
+[
+  {"tool": "write_file", "arguments": {"path": "calc.py", "content": "def add(a, b):\n    return a + b\n"}},
+  {"tool": "write_file", "arguments": {"path": "test_calc.py", "content": "from calc import add\n\n\ndef test_add():\n    assert add(2, 3) == 5\n"}},
+  {"tool": "run_shell", "arguments": {"command": "python -m pytest -q -p no:cacheprovider test_calc.py"}},
+  {"content": "calc.py and its test pass."}
+]

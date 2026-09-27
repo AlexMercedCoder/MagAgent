@@ -87,3 +87,21 @@ For a cross-project artifact, run `magent system ecosystem-report --root <worksp
 Use `magent ui` for a live read-only view of workspace status, project doctor,
 patches, checkpoints, memory quality, docs search, and release checks while
 running local verification.
+
+## Offline workflow fixtures
+
+`tests/unit/test_m6_workflows.py` runs whole workflows against the real CLI and runtime with the
+offline `mock` provider in scripted mode, so no key or network is needed:
+
+- edit (write, read, fix a file), test (write code and a test, run pytest), artifact (HTML and
+  SVG);
+- an approval inside an Agentic Graph node (`magent graph run --approval-stdio`), approved and
+  denied;
+- an approval inside a subagent, answered through the AAIS broker;
+- cancelling a run in the middle of a tool through the RPC gateway, checking the tool's child
+  process is gone.
+
+Scripted mode: set `MAGENT_MOCK_SCRIPT` to a JSON file of steps (`{"tool": ..., "arguments":
+...}` or `{"content": ...}`), or to `{"scripts": [{"when": "<prompt substring>", "steps":
+[...]}], "default": [...]}` when several agents share one script. The scripts live in
+`tests/fixtures/workflows/`. These tests are marked `slow` and run in CI's slow job.

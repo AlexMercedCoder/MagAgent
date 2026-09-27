@@ -1,0 +1,4 @@
+[
+  {"tool": "run_shell", "arguments": {"command": "python -c \"import time; time.sleep(37.25)\""}},
+  {"content": "Should never get here."}
+]

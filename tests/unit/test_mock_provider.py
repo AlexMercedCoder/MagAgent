@@ -114,3 +114,43 @@ def test_naming_only_a_provider_uses_that_providers_default_model() -> None:
     assert cli_build_provider(config, "mock", None).model == "offline-demo"
     assert cli_build_provider(config, "mock", "custom-name").model == "custom-name"
     assert cli_build_provider(config, None, None).model == "qwen2.5-coder:32b"
+
+
+def test_scripted_mode_plays_tool_calls_then_content(tmp_path: Path, monkeypatch) -> None:
+    from magent.providers.mock import scripted_step
+
+    script = tmp_path / "script.json"
+    script.write_text(
+        json.dumps(
+            {
+                "scripts": [
+                    {"when": "special", "steps": [{"tool": "read_file", "arguments": {"path": "a"}}]}
+                ],
+                "default": [{"content": "plain"}],
+            }
+        )
+    )
+    monkeypatch.setenv("MAGENT_MOCK_SCRIPT", str(script))
+    first = [{"role": "user", "content": "a special request"}]
+    assert scripted_step(first) == {"tool": "read_file", "arguments": {"path": "a"}}
+    after_tool = [*first, {"role": "assistant", "content": None}, {"role": "tool", "content": "x"}]
+    assert "Script finished" in scripted_step(after_tool)["content"]
+    assert scripted_step([{"role": "user", "content": "other"}]) == {"content": "plain"}
+
+    provider = build_provider("mock", "offline-demo", None, {})
+
+    async def run() -> object:
+        import litellm
+
+        return await litellm.acompletion(messages=first, **provider.request_kwargs())
+
+    response = asyncio.run(run())
+    call = response.choices[0].message.tool_calls[0]
+    assert call.function.name == "read_file" and json.loads(call.function.arguments) == {"path": "a"}
+
+
+def test_scripted_mode_reports_an_unreadable_script(monkeypatch, tmp_path: Path) -> None:
+    from magent.providers.mock import scripted_step
+
+    monkeypatch.setenv("MAGENT_MOCK_SCRIPT", str(tmp_path / "missing.json"))
+    assert "Could not read" in scripted_step([{"role": "user", "content": "x"}])["content"]

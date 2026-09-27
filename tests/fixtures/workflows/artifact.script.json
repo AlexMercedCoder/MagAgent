@@ -1,0 +1,5 @@
+[
+  {"tool": "write_file", "arguments": {"path": "report.html", "content": "<!doctype html>\n<html lang=\"en\"><head><title>Weekly report</title></head><body><h1>Weekly report</h1><p>All checks passed.</p></body></html>\n"}},
+  {"tool": "create_svg", "arguments": {"path": "chart.svg", "title": "Checks", "width": 240, "height": 80, "elements": [{"type": "rect", "x": 10, "y": 10, "width": 200, "height": 40, "fill": "#1d6b4e"}, {"type": "text", "text": "12 passed", "x": 20, "y": 36}]}},
+  {"content": "Wrote report.html and chart.svg."}
+]

@@ -1,0 +1,13 @@
+{
+  "scripts": [
+    {
+      "when": "Create the build output directory",
+      "steps": [
+        {"tool": "run_shell", "arguments": {"command": "mkdir build-output"}},
+        {"tool": "graph_emit_output", "arguments": {"name": "result", "value": "created build-output"}},
+        {"content": "Created build-output."}
+      ]
+    }
+  ],
+  "default": [{"content": "Nothing to do."}]
+}

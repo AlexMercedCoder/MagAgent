@@ -1,0 +1,6 @@
+[
+  {"tool": "write_file", "arguments": {"path": "greet.py", "content": "def greet(name):\n    return 'Helo, ' + name\n"}},
+  {"tool": "read_file", "arguments": {"path": "greet.py"}},
+  {"tool": "edit_file", "arguments": {"path": "greet.py", "old_string": "'Helo, '", "new_string": "'Hello, '"}},
+  {"content": "Fixed the typo in greet.py."}
+]
