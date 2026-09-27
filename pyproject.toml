@@ -222,4 +222,4 @@ skip_covered = true
 # Ratchet: raise this as coverage improves, never lower it. The new
 # regression suites (classifier bypasses, CLI surface, durability, safe names)
 # lifted the measured figure, so the floor moves up with them.
-fail_under = 68
+fail_under = 69
