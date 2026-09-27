@@ -279,6 +279,8 @@ export default function App() {
               className={`rail-button ${view === item.id ? "active" : ""}`}
               data-view={item.id}
               title={item.label}
+              // The visible label is hidden on narrow screens; keep the name.
+              aria-label={item.label}
               aria-current={view === item.id ? "page" : undefined}
               onClick={() => setView(item.id)}
             >

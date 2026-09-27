@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { post, request } from "../api";
 import type { Schedule } from "../types";
+import { MemoryUsedPanel, evidenceSources } from "./MemoryUsedPanel";
 
 type RunCenter = {
   chat_runs?: Record<string, unknown>[];
@@ -95,8 +96,9 @@ export function RunCenterView({ setError, notify }: { setError: (message: string
         <div><div className="eyebrow">BACKGROUND WORK</div><h1>Run center</h1><p>Monitor chat and graph execution, manage durable tasks, and schedule governed graphs.</p></div>
         <button className="ghost-button" type="button" onClick={() => void toggleNotifications()}>{notifications ? "Notifications on" : "Enable notifications"}</button>
       </div>
+      <MemoryUsedPanel sources={evidenceSources(data.chat_runs || [], tasks as Record<string, unknown>[])} />
       <div className="ops-grid">
-        <article className="ops-card"><h3>Chat runs</h3><pre>{JSON.stringify(data.chat_runs || [], null, 2)}</pre></article>
+        <article className="ops-card"><h3>Chat runs</h3><pre>{JSON.stringify((data.chat_runs || []).map(({ memory_evidence: _memory, ...run }) => run), null, 2)}</pre></article>
         <article className="ops-card"><h3>Graph runs</h3><pre>{JSON.stringify(data.graph_runs || [], null, 2)}</pre></article>
       </div>
       <article className="detail-card schedule-card">
