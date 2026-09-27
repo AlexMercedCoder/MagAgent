@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    # Tag builds make the release-metadata check strict.
+    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -57,7 +59,13 @@ jobs:
         run: python -m pip_audit . --format json --output dependency-audit.json
 
       - name: Lint
-        run: python -m ruff check src tests
+        run: python -m ruff check src tests scripts
+
+      - name: Release metadata agreement
+        # Strict on tag builds (GITHUB_REF=refs/tags/v*), advisory otherwise so an
+        # in-progress version bump does not block a pull request.
+        if: matrix.python-version == '3.12'
+        run: python scripts/check_release_metadata.py
 
       - name: Type check
         # The gate `make lint` runs. It was never in CI while it could not
