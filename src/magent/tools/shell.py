@@ -11,6 +11,7 @@ import sys
 import tempfile
 from contextlib import suppress
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -217,6 +218,14 @@ def _shell_native_file_tool_guidance(command: str) -> str:
     return ""
 
 
+_TIER_RISK = {0: "low", 1: "low", 2: "medium", 3: "high"}
+_AUTO_THRESHOLD = {
+    "silent": RiskTier.BLOCK,
+    "balanced": RiskTier.CONFIRM,
+    "paranoid": RiskTier.AUTO,
+}
+
+
 class ShellToolsMixin:
     """Shell/process capability implementation mixed into the tool executor."""
 
@@ -248,19 +257,86 @@ class ShellToolsMixin:
         patterns = [*self.trusted_shell_patterns, *self.session_shell_patterns]
         return any(shell_pattern_matches(pattern, command) for pattern in patterns)
 
-    def _remember_trusted_shell_pattern(self, command: str) -> None:
-        try:
-            from magent.config import load_user_profile, save_user_profile
+    # -- approval grants (G-12) ---------------------------------------------
+    #
+    # "Always allow" used to append the command to the profile's
+    # trusted_shell_patterns: no expiry, no receipts, only `trust-clear` to undo.
+    # It now becomes an exact-action grant in the AAIS approval store, the same
+    # store and lifecycle the Web UI, graphs and desktop approvals use: expiry
+    # after permissions.grant_ttl_days, `magent permission grants list/revoke`,
+    # and an AAIS receipt for every command a grant approves. Patterns already
+    # in the profile are still honoured (grandfathered) and listed as legacy.
 
-            profile = load_user_profile(self.username)
-            permissions = profile.setdefault("permissions", {})
-            patterns = list(permissions.get("trusted_shell_patterns") or [])
-            if command not in patterns:
-                patterns.append(command)
-            permissions["trusted_shell_patterns"] = patterns
-            save_user_profile(self.username, profile)
-            self.trusted_shell_patterns = patterns
-        except Exception:
+    def _approval_broker(self) -> Any:
+        broker = getattr(self, "_shell_grant_broker", None)
+        if broker is None:
+            from magent.approval_broker import ApprovalBroker
+            from magent.workbench_store import WorkbenchStore
+
+            broker = ApprovalBroker(WorkbenchStore(self.username), project=self.cwd)
+            self._shell_grant_broker = broker
+        return broker
+
+    def _shell_grant_origin(self) -> dict[str, str]:
+        return {"session_id": str(getattr(self, "session_id", "") or "terminal")}
+
+    def _shell_grant_scope(self, command: str, tier: RiskTier) -> str | None:
+        """Scope of an active grant for this exact command, receipting the hit."""
+        from magent.approval_broker import shell_action
+
+        try:
+            return self._approval_broker().remembered_scope(
+                shell_action(command, project=self.cwd),
+                origin=self._shell_grant_origin(),
+                risk_level=_TIER_RISK.get(int(tier), "high"),
+                risk_reasons=[f"MagAgent permission tier {int(tier)} requires approval."],
+            )
+        except Exception as error:  # an unreadable store never grants authority
+            console.print(f"[yellow]Approval grants unavailable: {error}[/yellow]")
+            return None
+
+    def _record_shell_decision(self, command: str, tier: RiskTier, scope: str | None) -> bool:
+        """Record a terminal answer in the approval log; ``None`` scope means deny.
+
+        Returns False when the store is unavailable, so the caller can fall back
+        to a session-only approval instead of silently saving nothing.
+        """
+        from magent.approval_broker import shell_action
+
+        try:
+            self._approval_broker().record_local_decision(
+                shell_action(command, project=self.cwd),
+                origin=self._shell_grant_origin(),
+                decision="deny" if scope is None else "approve",
+                scope=scope or "once",
+                actor={
+                    "id": str(self.username or "local-user"),
+                    "type": "human",
+                    "authenticated_by": "magent-terminal",
+                },
+                risk_level=_TIER_RISK.get(int(tier), "high"),
+                risk_reasons=[f"MagAgent permission tier {int(tier)} requires approval."],
+            )
+            return True
+        except Exception as error:
+            console.print(f"[yellow]Could not record the approval: {error}[/yellow]")
+            return False
+
+    def _grant_lookup_useful(self, tier: RiskTier) -> bool:
+        """Only consult grants when someone would otherwise be asked."""
+        if self.permission_mode == "yolo":
+            return False
+        if self.interactive_permissions:
+            # The terminal prompt below asks from CONFIRM up in every mode.
+            return tier >= RiskTier.CONFIRM
+        if getattr(self, "permission_prompt", None) is None:
+            return False
+        return tier >= _AUTO_THRESHOLD.get(self.permission_mode, RiskTier.CONFIRM)
+
+    def _remember_trusted_shell_pattern(
+        self, command: str, tier: RiskTier = RiskTier.CONFIRM
+    ) -> None:
+        if not self._record_shell_decision(command, tier, "persistent"):
             self.session_shell_patterns.append(command)
 
     def _shell_trust_pattern(self, command: str, tier: RiskTier) -> str:
@@ -276,6 +352,12 @@ class ShellToolsMixin:
     def _check_shell_permission(self, command: str, tier: RiskTier) -> PermissionResult:
         if self._trusted_shell_match(command):
             return PermissionResult(True, RiskTier.AUTO, "trusted-shell")
+        if self._grant_lookup_useful(tier):
+            scope = self._shell_grant_scope(command, tier)
+            if scope:
+                if self.show_tool_calls:
+                    console.print(f"[dim]Approved by a remembered {scope} grant.[/dim]")
+                return PermissionResult(True, tier, f"grant-{scope}")
         if not self.interactive_permissions or self.permission_mode == "yolo":
             result = self._check_permission(f"Run: `{command}`", tier)
             if result.approved and result.reason == "user-session-allow":
@@ -283,7 +365,7 @@ class ShellToolsMixin:
                 if pattern not in self.session_shell_patterns:
                     self.session_shell_patterns.append(pattern)
             elif result.approved and result.reason == "user-persistent-allow":
-                self._remember_trusted_shell_pattern(self._shell_trust_pattern(command, tier))
+                self._remember_trusted_shell_pattern(self._shell_trust_pattern(command, tier), tier)
             return result
         if tier < RiskTier.CONFIRM:
             return PermissionResult(True, tier, "auto")
@@ -308,18 +390,24 @@ class ShellToolsMixin:
             default="once" if tier == RiskTier.CONFIRM else "no",
         ).lower()
         if choice in {"no", "n"}:
+            self._record_shell_decision(command, tier, None)
             return PermissionResult(False, tier, "user-denied")
         if choice in {"session", "s"}:
             pattern = self._shell_trust_pattern(command, tier)
             if pattern not in self.session_shell_patterns:
                 self.session_shell_patterns.append(pattern)
+            self._record_shell_decision(command, tier, "session")
             console.print(f"[dim]Approved for this session; running `{command}`.[/dim]")
             return PermissionResult(True, tier, "user-session-allow")
         if choice in {"always", "a"}:
             pattern = self._shell_trust_pattern(command, tier)
-            self._remember_trusted_shell_pattern(pattern)
-            console.print(f"[dim]Saved approval for `{pattern}`; running `{command}`.[/dim]")
+            self._remember_trusted_shell_pattern(pattern, tier)
+            console.print(
+                f"[dim]Saved approval for `{pattern}` in this project "
+                "(see `magent permission grants list`); running it.[/dim]"
+            )
             return PermissionResult(True, tier, "user-persistent-allow")
+        self._record_shell_decision(command, tier, "once")
         console.print(f"[dim]Approved once; running `{command}`.[/dim]")
         return PermissionResult(True, tier, "user-confirmed")
 

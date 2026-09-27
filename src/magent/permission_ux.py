@@ -143,3 +143,56 @@ def permission_trust_clear(username: str, pattern: str = "") -> dict[str, Any]:
         "removed": len(existing) - len(remaining),
         "trusted_shell_patterns": remaining,
     }
+
+
+LEGACY_PATTERN_PREFIX = "grt_profile_"
+
+
+def legacy_pattern_grant_id(pattern: str) -> str:
+    import hashlib
+
+    return LEGACY_PATTERN_PREFIX + hashlib.sha256(pattern.encode("utf-8")).hexdigest()[:16]
+
+
+def legacy_shell_grants(username: str) -> list[dict[str, Any]]:
+    """Trusted shell patterns saved by "always" before 1.4, shown as legacy grants.
+
+    They keep working (grandfathered) until revoked. New "always" answers
+    create expiring grants in the approval store instead.
+    """
+
+    patterns = permission_trust_list(username)["trusted_shell_patterns"]
+    return [
+        {
+            "id": legacy_pattern_grant_id(pattern),
+            "scope": "persistent",
+            "status": "active",
+            "action_digest": "",
+            "action_name": "shell.exec",
+            "action_summary": f"Run: {pattern}",
+            "session_id": "",
+            "created_at": "",
+            "expires_at": None,
+            "last_used_at": None,
+            "hits": 0,
+            "source": "profile-trusted-pattern",
+            "legacy": True,
+            "flag": (
+                "Saved as a trusted shell pattern before 1.4; it never expires and its uses "
+                "are not receipted. Revoke it and approve again to get an expiring grant."
+            ),
+        }
+        for pattern in patterns
+    ]
+
+
+def revoke_legacy_shell_grants(username: str, grant_ids: set[str]) -> list[str]:
+    """Remove the trusted shell patterns behind the given legacy grant ids."""
+
+    revoked: list[str] = []
+    for pattern in permission_trust_list(username)["trusted_shell_patterns"]:
+        identifier = legacy_pattern_grant_id(pattern)
+        if identifier in grant_ids:
+            permission_trust_clear(username, pattern)
+            revoked.append(identifier)
+    return revoked
