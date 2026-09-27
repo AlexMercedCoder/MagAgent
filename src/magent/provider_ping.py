@@ -46,14 +46,23 @@ def ping_provider(
         import litellm
 
         litellm.suppress_debug_info = True
+        from magent.providers import flush_provider_logging
+
         params = provider.completion_params(0.0, max_tokens)
-        response = asyncio.run(
-            litellm.acompletion(
-                messages=[{"role": "user", "content": PROMPT}],
-                **params,
-                **provider.request_kwargs(),
-            )
-        )
+
+        async def call() -> Any:
+            try:
+                return await litellm.acompletion(
+                    messages=[{"role": "user", "content": PROMPT}],
+                    **params,
+                    **provider.request_kwargs(),
+                )
+            finally:
+                # Drain LiteLLM's logging worker inside this loop, or it warns
+                # about a changed event loop on the next call.
+                await flush_provider_logging()
+
+        response = asyncio.run(call())
     except Exception as error:
         return {
             **record,

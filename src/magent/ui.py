@@ -1329,13 +1329,14 @@ def serve_ui(
     except OSError as e:
         return {"ok": False, "error": f"Could not bind 127.0.0.1:{port}: {e}", "port": port}
 
-    shutdown_server = server.shutdown
+    shutdown_server = getattr(server, "shutdown", None)
 
     def shutdown() -> None:
         if schedules:
             schedules.stop()
         approval_broker.close()
-        shutdown_server()
+        if shutdown_server is not None:
+            shutdown_server()
 
     server.shutdown = shutdown  # type: ignore[method-assign]
 

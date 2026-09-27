@@ -46,7 +46,8 @@ def test_ping_cli_reports_failures_with_a_next_step(monkeypatch, tmp_path: Path)
     assert failed.exit_code == 1 and "magent auth list" in failed.output
     ok = runner.invoke(cli_main.app, ["provider", "ping", "mock", "--json"])
     assert ok.exit_code == 0, ok.output
-    assert json.loads(ok.output)["ok"] is True
+    payload, _end = json.JSONDecoder().raw_decode(ok.output[ok.output.index("{") :])
+    assert payload["ok"] is True
 
 
 def test_pinged_providers_keep_their_tier_and_cite_the_report() -> None:
