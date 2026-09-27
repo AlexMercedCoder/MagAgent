@@ -109,7 +109,15 @@ def _model_response(model: str, messages: list[dict[str, Any]]) -> Any:
                 message=Message(role="assistant", content=reply),
             )
         ],
-        usage=Usage(**_usage(messages, reply)),
+        usage=_litellm_usage(Usage, _usage(messages, reply)),
+    )
+
+
+def _litellm_usage(usage_type: Any, counts: dict[str, int]) -> Any:
+    return usage_type(
+        prompt_tokens=counts["prompt_tokens"],
+        completion_tokens=counts["completion_tokens"],
+        total_tokens=counts["total_tokens"],
     )
 
 
@@ -154,7 +162,9 @@ def ensure_registered() -> None:
         def streaming(self, *args: Any, **kwargs: Any) -> Iterator[Any]:
             yield from _chunks(list(kwargs.get("messages", [])))
 
-        async def astreaming(self, *args: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        async def astreaming(  # type: ignore[override]
+            self, *args: Any, **kwargs: Any
+        ) -> AsyncIterator[Any]:
             for chunk in _chunks(list(kwargs.get("messages", []))):
                 yield chunk
 
