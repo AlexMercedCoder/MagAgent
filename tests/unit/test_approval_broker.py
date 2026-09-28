@@ -131,6 +131,11 @@ def test_request_is_persisted_before_publish_and_resumes_after_exact_decision(tm
     )
     thread.start()
     request = wait_for_request(instance)
+    # The request is persisted (and so visible in the snapshot) before it is published, so the
+    # publish can land a moment later on a loaded machine.
+    deadline = time.monotonic() + 10
+    while not events and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert events and events[0]["type"] == "approval.requested"
     assert request["action_digest"] == action_digest(request["action"])
     resolution = instance.decide(
