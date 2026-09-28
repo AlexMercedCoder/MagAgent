@@ -191,7 +191,10 @@ def _post(url: str, method: str, params: dict, token: str = TOKEN) -> tuple[int,
         with urllib.request.urlopen(request, timeout=60) as response:
             return response.status, json.loads(response.read())
     except urllib.error.HTTPError as error:
-        return error.code, json.loads(error.read())
+        # Close the error's response body: Python 3.14 reports an unclosed one
+        # as a ResourceWarning, which pytest turns into a failure.
+        with error:
+            return error.code, json.loads(error.read())
 
 
 def test_http_server_end_to_end_with_the_mock_provider(tmp_path: Path) -> None:

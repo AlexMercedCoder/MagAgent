@@ -117,7 +117,9 @@ def _post(info: dict, headers: dict[str, str], body: bytes = b"") -> int:
         with urllib.request.urlopen(request, timeout=10) as response:
             return response.status
     except urllib.error.HTTPError as error:
-        return error.code
+        # Close the unread body; Python 3.14 reports it as a ResourceWarning.
+        with error:
+            return error.code
 
 
 def test_browser_requests_are_refused_even_with_the_token(http_gateway: dict) -> None:
