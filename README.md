@@ -23,14 +23,14 @@ Current release: **1.3.0** ([release notes](docs/RELEASE_NOTES_1.3.0.md)). Unrel
 
 ## Which tool do I want?
 
-MagAgent is one of four related projects. Pick by what you need:
+MagAgent is one of four related open-source agent projects. Pick by what you are trying to do:
 
-| I want... | Use |
-|---|---|
-| A governed agent for a team or data platform | [Loro](https://github.com/alexmerced-oss/loro) |
-| A personal agent that remembers me | [MagAgent](https://github.com/AlexMercedCoder/MagAgent) |
-| A desktop app for my agent | [Mag Command Center](https://github.com/AlexMercedCoder/MagCommandCenter) |
-| One identity across Claude Code, Codex, Gemini and the other harnesses I already use | [Merced AI](https://github.com/AlexMercedCoder/merced-ai) |
+| Goal | Tool |
+| --- | --- |
+| I want a governed agent for a team or data platform | [Loro](https://github.com/alexmerced-oss/loro) |
+| I want a personal agent that remembers me | [MagAgent](https://github.com/AlexMercedCoder/MagAgent) |
+| I want a desktop app for my agent | [Mag Command Center](https://github.com/AlexMercedCoder/MagCommandCenter) |
+| I already use Claude Code/Codex/Gemini/etc. and want one identity across them | [Merced AI](https://github.com/AlexMercedCoder/merced-ai) |
 
 ---
 

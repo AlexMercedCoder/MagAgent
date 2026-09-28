@@ -73,7 +73,8 @@ dev = [
     # Parallel test execution: the suite is dominated by subprocess-spawning
     # tests, so it scales well across workers.
     "pytest-xdist>=3.5.0",
-    "ruff>=0.4.0",
+    # Upper bound: CI runs `ruff check`, and a new ruff minor can add lint rules.
+    "ruff>=0.16,<0.17",
     "mypy>=1.10.0",
 ]
 gateway = [

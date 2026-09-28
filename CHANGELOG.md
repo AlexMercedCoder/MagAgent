@@ -148,6 +148,13 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
 
 ### Fixed
 
+- `magent agent export` dropped OAP fields whose names contain "token", such as
+  `spec.context.budget.max_context_tokens` and `max_state_tokens`, while removing secret-like
+  fields. Numbers and booleans are now kept; string values under credential-like names are still
+  removed. Export also wrote OAP Markdown whatever the output name, so `-o x.agent.yaml` produced
+  a file that Loro and Merced AI could not parse as YAML; the encoding now follows the extension
+  (`.yaml`/`.yml`, `.json`, otherwise Markdown). Found in cross-harness integration testing.
+
 - `edit_file` silently converted CRLF files to LF and rewrote non-UTF-8 files with replacement
   characters. It now edits bytes, keeps a consistently CRLF file CRLF (an LF `old_str` still
   matches), and refuses files that are not UTF-8. The edit-quality benchmark went from 10/13 to
@@ -218,7 +225,10 @@ that failed before the fix. `magent docs show threat-model` has the per-surface 
 
 ### Docs and tooling
 
-- README opens with MagAgent's role and a shared "Which tool do I want?" table.
+- README opens with MagAgent's role and a shared "Which tool do I want?" table, worded the same
+  as in Loro and Merced AI.
+- The dev extra bounds ruff to 0.16.x (`ruff>=0.16,<0.17`) so a new ruff minor cannot add lint
+  rules under CI without a code change.
 - Fixed drift: tool count (49, from the registry), provider count (22 plus `mock`), conformance
   stamps (`docs/*-conformance.json` now `1.3.0`, re-checked against the pinned OAP and AGS
   fixtures), the 1.3.0 CHANGELOG heading, the generated config reference, ROADMAP and PRD status.

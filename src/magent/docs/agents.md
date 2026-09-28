@@ -46,7 +46,12 @@ magent agent export reviewer --output reviewer.md --project .
 tools, and subagents. Updates require the digest returned when the profile was opened.
 Behavior edits preserve runtime-owned state and proposals, append revision history, and
 create a rollback checkpoint before writing atomically. Import and export never include
-secret-like extension fields.
+secret-like extension fields: a field whose name looks like a credential (`token`, `api_key`,
+`password`, `secret`, `private_key`) is dropped unless its value is a number or boolean, so
+OAP budget fields such as `max_context_tokens` survive. `export` writes the encoding the output
+name asks for: `.agent.yaml` or `.yml` as YAML, `.json` as JSON, anything else as OAP Markdown.
+Loro and Merced AI read these files; they discover shared profiles in the project's `.agents/`
+directory, while `magent agent import --scope project` writes MagAgent's own `.magent/agents/`.
 
 Web access has two independent profile checks. `spec.tools.allow` must include `web` or the
 specific web tools, and `spec.permissions.network` must be `read` or `full`. Use `read` for web

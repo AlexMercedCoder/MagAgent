@@ -385,7 +385,7 @@ def export_profile(
         }
     target = Path(destination).expanduser().resolve()
     document = _without_secret_like_fields(copy.deepcopy(resolved.document))
-    atomic_write(target, render_document(document, "md"))
+    atomic_write(target, render_document(document, _export_encoding(target)))
     return {
         "ok": True,
         "contract": PROFILE_CONTRACT,
@@ -507,13 +507,29 @@ def _dependencies(
     }
 
 
+def _export_encoding(target: Path) -> str:
+    """Pick the OAP encoding from the file name, as other OAP loaders do when they read it."""
+    name = target.name.lower()
+    if name.endswith((".yaml", ".yml")):
+        return "yaml"
+    if name.endswith(".json"):
+        return "json"
+    return "md"
+
+
 def _without_secret_like_fields(value: Any) -> Any:
+    """Drop fields whose name looks like a credential and whose value could hold one.
+
+    Numbers and booleans are kept: they cannot be credentials, and OAP itself names numeric
+    fields such as ``context.budget.max_context_tokens`` and ``max_state_tokens``.
+    """
     secret_words = ("api_key", "apikey", "token", "password", "secret", "private_key")
     if isinstance(value, dict):
         return {
             key: _without_secret_like_fields(item)
             for key, item in value.items()
-            if not any(word in key.lower() for word in secret_words)
+            if isinstance(item, (bool, int, float))
+            or not any(word in key.lower() for word in secret_words)
         }
     if isinstance(value, list):
         return [_without_secret_like_fields(item) for item in value]

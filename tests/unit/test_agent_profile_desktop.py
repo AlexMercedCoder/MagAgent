@@ -208,3 +208,35 @@ def test_profile_identity_reaches_research_recipes_and_graph_runtime(
     assert graph.profile is profile
     assert recipe["plan"]["agent_profile"] == "reviewer"
     assert report.parent == tmp_path
+
+
+def test_export_keeps_numeric_token_fields_and_matches_the_file_extension(tmp_path: Path) -> None:
+    import yaml
+    from oap.validate import load_document
+
+    profile = document("budgeted")
+    profile["spec"]["context"] = {
+        "budget": {"max_context_tokens": 150000, "max_state_tokens": 4000}
+    }
+    profile["metadata"]["annotations"]["example.dev/api_token"] = "literal-value"
+    apply_profile(profile, scope="project", project=tmp_path, config=Config())
+
+    yaml_path = tmp_path / "out" / "budgeted.agent.yaml"
+    markdown_path = tmp_path / "out" / "budgeted.agent.md"
+    json_path = tmp_path / "out" / "budgeted.agent.json"
+    for target in (yaml_path, markdown_path, json_path):
+        assert export_profile("budgeted", target, project=tmp_path, config=Config())["ok"]
+
+    # A .yaml export is plain YAML (one document), so YAML-only OAP loaders can read it.
+    exported = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+    assert exported["spec"]["context"]["budget"] == {
+        "max_context_tokens": 150000,
+        "max_state_tokens": 4000,
+    }
+    # String values under credential-like names are still removed.
+    assert "example.dev/api_token" not in exported["metadata"].get("annotations", {})
+    assert json.loads(json_path.read_text(encoding="utf-8"))["metadata"]["name"] == "budgeted"
+    assert markdown_path.read_text(encoding="utf-8").startswith("---\n")
+    for target in (yaml_path, markdown_path, json_path):
+        _, errors = load_document(target)
+        assert errors == [], (target.name, errors)

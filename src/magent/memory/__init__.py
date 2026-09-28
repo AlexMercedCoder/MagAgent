@@ -69,7 +69,7 @@ def _recall_node_evidence(anchor: dict[str, Any], source: str = "personal") -> d
     """Compact, JSON-safe description of one recalled anchor node."""
     score = anchor.get("score")
     try:
-        numeric = round(float(score), 4) if score not in (None, "") else None
+        numeric = round(float(score), 4) if score is not None and score != "" else None
     except (TypeError, ValueError):
         numeric = None
     matched = anchor.get("matched") or []
