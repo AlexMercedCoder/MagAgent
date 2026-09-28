@@ -154,6 +154,16 @@ Changelog = "https://github.com/AlexMercedCoder/MagAgent/releases"
 [tool.hatch.build.targets.wheel]
 packages = ["src/magent"]
 
+# Hatchling reads only the root .gitignore, so the VS Code extension's nested
+# ignore rules (node_modules/, dist/, *.vsix) would otherwise leak a local
+# npm install (about 13 MB of native binaries) into the sdist.
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "**/node_modules",
+  "editors/vscode/dist",
+  "*.vsix",
+]
+
 [tool.ruff]
 src = ["src"]
 line-length = 100
