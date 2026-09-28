@@ -1,11 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.4.0 (2026-09-28)
 
-Target: 1.4.0. The package version in `pyproject.toml` stays 1.3.0 until the release is cut.
-
-**Release prerequisite:** this release requires `agent-approval-interchange>=0.2.0,<0.3`, which
-is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the pin.
+Requires `agent-approval-interchange>=0.2.0,<0.3` (AAIS 0.2.0).
 
 ### Added
 
