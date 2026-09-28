@@ -206,6 +206,11 @@ def test_configure_prefers_keyring_for_a_supplied_key(isolated: Path, monkeypatc
         lambda provider, secret: saved.update(provider=provider, secret=secret) or {"ok": True},
     )
     monkeypatch.setattr(auth_store, "keyring_account", lambda provider: f"magent:{provider}")
+    # CI runners have keyring's "fail" backend only; the storage choice under
+    # test must not depend on whether the host runs a credential service.
+    monkeypatch.setattr(
+        auth_store, "keyring_status", lambda: {"available": True, "backend": "test.Keyring"}
+    )
     monkeypatch.setattr(web_onboarding, "readiness", lambda: {"ok": True, "ready": True})
 
     state = web_onboarding.configure("openai", credential="test-secret")
