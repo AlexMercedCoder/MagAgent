@@ -34,7 +34,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from magent.config import USERS_DIR
+from magent.config import USERS_DIR, user_path, validate_username
 
 PROPOSAL_PREFIX = "proposals/"
 REVIEWS_FILE = "REVIEWS.jsonl"
@@ -57,9 +57,9 @@ class TeamMemory:
     def __init__(self, username: str, *, name: str = "team", root: Path | None = None) -> None:
         if not _ID.match(name):
             raise TeamMemoryError("Team names use letters, digits, '.', '_' or '-'.")
-        self.username = username
+        self.username = validate_username(username)
         self.name = name
-        self.root = root or (USERS_DIR / username / "team" / name)
+        self.root = root or user_path(username, "team", name, base=USERS_DIR)
 
     # ----------------------------------------------------------------- git
 

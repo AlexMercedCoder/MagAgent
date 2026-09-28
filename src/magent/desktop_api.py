@@ -22,6 +22,7 @@ from magent.config import (
     save_user_profile,
     user_exists,
     user_memory_dir,
+    user_path,
 )
 from magent.config_safety import redact_config_text
 from magent.memory import MemoryManager
@@ -391,7 +392,7 @@ def config_get(username: str | None = None, *, include_raw: bool = False) -> dic
         "user": username,
         "paths": {
             "global": str(GLOBAL_CONFIG),
-            "user": str(USERS_DIR / username / "profile.toml"),
+            "user": str(user_path(username, "profile.toml", base=USERS_DIR)),
         },
         "global": _redact_obj(global_cfg),
         "user_config": _redact_obj(user_cfg),
@@ -403,9 +404,9 @@ def config_get(username: str | None = None, *, include_raw: bool = False) -> dic
             if GLOBAL_CONFIG.exists()
             else "",
             "user": redact_config_text(
-                (USERS_DIR / username / "profile.toml").read_text(encoding="utf-8")
+                user_path(username, "profile.toml", base=USERS_DIR).read_text(encoding="utf-8")
             )
-            if (USERS_DIR / username / "profile.toml").exists()
+            if user_path(username, "profile.toml", base=USERS_DIR).exists()
             else "",
         }
     return result
@@ -655,7 +656,7 @@ def execution_tasks(
     limit: int = 100,
 ) -> dict[str, Any]:
     """Return durable execution tasks for desktop clients."""
-    runtime = TaskRuntime(USERS_DIR / username / "workbench")
+    runtime = TaskRuntime(user_path(username, "workbench", base=USERS_DIR))
     return {
         "ok": True,
         "tasks": runtime.list_tasks(
@@ -671,7 +672,7 @@ def execution_task(
     username: str, task_id: str, *, after: int = 0, limit: int = 500
 ) -> dict[str, Any]:
     """Return one task and its ordered event stream."""
-    runtime = TaskRuntime(USERS_DIR / username / "workbench")
+    runtime = TaskRuntime(user_path(username, "workbench", base=USERS_DIR))
     task = runtime.get(task_id)
     if task is None:
         return {"ok": False, "error": f"Task not found: {task_id}"}
@@ -682,7 +683,7 @@ def execution_task_action(
     username: str, task_id: str, action: str, *, reason: str = ""
 ) -> dict[str, Any]:
     """Pause, resume, cancel, or retry a durable execution task."""
-    runtime = TaskRuntime(USERS_DIR / username / "workbench")
+    runtime = TaskRuntime(user_path(username, "workbench", base=USERS_DIR))
     if action not in {"pause", "resume", "cancel", "retry"}:
         return {"ok": False, "error": f"Unsupported task action: {action}"}
     try:

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from magent.config import USERS_DIR
+from magent.config import USERS_DIR, user_path
 
 DEFAULT_DIM = 256
 DEFAULT_MODEL = "nomic-embed-text"
@@ -65,7 +65,7 @@ class SemanticMemoryIndex:
         self.provider = provider
         self.model = model
         self.dim = dim
-        self.root = USERS_DIR / username / "workbench" / "vector"
+        self.root = user_path(username, "workbench", "vector", base=USERS_DIR)
         self.root.mkdir(parents=True, exist_ok=True)
         # The index is per memory graph. Ignoring memory_dir meant two graphs
         # for the same user shared (and corrupted) one index.

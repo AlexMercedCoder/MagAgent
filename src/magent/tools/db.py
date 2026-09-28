@@ -105,7 +105,7 @@ def _rows_to_dicts(rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
 
 def list_databases(username: str) -> dict[str, Any]:
     """List all databases for a user."""
-    db_dir = Path(USERS_DIR) / username / "databases"
+    db_dir = Path(USERS_DIR) / strip_component(username) / "databases"
     if not db_dir.exists():
         return {"ok": True, "databases": []}
 

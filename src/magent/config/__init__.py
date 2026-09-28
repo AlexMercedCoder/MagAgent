@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import os
+import re
 import tomllib  # type: ignore[no-redef]
 from pathlib import Path
 from typing import Any
@@ -616,7 +617,7 @@ def load_global_config() -> dict[str, Any]:
 
 def load_user_profile(username: str) -> dict[str, Any]:
     _ensure_state_compatibility()
-    profile_path = USERS_DIR / username / "profile.toml"
+    profile_path = user_path(username, "profile.toml")
     if not profile_path.exists():
         return DEFAULT_USER_PROFILE.copy()
     with profile_path.open("rb") as f:
@@ -635,14 +636,93 @@ def load_config(username: str | None = None) -> Config:
 # ─────────────────────────────────────────────
 
 
-def get_current_user() -> str | None:
+# User names become directory names under USERS_DIR, so they are validated at
+# every entry point and every join is checked to stay inside USERS_DIR. Without
+# this, `magent user delete ../.. --yes` removed ~/.config.
+USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
+RESERVED_USERNAMES = frozenset(
+    {
+        "current",  # the file that records the active user
+        "con",
+        "prn",
+        "aux",
+        "nul",
+        *(f"com{index}" for index in range(1, 10)),
+        *(f"lpt{index}" for index in range(1, 10)),
+    }
+)
+
+
+class InvalidUserNameError(ValueError):
+    """A user name that cannot be used as a directory under USERS_DIR."""
+
+
+def is_valid_username(username: object) -> bool:
+    if not isinstance(username, str) or not USERNAME_PATTERN.match(username):
+        return False
+    if ".." in username or username.endswith("."):
+        return False
+    return username.split(".")[0].lower() not in RESERVED_USERNAMES
+
+
+def validate_username(username: object) -> str:
+    """Return ``username`` when it is a safe user name, else raise InvalidUserNameError."""
+
+    if not is_valid_username(username):
+        raise InvalidUserNameError(
+            f"Invalid user name {username!r}: use 1-64 letters, digits, '.', '_' or '-', "
+            "starting with a letter or digit, without '..' (reserved: current, and device "
+            "names such as con or nul)."
+        )
+    return str(username)
+
+
+def user_path(username: str, *parts: str, base: Path | str | None = None) -> Path:
+    """``base/username/parts`` for a validated user, refusing anything outside ``base``.
+
+    ``base`` defaults to USERS_DIR; modules that keep their own (monkeypatched)
+    copy of USERS_DIR pass it in. The containment check resolves symlinks, so
+    a user directory that is itself a link out of USERS_DIR is refused too.
+    """
+
+    root_dir = Path(base) if base is not None else USERS_DIR
+    name = validate_username(username)
+    root = root_dir.resolve(strict=False)
+    target = (root_dir / name).resolve(strict=False)
+    if target.parent != root:
+        raise InvalidUserNameError(f"user directory for {name!r} is outside {root}")
+    candidate = (root_dir / name).joinpath(*parts)
+    resolved = candidate.resolve(strict=False)
+    if resolved != target and target not in resolved.parents:
+        raise InvalidUserNameError(f"path {'/'.join(parts)!r} escapes the user directory")
+    return candidate
+
+
+def get_current_user(*, strict: bool = True) -> str | None:
+    """The active user, or None. A stored name that is not valid raises (``strict``).
+
+    With ``strict=False`` an invalid stored name reads as "no active user", which
+    the `magent user` commands use so they can still repair it.
+    """
+
     if CURRENT_USER_FILE.exists():
         name = CURRENT_USER_FILE.read_text().strip()
-        return name if name else None
+        if not name:
+            return None
+        if not is_valid_username(name):
+            if not strict:
+                return None
+            raise InvalidUserNameError(
+                f"The active user recorded in {CURRENT_USER_FILE} ({name!r}) is not a valid "
+                "user name, so MagAgent will not use it. Choose a user with "
+                "`magent user switch <name>` (see `magent user list`), or empty that file."
+            )
+        return name
     return None
 
 
 def set_current_user(username: str) -> None:
+    validate_username(username)
     USERS_DIR.mkdir(parents=True, exist_ok=True)
     CURRENT_USER_FILE.write_text(username)
 
@@ -654,16 +734,16 @@ def list_users() -> list[str]:
 
 
 def user_exists(username: str) -> bool:
-    return (USERS_DIR / username).exists()
+    return user_path(username).exists()
 
 
 def user_memory_dir(username: str) -> Path:
-    return USERS_DIR / username / "memory"
+    return user_path(username, "memory")
 
 
 def create_user(username: str) -> None:
     """Create directory structure and default profile for a new user."""
-    user_dir = USERS_DIR / username
+    user_dir = user_path(username)
     memory_dir = user_dir / "memory"
     memory_dir.mkdir(parents=True, exist_ok=True)
 
@@ -682,11 +762,13 @@ def delete_user(username: str) -> None:
     """Remove user directory entirely."""
     import shutil
 
-    user_dir = USERS_DIR / username
+    user_dir = user_path(username)
+    if user_dir.is_symlink():
+        raise InvalidUserNameError(f"refusing to delete {user_dir}: it is a symbolic link")
     if user_dir.exists():
         shutil.rmtree(user_dir)
     # If this was the active user, clear current
-    if get_current_user() == username:
+    if get_current_user(strict=False) == username:
         CURRENT_USER_FILE.write_text("")
 
 
@@ -699,7 +781,7 @@ def save_global_config(cfg: dict[str, Any]) -> None:
 
 def save_user_profile(username: str, profile: dict[str, Any]) -> None:
     _ensure_state_compatibility()
-    profile_path = USERS_DIR / username / "profile.toml"
+    profile_path = user_path(username, "profile.toml")
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     with profile_path.open("wb") as f:
         tomli_w.dump(profile, f)

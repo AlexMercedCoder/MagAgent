@@ -17,6 +17,7 @@ from rich.table import Table
 
 from magent.cli.render import _print_memory_stats
 from magent.config import (
+    InvalidUserNameError,
     create_user,
     delete_user,
     get_current_user,
@@ -24,6 +25,7 @@ from magent.config import (
     set_current_user,
     user_exists,
     user_memory_dir,
+    validate_username,
 )
 
 console = Console()
@@ -222,15 +224,23 @@ def register_memory_commands(
     # ─────────────────────────────────────────────
 
 
+    def _checked_user_name(name: str) -> str:
+        try:
+            return validate_username(name)
+        except InvalidUserNameError as error:
+            console.print(f"[red]{error}[/red]")
+            raise typer.Exit(2) from error
+
     @user_app.command("create")
     def user_create(name: str = typer.Argument(..., help="Username to create")):
         """Create a new user profile."""
+        _checked_user_name(name)
         if user_exists(name):
             console.print(f"[yellow]User '{name}' already exists.[/yellow]")
             raise typer.Exit(1)
         create_user(name)
         console.print(f"[green]✓ Created user [bold]{name}[/bold][/green]")
-        if not get_current_user():
+        if not get_current_user(strict=False):
             set_current_user(name)
             console.print(f"[dim]Switched to user: {name}[/dim]")
 
@@ -238,6 +248,7 @@ def register_memory_commands(
     @user_app.command("switch")
     def user_switch(name: str = typer.Argument(..., help="Username to switch to")):
         """Switch the active user."""
+        _checked_user_name(name)
         if not user_exists(name):
             console.print(f"[red]User '{name}' does not exist.[/red]")
             raise typer.Exit(1)
@@ -251,6 +262,7 @@ def register_memory_commands(
         yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
     ):
         """Delete a user and their memory graph."""
+        _checked_user_name(name)
         if not user_exists(name):
             console.print(f"[red]User '{name}' does not exist.[/red]")
             raise typer.Exit(1)
@@ -262,7 +274,11 @@ def register_memory_commands(
             if confirm.lower() != "yes":
                 console.print("[dim]Cancelled.[/dim]")
                 raise typer.Exit()
-        delete_user(name)
+        try:
+            delete_user(name)
+        except InvalidUserNameError as error:
+            console.print(f"[red]{error}[/red]")
+            raise typer.Exit(2) from error
         console.print(f"[green]✓ Deleted user [bold]{name}[/bold][/green]")
 
 
@@ -270,7 +286,7 @@ def register_memory_commands(
     def user_list():
         """List all user profiles."""
         users = list_users()
-        current = get_current_user()
+        current = get_current_user(strict=False)
         if not users:
             console.print("[dim]No users found. Run [bold]magent setup[/bold] to get started.[/dim]")
             return
@@ -284,7 +300,11 @@ def register_memory_commands(
     @user_app.command("current")
     def user_current():
         """Show the currently active user."""
-        user = get_current_user()
+        try:
+            user = get_current_user()
+        except InvalidUserNameError as error:
+            console.print(f"[red]{error}[/red]")
+            raise typer.Exit(2) from error
         if user:
             console.print(f"[bold]{user}[/bold]")
         else:

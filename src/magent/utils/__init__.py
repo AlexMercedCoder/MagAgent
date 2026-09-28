@@ -121,9 +121,9 @@ def run_doctor() -> None:
         except Exception as e:
             checks.append(("Semantic memory", False, str(e)))
 
-        from magent.config import USERS_DIR
+        from magent.config import USERS_DIR, user_path
 
-        checkpoint_dir = USERS_DIR / user / "workbench" / "checkpoints"
+        checkpoint_dir = user_path(user, "workbench", "checkpoints", base=USERS_DIR)
         checks.append(
             (
                 "Checkpoint store",

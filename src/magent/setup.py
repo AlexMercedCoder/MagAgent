@@ -18,6 +18,7 @@ from magent.config import (
     USERS_DIR,
     create_user,
     get_current_user,
+    is_valid_username,
     load_global_config,
     save_global_config,
     set_current_user,
@@ -177,6 +178,12 @@ def _prompt_create_user() -> str:
         name = name.strip().lower().replace(" ", "_")
         if not name:
             console.print("[red]Username cannot be empty.[/red]")
+            continue
+        if not is_valid_username(name):
+            console.print(
+                "[red]Use 1-64 letters, digits, '.', '_' or '-', starting with a letter or "
+                "digit, without '..'.[/red]"
+            )
             continue
         if user_exists(name):
             console.print(f"[yellow]User '{name}' already exists. Switching to it.[/yellow]")

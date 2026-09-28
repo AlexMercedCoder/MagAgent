@@ -167,6 +167,18 @@ def main(
         console.print(f"MagAgent {__version__}")
         raise typer.Exit()
 
+    if ctx.invoked_subcommand != "user":
+        # An active-user file naming something that is not a valid user name
+        # (for example "../..") is refused everywhere except `magent user`,
+        # which is how it gets repaired.
+        from magent.config import InvalidUserNameError, get_current_user
+
+        try:
+            get_current_user()
+        except InvalidUserNameError as error:
+            console.print(f"[red]{error}[/red]")
+            raise typer.Exit(2) from error
+
     if ctx.invoked_subcommand is not None:
         return
 

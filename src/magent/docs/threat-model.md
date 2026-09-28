@@ -158,6 +158,24 @@ Covering tests: `editors/vscode/test/client.test.ts`.
 Residual risk: following a symlinked prompt file is allowed (it is your own path).
 Covering tests: `test_ask_prompt_file.py`, `test_sec1_regressions.py`.
 
+### User and profile names (G-15)
+
+Found by Mag Command Center's review after SEC-1, and fixed the same way: a regression test that
+failed before the fix (`tests/unit/test_user_name_containment.py`).
+
+Assets: everything under `~/.config/magent/users/<name>/` and, before the fix, anything a
+traversal could reach (`magent user delete ../.. --yes` removed `~/.config`).
+
+| STRIDE | Threat | Mitigation |
+| --- | --- | --- |
+| T | Traversal through a user name (`..`, `/`, absolute paths) in `user create/switch/delete`, the workbench store, semantic and team memory, the desktop API, `doctor` and config paths | One validator, `validate_username` (1-64 of `[A-Za-z0-9_.-]`, leading letter or digit, no `..`, not `current` or a device name), at every entry point; every join goes through `user_path`, which also checks the resolved path stays directly under `USERS_DIR` (`config/__init__.py`) |
+| T | A user directory that is a symlink out of `USERS_DIR` | Resolved-path containment refuses it; `delete_user` refuses any symlinked user directory |
+| E | A tampered `users/current` file | `get_current_user` refuses a stored name that is not valid and says how to repair it; the CLI stops before any command except `magent user` (`cli/main.py`) |
+
+Residual risk: names that were valid before but are not now (for example with spaces) must be
+renamed by moving the directory; code that passes an explicit `Path` to `WorkbenchStore` (tests
+and embedders) is trusted as given.
+
 ### Parallel read tools and grants
 
 | STRIDE | Threat | Mitigation |

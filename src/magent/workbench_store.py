@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from magent.config import USERS_DIR
+from magent.config import USERS_DIR, user_path
 
 WORKBENCH_DIRNAME = "workbench"
 
@@ -70,9 +70,14 @@ class WorkbenchStore:
     # caller that skips __init__) still have somewhere to record warnings.
     warnings: list[str] = []
 
-    def __init__(self, username: str):
-        self.username = username
-        self.root = USERS_DIR / username / WORKBENCH_DIRNAME
+    def __init__(self, username: str | Path):
+        self.username = username  # type: ignore[assignment]
+        if isinstance(username, Path):
+            # An explicit state directory from code (tests, embedders): used
+            # as given. A user *name* is validated and kept inside USERS_DIR.
+            self.root = username / WORKBENCH_DIRNAME
+        else:
+            self.root = user_path(username, WORKBENCH_DIRNAME, base=USERS_DIR)
         self.root.mkdir(parents=True, exist_ok=True)
         self.warnings: list[str] = []
 

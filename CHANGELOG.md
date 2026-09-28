@@ -163,7 +163,8 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
 
 ### Security (SEC-1 self-review)
 
-A self-review of everything added for 1.4.0 found and fixed these before release. Each has a
+A self-review of everything added for 1.4.0 found and fixed these before release (plus G-15,
+found by Mag Command Center's review and tested in `tests/unit/test_user_name_containment.py`). Each has a
 regression test in `tests/unit/test_sec1_regressions.py` (or the VS Code extension's tests)
 that failed before the fix. `magent docs show threat-model` has the per-surface model.
 
@@ -203,6 +204,15 @@ that failed before the fix. `magent docs show threat-model` has the per-surface 
   instead of the secret. Resume now takes `--param NAME=VALUE`, `--params JSON` and
   `--param-file FILE`, asks with hidden input in a terminal, and otherwise stops (exit 2) naming
   the parameters to supply. The executor refuses any parameter containing the marker (`RT055`).
+- User names (G-15, found by Mag Command Center's review): user names were joined onto the
+  users directory unchecked, so `magent user delete ../.. --yes` deleted `~/.config`, and
+  `create`, `switch` and several modules (workbench store, semantic memory, team memory, desktop
+  API, doctor, config paths) could reach outside it. One validator now applies everywhere (1-64
+  letters, digits, `.`, `_` or `-`, starting with a letter or digit, no `..`, not `current` or a
+  device name), and every join is also checked to stay inside the users directory after
+  resolving symlinks; `user delete` refuses a symlinked user directory. An invalid stored
+  active user is refused with a hint (`magent user switch <name>`); only `magent user` commands
+  still run so it can be repaired.
 - VS Code: a workspace's `.vscode/settings.json` could set `magagent.executable` (any program)
   or the permission mode; both are now user-only and the extension needs a trusted workspace.
 

@@ -18,7 +18,9 @@ def config_paths(username: str | None = None) -> dict[str, str]:
     username = username or get_current_user()
     paths = {"global": str(GLOBAL_CONFIG)}
     if username:
-        paths["user"] = str(CONFIG_DIR / "users" / username / "profile.toml")
+        from magent.config import user_path
+
+        paths["user"] = str(user_path(username, "profile.toml", base=CONFIG_DIR / "users"))
     return paths
 
 
