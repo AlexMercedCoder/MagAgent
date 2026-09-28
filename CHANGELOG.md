@@ -134,6 +134,11 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
     view after sending; only the inner panes scroll.
   - Phones get a bottom tab bar with labels in the theme's colours instead of the dark icon rail,
     and dialogs open over the page instead of inside the hidden drawer.
+- **Web UI fonts are bundled (UI-6).** The UI named Inter and Georgia but shipped neither, so
+  it rendered differently per machine. It now self-hosts Inter (body) and Source Serif 4
+  (headings), both SIL OFL 1.1, as latin-subset variable WOFF2 files (about 99 KB together) with
+  `font-display: swap`, served from the same origin; licenses ship as `FONT-LICENSES.txt`. Every
+  stack ends in a generic family, and a test fails on any that does not.
 - **`magent ui` prints a plain line** (`MagAgent UI: <url>`, the project, and how to stop)
   instead of a JSON blob; `--json` prints one machine-readable line. Every visible CLI option now
   has help text (404 had none), and a test keeps it that way.
