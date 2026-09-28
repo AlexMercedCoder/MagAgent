@@ -33,8 +33,9 @@ python -m pytest -q
 python -m pytest -q -m slow
 ```
 
-The 1.4.0 bump was rehearsed in a scratch worktree on 2026-09-27: the strict check passed and
-the default suite passed at 1.4.0 (after two test fixes found by the rehearsal).
+The 1.4.0 bump was rehearsed in a scratch worktree on 2026-09-27. The strict check passed. The
+default suite at 1.4.0 had two failures, both since fixed: a test that hard-coded the 1.3.0
+changelog heading, and a LiteLLM logging drain that could hang.
 
 ## 3. Build and verify
 
