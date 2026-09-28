@@ -244,8 +244,36 @@ class ShellToolsMixin:
     def _log_tool(self, name: str, desc: str, tier: RiskTier) -> None:
         raise NotImplementedError
 
-    def _check_permission(self, action_description: str, tier: RiskTier) -> PermissionResult:
+    def _check_permission(
+        self, action_description: str, tier: RiskTier, *, mode: str | None = None
+    ) -> PermissionResult:
         raise NotImplementedError
+
+    # -- "ask" for every shell command (I-17) -------------------------------
+    #
+    # By default MagAgent runs commands its classifier treats as read-only
+    # (echo, cat, grep, sed without -i, ...) without asking. An Open Agent
+    # Profile with `permissions.shell: ask` (OAP 1.0 section 3.5), or
+    # `permissions.read_only_shell_auto_allow = false` in config, means every
+    # shell-family call is approved by a person first: the classifier can only
+    # make a command *more* restricted, never skip the question. Grants the
+    # user made earlier (exact command, this project) still count as approvals.
+
+    profile_shell: str = "allow"
+
+    def _shell_ask_all(self) -> bool:
+        if str(getattr(self, "profile_shell", "allow") or "allow") == "ask":
+            return True
+        config = getattr(self, "config", None)
+        if config is None or not hasattr(config, "get"):
+            return False
+        return config.get("permissions", "read_only_shell_auto_allow", default=True) is False
+
+    def _shell_family_permission(self, description: str, tier: RiskTier) -> PermissionResult:
+        """Permission for run_python / install_package, honouring `shell: ask`."""
+        if self._shell_ask_all():
+            return self._check_permission(description, max(tier, RiskTier.CONFIRM), mode="paranoid")
+        return self._check_permission(description, tier)
 
     def _permission_denied(self, perm: PermissionResult) -> ToolResult:
         raise NotImplementedError
@@ -362,16 +390,22 @@ class ShellToolsMixin:
         return command.strip()
 
     def _check_shell_permission(self, command: str, tier: RiskTier) -> PermissionResult:
+        ask_all = self._shell_ask_all()
         if self._trusted_shell_match(command):
             return PermissionResult(True, RiskTier.AUTO, "trusted-shell")
-        if self._grant_lookup_useful(tier):
+        if ask_all:
+            # No auto-run for "read-only" commands: everything is at least CONFIRM.
+            tier = max(tier, RiskTier.CONFIRM)
+        if ask_all or self._grant_lookup_useful(tier):
             scope = self._shell_grant_scope(command, tier)
             if scope:
                 if self.show_tool_calls:
                     console.print(f"[dim]Approved by a remembered {scope} grant.[/dim]")
                 return PermissionResult(True, tier, f"grant-{scope}")
         if not self.interactive_permissions or self.permission_mode == "yolo":
-            result = self._check_permission(f"Run: `{command}`", tier)
+            result = self._check_permission(
+                f"Run: `{command}`", tier, mode="paranoid" if ask_all else None
+            )
             if result.approved and result.reason == "user-session-allow":
                 pattern = self._shell_trust_pattern(command, tier)
                 if pattern not in self.session_shell_patterns:
@@ -515,7 +549,7 @@ class ShellToolsMixin:
         """Execute Python code in an isolated subprocess and capture output."""
         tier = RiskTier.CONFIRM
         self._log_tool("run_python", f"{len(code)} chars of Python", tier)
-        perm = self._check_permission("Execute Python code snippet", tier)
+        perm = self._shell_family_permission("Execute Python code snippet", tier)
         if not perm.approved:
             return self._permission_denied(perm)
         try:
@@ -578,7 +612,9 @@ class ShellToolsMixin:
         if version and _installed_version(name) == version.strip():
             return {"ok": True, "already_installed": True, "package": pkg_spec}
 
-        perm = self._check_permission(f"pip install {pkg_spec}  (required for this task)", tier)
+        perm = self._shell_family_permission(
+            f"pip install {pkg_spec}  (required for this task)", tier
+        )
         if not perm.approved:
             denied = self._permission_denied(perm)
             denied["package"] = pkg_spec

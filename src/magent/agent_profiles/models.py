@@ -69,6 +69,9 @@ class EffectiveProfile:
     tools: frozenset[str]
     permission_mode: str
     network_access: str = "full"
+    # OAP spec.permissions.shell after narrowing: allow (MagAgent's normal
+    # tier-based policy), ask (every shell-family call needs approval), deny.
+    shell: str = "allow"
     provider: str = ""
     model: str = ""
     max_turns: int = 0
@@ -95,6 +98,7 @@ class EffectiveProfile:
             "tools": sorted(self.tools),
             "permission_mode": self.permission_mode,
             "network_access": self.network_access,
+            "shell": self.shell,
             "provider": self.provider,
             "model": self.model,
             "max_turns": self.max_turns,

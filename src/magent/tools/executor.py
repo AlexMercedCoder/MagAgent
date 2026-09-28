@@ -219,11 +219,13 @@ class ToolExecutor(
                 f"  [dim]🔧 {name}[/dim] [dim cyan][{tier_label}][/dim cyan] [dim]{desc[:80]}[/dim]"
             )
 
-    def _check_permission(self, action_description: str, tier: RiskTier) -> PermissionResult:
+    def _check_permission(
+        self, action_description: str, tier: RiskTier, *, mode: str | None = None
+    ) -> PermissionResult:
         return check_permission(
             action_description,
             tier,
-            self.permission_mode,
+            mode or self.permission_mode,
             interactive=self.interactive_permissions,
             ask=self.permission_prompt,
             action=_approval_action.get(),

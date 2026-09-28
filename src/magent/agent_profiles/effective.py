@@ -57,6 +57,9 @@ _TOOL_ALIASES = {
 }
 
 
+_DECISION_ORDER = {"deny": 0, "ask": 1, "allow": 2}
+
+
 def narrow_permission_mode(policy: str, requested: str) -> str:
     requested = {"deny": "paranoid", "ask": "balanced", "allow": "yolo"}.get(requested, requested)
     policy = policy if policy in _MODE_ORDER else "balanced"
@@ -271,6 +274,28 @@ def resolve_effective_profile(
             (network_access, requested_network), key=lambda item: _NETWORK_ORDER[item]
         )
 
+    # spec.permissions.shell narrows independently of `default` (OAP 1.0
+    # section 3.5: deny < ask < allow, the effective value is the minimum).
+    # The harness ceiling is `ask` when config turns off the read-only
+    # auto-allow, else `allow`.
+    auto_allow = config.get("permissions", "read_only_shell_auto_allow", default=True)
+    shell = "ask" if auto_allow is False else "allow"
+    for document in documents:
+        requested_shell = (document.get("spec", {}).get("permissions", {}) or {}).get("shell")
+        if requested_shell not in _DECISION_ORDER:
+            continue
+        narrowed_shell = min((shell, str(requested_shell)), key=lambda item: _DECISION_ORDER[item])
+        if narrowed_shell != requested_shell:
+            adjustments.append(
+                Adjustment(
+                    "permissions.shell",
+                    requested_shell,
+                    narrowed_shell,
+                    "profile cannot widen the harness or inherited shell decision",
+                )
+            )
+        shell = narrowed_shell
+
     provider = str(getattr(config, "default_provider", ""))
     model_id = str(getattr(config, "default_model", ""))
     for document in documents:
@@ -353,6 +378,9 @@ def resolve_effective_profile(
         for name in sorted(before - effective_tools):
             adjustments.append(Adjustment("tools", name, None, "parent profile delegation ceiling"))
         mode = narrow_permission_mode(parent.permission_mode, mode)
+        shell = min(
+            (shell, str(getattr(parent, "shell", "allow"))), key=lambda item: _DECISION_ORDER[item]
+        )
         network_access = min(
             (network_access, getattr(parent, "network_access", "full")),
             key=lambda item: _NETWORK_ORDER[item],
@@ -370,6 +398,12 @@ def resolve_effective_profile(
         max_depth = min(max_depth, max(0, parent.max_delegation_depth - 1))
         if parent.memory_stores is not None:
             stores = _intersect_stores(stores, parent.memory_stores)
+
+    if shell == "deny":
+        before_shell = set(effective_tools)
+        effective_tools -= _TOOL_ALIASES["shell"]
+        for name in sorted(before_shell - effective_tools):
+            adjustments.append(Adjustment("permissions.shell", name, None, "profile shell is deny"))
 
     before_network = set(effective_tools)
     if network_access == "none":
@@ -391,6 +425,7 @@ def resolve_effective_profile(
         tools=frozenset(effective_tools),
         permission_mode=mode,
         network_access=network_access,
+        shell=shell,
         provider=provider,
         model=model_id,
         max_turns=max_turns,

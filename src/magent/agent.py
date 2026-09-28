@@ -228,6 +228,9 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
             activity_callback=self._log_tool_progress_event,
             allowed_tools=profile.tools if profile else None,
         )
+        # OAP `permissions.shell: ask` means every shell command is approved
+        # first, with no read-only auto-run (I-17).
+        self.tools.profile_shell = profile.shell if profile else "allow"
         self._granted_profile_tools = (
             frozenset(
                 item.get("function", {}).get("name", "")
@@ -440,9 +443,11 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
                     self.tools.allowed_tools,
                     self.tools.permission_mode,
                 )
+                self._turn_profile_shell_restore = self.tools.profile_shell
                 self.profile = effective
                 self.tools.allowed_tools = effective.tools
                 self.tools.permission_mode = effective.permission_mode
+                self.tools.profile_shell = effective.shell
                 self.scratchpad["active_agent"] = {
                     "name": effective.name,
                     "revision": effective.resolved.revision,
@@ -463,6 +468,7 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
         if restore is None:
             return
         self.profile, self.tools.allowed_tools, self.tools.permission_mode = restore
+        self.tools.profile_shell = getattr(self, "_turn_profile_shell_restore", "allow")
         self._turn_profile_restore = None
 
 

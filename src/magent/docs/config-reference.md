@@ -79,6 +79,7 @@ Stored at `~/.config/magent/config.toml`.
 - `permissions.allowed_shell_patterns` default: `[]`
 - `permissions.trusted_shell_patterns` default: `[]`
 - `permissions.grant_ttl_days` default: `30`
+- `permissions.read_only_shell_auto_allow` default: `True`
 ### `skills`
 
 - `skills.lockfile` default: `'~/.config/magent/skills.lock'`

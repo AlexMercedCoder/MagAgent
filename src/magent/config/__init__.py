@@ -107,6 +107,10 @@ DEFAULT_GLOBAL_CONFIG: dict[str, Any] = {
         # grants never expire. Grants created before 1.4 have no expiry and are
         # flagged by `magent permission grants list`.
         "grant_ttl_days": 30,
+        # Run commands the classifier treats as read-only (echo, cat, grep, sed
+        # without -i, ...) without asking. false asks for every shell command,
+        # which is what an OAP profile with permissions.shell: ask gets anyway.
+        "read_only_shell_auto_allow": True,
     },
     "skills": {
         "lockfile": str(SKILLS_LOCK),
