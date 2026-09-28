@@ -150,8 +150,9 @@ class WorkbenchStore:
             if fcntl is None:  # pragma: no cover - exercised by Windows CI
                 import msvcrt
 
-                if os.fstat(descriptor).st_size == 0:
-                    os.write(descriptor, b"0")
+                # Windows lets a process lock a byte past end-of-file, so the lock file
+                # stays empty. Writing a placeholder byte first raced with a process
+                # that already held byte 0 locked and failed with PermissionError.
             while True:
                 try:
                     if fcntl is None:  # pragma: no cover
