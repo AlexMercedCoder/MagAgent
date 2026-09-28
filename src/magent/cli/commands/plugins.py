@@ -25,7 +25,7 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     def plugin_trust_add_cmd(
         key_id: str = typer.Argument(..., help="A name for the signer, e.g. acme."),
         public_key: str = typer.Argument(..., help="ed25519:<base64> from the publisher."),
-        note: str = typer.Option("", "--note"),
+        note: str = typer.Option("", "--note", help="Why this key is trusted."),
     ) -> None:
         """Trust a publisher's public key (check its fingerprint with them first)."""
         from magent.plugin_signing import trust_key
@@ -91,7 +91,7 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
         out: str = typer.Option(..., "--out", help="Directory for index.json and archives."),
         name: str = typer.Option(..., "--name", help="Registry name."),
         key: str = typer.Option("", "--key", help="Sign each pack with this Ed25519 key first."),
-        key_id: str = typer.Option("", "--key-id"),
+        key_id: str = typer.Option("", "--key-id", help="Key id shown to users (default: the registry name)."),
     ) -> None:
         """Build a static registry (index.json plus .tar.gz archives) to host anywhere."""
         from pathlib import Path
@@ -114,7 +114,7 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     plugin_app.add_typer(pi_app, name="pi")
 
     @plugin_app.command("list")
-    def plugin_list_cmd(json_output: bool = typer.Option(True, "--json/--no-json")) -> None:
+    def plugin_list_cmd(json_output: bool = typer.Option(True, "--json/--no-json", help="Print machine-readable JSON.")) -> None:
         """List installed extension packs."""
         from magent.plugins import list_plugins
 
@@ -129,8 +129,8 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     @plugin_app.command("install")
     def plugin_install_cmd(
         source: str = typer.Argument(..., help="A plugin directory, or NAME[@VERSION] from a registry."),
-        name: str = typer.Option("", "--name"),
-        force: bool = typer.Option(False, "--force"),
+        name: str = typer.Option("", "--name", help="Install under this name instead of the manifest's (unsigned packs only)."),
+        force: bool = typer.Option(False, "--force", help="Replace an installed plugin with the same name."),
         registry: str = typer.Option("", "--registry", help="Only look in this registry."),
         allow_unsigned: bool = typer.Option(
             False, "--allow-unsigned", help="Install a registry pack that has no signature."
@@ -336,7 +336,7 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
         name: str = typer.Argument(...),
         permissions: str = typer.Option(..., "--permissions", help="Comma-separated reviewed permissions."),
         scope: str = typer.Option("project", "--scope", help="project or user"),
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(".", "--project", "-p", help="Project directory (default: the current directory)."),
     ) -> None:
         """Grant reviewed plugin permissions at project or user scope."""
         from magent.plugins import set_plugin_grant
@@ -352,7 +352,7 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @plugin_app.command("schema")
-    def plugin_schema_cmd(output: str = typer.Option("", "--output", "-o")) -> None:
+    def plugin_schema_cmd(output: str = typer.Option("", "--output", "-o", help="Where to write the schema (default: print it).")) -> None:
         """Print or write the versioned MagAgent plugin manifest schema."""
         from magent.plugin_sdk import MANIFEST_SCHEMA, write_schema
 
@@ -364,7 +364,7 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
 
     @plugin_app.command("registry-index")
     def plugin_registry_index_cmd(
-        paths: list[str], output: str = typer.Option("", "--output", "-o")
+        paths: list[str], output: str = typer.Option("", "--output", "-o", help="Where to write the index (default: print it).")
     ) -> None:
         """Build deterministic registry metadata from local reviewed plugin packs."""
         from magent.plugin_sdk import build_registry_index
@@ -382,8 +382,8 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     @mcp_app.command("import")
     def plugin_mcp_import_cmd(
         source: str = typer.Argument(...),
-        name: str = typer.Option("", "--name"),
-        force: bool = typer.Option(False, "--force"),
+        name: str = typer.Option("", "--name", help="Name for the plugin pack."),
+        force: bool = typer.Option(False, "--force", help="Replace an installed plugin with the same name."),
         apply: bool = typer.Option(False, "--apply", help="Also write servers into config.toml."),
     ) -> None:
         """Import an MCP server config file or directory as a plugin pack."""
@@ -410,8 +410,8 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     @import_app.command("opencode")
     def plugin_import_opencode_cmd(
         source: str = typer.Argument(...),
-        name: str = typer.Option("", "--name"),
-        force: bool = typer.Option(False, "--force"),
+        name: str = typer.Option("", "--name", help="Name for the plugin pack."),
+        force: bool = typer.Option(False, "--force", help="Replace an installed plugin with the same name."),
     ) -> None:
         """Import OpenCode-style agents, commands, and MCP config."""
         from magent.plugins import import_compat_plugin
@@ -424,8 +424,8 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     @import_app.command("claude")
     def plugin_import_claude_cmd(
         source: str = typer.Argument(...),
-        name: str = typer.Option("", "--name"),
-        force: bool = typer.Option(False, "--force"),
+        name: str = typer.Option("", "--name", help="Name for the plugin pack."),
+        force: bool = typer.Option(False, "--force", help="Replace an installed plugin with the same name."),
     ) -> None:
         """Import Claude-style CLAUDE.md, agents, commands, and MCP config."""
         from magent.plugins import import_compat_plugin
@@ -438,8 +438,8 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     @import_app.command("codex-skill")
     def plugin_import_codex_skill_cmd(
         source: str = typer.Argument(...),
-        name: str = typer.Option("", "--name"),
-        force: bool = typer.Option(False, "--force"),
+        name: str = typer.Option("", "--name", help="Name for the plugin pack."),
+        force: bool = typer.Option(False, "--force", help="Replace an installed plugin with the same name."),
     ) -> None:
         """Import a Codex-style SKILL.md pack as MagAgent skills."""
         from magent.plugins import import_compat_plugin
@@ -452,8 +452,8 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     @import_app.command("gemini")
     def plugin_import_gemini_cmd(
         source: str = typer.Argument(...),
-        name: str = typer.Option("", "--name"),
-        force: bool = typer.Option(False, "--force"),
+        name: str = typer.Option("", "--name", help="Name for the plugin pack."),
+        force: bool = typer.Option(False, "--force", help="Replace an installed plugin with the same name."),
     ) -> None:
         """Import Gemini CLI-style extensions, commands, skills, and MCP config."""
         from magent.plugins import import_compat_plugin
@@ -466,8 +466,8 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     @import_app.command("pi")
     def plugin_import_pi_cmd(
         source: str = typer.Argument(...),
-        name: str = typer.Option("", "--name"),
-        force: bool = typer.Option(False, "--force"),
+        name: str = typer.Option("", "--name", help="Name for the plugin pack."),
+        force: bool = typer.Option(False, "--force", help="Replace an installed plugin with the same name."),
     ) -> None:
         """Import portable Pi skills/prompts and inventory runtime extensions."""
         from magent.plugins import import_compat_plugin
@@ -480,7 +480,7 @@ def register_plugin_commands(plugin_app: typer.Typer) -> None:
     @pi_app.command("bridge")
     def plugin_pi_bridge_cmd(
         name: str = typer.Argument(...),
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(".", "--project", "-p", help="Project directory (default: the current directory)."),
         mode: str = typer.Option("interactive", "--mode", help="interactive, rpc, or json"),
         dry_run: bool = typer.Option(False, "--dry-run", help="Show the reviewed command without starting Pi."),
     ) -> None:

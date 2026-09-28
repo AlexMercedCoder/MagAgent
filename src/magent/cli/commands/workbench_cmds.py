@@ -38,8 +38,10 @@ from magent.config import (
 @task_app.command("add")
 def task_add_cmd(
     title: str = typer.Argument(...),
-    project: str = typer.Option("", "--project", "-p"),
-    priority: str = typer.Option("normal", "--priority"),
+    project: str = typer.Option(
+        "", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    priority: str = typer.Option("normal", "--priority", help="Priority: low, normal or high."),
 ):
     """Add a task to the persistent local task ledger."""
     from magent.workbench import task_add
@@ -50,8 +52,10 @@ def task_add_cmd(
 
 @task_app.command("list")
 def task_list_cmd(
-    status: str | None = typer.Option(None, "--status"),
-    project: str | None = typer.Option(None, "--project", "-p"),
+    status: str | None = typer.Option(None, "--status", help="Only show items with this status."),
+    project: str | None = typer.Option(
+        None, "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """List tasks."""
     from magent.workbench import task_list
@@ -98,8 +102,10 @@ def task_report_cmd():
 @artifact_app.command("add")
 def artifact_add_cmd(
     path: str = typer.Argument(...),
-    kind: str = typer.Option("", "--kind", "-k"),
-    title: str = typer.Option("", "--title", "-t"),
+    kind: str = typer.Option(
+        "", "--kind", "-k", help="Artifact kind, for example report or diagram."
+    ),
+    title: str = typer.Option("", "--title", "-t", help="Title."),
 ):
     """Track a generated artifact."""
     from magent.workbench import artifact_add
@@ -154,7 +160,9 @@ def artifact_open_cmd(artifact_id: str = typer.Argument(...)):
 @knowledge_app.command("remember")
 def knowledge_remember_cmd(
     text: str = typer.Argument(...),
-    tags: Annotated[list[str] | None, typer.Option("--tag", "-t")] = None,
+    tags: Annotated[
+        list[str] | None, typer.Option("--tag", "-t", help="Tag for the note (repeatable).")
+    ] = None,
 ):
     """Remember a personal knowledge note."""
     from magent.workbench import remember
@@ -184,7 +192,11 @@ def knowledge_forget_cmd(item_id: str = typer.Argument(...)):
 
 
 @project_app.command("profile")
-def project_profile_cmd(path: str = typer.Option(".", "--path", "-p")):
+def project_profile_cmd(
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Create or refresh a project profile."""
     from magent.workbench import save_project_profile
 
@@ -204,7 +216,11 @@ def project_list_cmd():
 
 
 @project_app.command("commands")
-def project_commands_cmd(path: str = typer.Option(".", "--path", "-p")):
+def project_commands_cmd(
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Show discovered project test/lint/build commands."""
     from magent.workbench import infer_project_commands
 
@@ -213,7 +229,11 @@ def project_commands_cmd(path: str = typer.Option(".", "--path", "-p")):
 
 
 @project_app.command("roles")
-def project_roles_cmd(path: str = typer.Option(".", "--path", "-p")):
+def project_roles_cmd(
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Show project command roles."""
     from magent.workbench import project_command_roles
 
@@ -221,7 +241,11 @@ def project_roles_cmd(path: str = typer.Option(".", "--path", "-p")):
 
 
 @project_app.command("doctor")
-def project_doctor_cmd(path: str = typer.Option(".", "--path", "-p")):
+def project_doctor_cmd(
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Report missing/broken project command roles."""
     from magent.workbench import project_doctor
 
@@ -230,7 +254,9 @@ def project_doctor_cmd(path: str = typer.Option(".", "--path", "-p")):
 
 @project_app.command("playbook")
 def project_playbook_cmd(
-    path: str = typer.Option(".", "--path", "-p"),
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
     init: bool = typer.Option(False, "--init", help="Create a starter .magent/playbook.toml"),
 ):
     """Show or initialize the project playbook."""
@@ -248,8 +274,12 @@ def project_playbook_cmd(
 
 @project_app.command("init")
 def project_init_cmd(
-    path: str = typer.Option(".", "--path", "-p"),
-    force: bool = typer.Option(False, "--force"),
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Overwrite existing project config and playbook files."
+    ),
 ):
     """Create CLI-friendly MagAgent project config and playbook files."""
     from magent.ux_flows import init_project
@@ -259,8 +289,12 @@ def project_init_cmd(
 
 @project_app.command("wizard")
 def project_wizard_cmd(
-    path: str = typer.Option(".", "--path", "-p"),
-    force: bool = typer.Option(False, "--force"),
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
+    force: bool = typer.Option(
+        False, "--force", help="Overwrite existing project config and playbook files."
+    ),
 ):
     """Explain and create project config and playbook files."""
     # Call the underlying helper, not the Typer command: invoking a command as
@@ -279,7 +313,11 @@ def project_wizard_cmd(
 
 
 @project_app.command("config")
-def project_config_cmd(path: str = typer.Option(".", "--path", "-p")):
+def project_config_cmd(
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Show project-local .magent/config.toml values."""
     from magent.workbench import load_project_config
 
@@ -287,7 +325,11 @@ def project_config_cmd(path: str = typer.Option(".", "--path", "-p")):
 
 
 @project_app.command("command-history")
-def project_command_history_cmd(path: str = typer.Option(".", "--path", "-p")):
+def project_command_history_cmd(
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Show learned command outcomes for a project."""
     from magent.workbench import command_history
 
@@ -305,7 +347,9 @@ def project_command_history_cmd(path: str = typer.Option(".", "--path", "-p")):
 @project_app.command("command-promote")
 def project_command_promote_cmd(
     command: str = typer.Argument(...),
-    path: str = typer.Option(".", "--path", "-p"),
+    path: str = typer.Option(
+        ".", "--path", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Promote a command into the saved project profile."""
     from magent.workbench import promote_command
@@ -314,14 +358,19 @@ def project_command_promote_cmd(
 
 
 @inbox_app.command("add")
-def inbox_add_cmd(text: str = typer.Argument(...), source: str = typer.Option("cli", "--source")):
+def inbox_add_cmd(
+    text: str = typer.Argument(...),
+    source: str = typer.Option("cli", "--source", help="Where the item came from."),
+):
     """Add an item to the local inbox."""
     item = shared._store().append("inbox", {"text": text, "source": source, "status": "new"})
     console.print(f"[green]✓ Added {item['id']}[/green]")
 
 
 @inbox_app.command("list")
-def inbox_list_cmd(status: str | None = typer.Option(None, "--status")):
+def inbox_list_cmd(
+    status: str | None = typer.Option(None, "--status", help="Only show items with this status."),
+):
     """List inbox items."""
     items = shared._store().read("inbox", [])
     if status:
@@ -357,7 +406,9 @@ def inbox_triage_cmd():
 def routine_add_cmd(
     name: str = typer.Argument(...),
     prompt: str = typer.Argument(...),
-    schedule: str = typer.Option("", "--schedule"),
+    schedule: str = typer.Option(
+        "", "--schedule", help="When to run it, for example 'daily 09:00'."
+    ),
 ):
     """Register a recurring routine prompt."""
     item = shared._store().append(
@@ -389,7 +440,10 @@ def routine_run_cmd(name_or_id: str = typer.Argument(...)):
 
 
 @followup_app.command("add")
-def followup_add_cmd(text: str = typer.Argument(...), when: str = typer.Option("", "--when")):
+def followup_add_cmd(
+    text: str = typer.Argument(...),
+    when: str = typer.Option("", "--when", help="When to be reminded (free text or ISO time)."),
+):
     """Add a follow-up reminder entry."""
     item = shared._store().append("followups", {"text": text, "when": when, "status": "open"})
     console.print(f"[green]✓ Added {item['id']}[/green]")
@@ -408,7 +462,10 @@ def followup_list_cmd():
 
 @patch_app.command("save")
 def patch_save_cmd(
-    name: str = typer.Option("", "--name"), project: str = typer.Option(".", "--project", "-p")
+    name: str = typer.Option("", "--name", help="Name for the saved patch."),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Save the current git diff to the patch queue."""
     from magent.workbench import save_patch
@@ -446,7 +503,8 @@ def patch_explain_cmd(patch_id: str = typer.Argument(...)):
 
 @patch_app.command("apply")
 def patch_apply_cmd(
-    patch_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")
+    patch_id: str = typer.Argument(...),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ):
     """Apply a saved patch after git apply --check passes."""
     from magent.workbench import apply_saved_patch
@@ -460,7 +518,8 @@ def patch_apply_cmd(
 
 @patch_app.command("revert")
 def patch_revert_cmd(
-    patch_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")
+    patch_id: str = typer.Argument(...),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ):
     """Reverse-apply a saved patch after git apply -R --check passes."""
     from magent.workbench import apply_saved_patch
@@ -473,7 +532,11 @@ def patch_revert_cmd(
 
 
 @workspace_app.command("status")
-def workspace_status_cmd(project: str = typer.Option(".", "--project", "-p")):
+def workspace_status_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Show git/workbench status for the workspace."""
     from magent.workbench import workspace_status
 
@@ -481,7 +544,11 @@ def workspace_status_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 
 @workspace_app.command("clean-report")
-def workspace_clean_report_cmd(project: str = typer.Option(".", "--project", "-p")):
+def workspace_clean_report_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Show non-destructive cleanup suggestions."""
     from magent.workbench import workspace_clean_report
 
@@ -490,7 +557,9 @@ def workspace_clean_report_cmd(project: str = typer.Option(".", "--project", "-p
 
 @recipe_app.command("list")
 def recipe_list_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
     json_output: bool = typer.Option(False, "--json", help="Emit JSON instead of a table."),
 ):
     """List built-in, saved, and playbook-backed workflow recipes."""
@@ -514,7 +583,10 @@ def recipe_list_cmd(
 
 @recipe_app.command("show")
 def recipe_show_cmd(
-    name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    name: str = typer.Argument(...),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Show a workflow recipe."""
     from magent.recipes import get_recipe
@@ -529,7 +601,9 @@ def recipe_show_cmd(
 @recipe_app.command("save")
 def recipe_save_cmd(
     name: str = typer.Argument(...),
-    description: str = typer.Option("", "--description", "-d"),
+    description: str = typer.Option(
+        "", "--description", "-d", help="One-line description of the recipe."
+    ),
     step: Annotated[
         list[str] | None, typer.Option("--step", help="Recipe step; may be repeated")
     ] = None,
@@ -551,7 +625,9 @@ def recipe_save_cmd(
 @recipe_app.command("run")
 def recipe_run_cmd(
     name: str = typer.Argument(...),
-    project: str = typer.Option(".", "--project", "-p"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
     agent: str = typer.Option(
         "", "--agent", help="Attach an OAP profile to the materialized plan."
     ),
@@ -571,11 +647,19 @@ def recipe_run_cmd(
 @recipe_app.command("sandbox")
 def recipe_sandbox_cmd(
     name: str = typer.Argument(...),
-    project: str = typer.Option(".", "--project", "-p"),
-    mode: str = typer.Option("worktree", "--mode"),
-    run_checks: bool = typer.Option(False, "--run-checks"),
-    keep: bool = typer.Option(False, "--keep"),
-    image: str = typer.Option("python:3.12", "--image"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    mode: str = typer.Option(
+        "worktree", "--mode", help="Sandbox kind: worktree, copy or container."
+    ),
+    run_checks: bool = typer.Option(
+        False, "--run-checks", help="Also run the plan's suggested checks."
+    ),
+    keep: bool = typer.Option(False, "--keep", help="Keep the sandbox afterwards for inspection."),
+    image: str = typer.Option(
+        "python:3.12", "--image", help="Container image for --mode container."
+    ),
 ):
     """Materialize a recipe and run it in a sandbox."""
     from magent.recipes import run_recipe
@@ -607,7 +691,11 @@ def data_inspect_cmd(path: str = typer.Argument(...)):
 
 
 @data_app.command("sqlite-list")
-def data_sqlite_list_cmd(user: str | None = typer.Option(None, "--user", "-u")):
+def data_sqlite_list_cmd(
+    user: str | None = typer.Option(
+        None, "--user", "-u", help="MagAgent user (default: the active user)."
+    ),
+):
     """List MagAgent SQLite databases for desktop browsing."""
     from magent.desktop_api import sqlite_list
 
@@ -617,7 +705,9 @@ def data_sqlite_list_cmd(user: str | None = typer.Option(None, "--user", "-u")):
 @data_app.command("sqlite-tables")
 def data_sqlite_tables_cmd(
     db_name: str = typer.Option("default", "--db", help="Database name."),
-    user: str | None = typer.Option(None, "--user", "-u"),
+    user: str | None = typer.Option(
+        None, "--user", "-u", help="MagAgent user (default: the active user)."
+    ),
 ):
     """List tables and row counts in a MagAgent SQLite database."""
     from magent.desktop_api import sqlite_tables
@@ -629,7 +719,9 @@ def data_sqlite_tables_cmd(
 def data_sqlite_schema_cmd(
     table: str = typer.Argument(...),
     db_name: str = typer.Option("default", "--db", help="Database name."),
-    user: str | None = typer.Option(None, "--user", "-u"),
+    user: str | None = typer.Option(
+        None, "--user", "-u", help="MagAgent user (default: the active user)."
+    ),
 ):
     """Show SQLite table schema for desktop browsing."""
     from magent.desktop_api import sqlite_table_schema
@@ -645,7 +737,9 @@ def data_sqlite_query_cmd(
     sql: str = typer.Argument(...),
     db_name: str = typer.Option("default", "--db", help="Database name."),
     params: str = typer.Option("[]", "--params", help="JSON array of query params."),
-    user: str | None = typer.Option(None, "--user", "-u"),
+    user: str | None = typer.Option(
+        None, "--user", "-u", help="MagAgent user (default: the active user)."
+    ),
 ):
     """Run a read-only SELECT/WITH query against a MagAgent SQLite database."""
     from magent.desktop_api import parse_json_value, sqlite_query
@@ -691,7 +785,7 @@ def policy_list_cmd():
 
 @checkpoint_app.command("list")
 def checkpoint_list_cmd(
-    limit: int = typer.Option(20, "--limit", "-n"),
+    limit: int = typer.Option(20, "--limit", "-n", help="Maximum number of items to return."),
     json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
 ):
     """List recent file checkpoints."""
@@ -745,7 +839,7 @@ def checkpoint_diff_cmd(
 @checkpoint_app.command("restore")
 def checkpoint_restore_cmd(
     checkpoint_id: str = typer.Argument(...),
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ):
     """Restore a checkpoint."""
     from magent.workbench import restore_checkpoint
@@ -760,7 +854,9 @@ def checkpoint_restore_cmd(
 
 
 @checkpoint_app.command("restore-last")
-def checkpoint_restore_last_cmd(yes: bool = typer.Option(False, "--yes", "-y")):
+def checkpoint_restore_last_cmd(
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+):
     """Restore the most recent checkpoint."""
     from magent.workbench import restore_latest_checkpoint
 
@@ -811,7 +907,7 @@ def checkpoint_session_diff_cmd(
 @checkpoint_app.command("session-restore")
 def checkpoint_session_restore_cmd(
     session_id: str = typer.Argument(...),
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ):
     """Restore all checkpoints for a session in reverse order."""
     from magent.workbench import checkpoint_session_restore

@@ -12,9 +12,9 @@ console = Console()
 def register_event_commands(events_app: typer.Typer) -> None:
     @events_app.command("list")
     def events_list_cmd(
-        limit: int = typer.Option(50, "--limit", "-n"),
-        kind: str = typer.Option("", "--kind"),
-        json_output: bool = typer.Option(False, "--json"),
+        limit: int = typer.Option(50, "--limit", "-n", help="Maximum number of items to return."),
+        kind: str = typer.Option("", "--kind", help="Only show events of this kind."),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
     ) -> None:
         """List recent workbench events."""
         from magent.cli.command_context import store

@@ -15,14 +15,14 @@ console = Console()
 
 def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -> None:
     @eval_app.command("init")
-    def eval_init_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
+    def eval_init_cmd(project: str = typer.Option(".", "--project", "-p", help="Project directory (default: the current directory).")) -> None:
         """Create a starter local eval suite."""
         from magent.evals import init_evals
 
         console.print_json(data=init_evals(project))
 
     @eval_app.command("list")
-    def eval_list_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
+    def eval_list_cmd(project: str = typer.Option(".", "--project", "-p", help="Project directory (default: the current directory).")) -> None:
         """List local eval suites."""
         from magent.evals import list_eval_suites
 
@@ -31,7 +31,7 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
     @eval_app.command("run")
     def eval_run_cmd(
         suite: str = typer.Argument("evals/magagent-evals.json"),
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(".", "--project", "-p", help="Project directory (default: the current directory)."),
         compare: str = typer.Option(
             "", "--compare", help="Compare against the last recorded run at this version."
         ),
@@ -39,7 +39,7 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
         model: str = typer.Option("", "--model", help="Model for real-agent suites."),
         timeout: int = typer.Option(180, "--timeout", min=1, help="Per-task timeout in seconds."),
         report_out: str = typer.Option("", "--report-out", help="Write the report as JSON."),
-        keep_workspaces: bool = typer.Option(False, "--keep-workspaces"),
+        keep_workspaces: bool = typer.Option(False, "--keep-workspaces", help="Keep each task's temporary workspace for inspection."),
         profile: str = typer.Option(
             "full", "--profile", help="Capability profile: core or full."
         ),
@@ -85,7 +85,7 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
         raise typer.Exit(0 if report.get("ok") and comparison.get("ok") else 1)
 
     @eval_app.command("report")
-    def eval_report_cmd(limit: int = typer.Option(20, "--limit", "-n")) -> None:
+    def eval_report_cmd(limit: int = typer.Option(20, "--limit", "-n", help="Maximum number of items to return.")) -> None:
         """Show recent eval run reports."""
         from magent.evals import eval_report
 
@@ -126,7 +126,7 @@ def register_eval_commands(eval_app: typer.Typer, *, store: Callable[[], Any]) -
     @eval_app.command("memory")
     def eval_memory_cmd(
         suite: str = typer.Argument(..., help="Labeled memory eval JSON file."),
-        user: str | None = typer.Option(None, "--user", "-u"),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
         memory_dir: str = typer.Option("", "--memory-dir", help="Evaluate a fixture graph."),
         project: str = typer.Option("", "--project", help="Expected project scope."),
         report_out: str = typer.Option("", "--report-out", help="Write the JSON report."),

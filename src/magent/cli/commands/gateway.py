@@ -128,7 +128,7 @@ def gateway_status(
     sessions: bool = typer.Option(
         False, "--sessions", help="Show configured access and live session state."
     ),
-    json_output: bool = typer.Option(False, "--json"),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Show whether the gateway is running and on which platforms."""
     from magent.gateway import GATEWAY_LOG_FILE, is_gateway_running
@@ -193,12 +193,24 @@ def gateway_init():
 @gateway_app.command("configure")
 def gateway_configure_cmd(
     platform: str = typer.Argument(..., help="slack, discord, or telegram"),
-    bot_token: str = typer.Option("", "--bot-token"),
+    bot_token: str = typer.Option(
+        "", "--bot-token", help="Bot token (prefer the platform's environment variable)."
+    ),
     app_token: str = typer.Option("", "--app-token", help="Slack Socket Mode app token"),
-    allowed_user: Annotated[list[str] | None, typer.Option("--allowed-user")] = None,
-    allowed_channel: Annotated[list[str] | None, typer.Option("--allowed-channel")] = None,
-    rate_limit: int | None = typer.Option(None, "--rate-limit"),
-    timeout: int | None = typer.Option(None, "--timeout"),
+    allowed_user: Annotated[
+        list[str] | None,
+        typer.Option("--allowed-user", help="User id allowed to talk to the bot (repeatable)."),
+    ] = None,
+    allowed_channel: Annotated[
+        list[str] | None,
+        typer.Option("--allowed-channel", help="Channel id the bot may answer in (repeatable)."),
+    ] = None,
+    rate_limit: int | None = typer.Option(
+        None, "--rate-limit", help="Maximum messages per minute per user."
+    ),
+    timeout: int | None = typer.Option(
+        None, "--timeout", help="Seconds a turn may run before it is stopped."
+    ),
 ):
     """Configure a gateway platform without hand-editing config.toml."""
     from magent.config_ux import configure_gateway

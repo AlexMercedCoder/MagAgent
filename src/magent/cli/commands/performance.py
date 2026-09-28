@@ -15,7 +15,9 @@ console = Console()
 def register_performance_commands(performance_app: typer.Typer) -> None:
     @performance_app.command("budget")
     def performance_budget_cmd(
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
         profile: str = typer.Option("quick", "--profile", help="quick or release"),
         report_out: str = typer.Option("", "--report-out", help="Write JSON evidence."),
     ) -> None:
@@ -37,7 +39,9 @@ def register_performance_commands(performance_app: typer.Typer) -> None:
 
     @performance_app.command("install-shape")
     def performance_install_shape_cmd(
-        samples: int = typer.Option(3, "--samples", min=1, max=10),
+        samples: int = typer.Option(
+            3, "--samples", min=1, max=10, help="Number of cold-start samples to time."
+        ),
     ) -> None:
         """Measure installed package size and cold CLI startup cost."""
         from magent.performance import install_shape
@@ -46,8 +50,10 @@ def register_performance_commands(performance_app: typer.Typer) -> None:
 
     @performance_app.command("doctor")
     def performance_doctor_cmd(
-        project: str = typer.Option(".", "--project", "-p"),
-        json_output: bool = typer.Option(False, "--json"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
     ) -> None:
         """Inspect startup, repo, workbench, memory, and config performance."""
         from magent.cli.command_context import require_user, store

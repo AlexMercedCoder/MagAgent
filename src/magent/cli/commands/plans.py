@@ -53,14 +53,19 @@ plan_app = typer.Typer(
 @plan_app.command("create")
 def plan_cmd(
     goal: str = typer.Argument(...),
-    project: str = typer.Option(".", "--project", "-p"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
     save: bool = typer.Option(False, "--save", help="Save the plan in the local workbench"),
     executable: bool = typer.Option(
         False,
         "--executable",
         help="When saving, create an executable plan compatible with `plan preview` and `plan apply`.",
     ),
-    command: Annotated[list[str] | None, typer.Option("--command", "-c")] = None,
+    command: Annotated[
+        list[str] | None,
+        typer.Option("--command", "-c", help="Shell command to include as a plan step."),
+    ] = None,
     no_diff: bool = typer.Option(
         False, "--no-diff", help="Do not capture the current diff for executable plans."
     ),
@@ -92,7 +97,9 @@ def plan_cmd(
 
 
 @plan_app.command("list")
-def plan_list_cmd(status: str | None = typer.Option(None, "--status")):
+def plan_list_cmd(
+    status: str | None = typer.Option(None, "--status", help="Only show items with this status."),
+):
     """List saved plans."""
     from magent.workbench import list_plans
 
@@ -107,16 +114,22 @@ def plan_list_cmd(status: str | None = typer.Option(None, "--status")):
 @plan_app.command("apply")
 def plan_apply_cmd(
     plan_id: str = typer.Argument(...),
-    run_checks: bool = typer.Option(False, "--run-checks"),
-    dry_run: bool = typer.Option(False, "--dry-run"),
+    run_checks: bool = typer.Option(
+        False, "--run-checks", help="Also run the plan's suggested checks."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would happen without changing anything."
+    ),
     sandbox: str | None = typer.Option(
         None, "--sandbox", help="Run in worktree, copy, or container sandbox"
     ),
-    keep_sandbox: bool = typer.Option(False, "--keep-sandbox"),
+    keep_sandbox: bool = typer.Option(
+        False, "--keep-sandbox", help="Keep the sandbox afterwards for inspection."
+    ),
     image: str = typer.Option(
         "python:3.12", "--image", help="Container image for --sandbox container"
     ),
-    yes: bool = typer.Option(False, "--yes", "-y"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ):
     """Mark a saved plan applied, optionally running its suggested checks."""
     from magent.workbench import apply_plan
@@ -156,11 +169,19 @@ def plan_apply_cmd(
 @plan_app.command("sandbox")
 def plan_sandbox_cmd(
     plan_id: str = typer.Argument(...),
-    mode: str = typer.Option("worktree", "--mode"),
-    run_checks: bool = typer.Option(False, "--run-checks"),
-    dry_run: bool = typer.Option(False, "--dry-run"),
-    keep: bool = typer.Option(False, "--keep"),
-    image: str = typer.Option("python:3.12", "--image"),
+    mode: str = typer.Option(
+        "worktree", "--mode", help="Sandbox kind: worktree, copy or container."
+    ),
+    run_checks: bool = typer.Option(
+        False, "--run-checks", help="Also run the plan's suggested checks."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would happen without changing anything."
+    ),
+    keep: bool = typer.Option(False, "--keep", help="Keep the sandbox afterwards for inspection."),
+    image: str = typer.Option(
+        "python:3.12", "--image", help="Container image for --mode container."
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ):
     """Run or preview a saved plan in an isolated sandbox."""
@@ -187,9 +208,14 @@ def plan_sandbox_cmd(
 @plan_app.command("exec")
 def plan_exec_cmd(
     goal: str = typer.Argument(...),
-    project: str = typer.Option(".", "--project", "-p"),
-    command: Annotated[list[str] | None, typer.Option("--command", "-c")] = None,
-    no_diff: bool = typer.Option(False, "--no-diff"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    command: Annotated[
+        list[str] | None,
+        typer.Option("--command", "-c", help="Shell command to include as a plan step."),
+    ] = None,
+    no_diff: bool = typer.Option(False, "--no-diff", help="Do not include the current git diff."),
 ):
     """Create an executable plan from current diff and optional shell commands."""
     from magent.workbench import save_execution_plan
@@ -219,7 +245,10 @@ def plan_preview_cmd(plan_id: str = typer.Argument(...)):
 
 @plan_app.command("run")
 def plan_run_cmd(
-    goal: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    goal: str = typer.Argument(...),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Create a pending plan-run record with checks, review, and diff context."""
     from magent.workbench import save_plan_run
@@ -243,7 +272,8 @@ def plan_show_cmd(plan_id: str = typer.Argument(...)):
 
 @plan_app.command("discard")
 def plan_discard_cmd(
-    plan_id: str = typer.Argument(...), yes: bool = typer.Option(False, "--yes", "-y")
+    plan_id: str = typer.Argument(...),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ):
     """Discard a saved plan."""
     from magent.workbench import discard_plan

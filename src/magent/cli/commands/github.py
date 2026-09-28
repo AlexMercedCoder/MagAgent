@@ -10,7 +10,11 @@ console = Console()
 
 def register_github_commands(github_app: typer.Typer) -> None:
     @github_app.command("status")
-    def github_status_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
+    def github_status_cmd(
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Check gh availability and authentication."""
         from magent.github_workflows import github_status
 
@@ -18,9 +22,13 @@ def register_github_commands(github_app: typer.Typer) -> None:
 
     @github_app.command("issues")
     def github_issues_cmd(
-        project: str = typer.Option(".", "--project", "-p"),
-        limit: int = typer.Option(20, "--limit", "-n"),
-        state: str = typer.Option("open", "--state"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        limit: int = typer.Option(20, "--limit", "-n", help="Maximum number of items to return."),
+        state: str = typer.Option(
+            "open", "--state", help="Only show items in this state: open, closed or all."
+        ),
     ) -> None:
         """List GitHub issues with gh."""
         from magent.github_workflows import list_issues
@@ -29,9 +37,13 @@ def register_github_commands(github_app: typer.Typer) -> None:
 
     @github_app.command("prs")
     def github_prs_cmd(
-        project: str = typer.Option(".", "--project", "-p"),
-        limit: int = typer.Option(20, "--limit", "-n"),
-        state: str = typer.Option("open", "--state"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        limit: int = typer.Option(20, "--limit", "-n", help="Maximum number of items to return."),
+        state: str = typer.Option(
+            "open", "--state", help="Only show items in this state: open, closed or all."
+        ),
     ) -> None:
         """List GitHub pull requests with gh."""
         from magent.github_workflows import list_prs
@@ -41,7 +53,9 @@ def register_github_commands(github_app: typer.Typer) -> None:
     @github_app.command("issue")
     def github_issue_cmd(
         number: int = typer.Argument(...),
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Show one GitHub issue with gh."""
         from magent.github_workflows import show_issue
@@ -51,7 +65,9 @@ def register_github_commands(github_app: typer.Typer) -> None:
     @github_app.command("pr")
     def github_pr_cmd(
         number: int = typer.Argument(...),
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Show one GitHub pull request with gh."""
         from magent.github_workflows import show_pr
@@ -61,7 +77,9 @@ def register_github_commands(github_app: typer.Typer) -> None:
     @github_app.command("checks")
     def github_checks_cmd(
         number: int | None = typer.Argument(None),
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Show pull request checks with gh."""
         from magent.github_workflows import pr_checks

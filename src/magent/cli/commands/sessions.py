@@ -43,7 +43,7 @@ def session_events_cmd(
     log_path: str | None = typer.Argument(
         None, help="Session JSONL path. Defaults to the newest log."
     ),
-    limit: int = typer.Option(200, "--limit", "-n"),
+    limit: int = typer.Option(200, "--limit", "-n", help="Maximum number of items to return."),
     event_type: Annotated[
         list[str] | None, typer.Option("--type", help="Filter event type.")
     ] = None,
@@ -65,7 +65,9 @@ def session_events_cmd(
 @session_app.command("peers")
 def session_peers_cmd(
     json_output: bool = typer.Option(False, "--json", help="Emit machine-readable JSON."),
-    include_stale: bool = typer.Option(False, "--include-stale"),
+    include_stale: bool = typer.Option(
+        False, "--include-stale", help="Also list sessions that have stopped answering."
+    ),
 ):
     """List reachable local MagAgent sessions."""
     from magent.session_messaging import list_sessions
@@ -81,8 +83,8 @@ def session_peers_cmd(
 def session_send_cmd(
     target: str = typer.Argument(..., help="Durable session ID or unambiguous name."),
     message: str = typer.Argument(..., help="Plain-text coordination message."),
-    task_id: str = typer.Option("", "--task"),
-    json_output: bool = typer.Option(False, "--json"),
+    task_id: str = typer.Option("", "--task", help="Ask the peer to run this as a task."),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Send a message to a live local session."""
     from magent.session_messaging import register_ephemeral_sender, send_session_message
@@ -105,7 +107,7 @@ def session_send_cmd(
 def session_inbox_cmd(
     session_id: str = typer.Argument(...),
     held: bool = typer.Option(False, "--held", help="Show messages awaiting review."),
-    json_output: bool = typer.Option(False, "--json"),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Inspect a session's accepted or held local messages."""
     from magent.session_messaging import session_inbox
@@ -136,7 +138,11 @@ def session_refuse_cmd(
 @session_app.command("policy")
 def session_policy_cmd(
     policy: str = typer.Argument(..., help="accept, hold, or refuse"),
-    headless_accept: bool = typer.Option(False, "--headless-accept/--no-headless-accept"),
+    headless_accept: bool = typer.Option(
+        False,
+        "--headless-accept/--no-headless-accept",
+        help="Accept messages in sessions with nobody watching.",
+    ),
 ):
     """Configure the default receiving policy for future sessions."""
     from magent.config import load_global_config, save_global_config
@@ -156,7 +162,7 @@ def session_policy_cmd(
 @session_app.command("receipts")
 def session_receipts_cmd(
     sender_id: str = typer.Argument(...),
-    json_output: bool = typer.Option(False, "--json"),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Show delivery receipts for a session sender."""
     from magent.session_messaging import session_receipts

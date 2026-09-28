@@ -37,7 +37,9 @@ from magent.config import (
 
 
 @app.command("capabilities")
-def capabilities_cmd(json_output: bool = typer.Option(True, "--json/--no-json")) -> None:
+def capabilities_cmd(
+    json_output: bool = typer.Option(True, "--json/--no-json", help="Print machine-readable JSON."),
+) -> None:
     """Inspect installed runtime capabilities without running a model or opening a site."""
     from magent.capability_readiness import capability_report
 
@@ -161,11 +163,15 @@ def research_cmd(
         list[str] | None,
         typer.Option("--question", "-q", help="Optional focused research question."),
     ] = None,
-    max_sources: int = typer.Option(6, "--max-sources", "-n", min=1, max=20),
+    max_sources: int = typer.Option(
+        6, "--max-sources", "-n", min=1, max=20, help="Maximum number of sources to read."
+    ),
     fetch_sources: bool = typer.Option(
         True, "--fetch/--no-fetch", help="Fetch and excerpt source pages."
     ),
-    json_output: bool = typer.Option(False, "--json/--no-json"),
+    json_output: bool = typer.Option(
+        False, "--json/--no-json", help="Print machine-readable JSON."
+    ),
     write: bool | None = typer.Option(
         None,
         "--write/--no-write",
@@ -241,7 +247,9 @@ def update_cmd(run: bool = typer.Option(False, "--run", help="Run the detected u
 def run_cmd(
     goal: str = typer.Argument(...),
     budget: str = typer.Option("", "--budget", help="Human budget note, e.g. 30m"),
-    project: str | None = typer.Option(None, "--project"),
+    project: str | None = typer.Option(
+        None, "--project", help="Project directory (default: the current directory)."
+    ),
 ):
     """Record and print an autonomous work-session plan."""
     store = shared._store()
@@ -254,7 +262,9 @@ def run_cmd(
 @app.command("goal", rich_help_panel="Everyday Agent Work")
 def goal_cmd(
     goal: str = typer.Argument(...),
-    project: str = typer.Option(".", "--project", "-p"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
     background: bool = typer.Option(
         False, "--background/--no-background", help="Queue the goal as a daemon task."
     ),
@@ -267,9 +277,15 @@ def goal_cmd(
     review: bool = typer.Option(
         True, "--review/--no-review", help="Include reviewer pass instructions."
     ),
-    max_loops: int = typer.Option(3, "--max-loops", min=1, max=20),
-    verifier_model: str = typer.Option("cheap", "--verifier-model-role"),
-    reviewer_model: str = typer.Option("review", "--reviewer-model-role"),
+    max_loops: int = typer.Option(
+        3, "--max-loops", min=1, max=20, help="Maximum verify-and-review loops."
+    ),
+    verifier_model: str = typer.Option(
+        "cheap", "--verifier-model-role", help="Model role for the verifier."
+    ),
+    reviewer_model: str = typer.Option(
+        "review", "--reviewer-model-role", help="Model role for the reviewer."
+    ),
     orchestrated: bool = typer.Option(
         False,
         "--orchestrated/--no-orchestrated",
@@ -293,7 +309,7 @@ def goal_cmd(
     repair_attempts: int = typer.Option(
         2, "--repair-attempts", min=0, max=5, help="Audit repair attempts when using --run."
     ),
-    json_output: bool = typer.Option(False, "--json"),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Create a goal loop with verifier/reviewer workflow scaffolding."""
     if orchestrated:
@@ -467,7 +483,7 @@ def goal_run_cmd(
     ),
     provider: str | None = typer.Option(None, "--provider", help="Provider ID override."),
     model: str | None = typer.Option(None, "--model", "-m", help="Model name override."),
-    json_output: bool = typer.Option(False, "--json"),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Resume, retry, or preview a saved orchestrated goal plan."""
     from magent.goal_orchestrator import preview_orchestrated_plan, run_orchestrated_plan
@@ -526,8 +542,8 @@ def goal_run_cmd(
 
 @app.command("jobs", rich_help_panel="Everyday Agent Work")
 def jobs_cmd(
-    status: str = typer.Option("", "--status"),
-    json_output: bool = typer.Option(False, "--json"),
+    status: str = typer.Option("", "--status", help="Only show items with this status."),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Show background daemon jobs in a friendly table."""
     from magent.daily_driver import jobs_summary
@@ -544,7 +560,7 @@ def resume_cmd(
     session_id: str = typer.Argument("", help="Session id; omit for the most recent."),
     list_sessions: bool = typer.Option(False, "--list", "-l", help="List resumable sessions."),
     max_turns: int = typer.Option(40, "--max-turns", help="Most recent exchanges to restore."),
-    json_output: bool = typer.Option(False, "--json"),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Resume a previous conversation.
 
@@ -606,7 +622,7 @@ def statusline_cmd(
     template: str = typer.Option(
         "", "--template", "-t", help="Python format template for statusline fields."
     ),
-    json_output: bool = typer.Option(False, "--json"),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Render a compact shell statusline payload."""
     from magent.daily_driver import render_statusline, statusline_data
@@ -622,8 +638,10 @@ def statusline_cmd(
 
 @app.command("review", rich_help_panel="Planning, Review & Release")
 def review_cmd(
-    base: str = typer.Option("HEAD", "--since"),
-    project: str = typer.Option(".", "--project", "-p"),
+    base: str = typer.Option("HEAD", "--since", help="Git revision to diff against."),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
     json_out: bool = typer.Option(False, "--json", help="Emit structured JSON"),
     save: bool = typer.Option(False, "--save", help="Save review findings to the workbench"),
     fail_on: str | None = typer.Option(
@@ -682,7 +700,11 @@ def review_show_cmd(review_id: str = typer.Argument(...)):
 
 
 @app.command("repo-graph", rich_help_panel="Code Intelligence & Testing")
-def graph_cmd(project: str = typer.Option(".", "--project", "-p")):
+def graph_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Show a lightweight repository import graph."""
     from magent.workbench import repo_graph
 
@@ -693,7 +715,11 @@ code_app.command("graph")(graph_cmd)
 
 
 @app.command("test-intel", rich_help_panel="Code Intelligence & Testing")
-def test_intel_cmd(project: str = typer.Option(".", "--project", "-p")):
+def test_intel_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Suggest tests related to current git changes."""
     from magent.workbench import suggest_tests
 
@@ -702,7 +728,11 @@ def test_intel_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 
 @app.command("env-doctor", rich_help_panel="Performance & Diagnostics")
-def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
+def env_doctor_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Run project environment checks."""
     from magent.workbench import env_doctor
 
@@ -714,7 +744,9 @@ def env_doctor_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 @app.command("ci", rich_help_panel="Integrations")
 def ci_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
     logs: bool = typer.Option(False, "--logs", help="Include failed-run logs and repair hints"),
     repair_plan: bool = typer.Option(False, "--repair-plan", help="Include a local CI repair plan"),
     save: bool = typer.Option(False, "--save", help="Save repair plan to the plan ledger"),
@@ -731,7 +763,9 @@ def ci_cmd(
 
 @app.command("diagnostics", rich_help_panel="Performance & Diagnostics")
 def diagnostics_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
     deep: bool = typer.Option(
         False, "--deep", help="Include provider, MCP, hooks, plugins, and permissions."
     ),
@@ -757,8 +791,12 @@ def diagnostics_cmd(
 
 @app.command("docs-brief", rich_help_panel="Help & Learning")
 def docs_brief_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
-    out: str | None = typer.Option(None, "--out"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    out: str | None = typer.Option(
+        None, "--out", help="Write the brief to this file instead of printing it."
+    ),
 ):
     """Generate a compact project documentation brief."""
     from magent.workbench import docs_brief
@@ -829,10 +867,14 @@ def stats_cmd():
 
 @app.command("dashboard", rich_help_panel="Data & Local UI")
 def dashboard_cmd(
-    out: str = typer.Option("magent-dashboard.html", "--out"),
-    serve: bool = typer.Option(False, "--serve"),
-    port: int = typer.Option(7820, "--port"),
-    open_browser: bool = typer.Option(False, "--open"),
+    out: str = typer.Option(
+        "magent-dashboard.html", "--out", help="Where to write the dashboard HTML."
+    ),
+    serve: bool = typer.Option(
+        False, "--serve", help="Serve the dashboard over HTTP instead of writing a file."
+    ),
+    port: int = typer.Option(7820, "--port", help="Port for --serve."),
+    open_browser: bool = typer.Option(False, "--open", help="Open the dashboard in your browser."),
 ):
     """Export or serve a local workbench dashboard."""
     from magent.workbench import export_dashboard, serve_dashboard
@@ -853,11 +895,23 @@ def dashboard_cmd(
 
 @app.command("ui", rich_help_panel="Data & Local UI")
 def ui_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
-    port: int = typer.Option(7830, "--port"),
-    open_browser: bool = typer.Option(False, "--open"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    port: int = typer.Option(7830, "--port", help="Port to listen on (loopback only)."),
+    open_browser: bool = typer.Option(False, "--open", help="Open the UI in your browser."),
+    json_output: bool = typer.Option(
+        False, "--json", help="Print the launch details (url, project, token) as one JSON line."
+    ),
 ):
-    """Serve the local operations UI."""
+    """Serve the local web UI.
+
+    Prints the address to open (it carries a one-time launch token) and keeps
+    serving until Ctrl+C. Output is plain text with no colour codes, so it can
+    be read by scripts and logs; use --json for a machine-readable line.
+    """
+    import json
+
     from magent.ui import serve_ui
 
     username = shared._require_user()
@@ -865,14 +919,19 @@ def ui_cmd(
         shared._store(), project=project, username=username, port=port, open_browser=open_browser
     )
     # The server and schedule store are live runtime handles, not response data.
-    # Rendering either through Rich's JSON encoder aborts the CLI after the
-    # socket has already been bound.
-    console.print_json(
-        data={key: value for key, value in result.items() if key not in {"server", "schedules"}}
-    )
+    details = {key: value for key, value in result.items() if key not in {"server", "schedules"}}
+    if json_output:
+        typer.echo(json.dumps(details, default=str))
+    elif result.get("ok"):
+        typer.echo(f"MagAgent UI: {details.get('url', '')}")
+        typer.echo(f"Project: {details.get('project', project)}")
+        typer.echo("Press Ctrl+C to stop.")
+    else:
+        typer.echo(
+            f"Could not start the MagAgent UI: {details.get('error', 'unknown error')}", err=True
+        )
     if not result.get("ok"):
         raise typer.Exit(1)
-    console.print("[dim]Press Ctrl+C to stop.[/dim]")
     shared._block_until_interrupt(result.get("server"))
     return
 
@@ -895,8 +954,12 @@ def configure_cmd():
 
 @app.command("onboard", rich_help_panel="Start Here")
 def onboard_cmd(
-    profile: str = typer.Option("coding-local", "--profile"),
-    project: str = typer.Option(".", "--project", "-p"),
+    profile: str = typer.Option(
+        "coding-local", "--profile", help="Configuration profile to apply."
+    ),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Apply defaults without prompts"),
 ):
     """Guide a user through core MagAgent readiness."""
@@ -919,7 +982,11 @@ def onboard_cmd(
 
 
 @app.command("next", rich_help_panel="Start Here")
-def next_cmd(project: str = typer.Option(".", "--project", "-p")):
+def next_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Suggest useful next actions for the current repo and MagAgent setup."""
     from magent.ux_flows import next_actions
 
@@ -977,10 +1044,16 @@ def doctor(
 
 @app.command("readiness", rich_help_panel="Start Here")
 def readiness_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
     smoke: bool = typer.Option(False, "--smoke", help="Run a tiny live provider tool-use smoke."),
-    provider: str | None = typer.Option(None, "--provider"),
-    model: str | None = typer.Option(None, "--model"),
+    provider: str | None = typer.Option(
+        None, "--provider", help="Provider id (default: the configured provider)."
+    ),
+    model: str | None = typer.Option(
+        None, "--model", help="Model name (default: the configured model)."
+    ),
     timeout: int = typer.Option(90, "--timeout", help="Maximum smoke runtime in seconds."),
 ):
     """Show one concise setup, docs, project, provider, and model readiness report."""

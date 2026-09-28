@@ -35,7 +35,9 @@ from magent.config import (
 
 
 @system_app.command("info")
-def system_info_cmd(json_output: bool = typer.Option(True, "--json/--no-json")):
+def system_info_cmd(
+    json_output: bool = typer.Option(True, "--json/--no-json", help="Print machine-readable JSON."),
+):
     """Return machine-readable MagAgent installation and path info."""
     from magent.desktop_api import system_info
 
@@ -69,9 +71,13 @@ def system_compatibility_cmd() -> None:
 
 @system_app.command("migrate")
 def system_migrate_cmd(
-    root: str = typer.Option(str(CONFIG_DIR), "--root"),
+    root: str = typer.Option(
+        str(CONFIG_DIR), "--root", help="MagAgent state directory to operate on."
+    ),
     apply: bool = typer.Option(False, "--apply", help="Apply after creating a private backup."),
-    backup_dir: str = typer.Option("", "--backup-dir"),
+    backup_dir: str = typer.Option(
+        "", "--backup-dir", help="Where to write the backup (default: next to the state)."
+    ),
 ) -> None:
     """Preview or apply backup-first persistent-state migrations."""
     from magent.migrations import migrate_state
@@ -85,7 +91,9 @@ def system_migrate_cmd(
 @system_app.command("rollback")
 def system_rollback_cmd(
     backup: str = typer.Argument(...),
-    root: str = typer.Option(str(CONFIG_DIR), "--root"),
+    root: str = typer.Option(
+        str(CONFIG_DIR), "--root", help="MagAgent state directory to operate on."
+    ),
     apply: bool = typer.Option(False, "--apply", help="Restore the inspected backup."),
 ) -> None:
     """Preview or restore a migration backup with path-containment checks."""
@@ -133,9 +141,13 @@ def system_ecosystem_report_cmd(
 
 @cache_app.command("doctor")
 def cache_doctor_cmd(
-    provider: str | None = typer.Option(None, "--provider", "-p"),
-    model: str | None = typer.Option(None, "--model", "-m"),
-    json_output: bool = typer.Option(False, "--json"),
+    provider: str | None = typer.Option(
+        None, "--provider", "-p", help="Provider to check (default: the configured one)."
+    ),
+    model: str | None = typer.Option(
+        None, "--model", "-m", help="Model name (default: the configured model)."
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Show prompt-cache readiness for the current provider/model."""
     from magent.agent import AGENT_STATIC_PROMPT
@@ -167,7 +179,9 @@ def cache_doctor_cmd(
 
 
 @cache_app.command("status")
-def cache_status_cmd(json_output: bool = typer.Option(False, "--json")):
+def cache_status_cmd(
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+):
     """Summarize recorded prompt-cache usage from local session logs."""
     from magent.workbench import usage_stats
 
@@ -192,7 +206,11 @@ def cache_status_cmd(json_output: bool = typer.Option(False, "--json")):
 
 
 @code_app.command("index")
-def code_index_cmd(project: str = typer.Option(".", "--project", "-p")):
+def code_index_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Build and save a code intelligence index."""
     from magent.workbench import save_code_index
 
@@ -205,7 +223,10 @@ def code_index_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 @code_app.command("symbols")
 def code_symbols_cmd(
-    query: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    query: str = typer.Argument(...),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Search indexed code symbols."""
     from magent.workbench import search_symbols
@@ -223,7 +244,10 @@ def code_symbols_cmd(
 
 @code_app.command("related")
 def code_related_cmd(
-    file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    file: str = typer.Argument(...),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Show code and tests related to a file."""
     from magent.workbench import related_code
@@ -232,7 +256,11 @@ def code_related_cmd(
 
 
 @test_app.command("map")
-def test_map_cmd(project: str = typer.Option(".", "--project", "-p")):
+def test_map_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Build a source-to-test map."""
     from magent.workbench import test_map
 
@@ -243,7 +271,10 @@ def test_map_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 @test_app.command("related")
 def test_related_cmd(
-    file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    file: str = typer.Argument(...),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Show tests related to a source file."""
     from magent.workbench import related_tests
@@ -254,7 +285,10 @@ def test_related_cmd(
 
 @test_app.command("explain")
 def test_explain_cmd(
-    file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    file: str = typer.Argument(...),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Explain why tests are related to a source file."""
     from magent.workbench import explain_related_tests
@@ -264,7 +298,10 @@ def test_explain_cmd(
 
 @test_app.command("run-related")
 def test_run_related_cmd(
-    file: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    file: str = typer.Argument(...),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Run tests related to a source file."""
     from magent.workbench import run_related_tests
@@ -273,7 +310,11 @@ def test_run_related_cmd(
 
 
 @release_app.command("check")
-def release_check_cmd(project: str = typer.Option(".", "--project", "-p")):
+def release_check_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """Run release readiness checks."""
     from magent.workbench import release_check
 
@@ -284,8 +325,10 @@ def release_check_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 @release_app.command("notes")
 def release_notes_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
-    since: str = typer.Option("HEAD~5", "--since"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    since: str = typer.Option("HEAD~5", "--since", help="Git revision to start from."),
 ):
     """Generate release notes from recent commits."""
     from magent.workbench import release_notes
@@ -295,20 +338,40 @@ def release_notes_cmd(
 
 @release_app.command("evidence")
 def release_evidence_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
-    eval_report: str = typer.Option("", "--eval-report"),
-    memory_report: str = typer.Option("", "--memory-report"),
-    performance_report: str = typer.Option("", "--performance-report"),
-    supply_chain_report: str = typer.Option("", "--supply-chain-report"),
-    coverage: float | None = typer.Option(None, "--coverage", min=0, max=100),
-    coverage_required: float = typer.Option(70, "--coverage-required", min=0, max=100),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    eval_report: str = typer.Option("", "--eval-report", help="Eval report to include."),
+    memory_report: str = typer.Option("", "--memory-report", help="Memory eval report to include."),
+    performance_report: str = typer.Option(
+        "", "--performance-report", help="Performance report to include."
+    ),
+    supply_chain_report: str = typer.Option(
+        "", "--supply-chain-report", help="Supply-chain report to include."
+    ),
+    coverage: float | None = typer.Option(
+        None, "--coverage", min=0, max=100, help="Measured test coverage, in percent."
+    ),
+    coverage_required: float = typer.Option(
+        70, "--coverage-required", min=0, max=100, help="Minimum coverage, in percent."
+    ),
     tests: str = typer.Option(
         "", "--tests", help="Recorded test result, for example '724 passed'."
     ),
-    ci_url: str = typer.Option("", "--ci-url"),
-    artifact: Annotated[list[str] | None, typer.Option("--artifact")] = None,
-    exception: Annotated[list[str] | None, typer.Option("--exception")] = None,
-    out: str = typer.Option("", "--out", "-o"),
+    ci_url: str = typer.Option(
+        "", "--ci-url", help="URL of the CI run that produced the evidence."
+    ),
+    artifact: Annotated[
+        list[str] | None,
+        typer.Option("--artifact", help="Release artifact to include (repeatable)."),
+    ] = None,
+    exception: Annotated[
+        list[str] | None,
+        typer.Option("--exception", help="Documented exception to record (repeatable)."),
+    ] = None,
+    out: str = typer.Option(
+        "", "--out", "-o", help="Where to write the evidence bundle (default: print it)."
+    ),
 ):
     """Create a machine-readable release qualification evidence bundle."""
     from magent.release_evidence import build_release_evidence, write_release_evidence
@@ -334,10 +397,19 @@ def release_evidence_cmd(
 
 @release_app.command("supply-chain")
 def release_supply_chain_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
-    artifact: Annotated[list[str] | None, typer.Option("--artifact")] = None,
-    audit_report: str = typer.Option("", "--audit-report"),
-    out_dir: str = typer.Option("dist/release-evidence", "--out-dir"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    artifact: Annotated[
+        list[str] | None,
+        typer.Option("--artifact", help="Release artifact to include (repeatable)."),
+    ] = None,
+    audit_report: str = typer.Option(
+        "", "--audit-report", help="Dependency audit report to include."
+    ),
+    out_dir: str = typer.Option(
+        "dist/release-evidence", "--out-dir", help="Directory for the generated evidence."
+    ),
 ) -> None:
     """Generate CycloneDX SBOM, provenance, hashes, and scan evidence."""
     from magent.supply_chain import build_supply_chain_evidence, write_supply_chain_bundle
@@ -355,8 +427,10 @@ def release_supply_chain_cmd(
 
 @context_app.command("map")
 def context_map_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
-    query: str = typer.Option("", "--query", "-q"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    query: str = typer.Option("", "--query", "-q", help="The task to map context for."),
     json_output: bool = typer.Option(
         False, "--json", help="Emit the full machine-readable context payload."
     ),
@@ -374,9 +448,11 @@ def context_map_cmd(
 
 @context_app.command("audit")
 def context_audit_cmd(
-    project: str = typer.Option(".", "--project", "-p"),
-    query: str = typer.Option("", "--query", "-q"),
-    json_output: bool = typer.Option(False, "--json"),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+    query: str = typer.Option("", "--query", "-q", help="The task to audit context for."),
+    json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
 ):
     """Audit active context and suggest token-saving cleanup actions."""
     from magent.context import context_map
@@ -396,7 +472,11 @@ def context_audit_cmd(
 
 
 @skill_app.command("list")
-def skill_list_cmd(project: str = typer.Option(".", "--project", "-p")):
+def skill_list_cmd(
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
+):
     """List user and project skills available to MagAgent."""
     from magent.skills import SkillRegistry
 
@@ -411,7 +491,10 @@ def skill_list_cmd(project: str = typer.Option(".", "--project", "-p")):
 
 @skill_app.command("search")
 def skill_search_cmd(
-    query: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    query: str = typer.Argument(...),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Find skills relevant to a task or phrase."""
     from magent.skills import SkillRegistry
@@ -434,7 +517,10 @@ def skill_search_cmd(
 
 @skill_app.command("show")
 def skill_show_cmd(
-    name: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+    name: str = typer.Argument(...),
+    project: str = typer.Option(
+        ".", "--project", "-p", help="Project directory (default: the current directory)."
+    ),
 ):
     """Show one local skill's metadata and path."""
     from magent.skills import SkillRegistry
@@ -472,10 +558,12 @@ def config_validate_cmd():
 
 @subagent_app.command("configure")
 def subagent_configure_cmd(
-    max_subagents: int | None = typer.Option(None, "--max"),
-    max_parallel: int | None = typer.Option(None, "--parallel"),
-    model_role: str = typer.Option("", "--model-role"),
-    sandbox_mode: str = typer.Option("", "--sandbox-mode"),
+    max_subagents: int | None = typer.Option(None, "--max", help="Maximum sub-agents per session."),
+    max_parallel: int | None = typer.Option(
+        None, "--parallel", help="Maximum sub-agents running at once."
+    ),
+    model_role: str = typer.Option("", "--model-role", help="Default model role for sub-agents."),
+    sandbox_mode: str = typer.Option("", "--sandbox-mode", help="Default sandbox for sub-agents."),
 ):
     """Configure sub-agent caps and defaults."""
     from magent.config_ux import configure_subagents
@@ -501,9 +589,15 @@ def subagent_status_cmd():
 @subagent_app.command("run")
 def subagent_run_cmd(
     task: str = typer.Argument(...),
-    provider: str | None = typer.Option(None, "--provider", "-p"),
-    model: str | None = typer.Option(None, "--model", "-m"),
-    project: str | None = typer.Option(None, "--project"),
+    provider: str | None = typer.Option(
+        None, "--provider", "-p", help="Provider id (default: the configured provider)."
+    ),
+    model: str | None = typer.Option(
+        None, "--model", "-m", help="Model name (default: the configured model)."
+    ),
+    project: str | None = typer.Option(
+        None, "--project", help="Project directory (default: the current directory)."
+    ),
 ):
     """Run one focused sub-agent task from the CLI."""
     username = shared._require_user()

@@ -749,10 +749,20 @@ def test_cli_ui_starts_local_operations_dashboard(tmp_path: Path, monkeypatch) -
     result = runner.invoke(cli_main.app, ["ui", "--project", str(project), "--port", "9999"])
 
     assert result.exit_code == 0
-    assert "http://127.0.0.1:9999/" in result.output
-    assert "cli-test" in result.output
+    # A plain line a person (or a log) can read, with no JSON and no ANSI codes.
+    assert result.output.splitlines()[0] == "MagAgent UI: http://127.0.0.1:9999/"
+    assert "Press Ctrl+C to stop." in result.output
+    assert "\x1b[" not in result.output and "{" not in result.output
     assert blocked_on == [server]
     assert "NotSerializable" not in result.output
+
+    as_json = runner.invoke(
+        cli_main.app, ["ui", "--project", str(project), "--port", "9999", "--json"]
+    )
+    assert as_json.exit_code == 0
+    payload = json.loads(as_json.output.splitlines()[0])
+    assert payload["url"] == "http://127.0.0.1:9999/" and payload["username"] == "cli-test"
+    assert "\x1b[" not in as_json.output
 
 
 def test_cli_dashboard_serve_does_not_print_the_server_handle(tmp_path: Path, monkeypatch) -> None:

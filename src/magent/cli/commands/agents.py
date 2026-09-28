@@ -50,10 +50,14 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     @agent_app.command("generate-draft")
     def agent_generate_draft_cmd(
         prompt: str = typer.Argument(..., help="Natural-language profile request."),
-        name: str = typer.Option("", "--name"),
-        extends: str = typer.Option("", "--extends"),
-        project: str = typer.Option(".", "--project", "-p"),
-        autonomous: bool = typer.Option(False, "--autonomous"),
+        name: str = typer.Option("", "--name", help="Name for the generated profile."),
+        extends: str = typer.Option("", "--extends", help="Profile the draft should extend."),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        autonomous: bool = typer.Option(
+            False, "--autonomous", help="Draft for autonomous use (narrower permissions)."
+        ),
     ) -> None:
         """Return a validated, non-persisted OAP generation proposal."""
         from magent.agent_profiles.generation import generate_profile_proposal
@@ -77,7 +81,11 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @agent_app.command("schema")
-    def agent_schema_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_schema_cmd(
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Return the versioned OAP editor contract and local choices."""
         from magent.agent_profiles.desktop import profile_contract
 
@@ -87,7 +95,9 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     @agent_app.command("preview")
     def agent_preview_cmd(
         input_path: str = typer.Option("-", "--input", help="JSON document path, or - for stdin."),
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Validate and resolve an OAP document without writing it."""
         from magent.agent_profiles.desktop import preview_profile
@@ -107,8 +117,14 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     def agent_apply_cmd(
         input_path: str = typer.Option("-", "--input", help="JSON document path, or - for stdin."),
         scope: str = typer.Option("user", "--scope", help="user, project, or portable"),
-        project: str = typer.Option(".", "--project", "-p"),
-        expected_digest: str = typer.Option("", "--expected-digest"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        expected_digest: str = typer.Option(
+            "",
+            "--expected-digest",
+            help="The profile digest you last read; the change is refused if it differs.",
+        ),
     ) -> None:
         """Create or conflict-safely update an OAP document."""
         from magent.agent_profiles.desktop import apply_profile
@@ -132,8 +148,14 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     def agent_clone_cmd(
         source: str,
         name: str,
-        scope: str = typer.Option("user", "--scope"),
-        project: str = typer.Option(".", "--project", "-p"),
+        scope: str = typer.Option(
+            "user",
+            "--scope",
+            help="Where to write the profile: user, universal, project or portable (.agents/).",
+        ),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Copy a profile without carrying state or history."""
         from magent.agent_profiles.desktop import clone_profile
@@ -147,10 +169,22 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     @agent_app.command("import")
     def agent_import_cmd(
         source: Path,
-        scope: str = typer.Option("user", "--scope"),
-        project: str = typer.Option(".", "--project", "-p"),
-        name: str = typer.Option("", "--name"),
-        dry_run: bool = typer.Option(False, "--dry-run"),
+        scope: str = typer.Option(
+            "user",
+            "--scope",
+            help="Where to write the profile: user, universal, project or portable (.agents/).",
+        ),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        name: str = typer.Option(
+            "",
+            "--name",
+            help="Import under this name (rewrites metadata.name, so the digest changes).",
+        ),
+        dry_run: bool = typer.Option(
+            False, "--dry-run", help="Preview the import without writing anything."
+        ),
     ) -> None:
         """Preview or import an OAP document."""
         from magent.agent_profiles.desktop import import_profile
@@ -166,8 +200,17 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     @agent_app.command("export")
     def agent_export_cmd(
         name: str,
-        output: Annotated[Path, typer.Option("--output", "-o")],
-        project: str = typer.Option(".", "--project", "-p"),
+        output: Annotated[
+            Path,
+            typer.Option(
+                "--output",
+                "-o",
+                help="Where to write the profile; the extension picks YAML, JSON or Markdown.",
+            ),
+        ],
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Export a portable profile with secret-like extension fields removed."""
         from magent.agent_profiles.desktop import export_profile
@@ -181,8 +224,14 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     @agent_app.command("delete")
     def agent_delete_cmd(
         name: str,
-        expected_digest: str = typer.Option(..., "--expected-digest"),
-        project: str = typer.Option(".", "--project", "-p"),
+        expected_digest: str = typer.Option(
+            ...,
+            "--expected-digest",
+            help="The profile digest you last read; the change is refused if it differs.",
+        ),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
         yes: bool = typer.Option(False, "--yes", help="Confirm permanent deletion."),
     ) -> None:
         """Delete a user-owned profile after digest and confirmation checks."""
@@ -202,7 +251,12 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @agent_app.command("revisions")
-    def agent_revisions_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_revisions_cmd(
+        name: str,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """List restorable authoring revisions for an OAP profile."""
         from magent.agent_profiles.desktop import profile_checkpoints
 
@@ -213,7 +267,12 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @agent_app.command("detail")
-    def agent_detail_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_detail_cmd(
+        name: str,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Return profile document, effective authority, and revision history."""
         from magent.agent_profiles.desktop import inspect_profile
 
@@ -227,9 +286,15 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     def agent_restore_revision_cmd(
         name: str,
         checkpoint: Path,
-        expected_digest: str = typer.Option(..., "--expected-digest"),
-        project: str = typer.Option(".", "--project", "-p"),
-        yes: bool = typer.Option(False, "--yes"),
+        expected_digest: str = typer.Option(
+            ...,
+            "--expected-digest",
+            help="The profile digest you last read; the change is refused if it differs.",
+        ),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        yes: bool = typer.Option(False, "--yes", help="Skip the confirmation prompt."),
     ) -> None:
         """Conflict-safely restore a profile revision created by MagAgent."""
         from magent.agent_profiles.desktop import rollback_profile
@@ -252,19 +317,33 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @agent_app.command("list")
-    def agent_list_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_list_cmd(
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """List profiles with revision, trust, source, and digest."""
         registry, _ = _registry(project)
         console.print_json(data=registry.list())
 
     @agent_app.command("show")
-    def agent_show_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_show_cmd(
+        name: str,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Show a resolved profile document."""
         profile, _ = _require_profile(name, project)
         console.print_json(data={"ok": True, "profile": profile.as_dict()})
 
     @agent_app.command("explain")
-    def agent_explain_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_explain_cmd(
+        name: str,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Explain the capabilities this profile actually receives."""
         from magent.agent_profiles.effective import resolve_effective_profile
         from magent.tools.catalog import built_in_tool_definitions
@@ -299,11 +378,17 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     @agent_app.command("create")
     def agent_create_cmd(
         name: str,
-        project: str = typer.Option(".", "--project", "-p"),
-        description: str = typer.Option("", "--description"),
-        mode: str = typer.Option("subagent", "--mode"),
-        prompt: str = typer.Option("", "--prompt"),
-        force: bool = typer.Option(False, "--force"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        description: str = typer.Option("", "--description", help="One-line description."),
+        mode: str = typer.Option(
+            "subagent", "--mode", help="How the profile is used: subagent, primary or all."
+        ),
+        prompt: str = typer.Option("", "--prompt", help="Role instructions for the profile."),
+        force: bool = typer.Option(
+            False, "--force", help="Overwrite an existing profile with the same name."
+        ),
     ) -> None:
         """Create a portable OAP Markdown profile."""
         from magent.agent_profiles.authoring import build_profile_document, write_profile
@@ -327,7 +412,12 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         console.print_json(data={**result, "profile": document})
 
     @agent_app.command("convert")
-    def agent_convert_cmd(path: Path, write: bool = typer.Option(False, "--write")) -> None:
+    def agent_convert_cmd(
+        path: Path,
+        write: bool = typer.Option(
+            False, "--write", help="Write the converted profile (default: preview only)."
+        ),
+    ) -> None:
         """Preview legacy-to-OAP conversion; write only when explicitly requested."""
         from magent.agent_profiles.documents import atomic_write, render_document
         from magent.agent_profiles.registry import AgentProfileRegistry
@@ -346,7 +436,12 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         console.print_json(data={"ok": True, "path": str(path), "backup": str(backup)})
 
     @agent_app.command("state")
-    def agent_state_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_state_cmd(
+        name: str,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Show durable, untrusted state for a profile."""
         profile, _ = _require_profile(name, project)
         console.print_json(
@@ -359,7 +454,12 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         )
 
     @agent_app.command("history")
-    def agent_history_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_history_cmd(
+        name: str,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Show profile state revision history."""
         profile, _ = _require_profile(name, project)
         console.print_json(
@@ -368,7 +468,11 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
 
     @agent_app.command("rollback")
     def agent_rollback_cmd(
-        name: str, checkpoint: Path, project: str = typer.Option(".", "--project", "-p")
+        name: str,
+        checkpoint: Path,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Restore a validated profile checkpoint."""
         from magent.agent_profiles.delta import restore_checkpoint
@@ -382,7 +486,11 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
 
     @agent_app.command("forget")
     def agent_forget_cmd(
-        name: str, entry_id: str, project: str = typer.Option(".", "--project", "-p")
+        name: str,
+        entry_id: str,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Queue removal of one profile state entry for review."""
         from magent.agent_profiles.delta import ProfileDeltaInbox, make_delta
@@ -397,7 +505,11 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         console.print_json(data={"ok": True, "delta": delta})
 
     @agent_app.command("inbox")
-    def agent_inbox_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_inbox_cmd(
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """List pending profile state changes."""
         from magent.agent_profiles.delta import ProfileDeltaInbox
 
@@ -406,7 +518,9 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     @agent_app.command("accept")
     def agent_accept_cmd(
         delta_id: str,
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
         rebase: bool = typer.Option(
             True, "--rebase/--no-rebase", help="Rebase when unrelated profile state changed."
         ),
@@ -424,8 +538,10 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
     @agent_app.command("reject")
     def agent_reject_cmd(
         delta_id: str,
-        reason: str = typer.Option("", "--reason"),
-        project: str = typer.Option(".", "--project", "-p"),
+        reason: str = typer.Option("", "--reason", help="Reason recorded with the decision."),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Reject a proposed profile state delta."""
         from magent.agent_profiles.delta import ProfileDeltaInbox
@@ -434,7 +550,12 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
         console.print_json(data={"ok": True, "delta": item})
 
     @agent_app.command("digest")
-    def agent_digest_cmd(name: str, project: str = typer.Option(".", "--project", "-p")) -> None:
+    def agent_digest_cmd(
+        name: str,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Show full and spec-only canonical digests."""
         profile, _ = _require_profile(name, project)
         console.print_json(
@@ -458,7 +579,11 @@ def register_agent_commands(agent_app: typer.Typer) -> None:
 
     @agent_app.command("run")
     def agent_run_cmd(
-        name: str, task: str, project: str = typer.Option(".", "--project", "-p")
+        name: str,
+        task: str,
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Render a manual @agent invocation for compatibility."""
         from magent.agent_defs import resolve_invocation

@@ -70,3 +70,24 @@ def test_json_shapes_match_the_golden_contract(case, tmp_path: Path) -> None:
     assert not differences, (
         "JSON shape changed; if intended, run " + REGENERATE + ":\n" + "\n".join(differences[:40])
     )
+
+
+def test_every_visible_option_has_help_text() -> None:
+    """UI-2: 404 options (`magent ui --port`, `--project` almost everywhere) had
+    no description in --help. New options must say what they do."""
+    missing: list[str] = []
+
+    def walk(node: dict, path: list[str]) -> None:
+        for param in node.get("params") or []:
+            if (
+                param.get("kind") == "option"
+                and not param.get("hidden")
+                and param.get("name") != "help"
+                and not str(param.get("help") or "").strip()
+            ):
+                missing.append(f"magent {' '.join(path)} {param['opts'][0]}".replace("  ", " "))
+        for name, child in (node.get("commands") or {}).items():
+            walk(child, [*path, name])
+
+    walk(command_tree(cli_main.app), [])
+    assert not missing, "Options without help text:\n" + "\n".join(missing[:40])

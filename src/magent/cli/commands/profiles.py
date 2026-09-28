@@ -12,12 +12,14 @@ def register_profile_commands(profile_app: typer.Typer, *, store, console: Conso
     @profile_app.command("generate")
     def profile_generate_cmd(
         prompt: str = typer.Argument(..., help="Describe the specialist to create."),
-        name: str = typer.Option("", "--name"),
+        name: str = typer.Option("", "--name", help="Name for the generated profile."),
         extends: str = typer.Option("", "--extends", help="Optional base profile."),
         scope: str = typer.Option(
             "project", "--scope", help="project, portable, user, or universal"
         ),
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
         dry_run: bool = typer.Option(
             False, "--dry-run", help="Generate and validate without saving."
         ),
@@ -77,7 +79,9 @@ def register_profile_commands(profile_app: typer.Typer, *, store, console: Conso
 
     @profile_app.command("wizard")
     def profile_wizard_cmd(
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Create a complete Open Agent Profile interactively."""
         from magent.agent_profiles.authoring import set_default_profile
@@ -104,7 +108,11 @@ def register_profile_commands(profile_app: typer.Typer, *, store, console: Conso
             raise typer.Exit(1)
 
     @profile_app.command("default")
-    def profile_default_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
+    def profile_default_cmd(
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Show the active default Open Agent Profile."""
         from magent.agent_profiles.authoring import default_profile_status
         from magent.config import get_current_user
@@ -117,7 +125,9 @@ def register_profile_commands(profile_app: typer.Typer, *, store, console: Conso
     @profile_app.command("set-default")
     def profile_set_default_cmd(
         name: str = typer.Argument(..., help="Open Agent Profile name"),
-        project: str = typer.Option(".", "--project", "-p"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
         global_scope: bool = typer.Option(
             False,
             "--global",
@@ -137,7 +147,9 @@ def register_profile_commands(profile_app: typer.Typer, *, store, console: Conso
 
     @profile_app.command("clear-default")
     def profile_clear_default_cmd(
-        global_scope: bool = typer.Option(False, "--global"),
+        global_scope: bool = typer.Option(
+            False, "--global", help="Reset the installation default instead of the user override."
+        ),
     ) -> None:
         """Clear the user override or reset the global default to magagent."""
         from magent.agent_profiles.authoring import clear_default_profile

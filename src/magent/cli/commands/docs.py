@@ -40,7 +40,8 @@ def register_docs_commands(
 
     @docs_app.command("search")
     def docs_search_cmd(
-        query: str = typer.Argument(...), limit: int = typer.Option(8, "--limit", "-n")
+        query: str = typer.Argument(...),
+        limit: int = typer.Option(8, "--limit", "-n", help="Maximum number of items to return."),
     ) -> None:
         """Search built-in MagAgent documentation."""
         from magent.docs import search_docs
@@ -60,7 +61,9 @@ def register_docs_commands(
 
     @docs_app.command("generate-reference")
     def docs_generate_reference_cmd(
-        out: str | None = typer.Option(None, "--out", "-o"),
+        out: str | None = typer.Option(
+            None, "--out", "-o", help="Write the Markdown to this file instead of printing it."
+        ),
         check: bool = typer.Option(
             False, "--check", help="Fail if the generated reference differs from --out."
         ),
@@ -86,7 +89,11 @@ def register_docs_commands(
             console.print(text)
 
     @docs_app.command("generate-providers")
-    def docs_generate_providers_cmd(out: str | None = typer.Option(None, "--out", "-o")) -> None:
+    def docs_generate_providers_cmd(
+        out: str | None = typer.Option(
+            None, "--out", "-o", help="Write the Markdown to this file instead of printing it."
+        ),
+    ) -> None:
         """Generate provider reference Markdown from the provider catalog."""
         from magent.docs import render_provider_reference
 
@@ -96,7 +103,11 @@ def register_docs_commands(
         console.print(f"[green]✓ Wrote {target}[/green]")
 
     @docs_app.command("generate-config")
-    def docs_generate_config_cmd(out: str | None = typer.Option(None, "--out", "-o")) -> None:
+    def docs_generate_config_cmd(
+        out: str | None = typer.Option(
+            None, "--out", "-o", help="Write the Markdown to this file instead of printing it."
+        ),
+    ) -> None:
         """Generate config reference Markdown from packaged defaults."""
         from magent.docs import render_config_reference
 

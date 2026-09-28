@@ -51,11 +51,21 @@ def provider_detect_cmd():
 @provider_app.command("set")
 def provider_set_cmd(
     provider_id: str = typer.Argument(...),
-    model: str | None = typer.Option(None, "--model", "-m"),
-    api_key_env: str = typer.Option("", "--api-key-env"),
-    api_key: str = typer.Option("", "--api-key"),
-    api_key_keyring: str = typer.Option("", "--api-key-keyring"),
-    base_url: str = typer.Option("", "--base-url"),
+    model: str | None = typer.Option(
+        None, "--model", "-m", help="Model name (default: the configured model)."
+    ),
+    api_key_env: str = typer.Option(
+        "", "--api-key-env", help="Environment variable that holds the key."
+    ),
+    api_key: str = typer.Option(
+        "", "--api-key", help="API key (prefer `magent auth add --api-key-stdin`)."
+    ),
+    api_key_keyring: str = typer.Option(
+        "", "--api-key-keyring", help="Keyring account that holds the key."
+    ),
+    base_url: str = typer.Option(
+        "", "--base-url", help="Base URL for an OpenAI-compatible endpoint."
+    ),
     team_id: str = typer.Option("", "--team-id", help="Optional provider team identifier"),
     access_mode: str = typer.Option(
         "", "--access", help="api, codex, payg, subscription, or local"
@@ -174,7 +184,9 @@ def provider_wizard_cmd():
 @provider_app.command("test")
 def provider_test_cmd(
     provider_id: str | None = typer.Argument(None),
-    model: str | None = typer.Option(None, "--model", "-m"),
+    model: str | None = typer.Option(
+        None, "--model", "-m", help="Model name (default: the configured model)."
+    ),
 ):
     """Test a provider/model connection."""
     from magent.providers import test_provider
@@ -264,8 +276,12 @@ def model_doctor_cmd():
 
 @model_app.command("orchestration-doctor")
 def model_orchestration_doctor_cmd(
-    planning_role: str = typer.Option("review", "--planning-role"),
-    execution_role: str = typer.Option("coding", "--execution-role"),
+    planning_role: str = typer.Option(
+        "review", "--planning-role", help="Model role used for planning."
+    ),
+    execution_role: str = typer.Option(
+        "coding", "--execution-role", help="Model role used for execution."
+    ),
 ):
     """Show planning/execution role readiness for orchestrated goals."""
     from magent.config_ux import orchestration_role_doctor
@@ -300,8 +316,12 @@ def model_capabilities_cmd():
 
 @model_app.command("recommend")
 def model_recommend_cmd(
-    provider: str | None = typer.Option(None, "--provider", "-p"),
-    task_type: str = typer.Option("tool-use", "--task-type", "-t"),
+    provider: str | None = typer.Option(
+        None, "--provider", "-p", help="Provider id (default: the configured provider)."
+    ),
+    task_type: str = typer.Option(
+        "tool-use", "--task-type", "-t", help="Kind of work, for example tool-use or chat."
+    ),
 ):
     """Recommend a model from successful local health observations."""
     from magent.model_health import recommend_model_from_health

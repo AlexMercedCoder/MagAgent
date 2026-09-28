@@ -13,8 +13,10 @@ def register_daemon_commands(daemon_app: typer.Typer) -> None:
     def daemon_enqueue_cmd(
         kind: str = typer.Argument(...),
         value: str = typer.Argument(...),
-        project: str = typer.Option(".", "--project", "-p"),
-        run_at: str = typer.Option("", "--run-at"),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        run_at: str = typer.Option("", "--run-at", help="When to run it (ISO time; default: now)."),
         agent: str = typer.Option("", "--agent", help="Run ask tasks with an OAP profile."),
     ) -> None:
         """Enqueue an ask, recipe, plan, or shell task."""
@@ -36,7 +38,9 @@ def register_daemon_commands(daemon_app: typer.Typer) -> None:
         )
 
     @daemon_app.command("list")
-    def daemon_list_cmd(status: str = typer.Option("", "--status")) -> None:
+    def daemon_list_cmd(
+        status: str = typer.Option("", "--status", help="Only show items with this status."),
+    ) -> None:
         """List durable daemon queue tasks."""
         from magent.cli.command_context import store
         from magent.daemon import list_queue
@@ -44,7 +48,11 @@ def register_daemon_commands(daemon_app: typer.Typer) -> None:
         console.print_json(data=list_queue(store(), status=status))
 
     @daemon_app.command("run-once")
-    def daemon_run_once_cmd(limit: int = typer.Option(1, "--limit", "-n")) -> None:
+    def daemon_run_once_cmd(
+        limit: int = typer.Option(
+            1, "--limit", "-n", help="Maximum number of queued tasks to run."
+        ),
+    ) -> None:
         """Run due queued tasks once."""
         from magent.cli.command_context import store
         from magent.daemon import enqueue_due_followups, run_once
@@ -54,7 +62,11 @@ def register_daemon_commands(daemon_app: typer.Typer) -> None:
         console.print_json(data=run_once(workbench, limit=limit))
 
     @daemon_app.command("start")
-    def daemon_start_cmd(limit: int = typer.Option(1, "--limit", "-n")) -> None:
+    def daemon_start_cmd(
+        limit: int = typer.Option(
+            1, "--limit", "-n", help="Maximum number of queued tasks to run."
+        ),
+    ) -> None:
         """Foreground worker alias for `run-once`."""
         from magent.cli.command_context import store
         from magent.daemon import enqueue_due_followups, run_once

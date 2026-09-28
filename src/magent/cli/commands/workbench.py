@@ -19,9 +19,15 @@ def register_workbench_commands(workbench_app: typer.Typer) -> None:
 
     @workbench_app.command("prune")
     def workbench_prune_cmd(
-        older_than_days: int = typer.Option(30, "--older-than-days"),
-        keep: int | None = typer.Option(None, "--keep"),
-        dry_run: bool = typer.Option(False, "--dry-run"),
+        older_than_days: int = typer.Option(
+            30, "--older-than-days", help="Remove records older than this many days."
+        ),
+        keep: int | None = typer.Option(
+            None, "--keep", help="Always keep this many of the newest records."
+        ),
+        dry_run: bool = typer.Option(
+            False, "--dry-run", help="Show what would happen without changing anything."
+        ),
     ) -> None:
         """Prune old high-volume workbench records."""
         from magent.cli.command_context import store

@@ -25,13 +25,23 @@ def register_execution_commands(
     @execution_app.command("create")  # type: ignore[untyped-decorator]
     def create_cmd(
         title: str = typer.Argument(...),
-        kind: str = typer.Option("ask", "--kind"),
-        project: str = typer.Option(".", "--project", "-p"),
-        session_id: str = typer.Option("", "--session"),
-        parent_task_id: str = typer.Option("", "--parent"),
-        planning_role: str = typer.Option("", "--planning-role"),
-        execution_role: str = typer.Option("", "--execution-role"),
-        permission_policy: str = typer.Option("", "--permission-policy"),
+        kind: str = typer.Option(
+            "ask", "--kind", help="Task kind, for example ask, recipe or plan."
+        ),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        session_id: str = typer.Option("", "--session", help="Session id to attach the task to."),
+        parent_task_id: str = typer.Option("", "--parent", help="Parent task id."),
+        planning_role: str = typer.Option(
+            "", "--planning-role", help="Model role used for planning."
+        ),
+        execution_role: str = typer.Option(
+            "", "--execution-role", help="Model role used for execution."
+        ),
+        permission_policy: str = typer.Option(
+            "", "--permission-policy", help="Permission mode for the task."
+        ),
     ) -> None:
         """Create a queued execution task."""
         task = TaskRuntime(store()).create(
@@ -49,9 +59,13 @@ def register_execution_commands(
     @execution_app.command("list")  # type: ignore[untyped-decorator]
     def list_cmd(
         state: str = typer.Option("", "--state", help=f"One of: {', '.join(TASK_STATES)}"),
-        project_id: str = typer.Option("", "--project-id"),
-        parent_task_id: str | None = typer.Option(None, "--parent"),
-        limit: int = typer.Option(100, "--limit", "-n", min=1, max=1000),
+        project_id: str = typer.Option("", "--project-id", help="Only tasks for this project id."),
+        parent_task_id: str | None = typer.Option(
+            None, "--parent", help="Only children of this task id."
+        ),
+        limit: int = typer.Option(
+            100, "--limit", "-n", min=1, max=1000, help="Maximum number of items to return."
+        ),
     ) -> None:
         """List durable execution tasks as JSON."""
         parsed_state = _state(state) if state else None
@@ -74,8 +88,12 @@ def register_execution_commands(
     @execution_app.command("events")  # type: ignore[untyped-decorator]
     def events_cmd(
         task_id: str = typer.Argument(...),
-        after: int = typer.Option(0, "--after", min=0),
-        limit: int = typer.Option(500, "--limit", "-n", min=1, max=5000),
+        after: int = typer.Option(
+            0, "--after", min=0, help="Only events after this sequence number."
+        ),
+        limit: int = typer.Option(
+            500, "--limit", "-n", min=1, max=5000, help="Maximum number of events to return."
+        ),
         jsonl: bool = typer.Option(False, "--jsonl", help="Emit one event per line."),
     ) -> None:
         """Read ordered task events as JSON or JSONL."""
@@ -100,7 +118,10 @@ def register_execution_commands(
 
     @execution_app.command("pause")  # type: ignore[untyped-decorator]
     def pause_cmd(
-        task_id: str = typer.Argument(...), reason: str = typer.Option("Paused by user", "--reason")
+        task_id: str = typer.Argument(...),
+        reason: str = typer.Option(
+            "Paused by user", "--reason", help="Reason recorded in the task's event log."
+        ),
     ) -> None:
         """Move a running task into the waiting state."""
         transition_command(task_id, "pause", reason)
@@ -108,7 +129,9 @@ def register_execution_commands(
     @execution_app.command("resume")  # type: ignore[untyped-decorator]
     def resume_cmd(
         task_id: str = typer.Argument(...),
-        reason: str = typer.Option("Resumed by user", "--reason"),
+        reason: str = typer.Option(
+            "Resumed by user", "--reason", help="Reason recorded in the task's event log."
+        ),
     ) -> None:
         """Resume a waiting or blocked task."""
         transition_command(task_id, "resume", reason)
@@ -116,7 +139,9 @@ def register_execution_commands(
     @execution_app.command("cancel")  # type: ignore[untyped-decorator]
     def cancel_cmd(
         task_id: str = typer.Argument(...),
-        reason: str = typer.Option("Cancelled by user", "--reason"),
+        reason: str = typer.Option(
+            "Cancelled by user", "--reason", help="Reason recorded in the task's event log."
+        ),
     ) -> None:
         """Cancel an active execution task."""
         transition_command(task_id, "cancel", reason)
@@ -124,7 +149,9 @@ def register_execution_commands(
     @execution_app.command("retry")  # type: ignore[untyped-decorator]
     def retry_cmd(
         task_id: str = typer.Argument(...),
-        reason: str = typer.Option("Retried by user", "--reason"),
+        reason: str = typer.Option(
+            "Retried by user", "--reason", help="Reason recorded in the task's event log."
+        ),
     ) -> None:
         """Queue a blocked, failed, completed, or cancelled task for another attempt."""
         transition_command(task_id, "retry", reason)

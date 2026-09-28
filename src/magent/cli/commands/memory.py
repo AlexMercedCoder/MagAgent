@@ -48,7 +48,7 @@ def register_memory_commands(
         return get_memory_manager()
 
     @memory_app.command("review")
-    def memory_review_cmd(diff: bool = typer.Option(False, "--diff")):
+    def memory_review_cmd(diff: bool = typer.Option(False, "--diff", help="Show the full diff.")):
         """Show pending git changes in the current user's memory graph."""
         from magent.workbench import memory_pending_summary
 
@@ -56,7 +56,7 @@ def register_memory_commands(
 
 
     @memory_app.command("approve")
-    def memory_approve_cmd(message: str = typer.Option("Approve MagAgent memory updates", "--message", "-m")):
+    def memory_approve_cmd(message: str = typer.Option("Approve MagAgent memory updates", "--message", "-m", help="Git commit message for the memory graph.")):
         """Commit pending memory graph changes for the current user."""
         from magent.workbench import memory_approve
 
@@ -67,9 +67,9 @@ def register_memory_commands(
     def memory_promote_cmd(
         source: str | None = typer.Argument(None),
         source_id: str | None = typer.Argument(None),
-        project: str = typer.Option(".", "--project", "-p"),
-        all_candidates: bool = typer.Option(False, "--all"),
-        limit: int = typer.Option(20, "--limit"),
+        project: str = typer.Option(".", "--project", "-p", help="Project directory (default: the current directory)."),
+        all_candidates: bool = typer.Option(False, "--all", help="Promote every candidate."),
+        limit: int = typer.Option(20, "--limit", help="Maximum number of items to return."),
     ):
         """Promote workbench facts into durable MagGraph memory."""
         from magent.context import promote_all_candidates, promote_candidate, promotion_candidates
@@ -91,7 +91,7 @@ def register_memory_commands(
         ttl_days: int = typer.Option(45, "--ttl-days", help="Age at which session summaries decay."),
         threshold: float = typer.Option(0.86, "--similarity", help="Duplicate similarity threshold."),
         include_stale: bool = typer.Option(False, "--stale", help="Also remove decayed nodes."),
-        json_output: bool = typer.Option(False, "--json"),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
     ):
         """Find (and optionally remove) duplicate and stale memory nodes."""
         from magent.memory_hygiene import run_hygiene
@@ -134,11 +134,11 @@ def register_memory_commands(
     def memory_inbox_cmd(
         action: str = typer.Argument("list", help="list, accept, reject, or edit"),
         candidate_id: str | None = typer.Argument(None),
-        project: str = typer.Option(".", "--project", "-p"),
-        limit: int = typer.Option(30, "--limit", "-n"),
-        reason: str = typer.Option("", "--reason"),
-        title: str = typer.Option("", "--title"),
-        body: str = typer.Option("", "--body"),
+        project: str = typer.Option(".", "--project", "-p", help="Project directory (default: the current directory)."),
+        limit: int = typer.Option(30, "--limit", "-n", help="Maximum number of items to return."),
+        reason: str = typer.Option("", "--reason", help="Reason recorded when rejecting a candidate."),
+        title: str = typer.Option("", "--title", help="New title when editing a candidate."),
+        body: str = typer.Option("", "--body", help="New body when editing a candidate."),
         force: bool = typer.Option(False, "--force", help="Accept after reviewing a duplicate/conflict warning."),
         json_output: bool = typer.Option(True, "--json/--no-json", help="Emit JSON output."),
     ):
@@ -194,7 +194,7 @@ def register_memory_commands(
     def memory_merge_cmd(
         target_id: str = typer.Argument(...),
         source_id: str = typer.Argument(...),
-        preview: bool = typer.Option(False, "--preview"),
+        preview: bool = typer.Option(False, "--preview", help="Show the merge without changing memory."),
     ):
         """Merge source memory node into target and delete source."""
         mgr, _ = _get_memory_manager()
@@ -205,7 +205,7 @@ def register_memory_commands(
     @memory_app.command("suppress")
     def memory_suppress_cmd(
         node_id: str = typer.Argument(...),
-        reason: str = typer.Option("", "--reason", "-r"),
+        reason: str = typer.Option("", "--reason", "-r", help="Why the node is suppressed."),
     ):
         """Mark a memory node as suppressed."""
         mgr, _ = _get_memory_manager()
@@ -336,8 +336,8 @@ def register_memory_commands(
     @memory_app.command("graph")
     def memory_graph_cmd(
         query: str = typer.Option("", "--query", "-q", help="Optional graph search query."),
-        limit: int = typer.Option(100, "--limit", "-n"),
-        user: str | None = typer.Option(None, "--user", "-u"),
+        limit: int = typer.Option(100, "--limit", "-n", help="Maximum number of items to return."),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
     ):
         """Return a compact JSON memory graph view for desktop integrations."""
         from magent.desktop_api import memory_graph
@@ -351,7 +351,7 @@ def register_memory_commands(
             "last", help="Execution task id, or 'last' for the newest run that used memory."
         ),
         json_output: bool = typer.Option(False, "--json", help="Emit JSON for desktop clients."),
-        user: str | None = typer.Option(None, "--user", "-u"),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
     ):
         """Show which memories a run recalled: node ids, scores, tokens, truncation.
 
@@ -376,7 +376,7 @@ def register_memory_commands(
     @memory_app.command("node")
     def memory_node_cmd(
         node_id: str = typer.Argument(...),
-        user: str | None = typer.Option(None, "--user", "-u"),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
     ):
         """Return one memory node as JSON with nearby traversal context."""
         from magent.desktop_api import memory_node
@@ -394,7 +394,7 @@ def register_memory_commands(
         body_file: str = typer.Option("", "--body-file", help="Read replacement Markdown body from a file."),
         links_json: str = typer.Option("", "--links-json", help="Optional JSON array of links to preserve/add."),
         preview: bool = typer.Option(False, "--preview", help="Preview hashes and size changes without writing."),
-        user: str | None = typer.Option(None, "--user", "-u"),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
     ):
         """Update a memory node body for desktop integrations."""
         from pathlib import Path
@@ -423,7 +423,7 @@ def register_memory_commands(
     @memory_app.command("search")
     def memory_search(
         query: str = typer.Argument(..., help="Search query"),
-        limit: int = typer.Option(10, "--limit", "-n"),
+        limit: int = typer.Option(10, "--limit", "-n", help="Maximum number of items to return."),
         mode: str = typer.Option("hybrid", "--mode", help="keyword, semantic, or hybrid"),
         keyword: bool = typer.Option(False, "--keyword", help="Force keyword search"),
         semantic: bool = typer.Option(False, "--semantic", help="Force semantic search"),
@@ -454,7 +454,7 @@ def register_memory_commands(
         operations_json: str = typer.Option("", "--operations-json", help="JSON array of reviewed operations."),
         operations_file: str = typer.Option("", "--operations-file", help="Read operations JSON from a file."),
         preview: bool = typer.Option(False, "--preview", help="Validate without changing memory."),
-        user: str | None = typer.Option(None, "--user", "-u"),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
     ):
         """Preview or apply reviewed memory update/suppress/merge operations."""
         from pathlib import Path
@@ -489,7 +489,7 @@ def register_memory_commands(
 
 
     @memory_semantic_app.command("reset")
-    def memory_semantic_reset_cmd(yes: bool = typer.Option(False, "--yes", "-y")):
+    def memory_semantic_reset_cmd(yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt.")):
         """Reset the semantic memory sidecar index."""
         mgr, _ = _get_memory_manager()
         if not yes:
@@ -520,7 +520,7 @@ def register_memory_commands(
     @memory_app.command("traverse")
     def memory_traverse(
         node_id: str = typer.Argument(...),
-        depth: int = typer.Option(2, "--depth", "-d"),
+        depth: int = typer.Option(2, "--depth", "-d", help="How many links to follow."),
     ):
         """Traverse the memory graph from a node."""
         mgr, _ = _get_memory_manager()
@@ -531,7 +531,7 @@ def register_memory_commands(
     @memory_app.command("delete")
     def memory_delete(
         node_id: str = typer.Argument(...),
-        yes: bool = typer.Option(False, "--yes", "-y"),
+        yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
     ):
         """Delete a memory node."""
         mgr, _ = _get_memory_manager()
@@ -548,8 +548,8 @@ def register_memory_commands(
 
     @memory_app.command("export")
     def memory_export(
-        out: str | None = typer.Option(None, "--out", "-o"),
-        fmt: str = typer.Option("json", "--format", "-f"),
+        out: str | None = typer.Option(None, "--out", "-o", help="Write the export to this file instead of printing it."),
+        fmt: str = typer.Option("json", "--format", "-f", help="Export format."),
     ):
         """Export the memory graph to JSON."""
         import json as json_mod
@@ -565,7 +565,7 @@ def register_memory_commands(
 
 
     @memory_app.command("reset")
-    def memory_reset(yes: bool = typer.Option(False, "--yes", "-y")):
+    def memory_reset(yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt.")):
         """Reset (delete) all memory nodes for the current user."""
         username = _require_user()
         if not yes:
@@ -587,7 +587,7 @@ def register_memory_commands(
     @memory_app.command("log")
     def memory_log(
         limit: int = typer.Option(20, "--limit", "-n", help="Max sessions to show"),
-        user: str | None = typer.Option(None, "--user", "-u"),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
     ):
         """Show recent session logs."""
         from magent.logging import list_session_logs
@@ -658,7 +658,7 @@ def register_memory_commands(
     @memory_app.command("sync")
     def memory_sync(
         action: str = typer.Argument(..., help="push|pull|status"),
-        message: str = typer.Option("MagAgent memory sync", "--message", "-m"),
+        message: str = typer.Option("MagAgent memory sync", "--message", "-m", help="Git commit message for the sync."),
     ):
         """Run MagGraph Git sync for the current user's memory graph."""
         import shutil
@@ -685,10 +685,10 @@ def register_memory_commands(
     @memory_app.command("configure")
     def memory_configure_cmd(
         mode: str = typer.Option("", "--mode", help="auto, inbox-first, or manual"),
-        semantic: bool | None = typer.Option(None, "--semantic/--no-semantic"),
-        write_every: int | None = typer.Option(None, "--write-every"),
-        extraction_provider: str = typer.Option("", "--extraction-provider"),
-        extraction_model: str = typer.Option("", "--extraction-model"),
+        semantic: bool | None = typer.Option(None, "--semantic/--no-semantic", help="Turn semantic memory on or off."),
+        write_every: int | None = typer.Option(None, "--write-every", help="Extract memories every N turns."),
+        extraction_provider: str = typer.Option("", "--extraction-provider", help="Provider used to extract memories."),
+        extraction_model: str = typer.Option("", "--extraction-model", help="Model used to extract memories."),
     ):
         """Configure memory behavior without editing profile.toml."""
         from magent.config_ux import configure_memory

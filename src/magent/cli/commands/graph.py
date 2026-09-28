@@ -45,7 +45,11 @@ def register_graph_commands(
         return load_config(username) if username else None
 
     @graph_app.command("schema")
-    def schema_cmd(project: Path = typer.Option(Path("."), "--project", "-p")) -> None:
+    def schema_cmd(
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Return the versioned graph editor contract and local profiles."""
         from magent.agraph.authoring import authoring_contract
 
@@ -63,8 +67,12 @@ def register_graph_commands(
 
     @graph_app.command("preview")
     def preview_cmd(
-        input_path: str = typer.Option("-", "--input"),
-        project: Path = typer.Option(Path("."), "--project", "-p"),
+        input_path: str = typer.Option(
+            "-", "--input", help="JSON document to read ('-' for standard input)."
+        ),
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Validate and plan an unsaved graph supplied as JSON."""
         from magent.agraph.authoring import preview_graph
@@ -82,9 +90,17 @@ def register_graph_commands(
     @graph_app.command("apply")
     def apply_cmd(
         path: Path = typer.Argument(...),
-        input_path: str = typer.Option("-", "--input"),
-        project: Path = typer.Option(Path("."), "--project", "-p"),
-        expected_digest: str = typer.Option("", "--expected-digest"),
+        input_path: str = typer.Option(
+            "-", "--input", help="JSON document to read ('-' for standard input)."
+        ),
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        expected_digest: str = typer.Option(
+            "",
+            "--expected-digest",
+            help="The profile digest you last read; the change is refused if it differs.",
+        ),
     ) -> None:
         """Conflict-safely save a validated graph supplied as JSON."""
         from magent.agraph.authoring import save_graph
@@ -106,7 +122,9 @@ def register_graph_commands(
     @graph_app.command("generate-draft")
     def generate_draft_cmd(
         goal: str = typer.Argument(...),
-        project: Path = typer.Option(Path("."), "--project", "-p"),
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Return a generated graph draft without writing or running it."""
         from magent.agraph.authoring import generate_draft
@@ -117,7 +135,9 @@ def register_graph_commands(
     def rename_node_cmd(
         old_id: str = typer.Argument(...),
         new_id: str = typer.Argument(...),
-        input_path: str = typer.Option("-", "--input"),
+        input_path: str = typer.Option(
+            "-", "--input", help="JSON document to read ('-' for standard input)."
+        ),
     ) -> None:
         """Safely rename a node in an unsaved graph document."""
         from magent.agraph.authoring import rename_node
@@ -131,7 +151,9 @@ def register_graph_commands(
     def duplicate_node_cmd(
         node_id: str = typer.Argument(...),
         new_id: str = typer.Argument(...),
-        input_path: str = typer.Option("-", "--input"),
+        input_path: str = typer.Option(
+            "-", "--input", help="JSON document to read ('-' for standard input)."
+        ),
     ) -> None:
         """Duplicate a node while preserving its type-specific contract."""
         from magent.agraph.authoring import duplicate_node
@@ -144,9 +166,13 @@ def register_graph_commands(
     @graph_app.command("model-draft")
     def model_draft_cmd(
         goal: str = typer.Argument(...),
-        project: Path = typer.Option(Path("."), "--project", "-p"),
-        input_path: str = typer.Option("", "--input"),
-        instruction: str = typer.Option("", "--instruction"),
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        input_path: str = typer.Option(
+            "", "--input", help="Existing graph JSON to improve (default: start from the goal)."
+        ),
+        instruction: str = typer.Option("", "--instruction", help="What to generate or change."),
     ) -> None:
         """Generate or improve a graph through the configured planning model."""
         from magent.agraph.authoring import model_graph_draft
@@ -170,8 +196,8 @@ def register_graph_commands(
     @graph_app.command("validate")
     def validate_cmd(
         path: Path = typer.Argument(..., exists=True, dir_okay=False),
-        strict: bool = typer.Option(False, "--strict"),
-        json_output: bool = typer.Option(False, "--json"),
+        strict: bool = typer.Option(False, "--strict", help="Treat warnings as failures."),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
     ) -> None:
         """Validate an AGS JSON or YAML document."""
         report = validate_graph(path, strict=strict)
@@ -193,8 +219,10 @@ def register_graph_commands(
     @graph_app.command("plan")
     def plan_cmd(
         path: Path = typer.Argument(..., exists=True, dir_okay=False),
-        json_output: bool = typer.Option(False, "--json"),
-        project: Path = typer.Option(Path("."), "--project", "-p"),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
         agent: str = typer.Option("", "--agent", help="Preview this run-default OAP profile."),
     ) -> None:
         """Preview topology, routing tiers, gates, parallelism, and cost."""
@@ -277,8 +305,12 @@ def register_graph_commands(
     @graph_app.command("generate")
     def generate_cmd(
         goal: str = typer.Argument(...),
-        project: Path = typer.Option(Path("."), "--project", "-p"),
-        output: Path = typer.Option(Path("plan.agraph.yaml"), "--out", "-o"),
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        output: Path = typer.Option(
+            Path("plan.agraph.yaml"), "--out", "-o", help="Where to write the graph."
+        ),
     ) -> None:
         """Generate a conservative, strictly valid graph from a goal."""
         path, report = generate_to_file(goal, output, project=project)
@@ -293,7 +325,9 @@ def register_graph_commands(
     @graph_app.command("export-plan")
     def export_plan_cmd(
         plan_id: str = typer.Argument(...),
-        output: Path = typer.Option(Path("plan.agraph.yaml"), "--out", "-o"),
+        output: Path = typer.Option(
+            Path("plan.agraph.yaml"), "--out", "-o", help="Where to write the graph."
+        ),
     ) -> None:
         """Export an existing MagAgent plan as an AGS document."""
         plan = next((item for item in store().read("plans", []) if item.get("id") == plan_id), None)
@@ -318,8 +352,12 @@ def register_graph_commands(
     @graph_app.command("export-recipe")
     def export_recipe_cmd(
         name: str = typer.Argument(...),
-        output: Path = typer.Option(Path("recipe-fragment.json"), "--out", "-o"),
-        project: Path = typer.Option(Path("."), "--project", "-p"),
+        output: Path = typer.Option(
+            Path("recipe-fragment.json"), "--out", "-o", help="Where to write the fragment."
+        ),
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Export a reusable recipe as an AGS subgraph fragment."""
         from magent.recipes import recipe_to_agraph_fragment
@@ -340,13 +378,17 @@ def register_graph_commands(
     @graph_app.command("run")
     def run_cmd(
         path: Path = typer.Argument(..., exists=True, dir_okay=False),
-        project: Path = typer.Option(Path("."), "--project", "-p"),
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
         params_json: str = typer.Option("{}", "--params", help="Graph parameters as JSON."),
-        dry_run: bool = typer.Option(False, "--dry-run"),
+        dry_run: bool = typer.Option(
+            False, "--dry-run", help="Validate and plan the graph without running it."
+        ),
         yes: bool = typer.Option(
             False, "--yes", help="Approve interactive graph gates non-interactively."
         ),
-        json_output: bool = typer.Option(False, "--json"),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
         jsonl: bool = typer.Option(
             False, "--jsonl", help="Stream magent.graph-event.v1 JSON lines."
         ),
@@ -499,9 +541,11 @@ def register_graph_commands(
     @graph_app.command("status")
     def status_cmd(
         run_id: str = typer.Argument(...),
-        json_output: bool = typer.Option(False, "--json"),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
         jsonl: bool = typer.Option(False, "--jsonl", help="Write lifecycle events as JSON lines."),
-        event_limit: int = typer.Option(500, "--event-limit", min=1, max=5000),
+        event_limit: int = typer.Option(
+            500, "--event-limit", min=1, max=5000, help="Maximum number of events to include."
+        ),
     ) -> None:
         """Show a reconnectable graph status snapshot with job blockers and summaries."""
         from magent.agraph.status import graph_status
@@ -538,19 +582,37 @@ def register_graph_commands(
     @graph_app.command("resume")
     def resume_cmd(
         run_id: str = typer.Argument(...),
-        path: Path | None = typer.Option(None, "--file", exists=True, dir_okay=False),
-        project: Path = typer.Option(Path("."), "--project", "-p"),
-        force: bool = typer.Option(False, "--force"),
-        yes: bool = typer.Option(False, "--yes"),
-        execution_task_id: str = typer.Option("", "--execution-task-id"),
-        approve_gates: str = typer.Option("", "--approve-gates"),
+        path: Path | None = typer.Option(
+            None,
+            "--file",
+            exists=True,
+            dir_okay=False,
+            help="Graph file to resume against (default: the run's source).",
+        ),
+        project: Path = typer.Option(
+            Path("."), "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+        force: bool = typer.Option(
+            False,
+            "--force",
+            help="Resume even though the graph changed since the run (digest mismatch).",
+        ),
+        yes: bool = typer.Option(False, "--yes", help="Approve graph gates without asking."),
+        execution_task_id: str = typer.Option(
+            "", "--execution-task-id", help="Attach the run to an existing durable task."
+        ),
+        approve_gates: str = typer.Option(
+            "", "--approve-gates", help="Comma-separated reviewed gate node ids."
+        ),
         retry_nodes: str = typer.Option(
             "",
             "--retry-nodes",
             help="Comma-separated failed job ids to retry with their dependents.",
         ),
-        json_output: bool = typer.Option(False, "--json"),
-        jsonl: bool = typer.Option(False, "--jsonl"),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
+        jsonl: bool = typer.Option(
+            False, "--jsonl", help="Stream magent.graph-event.v1 JSON lines."
+        ),
         approval_stdio: bool = typer.Option(
             False,
             "--approval-stdio",

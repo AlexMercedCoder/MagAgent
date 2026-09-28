@@ -12,7 +12,7 @@ console = Console()
 
 def register_config_commands(config_app: typer.Typer) -> None:
     @config_app.command("ux")
-    def config_ux_cmd(user: str | None = typer.Option(None, "--user", "-u")) -> None:
+    def config_ux_cmd(user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user).")) -> None:
         """Show a friendly control-center summary for common configuration UX."""
         from magent.config import get_current_user, load_config
 
@@ -39,7 +39,7 @@ def register_config_commands(config_app: typer.Typer) -> None:
 
     @config_app.command("get")
     def config_get_cmd(
-        user: str | None = typer.Option(None, "--user", "-u"),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
         raw: bool = typer.Option(False, "--raw", help="Include redacted raw TOML text."),
     ) -> None:
         """Return machine-readable redacted config for desktop integrations."""
@@ -49,7 +49,7 @@ def register_config_commands(config_app: typer.Typer) -> None:
 
     @config_app.command("schema")
     def config_schema_cmd(
-        user: str | None = typer.Option(None, "--user", "-u"),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
         defaults: bool = typer.Option(
             False, "--defaults", help="Show generated field metadata and defaults instead."
         ),
@@ -73,7 +73,7 @@ def register_config_commands(config_app: typer.Typer) -> None:
         path: str = typer.Argument(..., help="Dot-path config key to set."),
         value: str = typer.Argument(..., help="JSON value or string value."),
         scope: str = typer.Option("global", "--scope", help="global or user"),
-        user: str | None = typer.Option(None, "--user", "-u"),
+        user: str | None = typer.Option(None, "--user", "-u", help="MagAgent user (default: the active user)."),
     ) -> None:
         """Set a machine-readable config value without hand-editing TOML."""
         from magent.desktop_api import config_set, parse_json_value
@@ -137,7 +137,7 @@ def register_config_commands(config_app: typer.Typer) -> None:
             raise typer.Exit(1)
 
     @config_app.command("proposals")
-    def config_proposals_cmd(status: str = typer.Option("pending", "--status")) -> None:
+    def config_proposals_cmd(status: str = typer.Option("pending", "--status", help="Only show items with this status.")) -> None:
         """List config proposals."""
         from magent.cli.command_context import store
         from magent.config_proposals import list_config_proposals

@@ -200,7 +200,9 @@ def team_reject_cmd(
 
 @team_app.command("reviews")
 def team_reviews_cmd(
-    limit: int = typer.Option(20, "--limit", "-n"), name: str = NAME, json_output: bool = JSON
+    limit: int = typer.Option(20, "--limit", "-n", help="Maximum number of items to return."),
+    name: str = NAME,
+    json_output: bool = JSON,
 ) -> None:
     """Show recent review decisions from the team's REVIEWS.jsonl."""
     team = _team(name)

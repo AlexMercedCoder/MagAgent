@@ -18,8 +18,10 @@ def register_lsp_commands(lsp_app: typer.Typer) -> None:
 
     @lsp_app.command("symbols")
     def lsp_symbols_cmd(
-        query: str = typer.Option("", "--query", "-q"),
-        project: str = typer.Option(".", "--project", "-p"),
+        query: str = typer.Option("", "--query", "-q", help="Only symbols matching this text."),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Show symbols using LSP when available, with AST fallback."""
         from magent.lsp import lsp_symbols
@@ -27,7 +29,11 @@ def register_lsp_commands(lsp_app: typer.Typer) -> None:
         console.print_json(data=lsp_symbols(project, query=query))
 
     @lsp_app.command("diagnostics")
-    def lsp_diagnostics_cmd(project: str = typer.Option(".", "--project", "-p")) -> None:
+    def lsp_diagnostics_cmd(
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
+    ) -> None:
         """Show diagnostics using available local tooling."""
         from magent.lsp import lsp_diagnostics
 
@@ -38,7 +44,10 @@ def register_lsp_commands(lsp_app: typer.Typer) -> None:
 
     @lsp_app.command("definition")
     def lsp_definition_cmd(
-        symbol: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+        symbol: str = typer.Argument(...),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Find symbol definitions."""
         from magent.lsp import lsp_definition
@@ -47,7 +56,10 @@ def register_lsp_commands(lsp_app: typer.Typer) -> None:
 
     @lsp_app.command("references")
     def lsp_references_cmd(
-        symbol: str = typer.Argument(...), project: str = typer.Option(".", "--project", "-p")
+        symbol: str = typer.Argument(...),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Find text references to a symbol."""
         from magent.lsp import lsp_references
@@ -57,9 +69,11 @@ def register_lsp_commands(lsp_app: typer.Typer) -> None:
     @lsp_app.command("hover")
     def lsp_hover_cmd(
         path: str = typer.Argument(...),
-        line: int = typer.Option(..., "--line", min=1),
-        column: int = typer.Option(..., "--column", min=1),
-        project: str = typer.Option(".", "--project", "-p"),
+        line: int = typer.Option(..., "--line", min=1, help="Line number (1-based)."),
+        column: int = typer.Option(..., "--column", min=1, help="Column number (1-based)."),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Return hover information from a connected language server."""
         from magent.lsp import lsp_hover
@@ -70,9 +84,11 @@ def register_lsp_commands(lsp_app: typer.Typer) -> None:
     def lsp_rename_cmd(
         path: str = typer.Argument(...),
         new_name: str = typer.Argument(...),
-        line: int = typer.Option(..., "--line", min=1),
-        column: int = typer.Option(..., "--column", min=1),
-        project: str = typer.Option(".", "--project", "-p"),
+        line: int = typer.Option(..., "--line", min=1, help="Line number (1-based)."),
+        column: int = typer.Option(..., "--column", min=1, help="Column number (1-based)."),
+        project: str = typer.Option(
+            ".", "--project", "-p", help="Project directory (default: the current directory)."
+        ),
     ) -> None:
         """Preview a capability-aware LSP workspace rename edit."""
         from magent.lsp import lsp_rename

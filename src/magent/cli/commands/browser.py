@@ -15,7 +15,9 @@ def register_browser_commands(browser_app: typer.Typer, webmcp_app: typer.Typer)
     @browser_app.command("snapshot")
     def browser_snapshot_cmd(
         url: str = typer.Argument(...),
-        wait_ms: int = typer.Option(500, "--wait-ms"),
+        wait_ms: int = typer.Option(
+            500, "--wait-ms", help="Milliseconds to wait after the page loads."
+        ),
     ) -> None:
         """Capture title and text from a page using Playwright."""
         from magent.browser import browser_snapshot
@@ -25,8 +27,12 @@ def register_browser_commands(browser_app: typer.Typer, webmcp_app: typer.Typer)
     @browser_app.command("screenshot")
     def browser_screenshot_cmd(
         url: str = typer.Argument(...),
-        out: str = typer.Option("magent-browser.png", "--out", "-o"),
-        wait_ms: int = typer.Option(500, "--wait-ms"),
+        out: str = typer.Option(
+            "magent-browser.png", "--out", "-o", help="Where to save the screenshot."
+        ),
+        wait_ms: int = typer.Option(
+            500, "--wait-ms", help="Milliseconds to wait after the page loads."
+        ),
     ) -> None:
         """Capture a page screenshot using Playwright."""
         from magent.browser import browser_screenshot
@@ -125,7 +131,10 @@ def register_browser_commands(browser_app: typer.Typer, webmcp_app: typer.Typer)
 
     @webmcp_app.command("open")
     def webmcp_open_cmd(
-        url: str = typer.Argument("https://alexmerced.app"), wait_ms: int = 750
+        url: str = typer.Argument("https://alexmerced.app"),
+        wait_ms: int = typer.Option(
+            750, "--wait-ms", help="Milliseconds to wait for the page's tools to register."
+        ),
     ) -> None:
         """Open an allowlisted page and return its authoritative live tool registry."""
         from magent.browser import webmcp_inspect
@@ -140,9 +149,13 @@ def register_browser_commands(browser_app: typer.Typer, webmcp_app: typer.Typer)
     @webmcp_app.command("call")
     def webmcp_call_cmd(
         name: str = typer.Argument(...),
-        url: str = typer.Option("https://alexmerced.app", "--url"),
-        arguments: str = typer.Option("{}", "--arguments"),
-        registry_revision: str = typer.Option("", "--registry-revision"),
+        url: str = typer.Option(
+            "https://alexmerced.app", "--url", help="Page that provides the tool."
+        ),
+        arguments: str = typer.Option("{}", "--arguments", help="Tool arguments as a JSON object."),
+        registry_revision: str = typer.Option(
+            "", "--registry-revision", help="Tool registry revision you reviewed."
+        ),
         yes: bool = typer.Option(False, "--yes", help="Approve this direct invocation once."),
     ) -> None:
         """Call an exact discovered tool; agent sessions still provide approval enforcement."""

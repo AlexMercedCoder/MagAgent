@@ -53,7 +53,7 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
         console.print_json(data=provider_env_status())
 
     @provider_app.command("recommend")
-    def provider_recommend_cmd(goal: str = typer.Option("coding", "--goal", "-g")) -> None:
+    def provider_recommend_cmd(goal: str = typer.Option("coding", "--goal", "-g", help="What the model is for: coding, review, cheap, local, memory or research.")) -> None:
         """Recommend providers for coding, review, cheap, local, memory, or research."""
         from magent.config_ux import provider_recommend
 
@@ -139,7 +139,7 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
     def provider_ping_cmd(
         provider_id: str = typer.Argument(..., help="Provider id, e.g. openai."),
         model: str = typer.Option("", "--model", "-m", help="Model (default: catalog default)."),
-        max_tokens: int = typer.Option(16, "--max-tokens", min=1, max=16),
+        max_tokens: int = typer.Option(16, "--max-tokens", min=1, max=16, help="Output token cap for the single test call."),
         record: str = typer.Option("", "--record", help="Append the result to this JSON report."),
         json_output: bool = typer.Option(False, "--json", help="Emit JSON."),
     ) -> None:
@@ -182,7 +182,7 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
     @provider_app.command("conformance")
     def provider_conformance_cmd(
         record: bool = typer.Option(False, "--record", help="Rewrite the recorded fixture."),
-        json_output: bool = typer.Option(False, "--json"),
+        json_output: bool = typer.Option(False, "--json", help="Print machine-readable JSON."),
     ) -> None:
         """Check how MagAgent talks to each provider. Runs offline."""
         from magent.provider_conformance import conformance_matrix, record_fixture
@@ -224,7 +224,7 @@ def register_provider_ux_commands(provider_app: typer.Typer) -> None:
     @provider_app.command("recommend-model")
     def provider_recommend_model_cmd(
         provider_id: str = typer.Argument(..., help="Provider ID to inspect."),
-        goal: str = typer.Option("tool-use", "--goal", "-g"),
+        goal: str = typer.Option("tool-use", "--goal", "-g", help="What the model is for: coding, review, cheap, local, memory or research."),
     ) -> None:
         """Recommend a model for a provider and goal."""
         from magent.cli.command_context import require_user, store

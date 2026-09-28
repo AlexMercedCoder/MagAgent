@@ -25,7 +25,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -95,7 +95,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -111,7 +111,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "The profile digest you last read; the change is refused if it differs.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -164,7 +164,7 @@
        },
        {
         "default": "user",
-        "help": "",
+        "help": "Where to write the profile: user, universal, project or portable (.agents/).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -179,7 +179,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -225,7 +225,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Write the converted profile (default: preview only).",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -263,7 +263,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -279,7 +279,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "One-line description.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -294,7 +294,7 @@
        },
        {
         "default": "subagent",
-        "help": "",
+        "help": "How the profile is used: subagent, primary or all.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -309,7 +309,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Role instructions for the profile.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -324,7 +324,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Overwrite an existing profile with the same name.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -362,7 +362,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "The profile digest you last read; the change is refused if it differs.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -377,7 +377,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -431,7 +431,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -470,7 +470,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -509,7 +509,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -548,7 +548,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Where to write the profile; the extension picks YAML, JSON or Markdown.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -564,7 +564,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -618,7 +618,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -657,7 +657,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Name for the generated profile.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -672,7 +672,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Profile the draft should extend.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -687,7 +687,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -703,7 +703,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Draft for autonomous use (narrower permissions).",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -741,7 +741,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -780,7 +780,7 @@
        },
        {
         "default": "user",
-        "help": "",
+        "help": "Where to write the profile: user, universal, project or portable (.agents/).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -795,7 +795,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -811,7 +811,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Import under this name (rewrites metadata.name, so the digest changes).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -826,7 +826,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Preview the import without writing anything.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -849,7 +849,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -873,7 +873,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -912,7 +912,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -951,7 +951,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Reason recorded with the decision.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -966,7 +966,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1020,7 +1020,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "The profile digest you last read; the change is refused if it differs.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1035,7 +1035,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1051,7 +1051,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -1089,7 +1089,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1143,7 +1143,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1197,7 +1197,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1221,7 +1221,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1260,7 +1260,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1299,7 +1299,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1472,7 +1472,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Artifact kind, for example report or diagram.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1488,7 +1488,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Title.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1967,7 +1967,7 @@
        },
        {
         "default": "magent-browser.png",
-        "help": "",
+        "help": "Where to save the screenshot.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -1983,7 +1983,7 @@
        },
        {
         "default": 500,
-        "help": "",
+        "help": "Milliseconds to wait after the page loads.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2021,7 +2021,7 @@
        },
        {
         "default": 500,
-        "help": "",
+        "help": "Milliseconds to wait after the page loads.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2057,7 +2057,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Provider to check (default: the configured one).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2073,7 +2073,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Model name (default: the configured model).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2089,7 +2089,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -2112,7 +2112,7 @@
       "params": [
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -2146,7 +2146,7 @@
     "params": [
      {
       "default": true,
-      "help": "",
+      "help": "Print machine-readable JSON.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -2210,7 +2210,7 @@
       "params": [
        {
         "default": 20,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2264,7 +2264,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -2288,7 +2288,7 @@
       "params": [
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -2388,7 +2388,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -2452,7 +2452,7 @@
     "params": [
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -2523,7 +2523,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2547,7 +2547,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2586,7 +2586,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2625,7 +2625,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2756,7 +2756,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2802,7 +2802,7 @@
       "params": [
        {
         "default": "pending",
-        "help": "",
+        "help": "Only show items with this status.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2871,7 +2871,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2955,7 +2955,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -2986,7 +2986,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3049,7 +3049,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3065,7 +3065,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "The task to audit context for.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3081,7 +3081,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -3104,7 +3104,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3120,7 +3120,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "The task to map context for.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3202,7 +3202,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3218,7 +3218,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "When to run it (ISO time; default: now).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3256,7 +3256,7 @@
       "params": [
        {
         "default": "",
-        "help": "",
+        "help": "Only show items with this status.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3279,7 +3279,7 @@
       "params": [
        {
         "default": 1,
-        "help": "",
+        "help": "Maximum number of queued tasks to run.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3303,7 +3303,7 @@
       "params": [
        {
         "default": 1,
-        "help": "",
+        "help": "Maximum number of queued tasks to run.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3340,7 +3340,7 @@
     "params": [
      {
       "default": "magent-dashboard.html",
-      "help": "",
+      "help": "Where to write the dashboard HTML.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -3355,7 +3355,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Serve the dashboard over HTTP instead of writing a file.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -3370,7 +3370,7 @@
      },
      {
       "default": 7820,
-      "help": "",
+      "help": "Port for --serve.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -3385,7 +3385,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Open the dashboard in your browser.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -3433,7 +3433,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3502,7 +3502,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3556,7 +3556,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3595,7 +3595,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3633,7 +3633,7 @@
     "params": [
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -3696,7 +3696,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Write the Markdown to this file instead of printing it.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3720,7 +3720,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Write the Markdown to this file instead of printing it.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3744,7 +3744,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Write the Markdown to this file instead of printing it.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3805,7 +3805,7 @@
        },
        {
         "default": 8,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -3868,7 +3868,7 @@
     "params": [
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -3884,7 +3884,7 @@
      },
      {
       "default": null,
-      "help": "",
+      "help": "Write the brief to this file instead of printing it.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -3945,7 +3945,7 @@
     "params": [
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -4009,7 +4009,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4033,7 +4033,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4072,7 +4072,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4141,7 +4141,7 @@
       "params": [
        {
         "default": 20,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4180,7 +4180,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4271,7 +4271,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Keep each task's temporary workspace for inspection.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -4326,7 +4326,7 @@
       "params": [
        {
         "default": 50,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4342,7 +4342,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Only show events of this kind.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4357,7 +4357,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -4431,7 +4431,7 @@
        },
        {
         "default": "Cancelled by user",
-        "help": "",
+        "help": "Reason recorded in the task's event log.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4469,7 +4469,7 @@
        },
        {
         "default": "ask",
-        "help": "",
+        "help": "Task kind, for example ask, recipe or plan.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4484,7 +4484,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4500,7 +4500,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Session id to attach the task to.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4515,7 +4515,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Parent task id.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4530,7 +4530,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Model role used for planning.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4545,7 +4545,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Model role used for execution.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4560,7 +4560,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Permission mode for the task.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4598,7 +4598,7 @@
        },
        {
         "default": 0,
-        "help": "",
+        "help": "Only events after this sequence number.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4613,7 +4613,7 @@
        },
        {
         "default": 500,
-        "help": "",
+        "help": "Maximum number of events to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4667,7 +4667,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Only tasks for this project id.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4682,7 +4682,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Only children of this task id.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4697,7 +4697,7 @@
        },
        {
         "default": 100,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4736,7 +4736,7 @@
        },
        {
         "default": "Paused by user",
-        "help": "",
+        "help": "Reason recorded in the task's event log.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4774,7 +4774,7 @@
        },
        {
         "default": "Resumed by user",
-        "help": "",
+        "help": "Reason recorded in the task's event log.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4812,7 +4812,7 @@
        },
        {
         "default": "Retried by user",
-        "help": "",
+        "help": "Reason recorded in the task's event log.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4892,7 +4892,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "When to be reminded (free text or ISO time).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4950,7 +4950,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Bot token (prefer the platform's environment variable).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4980,7 +4980,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "User id allowed to talk to the bot (repeatable).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -4995,7 +4995,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Channel id the bot may answer in (repeatable).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5010,7 +5010,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Maximum messages per minute per user.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5025,7 +5025,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Seconds a turn may run before it is stopped.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5156,7 +5156,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -5266,7 +5266,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5305,7 +5305,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5329,7 +5329,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5345,7 +5345,7 @@
        },
        {
         "default": 20,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5361,7 +5361,7 @@
        },
        {
         "default": "open",
-        "help": "",
+        "help": "Only show items in this state: open, closed or all.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5399,7 +5399,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5423,7 +5423,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5439,7 +5439,7 @@
        },
        {
         "default": 20,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5455,7 +5455,7 @@
        },
        {
         "default": "open",
-        "help": "",
+        "help": "Only show items in this state: open, closed or all.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5478,7 +5478,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5532,7 +5532,7 @@
      },
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -5612,7 +5612,7 @@
      },
      {
       "default": 3,
-      "help": "",
+      "help": "Maximum verify-and-review loops.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -5627,7 +5627,7 @@
      },
      {
       "default": "cheap",
-      "help": "",
+      "help": "Model role for the verifier.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -5642,7 +5642,7 @@
      },
      {
       "default": "review",
-      "help": "",
+      "help": "Model role for the reviewer.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -5794,7 +5794,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Print machine-readable JSON.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -5910,7 +5910,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Print machine-readable JSON.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -5973,7 +5973,7 @@
        },
        {
         "default": "-",
-        "help": "",
+        "help": "JSON document to read ('-' for standard input).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -5988,7 +5988,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6004,7 +6004,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "The profile digest you last read; the change is refused if it differs.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6057,7 +6057,7 @@
        },
        {
         "default": "-",
-        "help": "",
+        "help": "JSON document to read ('-' for standard input).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6095,7 +6095,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Where to write the graph.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6157,7 +6157,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Where to write the fragment.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6173,7 +6173,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6212,7 +6212,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6228,7 +6228,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Where to write the graph.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6267,7 +6267,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6336,7 +6336,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6352,7 +6352,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Existing graph JSON to improve (default: start from the goal).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6367,7 +6367,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "What to generate or change.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6405,7 +6405,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -6420,7 +6420,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6459,7 +6459,7 @@
       "params": [
        {
         "default": "-",
-        "help": "",
+        "help": "JSON document to read ('-' for standard input).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6474,7 +6474,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6528,7 +6528,7 @@
        },
        {
         "default": "-",
-        "help": "",
+        "help": "JSON document to read ('-' for standard input).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6566,7 +6566,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Graph file to resume against (default: the run's source).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6581,7 +6581,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6597,7 +6597,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Resume even though the graph changed since the run (digest mismatch).",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -6612,7 +6612,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Approve graph gates without asking.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -6627,7 +6627,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Attach the run to an existing durable task.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6642,7 +6642,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Comma-separated reviewed gate node ids.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6672,7 +6672,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -6687,7 +6687,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Stream magent.graph-event.v1 JSON lines.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -6785,7 +6785,7 @@
        },
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -6816,7 +6816,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Validate and plan the graph without running it.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -6846,7 +6846,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -6944,7 +6944,7 @@
       "params": [
        {
         "default": "PosixPath",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7006,7 +7006,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -7036,7 +7036,7 @@
        },
        {
         "default": 500,
-        "help": "",
+        "help": "Maximum number of events to include.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7074,7 +7074,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Treat warnings as failures.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -7089,7 +7089,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -7143,7 +7143,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7159,7 +7159,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Overwrite an existing .magent/hooks.toml.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -7182,7 +7182,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7221,7 +7221,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7274,7 +7274,7 @@
        },
        {
         "default": "cli",
-        "help": "",
+        "help": "Where the item came from.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7297,7 +7297,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Only show items with this status.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7339,7 +7339,7 @@
     "params": [
      {
       "default": "",
-      "help": "",
+      "help": "Only show items with this status.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -7354,7 +7354,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Print machine-readable JSON.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -7440,7 +7440,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Tag for the note (repeatable).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7493,7 +7493,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7517,7 +7517,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7556,7 +7556,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Line number (1-based).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7571,7 +7571,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Column number (1-based).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7586,7 +7586,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7625,7 +7625,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7679,7 +7679,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Line number (1-based).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7694,7 +7694,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Column number (1-based).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7709,7 +7709,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7740,7 +7740,7 @@
       "params": [
        {
         "default": "",
-        "help": "",
+        "help": "Only symbols matching this text.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -7756,7 +7756,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8112,7 +8112,7 @@
       "params": [
        {
         "default": "Approve MagAgent memory updates",
-        "help": "",
+        "help": "Git commit message for the memory graph.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8181,7 +8181,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8220,7 +8220,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Turn semantic memory on or off.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -8236,7 +8236,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Extract memories every N turns.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8251,7 +8251,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Provider used to extract memories.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8266,7 +8266,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Model used to extract memories.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8304,7 +8304,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -8358,7 +8358,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8382,7 +8382,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Write the export to this file instead of printing it.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8398,7 +8398,7 @@
        },
        {
         "default": "json",
-        "help": "",
+        "help": "Export format.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8438,7 +8438,7 @@
        },
        {
         "default": 100,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8454,7 +8454,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8538,7 +8538,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -8591,7 +8591,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8607,7 +8607,7 @@
        },
        {
         "default": 30,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8623,7 +8623,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Reason recorded when rejecting a candidate.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8638,7 +8638,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "New title when editing a candidate.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8653,7 +8653,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "New body when editing a candidate.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8730,7 +8730,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8784,7 +8784,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Show the merge without changing memory.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -8822,7 +8822,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8876,7 +8876,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8892,7 +8892,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Promote every candidate.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -8907,7 +8907,7 @@
        },
        {
         "default": 20,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -8937,7 +8937,7 @@
       "params": [
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -8961,7 +8961,7 @@
       "params": [
        {
         "default": false,
-        "help": "",
+        "help": "Show the full diff.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -8999,7 +8999,7 @@
        },
        {
         "default": 10,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -9070,7 +9070,7 @@
         "params": [
          {
           "default": false,
-          "help": "",
+          "help": "Skip the confirmation prompt.",
           "hidden": false,
           "is_flag": true,
           "kind": "option",
@@ -9174,7 +9174,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Why the node is suppressed.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -9213,7 +9213,7 @@
        },
        {
         "default": "MagAgent memory sync",
-        "help": "",
+        "help": "Git commit message for the sync.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -9565,7 +9565,7 @@
         "params": [
          {
           "default": 20,
-          "help": "",
+          "help": "Maximum number of items to return.",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -9781,7 +9781,7 @@
        },
        {
         "default": 2,
-        "help": "",
+        "help": "How many links to follow.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -9942,7 +9942,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "MagAgent user (default: the active user).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -10087,7 +10087,7 @@
       "params": [
        {
         "default": "review",
-        "help": "",
+        "help": "Model role used for planning.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -10102,7 +10102,7 @@
        },
        {
         "default": "coding",
-        "help": "",
+        "help": "Model role used for execution.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -10125,7 +10125,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Provider id (default: the configured provider).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -10141,7 +10141,7 @@
        },
        {
         "default": "tool-use",
-        "help": "",
+        "help": "Kind of work, for example tool-use or chat.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -10236,7 +10236,7 @@
     "params": [
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -10283,7 +10283,7 @@
     "params": [
      {
       "default": "coding-local",
-      "help": "",
+      "help": "Configuration profile to apply.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -10298,7 +10298,7 @@
      },
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -10355,7 +10355,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -10447,7 +10447,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -10471,7 +10471,7 @@
       "params": [
        {
         "default": "",
-        "help": "",
+        "help": "Name for the saved patch.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -10486,7 +10486,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -10527,7 +10527,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -10581,7 +10581,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -10597,7 +10597,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -10620,7 +10620,7 @@
       "params": [
        {
         "default": 3,
-        "help": "",
+        "help": "Number of cold-start samples to time.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -11144,7 +11144,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Also run the plan's suggested checks.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -11159,7 +11159,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Show what would happen without changing anything.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -11189,7 +11189,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Keep the sandbox afterwards for inspection.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -11219,7 +11219,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -11258,7 +11258,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -11304,7 +11304,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Shell command to include as a plan step.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -11373,7 +11373,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Skip the confirmation prompt.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -11412,7 +11412,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -11428,7 +11428,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Shell command to include as a plan step.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -11444,7 +11444,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Do not include the current git diff.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -11467,7 +11467,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Only show items with this status.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -11528,7 +11528,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -11567,7 +11567,7 @@
        },
        {
         "default": "worktree",
-        "help": "",
+        "help": "Sandbox kind: worktree, copy or container.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -11582,7 +11582,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Also run the plan's suggested checks.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -11597,7 +11597,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Show what would happen without changing anything.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -11612,7 +11612,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Keep the sandbox afterwards for inspection.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -11627,7 +11627,7 @@
        },
        {
         "default": "python:3.12",
-        "help": "",
+        "help": "Container image for --mode container.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -11722,7 +11722,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Also run the plan's suggested checks.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -11737,7 +11737,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Show what would happen without changing anything.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -11767,7 +11767,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Keep the sandbox afterwards for inspection.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -11797,7 +11797,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Skip the confirmation prompt.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -11836,7 +11836,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Skip the confirmation prompt.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -11875,7 +11875,7 @@
      },
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -11891,7 +11891,7 @@
      },
      {
       "default": null,
-      "help": "",
+      "help": "Shell command to include as a plan step.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -11907,7 +11907,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Do not include the current git diff.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -11930,7 +11930,7 @@
     "params": [
      {
       "default": null,
-      "help": "",
+      "help": "Only show items with this status.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -11991,7 +11991,7 @@
      },
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -12030,7 +12030,7 @@
      },
      {
       "default": "worktree",
-      "help": "",
+      "help": "Sandbox kind: worktree, copy or container.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -12045,7 +12045,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Also run the plan's suggested checks.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -12060,7 +12060,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Show what would happen without changing anything.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -12075,7 +12075,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Keep the sandbox afterwards for inspection.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -12090,7 +12090,7 @@
      },
      {
       "default": "python:3.12",
-      "help": "",
+      "help": "Container image for --mode container.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -12245,7 +12245,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -12286,7 +12286,7 @@
          },
          {
           "default": "",
-          "help": "",
+          "help": "Name for the plugin pack.",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -12301,7 +12301,7 @@
          },
          {
           "default": false,
-          "help": "",
+          "help": "Replace an installed plugin with the same name.",
           "hidden": false,
           "is_flag": true,
           "kind": "option",
@@ -12339,7 +12339,7 @@
          },
          {
           "default": "",
-          "help": "",
+          "help": "Name for the plugin pack.",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -12354,7 +12354,7 @@
          },
          {
           "default": false,
-          "help": "",
+          "help": "Replace an installed plugin with the same name.",
           "hidden": false,
           "is_flag": true,
           "kind": "option",
@@ -12392,7 +12392,7 @@
          },
          {
           "default": "",
-          "help": "",
+          "help": "Name for the plugin pack.",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -12407,7 +12407,7 @@
          },
          {
           "default": false,
-          "help": "",
+          "help": "Replace an installed plugin with the same name.",
           "hidden": false,
           "is_flag": true,
           "kind": "option",
@@ -12445,7 +12445,7 @@
          },
          {
           "default": "",
-          "help": "",
+          "help": "Name for the plugin pack.",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -12460,7 +12460,7 @@
          },
          {
           "default": false,
-          "help": "",
+          "help": "Replace an installed plugin with the same name.",
           "hidden": false,
           "is_flag": true,
           "kind": "option",
@@ -12498,7 +12498,7 @@
          },
          {
           "default": "",
-          "help": "",
+          "help": "Name for the plugin pack.",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -12513,7 +12513,7 @@
          },
          {
           "default": false,
-          "help": "",
+          "help": "Replace an installed plugin with the same name.",
           "hidden": false,
           "is_flag": true,
           "kind": "option",
@@ -12565,7 +12565,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Install under this name instead of the manifest's (unsigned packs only).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -12580,7 +12580,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Replace an installed plugin with the same name.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -12672,7 +12672,7 @@
       "params": [
        {
         "default": true,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -12751,7 +12751,7 @@
          },
          {
           "default": "",
-          "help": "",
+          "help": "Name for the plugin pack.",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -12766,7 +12766,7 @@
          },
          {
           "default": false,
-          "help": "",
+          "help": "Replace an installed plugin with the same name.",
           "hidden": false,
           "is_flag": true,
           "kind": "option",
@@ -12855,7 +12855,7 @@
          },
          {
           "default": ".",
-          "help": "",
+          "help": "Project directory (default: the current directory).",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -13019,7 +13019,7 @@
          },
          {
           "default": "",
-          "help": "",
+          "help": "Key id shown to users (default: the registry name).",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -13100,7 +13100,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Where to write the index (default: print it).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13124,7 +13124,7 @@
       "params": [
        {
         "default": "",
-        "help": "",
+        "help": "Where to write the schema (default: print it).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13286,7 +13286,7 @@
          },
          {
           "default": "",
-          "help": "",
+          "help": "Why this key is trusted.",
           "hidden": false,
           "is_flag": false,
           "kind": "option",
@@ -13498,7 +13498,7 @@
       "params": [
        {
         "default": false,
-        "help": "",
+        "help": "Reset the installation default instead of the user override.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -13521,7 +13521,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13560,7 +13560,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Name for the generated profile.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13605,7 +13605,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13681,7 +13681,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13720,7 +13720,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13762,7 +13762,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13801,7 +13801,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13825,7 +13825,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13849,7 +13849,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13873,7 +13873,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13897,7 +13897,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13913,7 +13913,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Overwrite existing project config and playbook files.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -13943,7 +13943,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -13982,7 +13982,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14006,7 +14006,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14030,7 +14030,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14046,7 +14046,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Overwrite existing project config and playbook files.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -14136,7 +14136,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -14293,7 +14293,7 @@
        },
        {
         "default": 16,
-        "help": "",
+        "help": "Output token cap for the single test call.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14346,7 +14346,7 @@
       "params": [
        {
         "default": "coding",
-        "help": "",
+        "help": "What the model is for: coding, review, cheap, local, memory or research.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14385,7 +14385,7 @@
        },
        {
         "default": "tool-use",
-        "help": "",
+        "help": "What the model is for: coding, review, cheap, local, memory or research.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14424,7 +14424,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Model name (default: the configured model).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14440,7 +14440,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Environment variable that holds the key.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14455,7 +14455,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "API key (prefer `magent auth add --api-key-stdin`).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14470,7 +14470,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Keyring account that holds the key.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14485,7 +14485,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Base URL for an OpenAI-compatible endpoint.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14616,7 +14616,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Model name (default: the configured model).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14770,7 +14770,7 @@
     "params": [
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -14801,7 +14801,7 @@
      },
      {
       "default": null,
-      "help": "",
+      "help": "Provider id (default: the configured provider).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -14816,7 +14816,7 @@
      },
      {
       "default": null,
-      "help": "",
+      "help": "Model name (default: the configured model).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -14856,7 +14856,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14910,7 +14910,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14979,7 +14979,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -14995,7 +14995,7 @@
        },
        {
         "default": "worktree",
-        "help": "",
+        "help": "Sandbox kind: worktree, copy or container.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15010,7 +15010,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Also run the plan's suggested checks.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -15025,7 +15025,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Keep the sandbox afterwards for inspection.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -15040,7 +15040,7 @@
        },
        {
         "default": "python:3.12",
-        "help": "",
+        "help": "Container image for --mode container.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15078,7 +15078,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "One-line description of the recipe.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15148,7 +15148,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15188,7 +15188,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15212,7 +15212,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15228,7 +15228,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Eval report to include.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15243,7 +15243,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Memory eval report to include.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15258,7 +15258,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Performance report to include.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15273,7 +15273,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Supply-chain report to include.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15288,7 +15288,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Measured test coverage, in percent.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15303,7 +15303,7 @@
        },
        {
         "default": 70,
-        "help": "",
+        "help": "Minimum coverage, in percent.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15333,7 +15333,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "URL of the CI run that produced the evidence.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15348,7 +15348,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Release artifact to include (repeatable).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15363,7 +15363,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Documented exception to record (repeatable).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15378,7 +15378,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Where to write the evidence bundle (default: print it).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15402,7 +15402,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15418,7 +15418,7 @@
        },
        {
         "default": "HEAD~5",
-        "help": "",
+        "help": "Git revision to start from.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15441,7 +15441,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15457,7 +15457,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Release artifact to include (repeatable).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15472,7 +15472,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Dependency audit report to include.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15487,7 +15487,7 @@
        },
        {
         "default": "dist/release-evidence",
-        "help": "",
+        "help": "Directory for the generated evidence.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -15523,7 +15523,7 @@
     "params": [
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -15578,7 +15578,7 @@
      },
      {
       "default": 6,
-      "help": "",
+      "help": "Maximum number of sources to read.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -15610,7 +15610,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Print machine-readable JSON.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -15743,7 +15743,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Print machine-readable JSON.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -15766,7 +15766,7 @@
     "params": [
      {
       "default": "HEAD",
-      "help": "",
+      "help": "Git revision to diff against.",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -15781,7 +15781,7 @@
      },
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -15905,7 +15905,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "When to run it, for example 'daily 09:00'.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16000,7 +16000,7 @@
      },
      {
       "default": null,
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -16198,7 +16198,7 @@
        },
        {
         "default": 200,
-        "help": "",
+        "help": "Maximum number of items to return.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16267,7 +16267,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -16305,7 +16305,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Also list sessions that have stopped answering.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -16343,7 +16343,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Accept messages in sessions with nobody watching.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -16382,7 +16382,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -16496,7 +16496,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Ask the peer to run this as a task.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16511,7 +16511,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -16586,7 +16586,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16625,7 +16625,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16664,7 +16664,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16723,7 +16723,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Print machine-readable JSON.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -16748,7 +16748,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Maximum sub-agents per session.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16763,7 +16763,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Maximum sub-agents running at once.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16778,7 +16778,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Default model role for sub-agents.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16793,7 +16793,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Default sandbox for sub-agents.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16831,7 +16831,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Provider id (default: the configured provider).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16847,7 +16847,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Model name (default: the configured model).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16863,7 +16863,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -16968,7 +16968,7 @@
       "params": [
        {
         "default": true,
-        "help": "",
+        "help": "Print machine-readable JSON.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -16992,7 +16992,7 @@
       "params": [
        {
         "default": "~/.config/magent",
-        "help": "",
+        "help": "MagAgent state directory to operate on.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17022,7 +17022,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Where to write the backup (default: next to the state).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17060,7 +17060,7 @@
        },
        {
         "default": "~/.config/magent",
-        "help": "",
+        "help": "MagAgent state directory to operate on.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17155,7 +17155,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17171,7 +17171,7 @@
        },
        {
         "default": "normal",
-        "help": "",
+        "help": "Priority: low, normal or high.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17217,7 +17217,7 @@
       "params": [
        {
         "default": null,
-        "help": "",
+        "help": "Only show items with this status.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17232,7 +17232,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17293,7 +17293,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17317,7 +17317,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17356,7 +17356,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17395,7 +17395,7 @@
        },
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17432,7 +17432,7 @@
     "params": [
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -17588,13 +17588,13 @@
     "short_help": ""
    },
    "ui": {
-    "help": "Serve the local operations UI.",
+    "help": "Serve the local web UI.\n\nPrints the address to open (it carries a one-time launch token) and keeps\nserving until Ctrl+C. Output is plain text with no colour codes, so it can\nbe read by scripts and logs; use --json for a machine-readable line.",
     "hidden": false,
     "panel": "Data & Local UI",
     "params": [
      {
       "default": ".",
-      "help": "",
+      "help": "Project directory (default: the current directory).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -17610,7 +17610,7 @@
      },
      {
       "default": 7830,
-      "help": "",
+      "help": "Port to listen on (loopback only).",
       "hidden": false,
       "is_flag": false,
       "kind": "option",
@@ -17625,7 +17625,7 @@
      },
      {
       "default": false,
-      "help": "",
+      "help": "Open the UI in your browser.",
       "hidden": false,
       "is_flag": true,
       "kind": "option",
@@ -17634,6 +17634,21 @@
       "nargs": 1,
       "opts": [
        "--open"
+      ],
+      "required": false,
+      "type": "boolean"
+     },
+     {
+      "default": false,
+      "help": "Print the launch details (url, project, token) as one JSON line.",
+      "hidden": false,
+      "is_flag": true,
+      "kind": "option",
+      "multiple": false,
+      "name": "json_output",
+      "nargs": 1,
+      "opts": [
+       "--json"
       ],
       "required": false,
       "type": "boolean"
@@ -17803,7 +17818,7 @@
        },
        {
         "default": "https://alexmerced.app",
-        "help": "",
+        "help": "Page that provides the tool.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17818,7 +17833,7 @@
        },
        {
         "default": "{}",
-        "help": "",
+        "help": "Tool arguments as a JSON object.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17833,7 +17848,7 @@
        },
        {
         "default": "",
-        "help": "",
+        "help": "Tool registry revision you reviewed.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17886,7 +17901,7 @@
        },
        {
         "default": 750,
-        "help": "",
+        "help": "Milliseconds to wait for the page's tools to register.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -17993,7 +18008,7 @@
       "params": [
        {
         "default": 30,
-        "help": "",
+        "help": "Remove records older than this many days.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -18008,7 +18023,7 @@
        },
        {
         "default": null,
-        "help": "",
+        "help": "Always keep this many of the newest records.",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -18023,7 +18038,7 @@
        },
        {
         "default": false,
-        "help": "",
+        "help": "Show what would happen without changing anything.",
         "hidden": false,
         "is_flag": true,
         "kind": "option",
@@ -18067,7 +18082,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
@@ -18091,7 +18106,7 @@
       "params": [
        {
         "default": ".",
-        "help": "",
+        "help": "Project directory (default: the current directory).",
         "hidden": false,
         "is_flag": false,
         "kind": "option",
