@@ -35,12 +35,30 @@ type Readiness = {
 type Provider = {
   name: string;
   display_name: string;
+  group?: "local" | "hosted" | "advanced";
+  hint?: string;
   default_model: string;
   api_key_env: string;
   needs_key: boolean;
   local: boolean;
   credential_ready?: boolean;
 };
+
+/** Render `code` spans in backend guidance ("run `magent setup`") as code. */
+function withCode(text: string) {
+  return text.split(/(`[^`]+`)/).map((part, index) =>
+    part.startsWith("`") && part.endsWith("`") && part.length > 2 ? <code key={index}>{part.slice(1, -1)}</code> : part,
+  );
+}
+
+const GROUPS: { id: NonNullable<Provider["group"]>; label: string }[] = [
+  { id: "local", label: "Local" },
+  { id: "hosted", label: "Hosted" },
+  { id: "advanced", label: "Advanced" },
+];
+
+/** The offline demo provider: canned replies, no model, no key. */
+const OFFLINE = "mock";
 
 export function FirstRun({
   onReady,
@@ -99,9 +117,7 @@ export function FirstRun({
   if (!readiness) return null;
 
   const selected = providers.find((item) => item.name === chosen);
-  // Offering "run a local model" is useless when the local model is exactly
-  // what is failing, which is the shipped default's most common first run.
-  const localOption = readiness.local ? undefined : providers.find((item) => item.local);
+  const offline = providers.find((item) => item.name === OFFLINE);
 
   return (
     <div className="first-run">
@@ -119,8 +135,8 @@ export function FirstRun({
                   {step.label}
                   {step.local && <i className="tag">local</i>}
                 </b>
-                <small>{step.detail}</small>
-                {!step.ok && <em>{step.action}</em>}
+                <small>{withCode(step.detail)}</small>
+                {!step.ok && <em>{withCode(step.action)}</em>}
               </div>
             </li>
           ))}
@@ -131,15 +147,26 @@ export function FirstRun({
           <select
             id="providerPick"
             value={chosen}
+            aria-describedby="providerHint"
             onChange={(event) => { const value = event.target.value; setChosen(value); setModel(providers.find((item) => item.name === value)?.default_model || ""); }}
           >
             <option value="">Choose a provider…</option>
-            {providers.map((provider) => (
-              <option key={provider.name} value={provider.name}>
-                {provider.display_name}
-              </option>
-            ))}
+            {GROUPS.map((group) => {
+              const members = providers.filter((item) => (item.group || (item.local ? "local" : "hosted")) === group.id);
+              return members.length ? (
+                <optgroup key={group.id} label={group.label}>
+                  {members.map((provider) => (
+                    <option key={provider.name} value={provider.name}>
+                      {provider.display_name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null;
+            })}
           </select>
+          <p className="field-hint" id="providerHint">
+            {withCode(selected?.hint || "Local providers run on this computer; hosted ones need an API key.")}
+          </p>
 
           {selected && (
             <>
@@ -171,20 +198,21 @@ export function FirstRun({
             >
               {saving ? "Saving…" : "Use this provider"}
             </button>
-            {localOption && (
+            {offline && chosen !== OFFLINE && (
               <button
                 className="secondary-button"
                 type="button"
                 disabled={saving}
-                onClick={() => void apply(localOption.name)}
+                onClick={() => void apply(OFFLINE)}
               >
-                Run a local model instead
+                Try it offline first
               </button>
             )}
           </div>
-          {localOption && (
+          {offline && (
             <p className="first-run-note">
-              A local runtime needs no key, so the whole loop can be seen before finding one.
+              Offline mode uses canned replies with no model and no key, so you can see chats,
+              approvals and runs before choosing a provider. Switch in Settings at any time.
             </p>
           )}
         </div>

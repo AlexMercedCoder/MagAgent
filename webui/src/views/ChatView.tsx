@@ -7,6 +7,15 @@ function initials(name = "M"): string {
   return name.split(/\s+|[-_]/).map((p) => p[0]).join("").slice(0, 2).toUpperCase() || "M";
 }
 
+/**
+ * Ask the app to open the New conversation dialog with `prompt` as the first
+ * message. With no conversation there is nothing to send to, and a composer
+ * that fills up but cannot send just swallows the click; this starts one.
+ */
+export function startConversationWith(prompt: string): void {
+  window.dispatchEvent(new CustomEvent("magent:new-conversation", { detail: { prompt } }));
+}
+
 const STARTERS = [
   "Summarize this project",
   "Help me plan a feature",
@@ -22,6 +31,8 @@ export function ChatView({
   notify,
   context,
   clearContext,
+  pending,
+  clearPending,
 }: {
   active: Conversation | null;
   refresh: () => Promise<void>;
@@ -29,6 +40,9 @@ export function ChatView({
   notify: (message: string) => void;
   context: string[];
   clearContext: () => void;
+  /** A first message to send as soon as its new conversation is active. */
+  pending?: { conversationId: string; prompt: string } | null;
+  clearPending?: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -120,11 +134,16 @@ export function ChatView({
     [refresh, setError],
   );
 
-  const send = useCallback(async () => {
-    const content = draft.trim();
-    if (!content || !active || busy) return;
+  const send = useCallback(async (text?: string) => {
+    const content = (text ?? draft).trim();
+    if (!content || busy) return;
+    if (!active) {
+      startConversationWith(content);
+      setDraft("");
+      return;
+    }
     setBusy(true);
-    setDraft("");
+    if (text === undefined) setDraft("");
     await consume(
       (onEvent, signal) => streamMessage(active.id, content, onEvent, signal, context),
       [{ id: `local-${Date.now()}`, role: "user", content, speaker: "You", status: "complete" }],
@@ -182,6 +201,13 @@ export function ChatView({
     };
   }, [active, consume]);
 
+  // The dialog created this conversation for a prompt: send it now.
+  useEffect(() => {
+    if (!pending || !active || active.id !== pending.conversationId || busy) return;
+    clearPending?.();
+    void send(pending.prompt);
+  }, [pending, active, busy, send, clearPending]);
+
   const messages = live.length ? [...(active?.messages ?? []), ...live] : (active?.messages ?? []);
 
   return (
@@ -210,7 +236,11 @@ export function ChatView({
             </p>
             <div className="starter-grid">
               {STARTERS.map((prompt) => (
-                <button key={prompt} type="button" onClick={() => setDraft(prompt)}>
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => (active ? setDraft(prompt) : startConversationWith(prompt))}
+                >
                   {prompt}
                 </button>
               ))}
@@ -255,8 +285,9 @@ export function ChatView({
           <textarea
             rows={1}
             value={draft}
-            disabled={!active}
-            placeholder={active ? "Ask MagAgent anything…" : "Start a conversation first"}
+            placeholder={
+              active ? "Ask MagAgent anything…" : "Message to start a new chat…"
+            }
             aria-label="Message"
             onChange={(event) => setDraft(event.target.value)}
             onKeyDown={(event) => {
@@ -283,7 +314,7 @@ export function ChatView({
               <button
                 type="submit"
                 className="send-button"
-                disabled={!draft.trim() || !active}
+                disabled={!draft.trim()}
                 aria-label="Send message"
               >
                 ↑

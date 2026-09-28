@@ -69,6 +69,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(true);
   const [contextPaths, setContextPaths] = useState<string[]>([]);
+  const [pendingPrompt, setPendingPrompt] = useState<{ conversationId: string; prompt: string } | null>(null);
 
   const notify = useCallback((message: string) => {
     setToast(message);
@@ -191,6 +192,7 @@ export default function App() {
       project = boot?.project || ".",
       coordinator = "",
       permissionMode = boot?.permission_mode || "balanced",
+      firstMessage = "",
     ) => {
       try {
         const created = await post<{ conversation: Conversation }>("/api/conversations", {
@@ -203,6 +205,9 @@ export default function App() {
         });
         await refreshConversations();
         setActiveId(created.conversation.id);
+        if (firstMessage.trim()) {
+          setPendingPrompt({ conversationId: created.conversation.id, prompt: firstMessage });
+        }
         setSidebarOpen(false);
         setView("chat");
       } catch (problem) {
@@ -357,7 +362,7 @@ export default function App() {
         </div>
 
         {view === "chat" && (
-          <ChatView active={active} refresh={refreshConversations} setError={setError} notify={notify} context={contextPaths} clearContext={() => setContextPaths([])} />
+          <ChatView active={active} refresh={refreshConversations} setError={setError} notify={notify} context={contextPaths} clearContext={() => setContextPaths([])} pending={pendingPrompt} clearPending={() => setPendingPrompt(null)} />
         )}
         {view === "bots" && (
           <BotsView profiles={profiles} setError={setError} onStart={() => setView("chat")}

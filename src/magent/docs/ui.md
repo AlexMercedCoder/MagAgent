@@ -105,6 +105,20 @@ and then failed on the first message with a connection error. Readiness therefor
 runtime directly, with a short timeout so a missing runtime does not make the browser wait, and
 the step is labelled `Local runtime` rather than `Credential` when it applies.
 
+Only a provider written to `config.toml` counts as configured. The shipped default is not a
+choice, so a machine that was never configured says "No provider is configured yet" rather than
+claiming Ollama was set up. The provider select groups providers into Local, Hosted and Advanced
+with short names and a one-line hint underneath. **Try it offline first** selects the mock
+provider (canned replies, no model, no key) so chats, approvals and runs can be seen before
+choosing a real provider; switch in Settings at any time.
+
+With no conversation open, a starter prompt, or typing a message and pressing Enter, opens the New
+conversation dialog with that message; **Create and send** creates the conversation and sends it.
+
+`magent ui` prints `MagAgent UI: <url>` (the URL carries the launch token), the project, and how to
+stop it, as plain text without colour codes. `magent ui --json` prints one JSON line with the url,
+project and token instead.
+
 A provider and model can be chosen in first-run setup or Settings. The configured provider/model
 are selected when the asynchronous catalogue arrives, rather than reverting to a placeholder.
 Hosted-provider keys can be stored in the OS keyring (recommended); users who explicitly choose
@@ -212,6 +226,8 @@ Git, tools, or a turn. A conversation-scoped choice does not rewrite the user's 
 Markdown rendering treats model output as untrusted, because it can quote a hostile file, a scraped page, or a tool result. Every text run is escaped before any markup is introduced, raw HTML is never parsed into elements, and only `http`, `https`, `mailto`, and same-document links become anchors; a `javascript:` or `data:` URL renders as plain text. Your own messages are shown literally, exactly as typed.
 
 The transcript is an `aria-live` region, so streaming output is announced to assistive technology instead of appearing silently.
+
+On screens narrower than 780px the rail becomes a bottom tab bar with labels, in the theme's colours; the conversation list opens as a drawer from the header button. The app shell is always exactly one viewport tall and never scrolls itself; only the transcript, lists and pages inside it scroll.
 
 The UI follows the operating system's light or dark setting, and the control at the foot of the rail cycles between matching the system, forcing light, and forcing dark. The choice is stored per browser and applied before first paint.
 

@@ -273,3 +273,33 @@ def test_keyring_storage_without_a_keyring_explains_the_config_option(
             "openai", "gpt-4o-mini", credential="k", credential_storage="keyring"
         )
     assert web_onboarding.providers()["keyring_available"] is False
+
+
+def test_shipped_defaults_do_not_count_as_a_configured_provider(isolated: Path) -> None:
+    """UI-2: with no config.toml at all, the panel said "ollama is configured,
+    but ollama is not answering" and preselected Ollama, because the shipped
+    defaults were read as the user's choice."""
+    state = web_onboarding.readiness()
+    assert state["provider"] == ""
+    assert state["reason"].startswith("No provider is configured yet")
+    listed = web_onboarding.providers()
+    assert listed["default_provider"] == "" and listed["default_model"] == ""
+
+
+def test_provider_list_is_grouped_with_short_names_and_hints(isolated: Path) -> None:
+    listed = {item["name"]: item for item in web_onboarding.providers()["providers"]}
+    assert listed["ollama"]["group"] == "local" and listed["ollama"]["display_name"] == "Ollama"
+    assert listed["openai"]["group"] == "hosted" and listed["openai"]["display_name"] == "OpenAI"
+    assert listed["mock"]["group"] == "advanced"
+    for item in listed.values():
+        assert "FREE" not in item["display_name"] and "GPT-" not in item["display_name"]
+        assert "(" not in item["display_name"] or item["name"] == "mock"
+        assert item["hint"]
+
+
+def test_a_local_runtime_that_is_down_is_named_with_a_capital(isolated: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        web_onboarding, "_local_reachable", lambda *_: (False, "Ollama is not answering at x")
+    )
+    state = web_onboarding.configure("ollama")
+    assert state["reason"].startswith("Ollama is not answering at x")

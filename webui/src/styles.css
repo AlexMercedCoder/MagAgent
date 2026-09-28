@@ -789,3 +789,64 @@ textarea,input,select{color:var(--c-18201d)}
 .team-check.fail{color:var(--c-8a3026)}
 .team-reason{display:flex;flex-direction:column;gap:5px;margin:10px 0;font-size:11px;color:var(--muted)}
 .team-reason input{border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--panel);color:var(--ink);font:inherit}
+
+/* --- UI-2 --------------------------------------------------------------------
+   Form controls do not inherit the page font family by default, so every
+   button, select and input rendered in the browser's fallback (Arial). Only
+   the family is inherited: `font:inherit` also inherited the 16px body size and
+   enlarged every button that relies on the control default size. */
+button,input,select,textarea{font-family:inherit}
+
+/* The shell is exactly one viewport tall and never scrolls itself: only the
+   panes inside it do. With `overflow:hidden` alone, focusing or scrolling an
+   element into view could still move the shell (scrollTop 33 after sending
+   at 1280x768), pushing the header off screen. `clip` forbids that. */
+html,body,#root{height:100%}
+body{overflow:hidden}
+.app-shell{height:100vh;height:100dvh;overflow:hidden;overflow:clip;grid-template-rows:minmax(0,1fr)}
+.app-shell>*{min-height:0}
+.workspace,.sidebar,.context-panel{min-height:0}
+.workspace{overflow:hidden;overflow:clip}
+.first-run{height:100vh;height:100dvh;min-height:0;overflow:auto;place-items:start center}
+.first-run-card{margin:auto 0}
+.field-hint{margin:0;font-size:12px;line-height:1.5;color:var(--muted)}
+.first-message{border:1px solid var(--line);background:var(--accent-2);border-radius:10px;padding:9px 12px;margin:6px 0 4px}
+.first-message span{display:block;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.first-message p{margin:4px 0 0;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Short desktop windows: ten rail items plus the theme toggle overflowed
+   below ~820px, clipping the last item and the connection dot. */
+@media(min-width:781px) and (max-height:820px){
+  .rail{padding-top:14px;padding-bottom:12px}
+  .rail nav{margin-top:14px;gap:3px}
+  .rail-button{min-height:44px;font-size:16px}
+}
+
+/* Narrow screens: the icon-only rail became a bottom tab bar with labels, in
+   the theme's colours (it stayed dark in the light theme and took a column). */
+@media(max-width:780px){
+  .app-shell{grid-template-columns:1fr;padding-bottom:calc(60px + env(safe-area-inset-bottom))}
+  .app-shell:has(#graphsView.active){grid-template-columns:1fr}
+  .workspace{grid-column:1}
+  .rail{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:20;flex-direction:row;align-items:stretch;
+    height:calc(60px + env(safe-area-inset-bottom));padding:0 0 env(safe-area-inset-bottom);
+    background:var(--panel);color:var(--muted);border-top:1px solid var(--line);box-shadow:0 -6px 20px var(--c-16291f08)}
+  .rail .brand-mark,.rail .connection-dot{display:none}
+  .rail nav{margin:0;flex:1;flex-direction:row;gap:0;overflow-x:auto;scrollbar-width:none}
+  .rail nav::-webkit-scrollbar{display:none}
+  .rail-button,.rail-button.theme-toggle{flex:0 0 auto;width:auto;min-width:62px;min-height:0;height:100%;margin:0;border-radius:0;
+    color:var(--muted);font-size:17px;gap:2px;padding:6px 4px}
+  .rail-button span,.rail-button i{display:block;font-size:10px;letter-spacing:.02em}
+  .rail-button:hover,.rail-button.active{color:var(--accent);background:var(--accent-2)}
+  .rail-button.theme-toggle{border-left:1px solid var(--line)}
+  .sidebar{left:0;bottom:calc(60px + env(safe-area-inset-bottom));width:min(320px,88vw)}
+  .context-panel{bottom:calc(60px + env(safe-area-inset-bottom))}
+}
+@media(max-width:480px){
+  .app-shell{grid-template-columns:1fr}
+  .app-shell:has(#graphsView.active){grid-template-columns:1fr}
+  .rail{padding-left:0;padding-right:0}
+  .rail-button span{display:block}
+  .sidebar{left:0;width:88vw}
+}
+.first-run-steps code,.field-hint code{background:var(--accent-2);border-radius:4px;padding:1px 5px;font:11px ui-monospace,SFMono-Regular,Menlo,monospace}

@@ -14,6 +14,7 @@ with a visible warning for systems where keyring integration is unavailable.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 # Providers that run without any credential, so a first run is always possible.
@@ -47,15 +48,85 @@ def _local_reachable(provider: str, base_url: str) -> tuple[bool, str]:
         response = httpx.get(url, timeout=LOCAL_PROBE_TIMEOUT_SECONDS)
         response.raise_for_status()
     except Exception:  # noqa: BLE001 - any failure means "not usable yet"
-        return False, f"{provider} is not answering at {root}"
-    return True, f"{provider} is running at {root}"
+        return False, f"{web_label(provider)} is not answering at {root}"
+    return True, f"{web_label(provider)} is running at {root}"
 
 
 def _default_provider() -> tuple[str, str]:
-    from magent.config import load_global_config
+    """The provider and model the user actually chose, or ("", "").
 
-    defaults = load_global_config().get("defaults", {}) or {}
+    `load_global_config()` merges in the shipped defaults (Ollama with
+    qwen2.5-coder:32b), so on a machine nobody had configured the setup panel
+    said "ollama is configured, but ollama is not answering" and preselected
+    it. Only a choice written to config.toml counts as configured.
+    """
+    import tomllib
+
+    from magent import config as magent_config
+
+    path = Path(magent_config.GLOBAL_CONFIG)
+    try:
+        with path.open("rb") as handle:
+            raw = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError):
+        return "", ""
+    defaults = raw.get("defaults", {}) if isinstance(raw.get("defaults"), dict) else {}
     return str(defaults.get("provider") or ""), str(defaults.get("model") or "")
+
+
+# Short names, groups and one-line hints for the setup panel. The catalog
+# labels are written for the terminal wizard ("Ollama (local — FREE, requires
+# Ollama running)", "OpenAI API (GPT-4o, GPT-5; ...)"): too long for a select,
+# inconsistent, and some name models that go stale.
+_WEB_NAMES = {
+    "opencode-go": "OpenCode Go",
+    "ollama": "Ollama",
+    "lmstudio": "LM Studio",
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "nous-portal": "Nous Portal",
+    "opencode-zen": "OpenCode Zen",
+    "google": "Google Gemini",
+    "groq": "Groq",
+    "openrouter": "OpenRouter",
+    "trusted-router": "TrustedRouter",
+    "prime-intellect": "Prime Intellect",
+    "bedrock": "AWS Bedrock",
+    "mistral": "Mistral AI",
+    "deepseek": "DeepSeek",
+    "xai": "xAI",
+    "perplexity": "Perplexity",
+    "cerebras": "Cerebras",
+    "together_ai": "Together AI",
+    "fireworks_ai": "Fireworks AI",
+    "deepinfra": "DeepInfra",
+    "custom": "Custom OpenAI-compatible endpoint",
+    "mock": "Mock (offline demo)",
+}
+_WEB_HINTS = {
+    "ollama": "Runs open models on this computer. Needs Ollama running; no API key.",
+    "lmstudio": "Runs models on this computer through LM Studio's local server; no API key.",
+    "openai": "Needs an OpenAI API key. For a ChatGPT plan, use Codex mode from the terminal.",
+    "opencode-go": "OpenCode Go subscription with low-cost open coding models.",
+    "opencode-zen": "OpenCode Zen pay-as-you-go account with curated models.",
+    "nous-portal": "Nous Portal account, with Hermes and many other models.",
+    "openrouter": "One key for many hosted models.",
+    "trusted-router": "Private, attested OpenAI-compatible routing.",
+    "bedrock": "Uses your AWS credentials or profile.",
+    "custom": "Any OpenAI-compatible server; set its URL with `magent provider set custom`.",
+    "mock": "Canned replies, no model and no key: see the whole workflow offline.",
+}
+_ADVANCED = {"custom", "bedrock", "mock"}
+
+
+def web_label(name: str) -> str:
+    """The short, consistent name the Web UI shows for a provider."""
+    from magent.provider_catalog import PROVIDER_CATALOG
+
+    if name in _WEB_NAMES:
+        return _WEB_NAMES[name]
+    label = str((PROVIDER_CATALOG.get(name, {}) or {}).get("label") or name)
+    return label.split(" (")[0]
 
 
 def readiness() -> dict[str, Any]:
@@ -106,7 +177,9 @@ def readiness() -> dict[str, Any]:
             "detail": str(credential.get("reason") or ""),
             "env": str(credential.get("env") or ""),
             "action": (
-                f"Start {provider.capitalize()}, or choose a hosted provider below."
+                "Choose a provider first."
+                if not provider
+                else f"Start {web_label(provider)}, or choose a hosted provider below."
                 if local
                 else (
                     "Export the provider's key in the shell that runs `magent ui`, "
@@ -136,11 +209,14 @@ def readiness() -> dict[str, Any]:
         # claim "no provider is configured" while the provider step showed a tick
         # and the real problem was a local runtime that was not running.
         first = blocking[0]["id"]
+        detail = str(credential.get("reason") or "it cannot be used yet").rstrip(".")
         reason = (
             "No provider is configured yet, so a message sent now would fail."
             if first == "provider"
-            else f"{provider} is configured, but {credential.get('reason') or 'it cannot be used yet'}."
+            else f"{web_label(provider)} is selected, but {detail[:1].lower() + detail[1:]}."
         )
+        if first != "provider" and local and detail.startswith(web_label(provider)):
+            reason = f"{detail}. Start it, or choose another provider below."
 
     return {
         "ok": True,
@@ -171,7 +247,16 @@ def providers() -> dict[str, Any]:
         listed.append(
             {
                 "name": name,
-                "display_name": str(metadata.get("label") or metadata.get("name") or name),
+                "display_name": web_label(name),
+                "group": "advanced" if name in _ADVANCED else ("local" if local else "hosted"),
+                "hint": _WEB_HINTS.get(name)
+                or (
+                    "Runs on this computer; no API key."
+                    if local
+                    else f"Needs an API key in {metadata.get('env')}."
+                    if metadata.get("env")
+                    else "Hosted provider."
+                ),
                 "default_model": str(DEFAULT_MODELS.get(name, "") or ""),
                 "api_key_env": str(metadata.get("env", "") or ""),
                 # A local runtime needs no key, so it is offered as the
@@ -234,7 +319,7 @@ def configure(
         status = keyring_status()
         if not status["available"]:
             raise ValueError(
-                "No OS keyring is available. Choose \"MagAgent config file\" as the storage instead, or "
+                'No OS keyring is available. Choose "MagAgent config file" as the storage instead, or '
                 + str(status.get("hint", ""))
             )
         stored = save_keyring_secret(provider, secret)

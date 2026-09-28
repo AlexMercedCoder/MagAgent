@@ -121,6 +121,23 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
 
 ### Changed
 
+- **Web UI first run and layout (UI-2).**
+  - With no configuration, setup says "No provider is configured yet" instead of claiming Ollama
+    was configured (the shipped default no longer counts as a choice), and offers **Try it
+    offline first** (the mock provider) next to **Use this provider**.
+  - The provider list is grouped (Local, Hosted, Advanced) with short names and a one-line hint
+    under the select, instead of catalog labels such as "FREE" and stale model lists.
+  - Buttons and inputs use the page font instead of the browser fallback (Arial).
+  - With no conversation, starter prompts and typing plus Enter open the New conversation dialog
+    with that first message and send it on Create; the composer is never filled while disabled.
+  - The app shell is exactly one viewport tall and cannot scroll itself, so the header stays in
+    view after sending; only the inner panes scroll.
+  - Phones get a bottom tab bar with labels in the theme's colours instead of the dark icon rail,
+    and dialogs open over the page instead of inside the hidden drawer.
+- **`magent ui` prints a plain line** (`MagAgent UI: <url>`, the project, and how to stop)
+  instead of a JSON blob; `--json` prints one machine-readable line. Every visible CLI option now
+  has help text (404 had none), and a test keeps it that way.
+
 - **Behavior change: OAP `permissions.shell: ask` now asks for every shell command (I-17).**
   MagAgent ignored `spec.permissions.shell`, so a profile saying `ask` still ran commands it
   classifies as read-only (`echo`, `cat`, `grep`, `sed` without `-i`, `awk`) without asking.

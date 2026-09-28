@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Bootstrap, Conversation, Profile } from "../types";
 import { FolderPicker } from "./FolderPicker";
 
@@ -24,7 +25,7 @@ export function Sidebar({
   setActiveId: (id: string) => void;
   profiles: Profile[];
   boot: Bootstrap | null;
-  onCreate: (kind: "chat" | "bot" | "group", profileNames?: string[], project?: string, coordinator?: string, permissionMode?: string) => void;
+  onCreate: (kind: "chat" | "bot" | "group", profileNames?: string[], project?: string, coordinator?: string, permissionMode?: string, firstMessage?: string) => void;
   onDelete: (conversation: Conversation) => void;
   onProjectChange: (conversation: Conversation, project: string) => void;
   setError: (message: string) => void;
@@ -40,9 +41,15 @@ export function Sidebar({
   const [coordinator, setCoordinator] = useState("");
   const [permissionMode, setPermissionMode] = useState(boot?.permission_mode || "balanced");
   const [browsingFor, setBrowsingFor] = useState<Conversation | "new" | null>(null);
+  const [firstMessage, setFirstMessage] = useState("");
 
   useEffect(() => {
-    const openDialog = () => { setKind("chat"); setCreating(true); };
+    const openDialog = (event: Event) => {
+      const prompt = (event as CustomEvent<{ prompt?: string } | undefined>).detail?.prompt || "";
+      setFirstMessage(prompt);
+      setKind("chat");
+      setCreating(true);
+    };
     window.addEventListener("magent:new-conversation", openDialog);
     return () => window.removeEventListener("magent:new-conversation", openDialog);
   }, []);
@@ -153,16 +160,21 @@ export function Sidebar({
           </div>
         )}
       </div>
-      {creating && (
+      {/* Portalled to <body>: on narrow screens the sidebar is a transformed
+          drawer, and a fixed-position dialog inside a transformed element is
+          positioned (and hidden) with the drawer instead of the viewport. */}
+      {creating && createPortal(
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="New conversation"
           onClick={(event) => { if (event.target === event.currentTarget) setCreating(false); }}>
           <form className="modal" onSubmit={(event) => {
             event.preventDefault();
             const selected = kind === "chat" ? [] : chosen;
-            onCreate(kind, selected, project || boot?.project || ".", kind === "group" ? (coordinator || selected[0] || "") : "", permissionMode);
+            onCreate(kind, selected, project || boot?.project || ".", kind === "group" ? (coordinator || selected[0] || "") : "", permissionMode, firstMessage);
+            setFirstMessage("");
             setCreating(false);
           }}>
-            <div className="dialog-head"><div><div className="eyebrow">NEW CONVERSATION</div><h2>Choose context first</h2></div><button className="icon-button" type="button" onClick={() => setCreating(false)}>×</button></div>
+            <div className="dialog-head"><div><div className="eyebrow">NEW CONVERSATION</div><h2>Choose context first</h2></div><button className="icon-button" type="button" aria-label="Close" onClick={() => { setCreating(false); setFirstMessage(""); }}>×</button></div>
+            {firstMessage && <div className="first-message"><span>First message</span><p>{firstMessage}</p></div>}
             <label htmlFor="conversationKind">Type</label>
             <select id="conversationKind" value={kind} onChange={(event) => { setKind(event.target.value as typeof kind); setChosen([]); setCoordinator(""); }}>
               <option value="chat">Standard chat</option><option value="bot">Bot conversation</option><option value="group">Group conversation</option>
@@ -174,12 +186,13 @@ export function Sidebar({
             {kind !== "chat" && <fieldset className="profile-picker"><legend>Participants</legend>{profiles.map((profile) => <label className="profile-choice" key={profile.name}><input type={kind === "bot" ? "radio" : "checkbox"} name="participants" checked={chosen.includes(profile.name)} onChange={(event) => setChosen((current) => kind === "bot" ? (event.target.checked ? [profile.name] : []) : event.target.checked ? [...current, profile.name] : current.filter((name) => name !== profile.name))} />@{profile.name}</label>)}</fieldset>}
             {kind === "group" && <><label htmlFor="conversationCoordinator">Coordinator</label><select id="conversationCoordinator" value={coordinator} onChange={(event) => setCoordinator(event.target.value)}><option value="">Choose automatically</option>{chosen.map((name) => <option key={name} value={name}>@{name}</option>)}</select></>}
             <p className="context-note">The project and participants are pinned before the first message. You can create chats in any existing local folder.</p>
-            <button className="primary-button" type="submit" disabled={(kind === "bot" && chosen.length !== 1) || (kind === "group" && (chosen.length < 2 || chosen.length > 5))}>Create conversation</button>
+            <button className="primary-button" type="submit" disabled={(kind === "bot" && chosen.length !== 1) || (kind === "group" && (chosen.length < 2 || chosen.length > 5))}>{firstMessage ? "Create and send" : "Create conversation"}</button>
           </form>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {browsingFor && <FolderPicker initial={browsingFor === "new" ? project : browsingFor.project} setError={setError} onClose={() => setBrowsingFor(null)} onChoose={(selected) => { if (browsingFor === "new") setProject(selected); else onProjectChange(browsingFor, selected); setBrowsingFor(null); }} />}
+      {browsingFor && createPortal(<FolderPicker initial={browsingFor === "new" ? project : browsingFor.project} setError={setError} onClose={() => setBrowsingFor(null)} onChoose={(selected) => { if (browsingFor === "new") setProject(selected); else onProjectChange(browsingFor, selected); setBrowsingFor(null); }} />, document.body)}
 
       <div className="project-card">
         <div className="project-icon">⌘</div>
