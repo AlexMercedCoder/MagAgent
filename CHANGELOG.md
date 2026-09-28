@@ -148,6 +148,11 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
 
 ### Fixed
 
+- One-shot model calls (`magent ask`, `magent provider ping`) could hang forever while draining
+  LiteLLM's logging queue: LiteLLM's flush is `queue.join()`, which never returns when queued
+  items have no worker left. The drain is now bounded to 5 seconds; logging stays best effort.
+  Seen as a test that hung past 300 s under parallel load in integration testing.
+
 - `magent agent export` dropped OAP fields whose names contain "token", such as
   `spec.context.budget.max_context_tokens` and `max_state_tokens`, while removing secret-like
   fields. Numbers and booleans are now kept; string values under credential-like names are still
@@ -235,6 +240,9 @@ that failed before the fix. `magent docs show threat-model` has the per-surface 
 - `scripts/check_release_metadata.py` checks that the package version, README current-release
   line, conformance stamps, web UI package version and top released CHANGELOG heading agree. CI
   runs it strictly on tags and as an advisory check otherwise.
+- [docs/RELEASING.md](docs/RELEASING.md) lists every file a version bump touches, the checks to
+  run, and the build, tag and publish steps; the 1.4.0 bump was rehearsed in a scratch worktree.
+  The release-metadata drift test no longer hard-codes the 1.3.0 changelog heading.
 - Tests marked `slow` are skipped by default (`pytest -m slow` runs them) and run with the
   coverage measurement in a separate CI job.
 

@@ -5,6 +5,7 @@ Uses LiteLLM for unified access to all providers.
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from collections.abc import AsyncIterator
 from typing import Any
@@ -112,7 +113,9 @@ def _build_api_kwargs(
 REQUEST_TIMEOUT_SECONDS = 600
 
 
-def _completion_request_params(provider_id: str, model: str, temperature: float, max_tokens: int) -> dict[str, Any]:
+def _completion_request_params(
+    provider_id: str, model: str, temperature: float, max_tokens: int
+) -> dict[str, Any]:
     """Return provider-safe common completion parameters."""
     # Every provider call gets a request deadline: without one a wedged
     # endpoint hangs the agent turn indefinitely.
@@ -268,6 +271,12 @@ def provider_error_from_response(response: str) -> str:
     return ""
 
 
+# LiteLLM's flush is `queue.join()`, which never returns when queued items have no worker left to
+# consume them (for example a queue created under an earlier event loop in the same process).
+# Logging is best effort, so the drain is bounded instead of hanging the caller.
+LOGGING_FLUSH_TIMEOUT_SECONDS = 5.0
+
+
 async def flush_provider_logging() -> None:
     """Drain LiteLLM's process-global callback worker before a one-shot loop closes."""
     if "litellm" not in sys.modules:
@@ -275,10 +284,11 @@ async def flush_provider_logging() -> None:
     try:
         from litellm.litellm_core_utils.logging_worker import GLOBAL_LOGGING_WORKER
 
-        await GLOBAL_LOGGING_WORKER.flush()
-        await GLOBAL_LOGGING_WORKER.stop()
+        await asyncio.wait_for(GLOBAL_LOGGING_WORKER.flush(), LOGGING_FLUSH_TIMEOUT_SECONDS)
+        await asyncio.wait_for(GLOBAL_LOGGING_WORKER.stop(), LOGGING_FLUSH_TIMEOUT_SECONDS)
     except Exception:
-        # Logging callbacks are best-effort and must never fail an agent task.
+        # Logging callbacks are best-effort and must never fail an agent task. A timeout lands
+        # here too (asyncio.TimeoutError is an Exception).
         return
 
 

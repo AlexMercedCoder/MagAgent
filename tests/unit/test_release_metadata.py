@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -42,8 +43,16 @@ def test_detects_the_drift_fixed_in_h1(repo: Path, monkeypatch) -> None:
     data["implementation_version"] = "0.99.0"
     conformance.write_text(json.dumps(data))
     changelog = repo / "CHANGELOG.md"
+    # Mark the newest released heading unreleased, whichever version it is, so the test keeps
+    # working after a release bump.
     changelog.write_text(
-        changelog.read_text().replace("## 1.3.0 (2026-09-12)", "## 1.3.0 — Unreleased")
+        re.sub(
+            r"^## (\d+\.\d+\.\d+) \([^)]*\)",
+            r"## \1 — Unreleased",
+            changelog.read_text(),
+            count=1,
+            flags=re.MULTILINE,
+        )
     )
     readme = repo / "README.md"
     readme.write_text(readme.read_text().replace("Current release: **", "Release: **", 1))
