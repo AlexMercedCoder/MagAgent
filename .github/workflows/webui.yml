@@ -79,7 +79,9 @@ jobs:
           # operations UI. A hosted runner has no MagAgent state, so exercise
           # the same first-run prerequisite a real installation uses.
           magent user create ci-smoke
-          PYTHONUNBUFFERED=1 magent ui --project "$workspace" --port 7830 > serve.log 2>&1 &
+          # `magent ui` prints a plain line for people; --json prints the
+          # machine-readable line (url and token) this check parses.
+          PYTHONUNBUFFERED=1 magent ui --project "$workspace" --port 7830 --json > serve.log 2>&1 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
 
