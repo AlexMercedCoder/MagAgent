@@ -121,6 +121,23 @@ is not on PyPI yet. Publish AAIS 0.2.0 first; until then CI installs fail on the
 
 ### Changed
 
+- **Behavior change: OAP `permissions.shell: ask` now asks for every shell command (I-17).**
+  MagAgent ignored `spec.permissions.shell`, so a profile saying `ask` still ran commands it
+  classifies as read-only (`echo`, `cat`, `grep`, `sed` without `-i`, `awk`) without asking.
+  Under `shell: ask` every shell command, plus `run_python` and `install_package`, now needs
+  approval in every permission mode, including `silent` and `yolo`; earlier exact-command grants
+  still count. `shell: deny` removes the shell tools. The read-only auto-allow remains the
+  default without a profile and is configurable with `permissions.read_only_shell_auto_allow`
+  (false asks for everything). Effective profiles report `shell`.
+- **Profile import keeps the document (I-18).** `magent agent import` used to reset
+  `metadata.revision` to 1, drop `history` and `state`, and re-render the file, which changed the
+  profile digest. It now copies the file byte for byte, so the revision, history, state,
+  foreign annotations and both digests are preserved (`--name` is the only allowed change and is
+  reported as `digest_preserved: false`). Provenance is recorded outside the document in
+  `profile-imports/<name>.json`. An import never overwrites an existing profile. `--scope
+  portable` imports into the shared `.agents/` directory, which discovery already reads, with
+  `.magent/agents/` winning on a name collision.
+
 - **`magent plan <sub>` (S-2).** The nine `plan-*` verbs are subcommands of one group:
   `plan create` (still the default, so `magent plan "goal" --save` works), `plan list`,
   `plan apply`, `plan sandbox`, `plan exec`, `plan preview`, `plan run`, `plan show` and

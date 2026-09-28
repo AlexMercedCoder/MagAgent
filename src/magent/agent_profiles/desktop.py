@@ -363,14 +363,93 @@ def import_profile(
     name: str = "",
     dry_run: bool = False,
 ) -> dict[str, Any]:
+    """Import an OAP document without rewriting it.
+
+    OAP's `metadata.revision` counts persisted writes of *that* profile and
+    `history` is its append-only log, so an import keeps both, along with
+    `state`: the file is copied byte for byte (same encoding and suffix), and
+    its profile and spec digests are unchanged. Importing used to reset the
+    revision to 1, drop history and state, and re-render the document, which
+    changed the digest and broke pinning. `--name` is the one allowed change
+    (it rewrites `metadata.name`, so the digests change, and says so).
+
+    Where it came from is recorded outside the document, in
+    `profile-imports/<name>.json` (under ~/.config/magent for user scopes,
+    `.magent/` for project scopes), so the record does not change the digest.
+    """
     path = Path(source).expanduser().resolve()
-    document, _body, _encoding = parse_document(path)
-    if name:
+    document, _body, encoding = parse_document(path)
+    source_profile_digest = digest_document(document)
+    source_spec_digest = digest_spec(document)
+    original_name = str(document.get("metadata", {}).get("name", ""))
+    renamed = bool(name) and normalize_profile_name(name) != original_name
+    if renamed:
         document.setdefault("metadata", {})["name"] = normalize_profile_name(name)
     preview = preview_profile(document, project=project, config=config)
     if dry_run or not preview["ok"]:
         return {**preview, "source": str(path), "dry_run": dry_run}
-    return apply_profile(document, scope=scope, project=project, config=config)
+    profile_name = normalize_profile_name(str(document["metadata"]["name"]))
+    default_target = profile_path(profile_name, scope=scope, project=project)
+    suffix = (
+        "".join(path.suffixes[-2:])
+        if path.name.endswith((".agent.yaml", ".agent.json"))
+        else path.suffix
+    )
+    target = default_target.with_name(f"{profile_name}{suffix or '.md'}")
+    clashes = [
+        item
+        for item in default_target.parent.glob(f"{profile_name}.*")
+        if item.suffix.lower() in {".md", ".yaml", ".yml", ".json"}
+    ]
+    if clashes:
+        return {
+            "ok": False,
+            "contract": PROFILE_CONTRACT,
+            "conflict": True,
+            "error": (
+                f"A profile called {profile_name!r} already exists at {clashes[0]}. "
+                "Import under another --name, or delete that profile first."
+            ),
+        }
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if renamed:
+        atomic_write(target, render_document(document, encoding))
+    else:
+        atomic_write(target, path.read_text(encoding="utf-8"))
+    saved = AgentProfileRegistry(project, config).load_path(target)
+    provenance = {
+        "schema": "magent.profile-import.v1",
+        "profile": profile_name,
+        "source": str(path),
+        "imported_at": datetime.now(UTC).isoformat(),
+        "scope": scope,
+        "revision": int(document.get("metadata", {}).get("revision", 1) or 1),
+        "source_profile_digest": source_profile_digest,
+        "source_spec_digest": source_spec_digest,
+        "profile_digest": saved.profile_digest,
+        "spec_digest": saved.spec_digest,
+        "renamed_from": original_name if renamed else None,
+        "trust_at_source": "imported",
+    }
+    from magent import config as magent_config
+
+    record_dir = (
+        magent_config.CONFIG_DIR / "profile-imports"
+        if scope in {"user", "universal"}
+        else Path(project).expanduser().resolve() / ".magent" / "profile-imports"
+    )
+    record_dir.mkdir(parents=True, exist_ok=True)
+    atomic_write(record_dir / f"{profile_name}.json", json.dumps(provenance, indent=2) + "\n")
+    return {
+        "ok": True,
+        "contract": PROFILE_CONTRACT,
+        "operation": "import",
+        "scope": scope,
+        "path": str(target),
+        "profile": saved.as_dict(),
+        "provenance": provenance,
+        "digest_preserved": saved.profile_digest == source_profile_digest,
+    }
 
 
 def export_profile(

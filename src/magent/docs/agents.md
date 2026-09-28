@@ -52,6 +52,19 @@ OAP budget fields such as `max_context_tokens` survive. `export` writes the enco
 name asks for: `.agent.yaml` or `.yml` as YAML, `.json` as JSON, anything else as OAP Markdown.
 Loro and Merced AI read these files; they discover shared profiles in the project's `.agents/`
 directory, while `magent agent import --scope project` writes MagAgent's own `.magent/agents/`.
+Use `--scope portable` to import into the shared `.agents/` directory instead (`--scope user`
+writes `~/.config/magent/agents/`, `--scope universal` writes `~/.agentprofiles/`).
+
+`magent agent import` keeps the document as it is: the file is copied byte for byte in its own
+encoding, so `metadata.revision`, `history`, `state`, annotations from other harnesses and the
+profile and spec digests are all unchanged (OAP counts `revision` per profile, and `history` is
+its append-only log). `--name` is the one change allowed; it rewrites `metadata.name`, so the
+digests change, and the result says `digest_preserved: false`. An import never overwrites a
+profile with the same name. Where the profile came from (source path, source digests, revision,
+time, and whether it was renamed) is recorded outside the document, in
+`~/.config/magent/profile-imports/<name>.json` for user scopes or
+`.magent/profile-imports/<name>.json` for project scopes, so the record cannot change the digest.
+Review an imported profile before first use, as OAP asks for `imported` profiles.
 
 Web access has two independent profile checks. `spec.tools.allow` must include `web` or the
 specific web tools, and `spec.permissions.network` must be `read` or `full`. Use `read` for web
@@ -68,6 +81,22 @@ spec:
     default: balanced
     network: read
 ```
+
+`spec.permissions.shell` follows OAP 1.0 section 3.5 (`deny` < `ask` < `allow`, the effective
+value is the smaller of the profile's and the harness's):
+
+- `allow` (or not set): MagAgent's normal policy. Commands its classifier treats as read-only,
+  such as `echo`, `cat`, `grep` or `sed` without `-i`, run without asking; everything else is
+  asked according to the permission mode.
+- `ask`: every shell command is approved by a person first, including `echo`, in every
+  permission mode (even `silent` and `yolo`). `run_python` and `install_package` are asked too.
+  An approval grant the user made earlier for the exact command in this project still counts.
+- `deny`: `run_shell`, `run_python`, `install_package` and `git_op` are removed from the
+  profile's tools.
+
+The read-only auto-allow is also configurable without a profile:
+`magent config set permissions.read_only_shell_auto_allow false` makes every session behave
+like `shell: ask` (and caps profiles that say `allow` at `ask`).
 
 Every installation includes a managed `magagent` profile, and it is the out-of-box default. Its
 general coding and productivity personality is injected into ordinary REPL and `ask` sessions.
@@ -86,7 +115,9 @@ Inside an ordinary interactive session, `@review task` activates that profile fo
 Profiles resolve by precedence: project profiles in `.magent/agents/`, portable project profiles in
 `.agents/`, native user profiles in `~/.config/magent/agents/`, universal user profiles in
 `~/.agentprofiles/`, enabled plugin `agents/` directories, then managed built-ins. Earlier entries
-win and collisions are reported. Duplicate names in one root are errors. Trust is derived from the
+win and collisions are reported. The shared `.agents/` directory is the OAP-recommended project location
+and is always read; when a name exists in both `.agents/` and `.magent/agents/`, MagAgent's own
+directory wins and the collision is reported, as the spec asks. Duplicate names in one root are errors. Trust is derived from the
 root, so a project file cannot become managed by declaring `metadata.trust`.
 
 ## OAP Markdown Format
