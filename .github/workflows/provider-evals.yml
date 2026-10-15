@@ -11,8 +11,6 @@ on:
         description: Provider model
         required: false
         default: ""
-  schedule:
-    - cron: "17 9 * * 1"
 
 jobs:
   live-provider-evals:
