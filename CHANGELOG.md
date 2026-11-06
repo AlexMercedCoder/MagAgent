@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.1 (2026-11-06)
 
 Fixes for the bugs the *Graph Engineering with AI Agents* Appendix B walkthrough found in 1.4.0
 (handoff ids M1-M5).
