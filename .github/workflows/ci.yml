@@ -217,6 +217,33 @@ jobs:
       - name: Coverage (whole suite)
         run: python -m pytest tests/unit tests/integration -q -n auto -m "slow or not slow" --cov=magent --cov-report=term-missing:skip-covered
 
+  core-install:
+    # M1: LiteLLM 1.108 started importing the MCP SDK on every completion, and
+    # a core install (no extras) failed every model call, the mock included.
+    # This job installs the package alone, with whatever dependency versions
+    # resolve today, and runs one offline mock completion.
+    name: Core install (mock completion)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Install the core package alone
+        run: |
+          python -m venv /tmp/magent-core-only
+          /tmp/magent-core-only/bin/python -m pip install --upgrade pip
+          /tmp/magent-core-only/bin/python -m pip install .
+          /tmp/magent-core-only/bin/python -m pip show litellm mcp
+      - name: One mock completion
+        env:
+          HOME: /tmp/magent-core-home
+        run: |
+          mkdir -p "$HOME"
+          /tmp/magent-core-only/bin/magent user create ci
+          /tmp/magent-core-only/bin/magent ask "hello" --provider mock | tee mock-reply.txt
+          grep -q "MagAgent mock provider" mock-reply.txt
+
   vscode-extension:
     name: VS Code extension (preview)
     runs-on: ubuntu-latest

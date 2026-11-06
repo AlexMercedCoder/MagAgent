@@ -79,6 +79,9 @@ executor used by live runs.
 - External research normally declares both `web_search` and `web_fetch` with a `net:` permission. Producing project files adds `file_write` and `fs:write:**`; invoking build or test commands adds `shell_exec` and a `shell:exec:` permission.
 - Before model review, the deterministic draft infers obvious capability families from the goal. If the provider times out, MagAgent immediately returns that strictly validated draft rather than repeating a stalled request. If model repair is exhausted, the same draft is returned with a visible fallback explanation and the model's validation findings; generation only fails when both proposals are invalid.
 - Graph permissions are a ceiling beneath the user's MagAgent permission policy. They never grant additional access.
+- `requirements.skills` is checked against the same skills a session in the project loads: user skills (`~/.config/magent/skills/`), built-in skills, and the project's `.magent/skills/`. A missing skill fails the node with `RT012` before any model call.
+- Command criteria are run by the harness, not by the node's agent, so they do not need `shell_exec` in the node's tools. A criterion command must fall under one of the node's `shell:exec:` permissions, and then the permission policy decides as it does in a session: a command matching `permissions.allowed_shell_patterns` (or a remembered grant) runs without a prompt, a command the policy blocks is never lifted by any allowlist or grant, and under `balanced` with `--yes` an unmatched command that needs confirmation is refused. A refused criterion records `RT017` in the run diagnostics and in the criterion's `error` and evidence, naming the command and what refused it.
+- A task node's prompt carries its `description`, then its `instructions` (interpolated). On a retry with `feedback: failed_criteria`, it carries each failed required criterion's id, `description` and recorded evidence (AGS 10.3).
 - `graph_emit_output` is the reliable output contract. It is an internal execution capability that remains available even when selective tool loading or user tool packs narrow ordinary tools; nodes must still declare their substantive file, shell, web, and other capabilities. `path_hint` can discover a file after the node returns.
 - `before_start`, `before_side_effects`, and `after_outputs` checkpoints are enforced by the harness. A required checkpoint that cannot be displayed fails with `RT015`.
 - `shared`, `worktree`, and copied `sandbox` workspaces are supported. Unsupported or unavailable isolation fails with `RT014`; MagAgent does not silently downgrade it. Container-isolated agent sessions are currently refused.
@@ -91,6 +94,32 @@ executor used by live runs.
   (`redacted_params`, error `RT055`). The executor refuses any parameter holding the marker,
   whoever starts the run.
 - `magent graph resume RUN_ID --retry-nodes implement,verify` reruns the selected jobs and every downstream dependent while retaining unaffected successful work.
+
+## Diagnostic codes
+
+MagAgent uses the AGS 1.0 runtime codes (SPEC section 18.2) wherever the specification defines
+one, including `RT012` (requirement unavailable), `RT014`, `RT015`, `RT021` (loop hit
+`max_iterations`), `RT022`, `RT025` and `RT026` (map), `RT033` (required output missing),
+`RT041` (graph output could not be bound), `RT042` (node ended `succeed_degraded`, a warning),
+`RT051` and `RT052` (subgraph integrity and id), `RT053` (resume digest mismatch), `RT061` (a
+graph-level budget was exceeded) and `RT062` (expression error). Before 1.4.1 several of these
+were reported under other numbers (`RT024` for `RT041`, `RT031` for loops, `RT032` for map,
+`RT041`/`RT042` for subgraphs, `RT030` for graph budgets, `RT020` for expressions, and `RT001`
+for a missing output).
+
+Codes the specification does not define are MagAgent's own:
+
+| Code | Meaning |
+| --- | --- |
+| `RT001` | A node failed for another reason, such as failing its success criteria; the message names the failed criteria. |
+| `RT016` | A human gate, or the approval for an MCP or A2A executor call, was rejected or could not be obtained. |
+| `RT017` | A command criterion was refused by the node's `shell:exec` ceiling or by the permission policy. |
+| `RT027` | A node was blocked: it could never become ready (was `RT021`, which AGS uses for loops). |
+| `RT028` | A `map` item failed and `on_item_failure` is `fail` (was `RT033`). |
+| `RT030` | A node-level budget (tokens, cost, agent steps, tool calls, subgraph depth) was exceeded. |
+| `RT040`, `RT043`-`RT049` | Subgraph source and external (MCP, A2A) executor problems; see the [graph gallery](graph-gallery.md). |
+| `RT054` | `--retry-nodes` named a node that does not exist. |
+| `RT055` | A resume needs redacted parameters again. |
 
 ## Live status and terminal results
 

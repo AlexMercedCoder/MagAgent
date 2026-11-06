@@ -16,7 +16,7 @@ from magent.agraph.authoring import model_graph_draft, node_template, preview_gr
 from magent.agraph.document import load_graph
 from magent.agraph.execute import GraphExecutor
 from magent.agraph.plan import resolved_plan
-from magent.agraph.status import graph_status
+from magent.agraph.status import graph_status, run_summary
 from magent.approval_broker import ApprovalBroker
 from magent.config import load_config
 from magent.workbench_store import WorkbenchStore
@@ -369,7 +369,7 @@ def graph_catalog(store: WorkbenchStore, project: str | Path) -> dict[str, Any]:
                 "status": str(item.get("status") or ""),
                 "started_at": str(item.get("started_at") or ""),
                 "finished_at": str(item.get("finished_at") or ""),
-                "summary": item.get("summary") or {},
+                "summary": run_summary(item),
             }
         )
         if len(runs) >= 30:
@@ -723,7 +723,7 @@ class GraphRunManager:
                 job["state"] = str(
                     record.get("status") or ("succeeded" if result.get("ok") else "failed")
                 )
-                summary = record.get("summary") or {}
+                summary = run_summary(record)
                 job["summary"] = str(summary.get("text") or summary or job["summary"])
         except BaseException as exc:
             with self._lock:

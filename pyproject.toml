@@ -41,6 +41,10 @@ dependencies = [
     "prompt-toolkit>=3.0.0",
     # LLM providers
     "litellm>=1.40.0",
+    # LiteLLM 1.108 imports the MCP SDK on every completion without declaring
+    # it, so a core install without it fails every model call, the offline
+    # mock included. The `mcp` extra still adds the SDK's CLI.
+    "mcp>=2.0,<3",
     # Memory graph
     "maggraph>=0.4.1",
     # Config

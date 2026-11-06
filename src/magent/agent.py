@@ -294,10 +294,7 @@ class AgentSession(ContextRuntimeMixin, ToolLoopRuntimeMixin, LifecycleRuntimeMi
                 self._mcp_start_task = loop.create_task(self.mcp.start_all())
 
         # Load skills
-        project_skills_dir = Path(cwd) / ".magent" / "skills"
-        self.skill_registry = SkillRegistry(
-            extra_dirs=[project_skills_dir] if project_skills_dir.exists() else None
-        )
+        self.skill_registry = SkillRegistry.for_project(cwd)
         n_skills = self.skill_registry.load()
         if n_skills:
             console.print(f"[dim]📚 Loaded {n_skills} skills[/dim]")

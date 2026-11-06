@@ -1,5 +1,51 @@
 # Changelog
 
+## Unreleased
+
+Fixes for the bugs the *Graph Engineering with AI Agents* Appendix B walkthrough found in 1.4.0
+(handoff ids M1-M5).
+
+### Fixed
+
+- **Core install works with LiteLLM 1.108 (M1).** LiteLLM 1.108.0 imports the MCP SDK on every
+  completion without declaring it, so `pip install mag-agent` without the `mcp` extra failed
+  every model call with `ModuleNotFoundError: No module named 'mcp'`, the offline `mock`
+  provider included. `mcp>=2.0,<3` is now a core dependency; the `mcp` extra still adds the
+  SDK's CLI. A new CI job installs the package alone, with whatever versions resolve that day,
+  and runs one mock completion.
+- **Graph skill requirements see project skills (M2).** `requirements.skills` was checked
+  against user and built-in skills only, so a skill in the project's `.magent/skills/` failed
+  the node with `RT012` although a session in that project loaded it. The check now uses the
+  session's search path (`SkillRegistry.for_project`).
+- **Command criteria honour `allowed_shell_patterns` and say why they were refused (M3).** The
+  criterion runner ignored the policy's shell allowlist, so under `balanced` with `--yes` a
+  `node` criterion the graph granted (`shell:exec:node*`) and the policy allowed was refused in
+  milliseconds with no evidence. Criteria now run as harness work, outside the node agent's
+  tool policy (they no longer need `shell_exec` in the node's tools or count against its
+  tool-call budget). The node's `shell:exec:` permissions remain their ceiling, and within it
+  the policy decides as in a session: allowlisted or granted commands run without a prompt, and
+  nothing lifts a command the policy blocks. A refused criterion records `RT017` in the run
+  diagnostics and in the criterion's `error` and evidence, naming the command and what refused
+  it. Any other failed run (for example a timeout) now records its error as evidence.
+- **Retry feedback and node instructions (M4).** The retry prompt now carries each failed
+  criterion's `description` as well as its evidence (AGS 10.3), and the node prompt includes the
+  node's `instructions`, interpolated, after its `description`.
+- **Diagnostic codes follow AGS 1.0 (M5).** A graph output that cannot be bound is `RT041` (was
+  `RT024`), a missing required output `RT033` (was `RT001`), a loop at `max_iterations` `RT021`
+  (was `RT031`), map errors `RT025`/`RT026` (were `RT032`), subgraph integrity and id mismatches
+  `RT051`/`RT052` (were `RT041`/`RT042`), graph-level budgets `RT061` (were `RT030`) and
+  expression errors `RT062` (were `RT020`). Codes that collided with a different AGS meaning
+  moved: a blocked node is `RT027` (was `RT021`), a failed map item `RT028` (was `RT033`), a
+  rejected or unapprovable MCP/A2A executor call `RT016` (was `RT042`), and an invalid executor
+  `RT040` (was `RT041`). `succeed_degraded` now records an `RT042` warning, and a node that fails
+  its criteria says which ones. MagAgent's own codes are listed in the Agentic Graphs guide.
+- **Run summary counts (M5).** `magent graph run` printed `Succeeded: 0 | Failed/blocked: 0` for
+  every run, and the Web UI's graph run list showed empty summaries, because both read
+  `run["summary"]`; the executor stores it in `metadata["x-magagent-summary"]`. Both now read it
+  through `magent.agraph.status.run_summary`.
+- **Mock provider docstring (M5)** now says what the code does: scripted steps are replayed
+  verbatim, and only the mock's own messages carry the label.
+
 ## 1.4.0 (2026-09-28)
 
 Requires `agent-approval-interchange>=0.2.0,<0.3` (AAIS 0.2.0).

@@ -133,8 +133,9 @@ pip install "mag-agent[gateway]"
 pipx install mag-agent
 ```
 
-The core install keeps optional document, media, desktop, gateway, browser, MCP,
-and LSP dependencies out of the default environment. Run `magent tools doctor`
+The core install keeps optional document, media, desktop, gateway, browser,
+and LSP dependencies out of the default environment. The MCP SDK is a core
+dependency since 1.4.1, because LiteLLM 1.108 and later import it on every model call. Run `magent tools doctor`
 for readiness and exact install commands, or see [Installation Shapes](src/magent/docs/installation-shapes.md).
 
 ### First-time setup

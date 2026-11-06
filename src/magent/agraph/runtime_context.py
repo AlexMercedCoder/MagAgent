@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import fnmatch
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,7 @@ class GraphToolPolicy:
     approved: bool = False
     observer: ToolObserver | None = None
     decision_observer: ToolDecisionObserver | None = None
+    node_id: str = ""
 
 
 _policy: ContextVar[GraphToolPolicy | None] = ContextVar("magent_graph_tool_policy", default=None)
@@ -50,6 +52,25 @@ def set_graph_tool_policy(policy: GraphToolPolicy) -> Token[GraphToolPolicy | No
 
 def reset_graph_tool_policy(token: Token[GraphToolPolicy | None]) -> None:
     _policy.reset(token)
+
+
+def current_graph_tool_policy() -> GraphToolPolicy | None:
+    return _policy.get()
+
+
+@contextmanager
+def outside_graph_tool_policy() -> Iterator[None]:
+    """Run harness-owned work (criteria) without the node agent's tool policy."""
+    token = _policy.set(None)
+    try:
+        yield
+    finally:
+        _policy.reset(token)
+
+
+def shell_command_granted(permissions: tuple[str, ...], command: str) -> bool:
+    """Whether a ``shell:exec:`` permission in ``permissions`` covers ``command``."""
+    return not _permission_error(permissions, "run_shell", {"command": command}, ".")
 
 
 async def authorize_graph_tool(tool_name: str, args: dict[str, Any], cwd: str) -> dict[str, Any]:

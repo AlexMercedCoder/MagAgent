@@ -30,8 +30,11 @@ from magent.agraph.record import new_run_record, now_iso, validate_run_record
 from magent.agraph.routing import Route, route_for_node
 from magent.agraph.runtime_context import (
     GraphToolPolicy,
+    current_graph_tool_policy,
+    outside_graph_tool_policy,
     reset_graph_tool_policy,
     set_graph_tool_policy,
+    shell_command_granted,
 )
 from magent.agraph.schedule import blocking_reasons, edge_table, propagate_skips, ready_nodes
 from magent.agraph.validate import validate_graph
@@ -382,9 +385,9 @@ class GraphExecutor:
                         or "Node cannot become ready."
                     )
                     self._terminalize_nonexecuted(
-                        full_id, nodes[node_id], "blocked", message, "RT021", blocked_by=reasons
+                        full_id, nodes[node_id], "blocked", message, "RT027", blocked_by=reasons
                     )
-                    self._diagnostic("RT021", "error", message, node_id=node_id)
+                    self._diagnostic("RT027", "error", message, node_id=node_id)
                 break
             results = await asyncio.gather(
                 *(
@@ -399,7 +402,7 @@ class GraphExecutor:
                 if isinstance(result, BaseException):
                     statuses[node_id] = "failed"
                     # Record the failure in scope too: downstream expressions
-                    # like `nodes.X.status == "failed"` used to raise RT020
+                    # like `nodes.X.status == "failed"` used to raise RT020 (now RT062)
                     # because the node was never added at all.
                     outputs[node_id] = {}
                     scope["nodes"][node_id] = {"outputs": {}, "status": "failed"}
@@ -492,10 +495,10 @@ class GraphExecutor:
                         node,
                         "skipped",
                         f"The node guard could not be evaluated: {exc}",
-                        "RT020",
+                        "RT062",
                     )
                     return "skipped", {}
-                raise GraphRunError(str(exc), "RT020") from exc
+                raise GraphRunError(str(exc), "RT062") from exc
         resolved_inputs = self._resolve_inputs(node, scope)
         route = route_for_node(self.config, node) if node.get("type", "task") != "gate" else None
         self._enforce_requirements(node)
@@ -584,7 +587,7 @@ class GraphExecutor:
                         missing = sorted(required_outputs - outputs.keys())
                         if missing:
                             passed = False
-                            error = f"missing required outputs: {', '.join(missing)}"
+                            error = f"RT033 missing required outputs: {', '.join(missing)}"
                         status = forced_status or ("succeeded" if passed else "criteria_failed")
                     finally:
                         self._workspace.reset(workspace_token)
@@ -628,7 +631,9 @@ class GraphExecutor:
             }
             if status == "succeeded":
                 break
-            feedback = _failed_feedback(criteria_results, error)
+            feedback = _failed_feedback(
+                criteria_results, error, (node.get("success") or {}).get("criteria") or []
+            )
             failure_class = _failure_class(status, error)
             retry_on = set(retry.get("retry_on") or ["transient", "tool_error", "criteria_failed"])
             if "any" not in retry_on and failure_class not in retry_on:
@@ -656,7 +661,18 @@ class GraphExecutor:
             self.runtime.transition(
                 task["id"], "failed", reason=attempts[-1].get("error", "Node failed")
             )
-            last_error = str(attempts[-1].get("error", "Node failed"))
+            last_error = str(attempts[-1].get("error", ""))
+            if not last_error:
+                failed_ids = [
+                    str(item.get("id"))
+                    for item in (attempts[-1].get("success") or {}).get("results") or []
+                    if not item.get("passed") and item.get("severity", "required") == "required"
+                ]
+                last_error = (
+                    f"Node {full_id} failed its success criteria: {', '.join(failed_ids)}"
+                    if failed_ids
+                    else "Node failed"
+                )
             code_match = re.search(r"\b((?:RT|AG)\d{3})\b", last_error)
             self._diagnostic(
                 code_match.group(1) if code_match else "RT001", "error", last_error, node_id=full_id
@@ -734,7 +750,7 @@ class GraphExecutor:
         timeout = float((node.get("constraints") or {}).get("max_wall_clock_seconds", 0) or 0)
         coroutine: Awaitable[dict[str, Any]]
         if node_type == "task":
-            coroutine = self._run_task(full_id, node, inputs, route, task_id, feedback)
+            coroutine = self._run_task(full_id, node, inputs, scope, route, task_id, feedback)
         elif node_type == "decision":
             coroutine = self._run_decision(full_id, node, inputs, scope, route, task_id)
         elif node_type == "gate":
@@ -760,13 +776,14 @@ class GraphExecutor:
         full_id: str,
         node: dict[str, Any],
         inputs: dict[str, Any],
+        scope: dict[str, Any],
         route: Route | None,
         task_id: str,
         feedback: str,
     ) -> dict[str, Any]:
         if route is None:
             raise GraphRunError("task node has no route", "RT011")
-        prompt = _node_prompt(node, inputs, feedback)
+        prompt = _node_prompt(node, inputs, feedback, {**scope, "inputs": inputs})
         from magent.agraph.remote_executors import (
             ExecutorError,
             executor_for,
@@ -969,9 +986,9 @@ class GraphExecutor:
                         )
                     )
                     if not accepted:
-                        raise GraphRunError("loop reached max_iterations", "RT031")
+                        raise GraphRunError("loop reached max_iterations", "RT021")
                 else:
-                    raise GraphRunError("loop reached max_iterations", "RT031")
+                    raise GraphRunError("loop reached max_iterations", "RT021")
         outputs = {
             name: evaluate_expression(str(expression), child_scope or scope)
             for name, expression in (block.get("collect") or {}).items()
@@ -985,10 +1002,10 @@ class GraphExecutor:
         block = node.get("map") or {}
         values = evaluate_expression(str(block.get("over", "[]")), {**scope, "inputs": inputs})
         if not isinstance(values, list):
-            raise GraphRunError("map.over must evaluate to an array", "RT032")
+            raise GraphRunError("map.over must evaluate to an array", "RT025")
         maximum = int(block.get("max_items", len(values) or 1) or 1)
         if len(values) > maximum:
-            raise GraphRunError(f"map has {len(values)} items, above max_items {maximum}", "RT032")
+            raise GraphRunError(f"map has {len(values)} items, above max_items {maximum}", "RT026")
         semaphore = asyncio.Semaphore(
             max(
                 1,
@@ -1011,7 +1028,7 @@ class GraphExecutor:
                     any(status == "failed" for status in statuses.values())
                     and block.get("on_item_failure", "fail") == "fail"
                 ):
-                    raise GraphRunError(f"map item {index} failed", "RT033")
+                    raise GraphRunError(f"map item {index} failed", "RT028")
                 return item_scope
 
         # TaskGroup, not gather: on the first failure gather leaves sibling
@@ -1063,9 +1080,9 @@ class GraphExecutor:
                 raise GraphRunError("subgraph reference escapes its document directory", "RT040")
             child = load_graph(ref_path)
             if ref.get("integrity") and child.digest != ref["integrity"]:
-                raise GraphRunError("subgraph integrity mismatch", "RT041")
+                raise GraphRunError("subgraph integrity mismatch", "RT051")
             if ref.get("expected_id") and child.graph_id != ref["expected_id"]:
-                raise GraphRunError("subgraph id mismatch", "RT042")
+                raise GraphRunError("subgraph id mismatch", "RT052")
             fragment = child.data
         else:
             raise GraphRunError("subgraph has no source", "RT040")
@@ -1160,6 +1177,9 @@ class GraphExecutor:
         if exhausted == "skip":
             return "skipped"
         if exhausted == "succeed_degraded":
+            self._diagnostic(
+                "RT042", "warning", f"Node {node_id} ended succeed_degraded.", node_id=node_id
+            )
             return "succeeded"
         if exhausted == "escalate" and self.approval:
             return (
@@ -1199,15 +1219,36 @@ class GraphExecutor:
         root = (workspace / cwd).resolve(strict=False) if cwd else workspace
         if root != workspace and workspace not in root.parents:
             return {"ok": False, "returncode": -1, "stderr": "criterion cwd escapes workspace"}
+        # A criterion is harness work, not a tool call by the node's agent, so
+        # it runs outside the agent's tool policy. The node's shell:exec
+        # permissions are still its ceiling, and within it the policy decides
+        # as it does in the node's own session: allowed_shell_patterns skip
+        # the prompt, and nothing lifts a command the policy blocks outright.
+        policy = current_graph_tool_policy()
+        node_id = policy.node_id if policy else ""
+        permission_mode = str(getattr(self.config, "permission_mode", "balanced"))
+        if policy is not None and not shell_command_granted(policy.permissions, command):
+            denial = _criterion_denial(command, {}, permission_mode, granted=False)
+            self._diagnostic("RT017", "error", denial.removeprefix("RT017 "), node_id=node_id)
+            return {"ok": False, "returncode": -1, "stderr": denial, "denied": denial}
         executor = ToolExecutor(
             str(root),
-            permission_mode=str(getattr(self.config, "permission_mode", "balanced")),
+            permission_mode=permission_mode,
+            allowed_shell_patterns=list(getattr(self.config, "allowed_shell_patterns", None) or []),
+            trusted_shell_patterns=list(getattr(self.config, "trusted_shell_patterns", None) or []),
             username=self.username,
             config=self.config,
             interactive_permissions=self.permission_prompt is None and not self.assume_yes,
             permission_prompt=self.permission_prompt,
         )
-        result = await executor.dispatch("run_shell", {"command": command, "timeout": timeout})
+        with outside_graph_tool_policy():
+            result = await executor.dispatch("run_shell", {"command": command, "timeout": timeout})
+        if result.get("permission_reason") or result.get("blocked_by"):
+            denial = _criterion_denial(command, result, permission_mode, granted=True)
+            self._diagnostic("RT017", "error", denial.removeprefix("RT017 "), node_id=node_id)
+            return {**result, "returncode": -1, "stderr": denial, "denied": denial}
+        if not result.get("ok") and result.get("error") and not result.get("stderr"):
+            result = {**result, "stderr": str(result["error"])}
         return {**result, "returncode": result.get("returncode", 0 if result.get("ok") else -1)}
 
     async def _judge(
@@ -1310,7 +1351,7 @@ class GraphExecutor:
                 if isinstance(spec, dict) and not spec.get("required", True):
                     continue
                 raise GraphRunError(
-                    f"required graph output {name!r} is unavailable: {exc}", "RT024"
+                    f"required graph output {name!r} is unavailable: {exc}", "RT041"
                 ) from exc
         return outputs
 
@@ -1347,7 +1388,9 @@ class GraphExecutor:
             name, optional, _alternatives = tool_requirement(item)
             if not optional and not any(tool in available for tool in tools_for_requirement(item)):
                 raise GraphRunError(f"required tool {name!r} is unavailable", "RT012")
-        registry = SkillRegistry()
+        # The same search path the node's session loads, so a skill in the
+        # project's .magent/skills satisfies the requirement too.
+        registry = SkillRegistry.for_project(self._workspace.get())
         registry.load(respect_lockfile=False)
         available_skills = {skill.name for skill in registry.skills}
         missing_skills = sorted(set(requirements.get("skills") or []) - available_skills)
@@ -1430,6 +1473,7 @@ class GraphExecutor:
             ),
             observer=observe,
             decision_observer=observe_decision,
+            node_id=full_id,
         )
 
     async def _checkpoint(
@@ -1498,19 +1542,19 @@ class GraphExecutor:
         if constraints.get("max_wall_clock_seconds") and elapsed > float(
             constraints["max_wall_clock_seconds"]
         ):
-            raise GraphRunError("graph wall-clock budget exceeded", "RT030")
+            raise GraphRunError("graph wall-clock budget exceeded", "RT061")
         if constraints.get("max_node_executions") and self._record["usage"][
             "node_executions"
         ] >= int(constraints["max_node_executions"]):
-            raise GraphRunError("graph node-execution budget exceeded", "RT030")
+            raise GraphRunError("graph node-execution budget exceeded", "RT061")
         if constraints.get("max_total_tokens") and self._record["usage"].get(
             "total_tokens", 0
         ) >= int(constraints["max_total_tokens"]):
-            raise GraphRunError("graph token budget exceeded", "RT030")
+            raise GraphRunError("graph token budget exceeded", "RT061")
         if constraints.get("max_cost_usd") and self._record["usage"].get("cost_usd", 0) >= float(
             constraints["max_cost_usd"]
         ):
-            raise GraphRunError("graph cost budget exceeded", "RT030")
+            raise GraphRunError("graph cost budget exceeded", "RT061")
 
     def _consume_usage(self, usage: dict[str, Any]) -> None:
         self._agent_steps.set(int(usage.get("turns", 0) or 0))
@@ -1561,11 +1605,11 @@ class GraphExecutor:
         if graph_constraints.get("max_total_tokens") and int(
             self._record["usage"].get("total_tokens", 0)
         ) > int(graph_constraints["max_total_tokens"]):
-            raise GraphRunError("graph token budget exceeded", "RT030")
+            raise GraphRunError("graph token budget exceeded", "RT061")
         if graph_constraints.get("max_cost_usd") and float(
             self._record["usage"].get("cost_usd", 0)
         ) > float(graph_constraints["max_cost_usd"]):
-            raise GraphRunError("graph cost budget exceeded", "RT030")
+            raise GraphRunError("graph cost budget exceeded", "RT061")
 
     async def _compensate(self, scope: dict[str, Any]) -> None:
         if not self._document:
@@ -1966,15 +2010,27 @@ def _declared_secret_names(document: dict[str, Any]) -> set[str]:
     }
 
 
-def _node_prompt(node: dict[str, Any], inputs: dict[str, Any], feedback: str) -> str:
+def _node_prompt(
+    node: dict[str, Any],
+    inputs: dict[str, Any],
+    feedback: str,
+    scope: dict[str, Any] | None = None,
+) -> str:
     outputs = node.get("outputs") or {}
     contract = {
         name: {"type": spec.get("type", "json"), "description": spec.get("description", "")}
         for name, spec in outputs.items()
     }
+    task = f"Task: {node.get('title', '')}\n{node.get('description', '')}"
+    # AGS: `instructions` is a template appended to `description`.
+    instructions = node.get("instructions")
+    if instructions:
+        task += "\n\nInstructions:\n" + str(
+            resolve_value(instructions, scope if scope is not None else {"inputs": inputs})
+        )
     parts = [
         "You are executing one bounded Agentic Graph node.",
-        f"Task: {node.get('title', '')}\n{node.get('description', '')}",
+        task,
         f"Resolved inputs (immutable for this attempt):\n{json.dumps(inputs, indent=2, default=str)}",
         f"Declared outputs:\n{json.dumps(contract, indent=2)}",
         "Complete the task using only the needed tools. For every declared output, call graph_emit_output(name, value). Do not merely describe an artifact that should exist.",
@@ -2191,11 +2247,36 @@ def _json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
-def _failed_feedback(results: list[CriterionResult], error: str) -> str:
+def _criterion_denial(command: str, result: dict[str, Any], mode: str, granted: bool) -> str:
+    reason = str(result.get("permission_reason") or result.get("blocked_by") or "denied")
+    if not granted:
+        why = "the node's shell:exec permissions do not grant it"
+    elif reason == "permission-required":
+        why = (
+            f"permission mode {mode!r} requires confirmation, no one could answer, and "
+            "no permissions.allowed_shell_patterns entry matches it"
+        )
+    else:
+        why = f"the permission policy refused it ({reason}, mode {mode!r})"
+    return f"RT017 criterion command `{command}` was denied: {why}"
+
+
+def _failed_feedback(
+    results: list[CriterionResult],
+    error: str,
+    criteria: list[dict[str, Any]] | None = None,
+) -> str:
+    """Retry feedback: AGS 10.3 requires each failed criterion's description and evidence."""
+    descriptions = {
+        str(item.get("id", "")): str(item.get("description") or "")
+        for item in criteria or []
+        if isinstance(item, dict)
+    }
     lines = [error] if error else []
-    lines.extend(
-        f"- {item.id}: {item.error or item.evidence or 'criterion failed'}"
-        for item in results
-        if not item.passed and item.severity == "required"
-    )
+    for item in results:
+        if item.passed or item.severity != "required":
+            continue
+        description = descriptions.get(item.id, "")
+        lines.append(f"- {item.id}: {description}" if description else f"- {item.id}")
+        lines.append(f"  Evidence: {item.error or item.evidence or 'criterion failed'}")
     return "\n".join(lines)

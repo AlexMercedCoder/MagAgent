@@ -531,7 +531,9 @@ def register_graph_commands(
             )
             for item in run.get("diagnostics") or []:
                 console.print(f"[yellow]{item['code']}[/yellow] {item['message']}")
-            summary = run.get("summary") or {}
+            from magent.agraph.status import run_summary
+
+            summary = run_summary(run)
             console.print(
                 f"Succeeded: {len(summary.get('succeeded') or [])} | Failed/blocked: {len(summary.get('failed') or [])} | Skipped: {len(summary.get('skipped') or [])}"
             )

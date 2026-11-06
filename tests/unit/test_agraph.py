@@ -454,9 +454,9 @@ def test_failed_status_exposes_missing_output_and_attempt_evidence(tmp_path: Pat
     assert snapshot is not None
     node = snapshot["nodes"][0]
     assert node["state"] == "failed"
-    assert node["error_code"] == "GRAPH_NODE_FAILED"
-    assert node["error"] == "missing required outputs: result"
-    assert node["attempts"][-1]["error"] == "missing required outputs: result"
+    assert node["error_code"] == "RT033"
+    assert node["error"] == "RT033 missing required outputs: result"
+    assert node["attempts"][-1]["error"] == "RT033 missing required outputs: result"
     assert node["attempts"][-1]["criteria"] == [
         {"id": "result", "passed": False, "evidence": "null"}
     ]

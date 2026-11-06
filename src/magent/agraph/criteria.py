@@ -190,6 +190,9 @@ async def evaluate_criterion(
             if pattern:
                 passed = passed and _search_bounded(str(pattern), stdout, re.NOFLAG)
             evidence = (stdout + "\n" + str(result.get("stderr", ""))).strip()[-4000:]
+            # A refused command never ran; say who refused it instead of
+            # leaving an empty result.
+            error = str(result.get("denied") or "")
         elif kind == "file_exists":
             pattern = str(resolve_value(criterion.get("path", ""), scope))
             matches = _safe_glob(project, pattern)

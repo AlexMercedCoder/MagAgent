@@ -131,6 +131,12 @@ class SkillRegistry:
         if extra_dirs:
             self._search_dirs.extend(extra_dirs)
 
+    @classmethod
+    def for_project(cls, cwd: str | Path) -> SkillRegistry:
+        """The search path a session in ``cwd`` uses: user, built-in and ``.magent/skills``."""
+        project_skills_dir = Path(cwd) / ".magent" / "skills"
+        return cls(extra_dirs=[project_skills_dir] if project_skills_dir.exists() else None)
+
     def load(self, respect_lockfile: bool = True) -> int:
         """
         Scan all skill directories and load SKILL.md files.

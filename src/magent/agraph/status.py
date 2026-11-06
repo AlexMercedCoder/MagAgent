@@ -10,6 +10,16 @@ from magent.task_runtime import TaskRuntime
 from magent.workbench_store import WorkbenchStore
 
 
+def run_summary(record: dict[str, Any]) -> dict[str, Any]:
+    """The executor's node counts for a run record.
+
+    The schema keeps unknown top-level keys out of the record, so the summary
+    lives in ``metadata["x-magagent-summary"]``. Readers that looked for
+    ``record["summary"]`` reported zero nodes for every run.
+    """
+    return dict((record.get("metadata") or {}).get("x-magagent-summary") or {})
+
+
 def graph_status(
     store: WorkbenchStore, run_id: str, *, event_limit: int = 500
 ) -> dict[str, Any] | None:
@@ -127,7 +137,7 @@ def graph_status(
         "schema_version": GRAPH_STATUS_SCHEMA_VERSION,
         "run_id": run_id,
         "state": str((root or {}).get("state") or record.get("status") or ""),
-        "summary": (record.get("metadata") or {}).get("x-magagent-summary")
+        "summary": run_summary(record)
         or (root or {}).get("final_audit")
         or {},
         "run": record,

@@ -50,7 +50,7 @@ x-magagent-executor:
 ```
 
 - Every executor call is approved like any other external action: through `--approval-stdio`,
-  the Web UI, the terminal, or `--yes`. With no way to ask, the call is refused (`RT042`).
+  the Web UI, the terminal, or `--yes`. With no way to ask, the call is refused (`RT016`).
 - A2A needs HTTPS except on loopback. Private, link-local and cloud-metadata addresses are
   refused (`RT049`) unless the node sets `allow_private_network: true`, which the approval shows.
 - `token_env` must name a variable that starts with `A2A_`, so a graph you did not write cannot

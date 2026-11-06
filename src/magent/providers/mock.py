@@ -1,12 +1,14 @@
 """Offline ``mock`` provider for first-run demos, tests and CI.
 
 It never touches the network and needs no key. Replies are deterministic: the
-same messages always produce the same text. Every reply starts with a label so
-nobody mistakes it for a model answer.
+same messages always produce the same text. Every canned reply starts with a
+label so nobody mistakes it for a model answer (scripted replies, below, are
+replayed verbatim).
 
 The provider is wired into LiteLLM as a custom handler, so it flows through the
 same code paths as a real provider: streaming, the tool loop, usage logging and
-memory extraction. It never requests tools, so a mock run cannot change files.
+memory extraction. Without a script it never requests tools, so an unscripted
+mock run cannot change files.
 
 Use it with ``magent ask "hello" --provider mock`` or select it as the default
 with ``magent provider set mock``.
@@ -19,8 +21,10 @@ canned reply. The file is either a list of steps or
 call), ``{"tools": [{"tool": ..., "arguments": ...}, ...]}`` (several calls in
 one response) or ``{"content": "text"}`` (a final answer). The step played is the
 number of assistant messages since the last user message, so the script is
-stateless and every agent (graph node, subagent) gets its own copy. Replies
-are still labelled as mock output.
+stateless and every agent (graph node, subagent) gets its own copy. Scripted
+steps are replayed exactly as written, so a fixture can reproduce an agent's
+final text; only the mock's own messages ("Script finished." and a script that
+cannot be read) carry the label.
 """
 
 from __future__ import annotations

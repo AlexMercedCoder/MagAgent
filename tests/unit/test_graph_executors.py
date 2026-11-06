@@ -119,7 +119,7 @@ def test_executor_calls_are_denied_without_an_approval_path(tmp_path: Path) -> N
     )
     result = asyncio.run(runner.run(graph(MCP)))
     assert not result["ok"]
-    assert "RT042" in json.dumps(result["run"])
+    assert "RT016" in json.dumps(result["run"])
 
 
 def test_unconfigured_mcp_server_says_what_to_do(tmp_path: Path) -> None:

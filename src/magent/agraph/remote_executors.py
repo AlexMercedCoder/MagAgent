@@ -129,7 +129,7 @@ async def run_executor(
     executor = executor_for(node) or {}
     problems = validate_executor(node_id, node)
     if problems:
-        raise ExecutorError("; ".join(problems), "RT041")
+        raise ExecutorError("; ".join(problems), "RT040")
     kind = executor["kind"]
     started = time.monotonic()
     if kind == "mcp":
@@ -144,7 +144,7 @@ async def run_executor(
             "effects": [f"Runs the {tool} tool of the {server} MCP server."],
         }
         if not await approve(action, f"Graph node {node_id} calls MCP {server}.{tool}"):
-            raise ExecutorError(f"the MCP call for {node_id} was not approved", "RT042")
+            raise ExecutorError(f"the MCP call for {node_id} was not approved", "RT016")
         reply = await _call_mcp(server, tool, arguments, mcp_servers)
     else:
         url = str(executor["url"])
@@ -168,7 +168,7 @@ async def run_executor(
             "effects": effects,
         }
         if not await approve(action, f"Graph node {node_id} messages A2A agent {url}"):
-            raise ExecutorError(f"the A2A call for {node_id} was not approved", "RT042")
+            raise ExecutorError(f"the A2A call for {node_id} was not approved", "RT016")
         reply = await _call_a2a(
             url,
             message,
