@@ -856,10 +856,13 @@ def _resume_params(
 
 
 def _find_run(store: WorkbenchStore, run_id: str) -> dict[str, Any] | None:
-    return next(
+    from magent.agraph.status import stored_run_record
+
+    record = next(
         (item for item in reversed(store.read("graph_runs", [])) if item.get("run_id") == run_id),
         None,
     )
+    return stored_run_record(record) if record else None
 
 
 def _effective_profile(name: str, project: str | Path, config: Any) -> Any:

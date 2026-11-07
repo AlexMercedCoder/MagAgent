@@ -9,6 +9,15 @@ from magent.agraph.schedule import blocking_reasons
 from magent.task_runtime import TaskRuntime
 from magent.workbench_store import WorkbenchStore
 
+# Keys that `WorkbenchStore.append` added to run records before 1.4.2. The AGS
+# run-record schema allows no extra top-level keys, so readers drop them.
+STORE_ONLY_KEYS = ("id", "created_at", "updated_at")
+
+
+def stored_run_record(item: dict[str, Any]) -> dict[str, Any]:
+    """A stored graph run as an AGS run record, without store bookkeeping keys."""
+    return {key: value for key, value in item.items() if key not in STORE_ONLY_KEYS}
+
 
 def run_summary(record: dict[str, Any]) -> dict[str, Any]:
     """The executor's node counts for a run record.
@@ -29,6 +38,7 @@ def graph_status(
     )
     if not record:
         return None
+    record = stored_run_record(record)
     runtime = TaskRuntime(store)
     root_id = str((record.get("metadata") or {}).get("execution_task_id") or "")
     root = runtime.get(root_id) if root_id else None

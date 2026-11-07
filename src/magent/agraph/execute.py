@@ -37,6 +37,7 @@ from magent.agraph.runtime_context import (
     shell_command_granted,
 )
 from magent.agraph.schedule import blocking_reasons, edge_table, propagate_skips, ready_nodes
+from magent.agraph.status import STORE_ONLY_KEYS
 from magent.agraph.validate import validate_graph
 from magent.sandbox import graph_workspace
 from magent.task_runtime import TaskRuntime, TaskState
@@ -211,7 +212,9 @@ class GraphExecutor:
             },
         )
         self._record["metadata"]["execution_task_id"] = self._root_task_id
-        self.store.append("graph_runs", self._record)
+        # Not `store.append`: that adds the store's own `id` and `created_at`,
+        # which the AGS run-record schema rejects.
+        self.store.mutate("graph_runs", [], lambda records: [*records, dict(self._record)])
         self._emit("graph.started", state="running", summary="Graph execution started.")
         try:
             scope = self._base_scope(document.data, bound_params)
@@ -1240,6 +1243,14 @@ class GraphExecutor:
             config=self.config,
             interactive_permissions=self.permission_prompt is None and not self.assume_yes,
             permission_prompt=self.permission_prompt,
+            # The node's agent runs its shell inside this isolation profile, so
+            # its criteria do too.
+            shell_sandbox=str(
+                self.config.get("permissions", "shell_sandbox", default="off") or "off"
+            ),
+            shell_sandbox_network=bool(
+                self.config.get("permissions", "shell_sandbox_network", default=False)
+            ),
         )
         with outside_graph_tool_policy():
             result = await executor.dispatch("run_shell", {"command": command, "timeout": timeout})
@@ -1875,6 +1886,8 @@ class GraphExecutor:
         for item in records:
             if item.get("run_id") == self._record.get("run_id"):
                 item.update(self._record)
+                for key in STORE_ONLY_KEYS:
+                    item.pop(key, None)
                 break
         else:
             records.append(self._record)

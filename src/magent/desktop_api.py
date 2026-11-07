@@ -350,13 +350,14 @@ def graph_plan(path: str) -> dict[str, Any]:
 
 def graph_catalog(username: str) -> dict[str, Any]:
     """Return saved graph documents and recent portable run records."""
+    from magent.agraph.status import stored_run_record
     from magent.workbench_store import WorkbenchStore
 
     store = WorkbenchStore(username)
     return {
         "ok": True,
         "graphs": store.read("graphs", []),
-        "runs": list(reversed(store.read("graph_runs", [])))[:100],
+        "runs": [stored_run_record(item) for item in reversed(store.read("graph_runs", []))][:100],
     }
 
 

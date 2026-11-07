@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Command criteria run in the configured shell sandbox.** The criterion runner ignored
+  `permissions.shell_sandbox` and `shell_sandbox_network`, so a node's agent ran its shell under
+  bubblewrap or Docker while the node's command criteria ran unsandboxed. Criteria now use the
+  same isolation profile.
+- **Stored graph runs are valid AGS run records.** The workbench store added its own `id` and
+  `created_at` keys to every saved run, and the AGS run-record schema allows no extra top-level
+  keys. New runs are saved without them, and `magent graph resume`, `graph status` and the
+  desktop graph catalog drop them from runs saved by earlier versions.
+
 ## 1.4.1 (2026-11-06)
 
 Fixes for the bugs the *Graph Engineering with AI Agents* Appendix B walkthrough found in 1.4.0
