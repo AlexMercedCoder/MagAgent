@@ -2,7 +2,7 @@
 
 **The memory-first personal agent: it remembers you across sessions, in Git-backed Markdown you can review.**
 
-Current release: **1.4.1** ([release notes](docs/RELEASE_NOTES_1.4.1.md)). See the [CHANGELOG](CHANGELOG.md) for the full history.
+Current release: **1.4.2** ([release notes](docs/RELEASE_NOTES_1.4.2.md)). See the [CHANGELOG](CHANGELOG.md) for the full history.
 
 <img src="docs/assets/brand/magagent-logo.png" alt="MagAgent logo" width="220">
 

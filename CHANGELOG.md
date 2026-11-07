@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.4.2 (2026-11-07)
+
+Follow-ups to 1.4.1 for command-criterion isolation and run-record conformance.
 
 ### Fixed
 
