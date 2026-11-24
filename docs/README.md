@@ -168,3 +168,7 @@ magent docs generate-config --out src/magent/docs/config-reference.md
 ```
 
 The docs doctor checks that the packaged docs contain required topics and mention the live Typer command tree. The generated reference commands keep the GitHub-facing command and config references synchronized with the installed CLI.
+
+## Maintenance
+
+[Maintenance findings, acceptance checks and completion log](maintenance.md).
