@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import time
 from pathlib import Path
 from typing import Any
@@ -50,16 +51,25 @@ def clear_provider_cooldown(provider_id: str) -> dict[str, Any]:
 
 def list_provider_cooldowns() -> dict[str, Any]:
     rows = []
-    if COOLDOWN_DIR.exists():
-        for path in sorted(COOLDOWN_DIR.glob("*.json")):
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
-                continue
-            remaining = provider_cooldown_remaining(str(data.get("provider") or path.stem))
-            if remaining is not None:
-                rows.append({**data, "remaining_seconds": remaining})
-    return {"ok": True, "cooldowns": rows}
+    warnings = []
+    for path in sorted(COOLDOWN_DIR.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                raise ValueError("expected an object")
+            reset_at = float(data["reset_at"])
+            if not math.isfinite(reset_at):
+                raise ValueError("expected a finite reset time")
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, OverflowError):
+            warnings.append(f"Could not read cooldown record {path.name}")
+            continue
+        remaining = reset_at - time.time()
+        if remaining > 0:
+            rows.append({**data, "remaining_seconds": remaining})
+    result: dict[str, Any] = {"ok": True, "cooldowns": rows}
+    if warnings:
+        result["warnings"] = warnings
+    return result
 
 
 def cooldown_from_exception(provider_id: str, exc: Exception) -> dict[str, Any] | None:

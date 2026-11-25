@@ -23,11 +23,12 @@ def state_manifest(root: str | Path) -> dict[str, Any]:
         return {"schema_version": 0, "magent_version": "legacy", "path": str(path)}
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise StateCompatibilityError(
             f"Could not read MagAgent state marker {path}: {exc}"
         ) from exc
-    if not isinstance(value, dict) or not isinstance(value.get("schema_version"), int):
+    version = value.get("schema_version") if isinstance(value, dict) else None
+    if type(version) is not int or version < 0:
         raise StateCompatibilityError(f"Invalid MagAgent state marker: {path}")
     return {**value, "path": str(path)}
 
