@@ -6,8 +6,8 @@ Claim a row by entering your name or task ID and setting the status to **In prog
 
 | ID | Priority | Status | Owner | Fix and verification |
 | --- | --- | --- | --- | --- |
-| MAG-01 | P1 | Open | — | — |
-| MAG-02 | P2 | Open | — | — |
+| MAG-01 | P1 | Done | — | `384c580`. Nine migration tests passed. Direct checks rejected bool and negative schema versions. |
+| MAG-02 | P2 | Done | — | `384c580`. Valid cooldown remained visible alongside malformed JSON, a non-object and an invalid reset time. |
 
 ### MAG-01 · Reject malformed state versions before startup or migration
 
