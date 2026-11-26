@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.3 (2026-11-26)
+
+### Fixed
+
+- Reject boolean and negative state schema markers before startup or migration can rewrite state.
+- Keep valid provider cooldowns visible when another cooldown file contains malformed records.
+
 ## 1.4.2 (2026-11-07)
 
 Follow-ups to 1.4.1 for command-criterion isolation and run-record conformance.
