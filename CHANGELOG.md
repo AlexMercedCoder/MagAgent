@@ -6,6 +6,7 @@
 
 - Reject boolean and negative state schema markers before startup or migration can rewrite state.
 - Keep valid provider cooldowns visible when another cooldown file contains malformed records.
+- Keep the CLI on a Typer version compatible with its published command contract.
 
 ## 1.4.2 (2026-11-07)
 
